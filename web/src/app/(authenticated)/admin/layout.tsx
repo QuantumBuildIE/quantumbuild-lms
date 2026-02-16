@@ -53,7 +53,7 @@ export default function AdminLayout({
 
   return (
     <div className="space-y-6">
-      <nav className="border-b bg-background -mx-4 px-4 sm:mx-0 sm:px-0">
+      <nav className="border-b bg-background -mx-4 px-4 sm:mx-0 sm:px-6">
         <div className="flex h-10 items-center gap-4 overflow-x-auto sm:gap-6 scrollbar-hide">
           {adminNavItems.map((item) => (
             <Link
