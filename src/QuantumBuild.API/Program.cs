@@ -9,7 +9,9 @@ using QuantumBuild.Core.Infrastructure.Data;
 using QuantumBuild.Core.Infrastructure.Identity;
 using QuantumBuild.Core.Infrastructure.Persistence;
 using QuantumBuild.Core.Infrastructure.Repositories;
+using QuantumBuild.Core.Application.Abstractions.Email;
 using QuantumBuild.Core.Infrastructure.Services;
+using QuantumBuild.Core.Infrastructure.Services.Email;
 using QuantumBuild.Modules.ToolboxTalks.Application;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure;
@@ -83,6 +85,25 @@ builder.Services.AddHttpClient("ClaudeApi", client =>
 // Register Infrastructure services
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<ITenantRepository, TenantRepository>();
+
+// Register Email Provider
+builder.Services.Configure<EmailProviderSettings>(
+    builder.Configuration.GetSection(EmailProviderSettings.SectionName));
+
+var emailProvider = builder.Configuration.GetValue<string>("EmailProvider:Provider");
+if (string.Equals(emailProvider, "MailerSend", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddHttpClient<IEmailProvider, MailerSendEmailProvider>((sp, client) =>
+    {
+        var apiKey = builder.Configuration.GetValue<string>("EmailProvider:ApiKey");
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+    });
+}
+else
+{
+    builder.Services.AddSingleton<IEmailProvider, StubEmailProvider>();
+}
 
 // Register background jobs
 builder.Services.AddScoped<ProcessToolboxTalkSchedulesJob>();
