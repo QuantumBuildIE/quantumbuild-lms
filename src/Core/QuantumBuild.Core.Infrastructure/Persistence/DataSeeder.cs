@@ -39,6 +39,7 @@ public static class DataSeeder
             await SeedAdminUserAsync(userManager, roleManager, logger);
             await SeedTestUsersAsync(userManager, roleManager, logger);
             await SeedSitesAsync(context, logger);
+            await EnsureAdminEmployeeAsync(context, userManager, logger);
 
             logger.LogInformation("Database seeding completed successfully");
         }
@@ -2831,5 +2832,51 @@ public static class DataSeeder
 
             _ => $"Permission: {permissionName}"
         };
+    }
+
+    private static async Task EnsureAdminEmployeeAsync(DbContext context, UserManager<User> userManager, ILogger logger)
+    {
+        var employees = context.Set<Employee>();
+        var adminEmail = "admin@quantumbuild.ai";
+
+        var adminUser = await userManager.FindByEmailAsync(adminEmail);
+        if (adminUser == null)
+        {
+            logger.LogInformation("Admin user not found, skipping employee creation");
+            return;
+        }
+
+        // Check if admin already has an employee record
+        if (adminUser.EmployeeId != null)
+        {
+            logger.LogInformation("Admin user already linked to employee, skipping");
+            return;
+        }
+
+        var adminEmployee = new Employee
+        {
+            Id = Guid.NewGuid(),
+            TenantId = DefaultTenantId,
+            EmployeeCode = "EMP-ADMIN",
+            FirstName = adminUser.FirstName ?? "Admin",
+            LastName = adminUser.LastName ?? "User",
+            Email = adminEmail,
+            JobTitle = "Administrator",
+            Department = "Management",
+            IsActive = true,
+            UserId = adminUser.Id.ToString(),
+            StartDate = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            CreatedAt = DateTime.UtcNow,
+            CreatedBy = "system"
+        };
+
+        await employees.AddAsync(adminEmployee);
+
+        // Link user to employee (bidirectional)
+        adminUser.EmployeeId = adminEmployee.Id;
+        await userManager.UpdateAsync(adminUser);
+
+        await context.SaveChangesAsync();
+        logger.LogInformation("Created and linked admin employee record for {Email}", adminEmail);
     }
 }
