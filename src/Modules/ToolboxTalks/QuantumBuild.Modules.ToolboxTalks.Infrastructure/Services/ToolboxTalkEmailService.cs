@@ -40,7 +40,7 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
             return;
         }
 
-        var baseUrl = _configuration["AppSettings:BaseUrl"] ?? "https://rascorweb-production.up.railway.app";
+        var baseUrl = _configuration["AppSettings:BaseUrl"] ?? "https://quantumbuild-lms-web-production.up.railway.app";
         var talkUrl = $"{baseUrl}/login?returnUrl={Uri.EscapeDataString($"/toolbox-talks/{scheduledTalk.Id}")}";
 
         var subject = $"New Toolbox Talk Assigned: {scheduledTalk.ToolboxTalk.Title}";
@@ -119,7 +119,7 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
             return;
         }
 
-        var baseUrl = _configuration["AppSettings:BaseUrl"] ?? "https://rascorweb-production.up.railway.app";
+        var baseUrl = _configuration["AppSettings:BaseUrl"] ?? "https://quantumbuild-lms-web-production.up.railway.app";
         var talkUrl = $"{baseUrl}/login?returnUrl={Uri.EscapeDataString($"/toolbox-talks/{scheduledTalk.Id}")}";
 
         var urgency = reminderNumber >= 3 ? "URGENT: " : "";
@@ -425,7 +425,7 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
             return;
         }
 
-        var baseUrl = _configuration["AppSettings:BaseUrl"] ?? "https://rascorweb-production.up.railway.app";
+        var baseUrl = _configuration["AppSettings:BaseUrl"] ?? "https://quantumbuild-lms-web-production.up.railway.app";
         var talkUrl = $"{baseUrl}/login?returnUrl={Uri.EscapeDataString($"/toolbox-talks/{refresherTalk.Id}")}";
 
         var subject = $"Refresher Training Due in {timeframe}: {refresherTalk.ToolboxTalk.Title}";
@@ -501,7 +501,7 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
             return;
         }
 
-        var baseUrl = _configuration["AppSettings:BaseUrl"] ?? "https://rascorweb-production.up.railway.app";
+        var baseUrl = _configuration["AppSettings:BaseUrl"] ?? "https://quantumbuild-lms-web-production.up.railway.app";
         var courseUrl = $"{baseUrl}/login?returnUrl={Uri.EscapeDataString("/toolbox-talks")}";
 
         var subject = $"New Training Course Assigned: {course.Title}";
@@ -584,7 +584,7 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
             return;
         }
 
-        var baseUrl = _configuration["AppSettings:BaseUrl"] ?? "https://rascorweb-production.up.railway.app";
+        var baseUrl = _configuration["AppSettings:BaseUrl"] ?? "https://quantumbuild-lms-web-production.up.railway.app";
         var courseUrl = $"{baseUrl}/login?returnUrl={Uri.EscapeDataString($"/toolbox-talks/courses/{refresherAssignment.Id}")}";
 
         var subject = $"Course Refresher Due in {timeframe}: {refresherAssignment.Course.Title}";

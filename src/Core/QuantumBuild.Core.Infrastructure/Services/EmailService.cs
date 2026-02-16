@@ -32,7 +32,7 @@ public class EmailService : IEmailService
         string resetToken,
         CancellationToken cancellationToken = default)
     {
-        var baseUrl = _configuration["AppSettings:BaseUrl"] ?? "https://rascorweb-production.up.railway.app";
+        var baseUrl = _configuration["AppSettings:BaseUrl"] ?? "https://quantumbuild-lms-web-production.up.railway.app";
         var encodedToken = WebUtility.UrlEncode(resetToken);
         var encodedEmail = WebUtility.UrlEncode(email);
         var resetUrl = $"{baseUrl}/auth/set-password?email={encodedEmail}&token={encodedToken}";
