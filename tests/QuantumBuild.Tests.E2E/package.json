@@ -1,0 +1,38 @@
+{
+  "name": "quantumbuild-e2e-tests",
+  "version": "1.0.0",
+  "description": "Playwright E2E tests for QUANTUMBUILD Business Suite",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug",
+    "test:smoke": "playwright test --grep @smoke",
+    "test:regression": "playwright test --grep @regression",
+    "test:chromium": "playwright test --project=chromium",
+    "test:firefox": "playwright test --project=firefox",
+    "test:mobile": "playwright test --project=mobile",
+    "test:auth": "playwright test tests/auth/",
+    "test:stock": "playwright test tests/stock-management/",
+    "test:proposals": "playwright test tests/proposals/",
+    "test:attendance": "playwright test tests/site-attendance/",
+    "test:admin": "playwright test tests/admin/",
+    "test:toolbox": "playwright test tests/toolbox-talks/",
+    "report": "playwright show-report",
+    "report:open": "playwright show-report --host 0.0.0.0",
+    "codegen": "playwright codegen http://localhost:3000"
+  },
+  "keywords": [
+    "playwright",
+    "e2e",
+    "testing",
+    "quantumbuild"
+  ],
+  "author": "QUANTUMBUILD",
+  "license": "UNLICENSED",
+  "private": true,
+  "devDependencies": {
+    "@playwright/test": "^1.57.0",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,324 @@
+"use client";
+
+import * as React from "react";
+import Link from "next/link";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { MoreHorizontal } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  DataTable,
+  type Column,
+  type SortDirection,
+} from "@/components/shared/data-table";
+import { useEmployees, useDeleteEmployee, useResendInvite } from "@/lib/api/admin/use-employees";
+import type { Employee } from "@/types/admin";
+
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = React.useState(value);
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
+export default function EmployeesPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // Parse URL params
+  const pageNumber = Number(searchParams.get("page")) || 1;
+  const pageSize = Number(searchParams.get("size")) || 20;
+  const sortColumn = searchParams.get("sortColumn") || undefined;
+  const sortDirection = (searchParams.get("sortDirection") as SortDirection) || undefined;
+  const searchParam = searchParams.get("search") || "";
+
+  const [searchInput, setSearchInput] = React.useState(searchParam);
+  const debouncedSearch = useDebounce(searchInput, 300);
+
+  // Update URL when search changes (debounced)
+  React.useEffect(() => {
+    if (debouncedSearch !== searchParam) {
+      updateUrlParams({ search: debouncedSearch || null, page: 1 });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch]);
+
+  const { data, isLoading, error } = useEmployees({
+    pageNumber,
+    pageSize,
+    sortColumn,
+    sortDirection,
+    search: searchParam || undefined,
+  });
+
+  const deleteEmployee = useDeleteEmployee();
+  const resendInvite = useResendInvite();
+
+  const updateUrlParams = (
+    updates: Record<string, string | number | null | undefined>
+  ) => {
+    const params = new URLSearchParams(searchParams.toString());
+
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value === null || value === undefined || value === "") {
+        params.delete(key);
+      } else {
+        params.set(key, String(value));
+      }
+    });
+
+    // Remove page param if it's 1
+    if (params.get("page") === "1") {
+      params.delete("page");
+    }
+
+    const queryString = params.toString();
+    router.push(queryString ? `${pathname}?${queryString}` : pathname);
+  };
+
+  const handlePageChange = (page: number) => {
+    updateUrlParams({ page });
+  };
+
+  const handlePageSizeChange = (size: number) => {
+    updateUrlParams({ size, page: 1 });
+  };
+
+  const handleSort = (column: string, direction: SortDirection) => {
+    updateUrlParams({ sortColumn: column, sortDirection: direction, page: 1 });
+  };
+
+  const handleDelete = async (id: string) => {
+    if (window.confirm("Are you sure you want to delete this employee?")) {
+      try {
+        await deleteEmployee.mutateAsync(id);
+        toast.success("Employee deleted successfully");
+      } catch {
+        toast.error("Failed to delete employee");
+      }
+    }
+  };
+
+  const handleResendInvite = async (employee: Employee) => {
+    try {
+      await resendInvite.mutateAsync(employee.id);
+      toast.success(`Invite email sent to ${employee.email}`);
+    } catch {
+      toast.error("Failed to send invite email");
+    }
+  };
+
+  const columns: Column<Employee>[] = [
+    {
+      key: "employeeCode",
+      header: "Code",
+      sortable: true,
+      className: "font-medium",
+    },
+    {
+      key: "fullName",
+      header: "Name",
+      sortable: true,
+      render: (employee) => (
+        <span>{employee.firstName} {employee.lastName}</span>
+      ),
+    },
+    {
+      key: "email",
+      header: "Email",
+      render: (employee) =>
+        employee.email ? (
+          <span>{employee.email}</span>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        ),
+    },
+    {
+      key: "phone",
+      header: "Phone",
+      render: (employee) =>
+        employee.phone || employee.mobile ? (
+          <span>{employee.phone || employee.mobile}</span>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        ),
+    },
+    {
+      key: "jobTitle",
+      header: "Job Title",
+      sortable: true,
+      render: (employee) =>
+        employee.jobTitle ? (
+          <span>{employee.jobTitle}</span>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        ),
+    },
+    {
+      key: "primarySiteName",
+      header: "Default Site",
+      sortable: true,
+      render: (employee) =>
+        employee.primarySiteName ? (
+          <span>{employee.primarySiteName}</span>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        ),
+    },
+    {
+      key: "isActive",
+      header: "Status",
+      sortable: true,
+      render: (employee) =>
+        employee.isActive ? (
+          <Badge variant="default">Active</Badge>
+        ) : (
+          <Badge variant="secondary">Inactive</Badge>
+        ),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      headerClassName: "text-right",
+      className: "text-right",
+      render: (employee) => (
+        <div className="flex items-center justify-end gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm">
+                <MoreHorizontal className="h-4 w-4" />
+                <span className="sr-only">Open menu</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem asChild>
+                <Link href={`/admin/employees/${employee.id}/edit`}>Edit</Link>
+              </DropdownMenuItem>
+              {employee.hasUserAccount && (
+                <DropdownMenuItem
+                  onClick={() => handleResendInvite(employee)}
+                  disabled={resendInvite.isPending}
+                >
+                  Resend Invite
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={() => handleDelete(employee.id)}
+                disabled={deleteEmployee.isPending}
+              >
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ),
+    },
+  ];
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Employees</h1>
+            <p className="text-muted-foreground">Manage company employees</p>
+          </div>
+        </div>
+        <div className="rounded-lg border bg-card p-8 text-center">
+          <p className="text-destructive">
+            Failed to load employees. Please try again.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Employees</h1>
+          <p className="text-muted-foreground">Manage company employees</p>
+        </div>
+        <Button asChild>
+          <Link href="/admin/employees/new">Add Employee</Link>
+        </Button>
+      </div>
+
+      <div className="flex items-center gap-4">
+        <div className="relative flex-1 max-w-sm">
+          <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search by name or email..."
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+      </div>
+
+      <DataTable
+        columns={columns}
+        data={data?.items ?? []}
+        isLoading={isLoading}
+        emptyMessage="No employees found"
+        keyExtractor={(employee) => employee.id}
+        skeletonRows={pageSize}
+        pagination={
+          data
+            ? {
+                pageNumber: data.pageNumber,
+                pageSize: data.pageSize,
+                totalCount: data.totalCount,
+                totalPages: data.totalPages,
+              }
+            : undefined
+        }
+        onPageChange={handlePageChange}
+        onPageSizeChange={handlePageSizeChange}
+        sortColumn={sortColumn}
+        sortDirection={sortDirection}
+        onSort={handleSort}
+      />
+    </div>
+  );
+}
+
+function SearchIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+      />
+    </svg>
+  );
+}

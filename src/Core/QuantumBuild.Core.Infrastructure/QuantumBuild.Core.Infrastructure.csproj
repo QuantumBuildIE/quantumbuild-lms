@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Core Application (for interfaces) -->
+    <ProjectReference Include="..\QuantumBuild.Core.Application\QuantumBuild.Core.Application.csproj" />
+
+    <!-- Module Application projects (for DbContext interfaces and entity types) -->
+    <ProjectReference Include="..\..\Modules\ToolboxTalks\QuantumBuild.Modules.ToolboxTalks.Application\QuantumBuild.Modules.ToolboxTalks.Application.csproj" />
+
+    <!-- Module Infrastructure projects (for entity configurations - configurations loaded via ApplyConfigurationsFromAssembly) -->
+    <ProjectReference Include="..\..\Modules\ToolboxTalks\QuantumBuild.Modules.ToolboxTalks.Infrastructure\QuantumBuild.Modules.ToolboxTalks.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.*" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="9.0.*" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.*">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.*" />
+    <PackageReference Include="Microsoft.Extensions.Http.Polly" Version="9.0.*" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.*" />
+  </ItemGroup>
+
+</Project>

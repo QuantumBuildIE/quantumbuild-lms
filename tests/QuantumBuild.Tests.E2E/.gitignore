@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Test Results
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Authentication State (contains tokens)
+playwright/.auth/
+
+# Screenshots and videos from failures
+screenshots/
+videos/
+
+# Build output
+dist/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Coverage
+coverage/

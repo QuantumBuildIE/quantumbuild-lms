@@ -1,0 +1,36 @@
+# .NET
+bin/
+obj/
+publish/
+*.user
+*.suo
+.vs/
+*.db
+# App settings - ignore files with real secrets
+appsettings.json
+appsettings.Development.json
+appsettings.Production.json
+
+# Allow test config (no real secrets)
+!appsettings.Testing.json
+
+# Node.js
+node_modules/
+.next/
+.env
+.env.local
+
+# IDE
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+# macOS
+.ds
+**/.ds
+
+nul
+
+

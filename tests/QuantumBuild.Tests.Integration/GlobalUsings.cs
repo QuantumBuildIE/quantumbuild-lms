@@ -1,0 +1,10 @@
+global using Xunit;
+global using FluentAssertions;
+global using QuantumBuild.Tests.Common.TestTenant;
+global using QuantumBuild.Tests.Common.Builders;
+global using QuantumBuild.Tests.Integration.Fixtures;
+global using QuantumBuild.Tests.Integration.Setup;
+global using QuantumBuild.Tests.Integration.Setup.Fakes;
+global using Microsoft.AspNetCore.Mvc.Testing;
+global using System.Net.Http.Json;
+global using System.Net;
