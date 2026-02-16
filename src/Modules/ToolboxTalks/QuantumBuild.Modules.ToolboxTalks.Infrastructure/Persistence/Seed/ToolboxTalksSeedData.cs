@@ -49,7 +49,7 @@ public static class ToolboxTalksSeedData
         await SeedToolboxTalkSettingsAsync(context, logger);
         var talks = await SeedToolboxTalksAsync(context, logger);
         var schedules = await SeedToolboxTalkSchedulesAsync(context, logger, talks);
-        await SeedScheduledTalksAsync(context, logger, talks, schedules);
+        logger.LogInformation("Skipping scheduled talks seed data (not needed for fresh deployment)");
     }
 
     private static async Task SeedToolboxTalkSettingsAsync(DbContext context, ILogger logger)
