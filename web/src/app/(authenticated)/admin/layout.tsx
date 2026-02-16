@@ -7,17 +7,13 @@ import { useHasAnyPermission } from "@/lib/auth/use-auth";
 import { cn } from "@/lib/utils";
 
 const adminNavItems = [
-  { href: "/admin/sites", label: "Sites" },
   { href: "/admin/employees", label: "Employees" },
-  { href: "/admin/companies", label: "Companies" },
   { href: "/admin/users", label: "Users" },
   { href: "/admin/toolbox-talks", label: "Toolbox Talks" },
 ];
 
 const corePermissions = [
-  "Core.ManageSites",
   "Core.ManageEmployees",
-  "Core.ManageCompanies",
   "Core.ManageUsers",
   "Core.Admin",
   "ToolboxTalks.Admin",
