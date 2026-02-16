@@ -8,38 +8,5 @@ export function getHomeRoute(user: User | null): string {
     return "/login";
   }
 
-  const { roles, permissions } = user;
-
-  // Admin goes to dashboard
-  if (roles.includes("Admin")) {
-    return "/dashboard";
-  }
-
-  // Finance goes to dashboard
-  if (roles.includes("Finance")) {
-    return "/dashboard";
-  }
-
-  // SiteManager goes to dashboard
-  if (roles.includes("SiteManager")) {
-    return "/dashboard";
-  }
-
-  // OfficeStaff goes to dashboard
-  if (roles.includes("OfficeStaff")) {
-    return "/dashboard";
-  }
-
-  // WarehouseStaff goes to dashboard
-  if (roles.includes("WarehouseStaff")) {
-    return "/dashboard";
-  }
-
-  // Fallback: check permissions directly
-  if (permissions.includes("ToolboxTalks.View")) {
-    return "/toolbox-talks";
-  }
-
-  // Default fallback
-  return "/dashboard";
+  return "/toolbox-talks";
 }

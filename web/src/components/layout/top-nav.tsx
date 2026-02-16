@@ -13,7 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, User, KeyRound, ClipboardList } from "lucide-react";
+import { LogOut, User, KeyRound, ClipboardList, Shield } from "lucide-react";
 import Link from "next/link";
 
 export function TopNav() {
@@ -37,7 +37,7 @@ export function TopNav() {
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-14 items-center justify-between px-4">
-        <Link href="/dashboard" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+        <Link href="/toolbox-talks" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
           <div className="flex items-center gap-2">
             <svg viewBox="0 0 46 46" fill="none" className="w-8 h-8">
               <circle cx="23" cy="23" r="21" fill="#4d8eff" fillOpacity="0.1" stroke="#4d8eff" strokeWidth="1.5" strokeOpacity="0.3"/>
@@ -105,6 +105,17 @@ export function TopNav() {
                 )}
               </Link>
             </DropdownMenuItem>
+            {user?.roles.includes("Admin") && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/admin">
+                    <Shield className="mr-2 h-4 w-4" />
+                    <span>Administration</span>
+                  </Link>
+                </DropdownMenuItem>
+              </>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
               <LogOut className="mr-2 h-4 w-4" />
