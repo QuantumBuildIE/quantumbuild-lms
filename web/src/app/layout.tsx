@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "QuantumBuild LMS",
+  title: "ComplyIQ",
   description: "Learning Management System for workplace safety training and compliance",
 };
 

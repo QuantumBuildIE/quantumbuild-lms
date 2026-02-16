@@ -111,7 +111,21 @@ function SetPasswordForm() {
     <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1 text-center">
-          <CardTitle className="text-2xl font-bold tracking-tight">QuantumBuild</CardTitle>
+          <div className="flex flex-col items-center gap-3">
+            <svg viewBox="0 0 46 46" fill="none" className="w-12 h-12">
+              <circle cx="23" cy="23" r="21" fill="#4d8eff" fillOpacity="0.1" stroke="#4d8eff" strokeWidth="1.5" strokeOpacity="0.3"/>
+              <path d="M23 10V23L30 30" stroke="#4d8eff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <circle cx="23" cy="23" r="3" fill="#4d8eff"/>
+              <circle cx="23" cy="7" r="2" fill="#4d8eff" opacity="0.6"/>
+              <circle cx="39" cy="23" r="2" fill="#4d8eff" opacity="0.6"/>
+              <circle cx="23" cy="39" r="2" fill="#4d8eff" opacity="0.6"/>
+              <circle cx="7" cy="23" r="2" fill="#4d8eff" opacity="0.6"/>
+            </svg>
+            <CardTitle className="text-2xl font-bold tracking-tight">
+              Comply<span className="text-[#4d8eff] font-extrabold">IQ</span>
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">Intelligent compliance, every time.</p>
+          </div>
           <CardDescription>Set up your account password</CardDescription>
         </CardHeader>
         <CardContent>
@@ -176,6 +190,9 @@ function SetPasswordForm() {
               </div>
             </form>
           )}
+          <div className="mt-6 text-center">
+            <span className="text-xs text-muted-foreground">A QuantumBuild Product</span>
+          </div>
         </CardContent>
       </Card>
     </div>
@@ -188,7 +205,9 @@ export default function SetPasswordPage() {
       <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 px-4">
         <Card className="w-full max-w-md">
           <CardHeader className="space-y-1 text-center">
-            <CardTitle className="text-2xl font-bold tracking-tight">QuantumBuild</CardTitle>
+            <CardTitle className="text-2xl font-bold tracking-tight">
+              Comply<span className="text-[#4d8eff] font-extrabold">IQ</span>
+            </CardTitle>
             <CardDescription>Loading...</CardDescription>
           </CardHeader>
         </Card>
