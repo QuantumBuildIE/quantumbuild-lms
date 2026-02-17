@@ -78,14 +78,14 @@ public static class ToolboxTalksSeedData
 
         await context.Set<ToolboxTalkSettings>().AddAsync(settings);
         await context.SaveChangesAsync();
-        logger.LogInformation("Created Toolbox Talk settings");
+        logger.LogInformation("Created Learning settings");
     }
 
     private static async Task<List<ToolboxTalk>> SeedToolboxTalksAsync(DbContext context, ILogger logger)
     {
         if (await context.Set<ToolboxTalk>().IgnoreQueryFilters().AnyAsync(t => t.TenantId == DefaultTenantId))
         {
-            logger.LogInformation("Toolbox Talks already exist, skipping");
+            logger.LogInformation("Learnings already exist, skipping");
             return await context.Set<ToolboxTalk>()
                 .IgnoreQueryFilters()
                 .Where(t => t.TenantId == DefaultTenantId)
@@ -174,7 +174,7 @@ public static class ToolboxTalksSeedData
         await context.Set<ToolboxTalkQuestion>().AddRangeAsync(questions);
         await context.SaveChangesAsync();
 
-        logger.LogInformation("Created {TalkCount} Toolbox Talks with {SectionCount} sections and {QuestionCount} questions",
+        logger.LogInformation("Created {TalkCount} Learnings with {SectionCount} sections and {QuestionCount} questions",
             talks.Count, sections.Count, questions.Count);
 
         // Reload with navigation properties
@@ -190,7 +190,7 @@ public static class ToolboxTalksSeedData
     {
         if (await context.Set<ToolboxTalkSchedule>().IgnoreQueryFilters().AnyAsync(s => s.TenantId == DefaultTenantId))
         {
-            logger.LogInformation("Toolbox Talk schedules already exist, skipping");
+            logger.LogInformation("Learning schedules already exist, skipping");
             return await context.Set<ToolboxTalkSchedule>()
                 .IgnoreQueryFilters()
                 .Where(s => s.TenantId == DefaultTenantId)

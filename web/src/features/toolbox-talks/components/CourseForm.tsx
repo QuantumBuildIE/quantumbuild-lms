@@ -570,16 +570,16 @@ export function CourseForm({ course }: CourseFormProps) {
           <div className="space-y-4 rounded-lg border p-6">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-medium">Talks</h2>
+                <h2 className="text-lg font-medium">Learnings</h2>
                 <p className="text-sm text-muted-foreground">
                   {courseItems.length === 0
                     ? 'Add learnings to this course.'
-                    : `${courseItems.length} talk${courseItems.length !== 1 ? 's' : ''} in this course. Drag to reorder.`}
+                    : `${courseItems.length} learning${courseItems.length !== 1 ? 's' : ''} in this course. Drag to reorder.`}
                 </p>
               </div>
               <Button type="button" variant="outline" onClick={() => setAddTalksOpen(true)}>
                 <PlusIcon className="mr-2 h-4 w-4" />
-                Add Talks
+                Add Learnings
               </Button>
             </div>
 
@@ -610,7 +610,7 @@ export function CourseForm({ course }: CourseFormProps) {
             ) : (
               <div className="rounded-md border border-dashed p-8 text-center">
                 <p className="text-sm text-muted-foreground">
-                  No talks added yet. Click &quot;Add Talks&quot; to select learnings for this course.
+                  No talks added yet. Click &quot;Add Learnings&quot; to select learnings for this course.
                 </p>
               </div>
             )}

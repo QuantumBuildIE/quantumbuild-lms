@@ -27,7 +27,7 @@ export default function AdminToolboxTalkDetailPage() {
         <Button variant="ghost" size="icon" onClick={() => router.push('/admin/toolbox-talks/talks')}>
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <span className="text-muted-foreground">Back to Talks</span>
+        <span className="text-muted-foreground">Back to Learnings</span>
       </div>
 
       <ToolboxTalkDetail talkId={talkId} onSchedule={handleSchedule} />

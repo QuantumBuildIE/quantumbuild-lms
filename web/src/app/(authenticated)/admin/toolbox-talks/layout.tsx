@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 
 const adminToolboxTalksNavItems = [
   { href: "/admin/toolbox-talks", label: "Overview", exact: true },
-  { href: "/admin/toolbox-talks/talks", label: "Talks" },
+  { href: "/admin/toolbox-talks/talks", label: "Learnings" },
   { href: "/admin/toolbox-talks/courses", label: "Courses" },
   { href: "/admin/toolbox-talks/schedules", label: "Schedules" },
   { href: "/admin/toolbox-talks/assignments", label: "Assignments" },

@@ -121,7 +121,7 @@ export function CourseList() {
     },
     {
       key: 'talkCount',
-      header: 'Talks',
+      header: 'Learnings',
       className: 'text-center',
       headerClassName: 'text-center',
       render: (item) => (

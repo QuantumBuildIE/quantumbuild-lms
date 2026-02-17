@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 
 // Employee-only navigation - simplified view for completing assigned talks
 const myTalksNavItems = [
-  { href: "/toolbox-talks", label: "My Talks", exact: true },
+  { href: "/toolbox-talks", label: "My Learnings", exact: true },
   { href: "/toolbox-talks/certificates", label: "My Certificates" },
 ];
 

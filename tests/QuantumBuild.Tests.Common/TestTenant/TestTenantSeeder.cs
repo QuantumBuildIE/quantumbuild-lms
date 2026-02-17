@@ -614,7 +614,7 @@ public class TestTenantSeeder
 
         await settings.AddAsync(settingsToCreate);
         await _context.SaveChangesAsync();
-        _logger.LogInformation("Created test toolbox talk settings");
+        _logger.LogInformation("Created test Learning settings");
     }
 
     private async Task SeedToolboxTalkEntitiesAsync()
@@ -623,7 +623,7 @@ public class TestTenantSeeder
 
         if (await toolboxTalks.IgnoreQueryFilters().AnyAsync(t => t.TenantId == TestTenantConstants.TenantId))
         {
-            _logger.LogInformation("Test toolbox talks already exist, skipping");
+            _logger.LogInformation("Test Learnings already exist, skipping");
             return;
         }
 
@@ -873,7 +873,7 @@ public class TestTenantSeeder
 
         await toolboxTalks.AddRangeAsync(new[] { basicTalk, talkWithQuiz, talkWithVideo });
         await _context.SaveChangesAsync();
-        _logger.LogInformation("Created 3 test toolbox talks with sections and questions");
+        _logger.LogInformation("Created 3 test Learnings with sections and questions");
     }
 
     private async Task SeedToolboxTalkSchedulesAsync()
@@ -882,7 +882,7 @@ public class TestTenantSeeder
 
         if (await schedules.IgnoreQueryFilters().AnyAsync(s => s.TenantId == TestTenantConstants.TenantId))
         {
-            _logger.LogInformation("Test toolbox talk schedules already exist, skipping");
+            _logger.LogInformation("Test Learning schedules already exist, skipping");
             return;
         }
 

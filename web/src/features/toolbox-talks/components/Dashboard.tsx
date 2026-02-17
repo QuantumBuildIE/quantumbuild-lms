@@ -457,9 +457,9 @@ export function Dashboard() {
       {/* KPI Cards */}
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-5">
         <KpiCard
-          title="Active Talks"
+          title="Active Learnings"
           value={dashboard?.activeTalks ?? 0}
-          subtitle={`${dashboard?.totalTalks ?? 0} total talks`}
+          subtitle={`${dashboard?.totalTalks ?? 0} total learnings`}
           icon={FileText}
           isLoading={isLoading}
         />
@@ -605,7 +605,7 @@ export function Dashboard() {
         {/* Top Talks by Completion */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Top Talks by Completion</CardTitle>
+            <CardTitle className="text-base">Top Learnings by Completion</CardTitle>
             <CardDescription>Most completed talks</CardDescription>
           </CardHeader>
           <CardContent>

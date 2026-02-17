@@ -394,10 +394,10 @@ export function AssignmentsList({
             }
           >
             <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Filter by talk" />
+              <SelectValue placeholder="Filter by learning" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Talks</SelectItem>
+              <SelectItem value="all">All Learnings</SelectItem>
               {talksData?.items.map((talk) => (
                 <SelectItem key={talk.id} value={talk.id}>
                   {talk.title}

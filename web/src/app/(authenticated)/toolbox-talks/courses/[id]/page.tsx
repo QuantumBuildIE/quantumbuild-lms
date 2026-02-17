@@ -161,7 +161,7 @@ export default function CourseViewerPage({ params }: { params: Promise<{ id: str
       <div className="space-y-4">
         <Button variant="ghost" size="sm" onClick={() => router.push('/toolbox-talks')}>
           <ArrowLeftIcon className="mr-2 h-4 w-4" />
-          Back to My Talks
+          Back to My Learnings
         </Button>
         <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
           <p className="text-destructive">
@@ -180,7 +180,7 @@ export default function CourseViewerPage({ params }: { params: Promise<{ id: str
       {/* Back button */}
       <Button variant="ghost" size="sm" onClick={() => router.push('/toolbox-talks')}>
         <ArrowLeftIcon className="mr-2 h-4 w-4" />
-        Back to My Talks
+        Back to My Learnings
       </Button>
 
       {/* Course header */}
@@ -234,7 +234,7 @@ export default function CourseViewerPage({ params }: { params: Promise<{ id: str
 
       {/* Talk list */}
       <div className="space-y-3">
-        <h2 className="text-lg font-semibold">Course Talks</h2>
+        <h2 className="text-lg font-semibold">Course Learnings</h2>
         <div className="space-y-2">
           {sortedTalks.map((talk) => (
             <TalkItem

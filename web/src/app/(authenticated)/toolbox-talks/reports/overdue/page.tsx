@@ -147,10 +147,10 @@ export default function OverdueReportPage() {
                 onValueChange={(value) => updateUrlParams({ toolboxTalkId: value === 'all' ? null : value })}
               >
                 <SelectTrigger className="w-[250px]">
-                  <SelectValue placeholder="All Talks" />
+                  <SelectValue placeholder="All Learnings" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Talks</SelectItem>
+                  <SelectItem value="all">All Learnings</SelectItem>
                   {talksData?.items?.map((talk) => (
                     <SelectItem key={talk.id} value={talk.id}>
                       {talk.title}

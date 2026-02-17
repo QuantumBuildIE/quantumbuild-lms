@@ -65,7 +65,7 @@ export default function CertificatesPage() {
           </div>
         </div>
         <Link href="/toolbox-talks">
-          <Button variant="outline">Back to My Talks</Button>
+          <Button variant="outline">Back to My Learnings</Button>
         </Link>
       </div>
 

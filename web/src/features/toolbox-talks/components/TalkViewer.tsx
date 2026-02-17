@@ -422,7 +422,7 @@ export function TalkViewer({ scheduledTalkId }: TalkViewerProps) {
               {error instanceof Error ? error.message : 'An unexpected error occurred'}
             </p>
             <Button asChild>
-              <Link href="/toolbox-talks">Back to My Talks</Link>
+              <Link href="/toolbox-talks">Back to My Learnings</Link>
             </Button>
           </div>
         </Card>

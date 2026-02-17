@@ -598,7 +598,7 @@ public class MyToolboxTalksController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving toolbox talks summary");
+            _logger.LogError(ex, "Error retrieving Learnings summary");
             return StatusCode(500, new { message = "Error retrieving summary" });
         }
     }

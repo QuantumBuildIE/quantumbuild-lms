@@ -62,7 +62,7 @@ export default function ToolboxTalkEditPage() {
             {error instanceof Error ? error.message : 'Toolbox talk not found'}
           </p>
           <Button className="mt-4" onClick={() => router.push('/toolbox-talks/talks')}>
-            Back to Talks
+            Back to Learnings
           </Button>
         </Card>
       </div>

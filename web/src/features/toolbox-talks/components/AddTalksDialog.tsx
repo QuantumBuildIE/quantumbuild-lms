@@ -80,9 +80,9 @@ export function AddTalksDialog({ open, onOpenChange, excludeTalkIds, onAdd }: Ad
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Add Talks to Course</DialogTitle>
+          <DialogTitle>Add Learnings to Course</DialogTitle>
           <DialogDescription>
-            Select learnings to add to this course. Only active talks are shown.
+            Select learnings to add to this course. Only active learnings are shown.
           </DialogDescription>
         </DialogHeader>
 
@@ -90,7 +90,7 @@ export function AddTalksDialog({ open, onOpenChange, excludeTalkIds, onAdd }: Ad
           <div className="relative">
             <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search talks..."
+              placeholder="Search learnings..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
@@ -158,7 +158,7 @@ export function AddTalksDialog({ open, onOpenChange, excludeTalkIds, onAdd }: Ad
             Cancel
           </Button>
           <Button onClick={handleAdd} disabled={selectedIds.size === 0}>
-            Add {selectedIds.size > 0 ? `${selectedIds.size} Talk${selectedIds.size > 1 ? 's' : ''}` : 'Talks'}
+            Add {selectedIds.size > 0 ? `${selectedIds.size} Learning${selectedIds.size > 1 ? 's' : ''}` : 'Learnings'}
           </Button>
         </DialogFooter>
       </DialogContent>

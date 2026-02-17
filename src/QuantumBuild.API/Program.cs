@@ -325,11 +325,11 @@ static async Task SeedToolboxTalksDataAsync(IServiceProvider serviceProvider)
     {
         var context = services.GetRequiredService<DbContext>();
         await ToolboxTalksSeedData.SeedAsync(context, logger);
-        logger.LogInformation("Toolbox Talks module seeding completed");
+        logger.LogInformation("Learnings module seeding completed");
     }
     catch (Exception ex)
     {
-        logger.LogError(ex, "Error seeding Toolbox Talks module data");
+        logger.LogError(ex, "Error seeding Learnings module data");
         throw;
     }
 }

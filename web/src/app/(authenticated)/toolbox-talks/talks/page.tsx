@@ -17,9 +17,9 @@ export default function ToolboxTalksListPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Toolbox Talks</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Learnings</h1>
         <p className="text-muted-foreground">
-          Manage and schedule safety toolbox talks
+          Manage and schedule safety learnings
         </p>
       </div>
 
