@@ -213,6 +213,10 @@ public class ContentDeduplicationService : IContentDeduplicationService
             var questionsCopied = 0;
             var translationsCopied = 0;
 
+            // Build source→target ID maps for remapping translation JSON
+            var sectionIdMap = new Dictionary<Guid, Guid>();
+            var questionIdMap = new Dictionary<Guid, Guid>();
+
             // Copy sections
             foreach (var sourceSection in source.Sections.OrderBy(s => s.SectionNumber))
             {
@@ -230,6 +234,7 @@ public class ContentDeduplicationService : IContentDeduplicationService
                     CreatedBy = currentUser
                 };
 
+                sectionIdMap[sourceSection.Id] = newSection.Id;
                 _dbContext.ToolboxTalkSections.Add(newSection);
                 sectionsCopied++;
             }
@@ -255,13 +260,22 @@ public class ContentDeduplicationService : IContentDeduplicationService
                     CreatedBy = currentUser
                 };
 
+                questionIdMap[sourceQuestion.Id] = newQuestion.Id;
                 _dbContext.ToolboxTalkQuestions.Add(newQuestion);
                 questionsCopied++;
             }
 
-            // Copy translations
+            // Copy translations with remapped section/question IDs
             foreach (var sourceTranslation in source.Translations)
             {
+                var remappedSections = sectionIdMap.Count > 0
+                    ? RemapTranslatedSections(sourceTranslation.TranslatedSections, sectionIdMap)
+                    : sourceTranslation.TranslatedSections;
+
+                var remappedQuestions = sourceTranslation.TranslatedQuestions != null && questionIdMap.Count > 0
+                    ? RemapTranslatedQuestions(sourceTranslation.TranslatedQuestions, questionIdMap)
+                    : sourceTranslation.TranslatedQuestions;
+
                 var newTranslation = new ToolboxTalkTranslation
                 {
                     Id = Guid.NewGuid(),
@@ -270,8 +284,8 @@ public class ContentDeduplicationService : IContentDeduplicationService
                     LanguageCode = sourceTranslation.LanguageCode,
                     TranslatedTitle = sourceTranslation.TranslatedTitle,
                     TranslatedDescription = sourceTranslation.TranslatedDescription,
-                    TranslatedSections = sourceTranslation.TranslatedSections,
-                    TranslatedQuestions = sourceTranslation.TranslatedQuestions,
+                    TranslatedSections = remappedSections,
+                    TranslatedQuestions = remappedQuestions,
                     EmailSubject = sourceTranslation.EmailSubject,
                     EmailBody = sourceTranslation.EmailBody,
                     TranslatedAt = currentTime,
@@ -545,6 +559,10 @@ public class ContentDeduplicationService : IContentDeduplicationService
             var slideshowCopied = false;
             var translationsCopied = 0;
 
+            // Build source→target ID maps for remapping translation JSON
+            var sectionIdMap = new Dictionary<Guid, Guid>();
+            var questionIdMap = new Dictionary<Guid, Guid>();
+
             // Copy sections if requested
             if (options.CopySections && source.Sections.Count > 0)
             {
@@ -572,6 +590,7 @@ public class ContentDeduplicationService : IContentDeduplicationService
                         CreatedBy = currentUser
                     };
 
+                    sectionIdMap[sourceSection.Id] = newSection.Id;
                     _dbContext.ToolboxTalkSections.Add(newSection);
                     sectionsCopied++;
                 }
@@ -608,6 +627,7 @@ public class ContentDeduplicationService : IContentDeduplicationService
                         CreatedBy = currentUser
                     };
 
+                    questionIdMap[sourceQuestion.Id] = newQuestion.Id;
                     _dbContext.ToolboxTalkQuestions.Add(newQuestion);
                     questionsCopied++;
                 }
@@ -697,7 +717,7 @@ public class ContentDeduplicationService : IContentDeduplicationService
                 }
             }
 
-            // Copy translations if requested
+            // Copy translations if requested, remapping section/question IDs when those were also copied
             if (options.CopyTranslations && source.Translations.Count > 0)
             {
                 // Soft delete existing translations on target
@@ -710,6 +730,15 @@ public class ContentDeduplicationService : IContentDeduplicationService
 
                 foreach (var sourceTranslation in source.Translations)
                 {
+                    // Only remap IDs for content types that were actually copied
+                    var remappedSections = options.CopySections && sectionIdMap.Count > 0
+                        ? RemapTranslatedSections(sourceTranslation.TranslatedSections, sectionIdMap)
+                        : sourceTranslation.TranslatedSections;
+
+                    var remappedQuestions = options.CopyQuestions && sourceTranslation.TranslatedQuestions != null && questionIdMap.Count > 0
+                        ? RemapTranslatedQuestions(sourceTranslation.TranslatedQuestions, questionIdMap)
+                        : sourceTranslation.TranslatedQuestions;
+
                     var newTranslation = new ToolboxTalkTranslation
                     {
                         Id = Guid.NewGuid(),
@@ -718,8 +747,8 @@ public class ContentDeduplicationService : IContentDeduplicationService
                         LanguageCode = sourceTranslation.LanguageCode,
                         TranslatedTitle = sourceTranslation.TranslatedTitle,
                         TranslatedDescription = sourceTranslation.TranslatedDescription,
-                        TranslatedSections = sourceTranslation.TranslatedSections,
-                        TranslatedQuestions = sourceTranslation.TranslatedQuestions,
+                        TranslatedSections = remappedSections,
+                        TranslatedQuestions = remappedQuestions,
                         EmailSubject = sourceTranslation.EmailSubject,
                         EmailBody = sourceTranslation.EmailBody,
                         TranslatedAt = currentTime,
@@ -888,6 +917,88 @@ public class ContentDeduplicationService : IContentDeduplicationService
         toolboxTalk.UpdatedBy = _currentUser.UserId ?? "System";
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Remaps SectionId values in the TranslatedSections JSON from source IDs to target IDs.
+    /// JSON format: [{SectionId, Title, Content}, ...]
+    /// </summary>
+    private string RemapTranslatedSections(string json, Dictionary<Guid, Guid> sectionIdMap)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var sections = new List<Dictionary<string, object>>();
+
+            foreach (var element in doc.RootElement.EnumerateArray())
+            {
+                var section = new Dictionary<string, object>();
+
+                foreach (var prop in element.EnumerateObject())
+                {
+                    if (prop.Name.Equals("SectionId", StringComparison.OrdinalIgnoreCase)
+                        && prop.Value.TryGetGuid(out var oldId)
+                        && sectionIdMap.TryGetValue(oldId, out var newId))
+                    {
+                        section[prop.Name] = newId;
+                    }
+                    else
+                    {
+                        section[prop.Name] = prop.Value.Clone();
+                    }
+                }
+
+                sections.Add(section);
+            }
+
+            return JsonSerializer.Serialize(sections);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to remap section IDs in translation JSON. Returning original.");
+            return json;
+        }
+    }
+
+    /// <summary>
+    /// Remaps QuestionId values in the TranslatedQuestions JSON from source IDs to target IDs.
+    /// JSON format: [{QuestionId, QuestionText, Options}, ...]
+    /// </summary>
+    private string RemapTranslatedQuestions(string json, Dictionary<Guid, Guid> questionIdMap)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var questions = new List<Dictionary<string, object>>();
+
+            foreach (var element in doc.RootElement.EnumerateArray())
+            {
+                var question = new Dictionary<string, object>();
+
+                foreach (var prop in element.EnumerateObject())
+                {
+                    if (prop.Name.Equals("QuestionId", StringComparison.OrdinalIgnoreCase)
+                        && prop.Value.TryGetGuid(out var oldId)
+                        && questionIdMap.TryGetValue(oldId, out var newId))
+                    {
+                        question[prop.Name] = newId;
+                    }
+                    else
+                    {
+                        question[prop.Name] = prop.Value.Clone();
+                    }
+                }
+
+                questions.Add(question);
+            }
+
+            return JsonSerializer.Serialize(questions);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to remap question IDs in translation JSON. Returning original.");
+            return json;
+        }
     }
 
     /// <summary>
