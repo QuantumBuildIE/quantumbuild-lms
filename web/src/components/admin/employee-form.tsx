@@ -32,47 +32,47 @@ import { Info, User as UserIcon } from "lucide-react";
 import { EmployeeUserAccountSection } from "./employee-user-account-section";
 
 const AVAILABLE_ROLES = [
+  { value: "Admin", label: "Admin" },
   { value: "SiteManager", label: "Site Manager" },
   { value: "WarehouseStaff", label: "Warehouse Staff" },
   { value: "OfficeStaff", label: "Office Staff" },
   { value: "Finance", label: "Finance" },
-  { value: "Admin", label: "Admin" },
 ] as const;
 
 // Supported languages for Learning subtitles
 // Most common construction worker languages in Ireland/UK listed first
 const SUPPORTED_LANGUAGES: Array<{ code: string; name: string; nativeName?: string }> = [
-  { code: "en", name: "English" },
-  { code: "pl", name: "Polish", nativeName: "Polski" },
-  { code: "ro", name: "Romanian", nativeName: "Română" },
-  { code: "lt", name: "Lithuanian", nativeName: "Lietuvių" },
-  { code: "pt", name: "Portuguese", nativeName: "Português" },
-  { code: "es", name: "Spanish", nativeName: "Español" },
-  { code: "lv", name: "Latvian", nativeName: "Latviešu" },
-  { code: "ru", name: "Russian", nativeName: "Русский" },
-  { code: "uk", name: "Ukrainian", nativeName: "Українська" },
-  { code: "bg", name: "Bulgarian", nativeName: "Български" },
-  { code: "cs", name: "Czech", nativeName: "Čeština" },
-  { code: "hr", name: "Croatian", nativeName: "Hrvatski" },
-  { code: "hu", name: "Hungarian", nativeName: "Magyar" },
-  { code: "sk", name: "Slovak", nativeName: "Slovenčina" },
+  { code: "af", name: "Afrikaans", nativeName: "Afrikaans" },
   { code: "ar", name: "Arabic", nativeName: "العربية" },
+  { code: "bg", name: "Bulgarian", nativeName: "Български" },
   { code: "zh", name: "Chinese", nativeName: "中文" },
+  { code: "hr", name: "Croatian", nativeName: "Hrvatski" },
+  { code: "cs", name: "Czech", nativeName: "Čeština" },
   { code: "da", name: "Danish", nativeName: "Dansk" },
   { code: "nl", name: "Dutch", nativeName: "Nederlands" },
+  { code: "en", name: "English" },
   { code: "fi", name: "Finnish", nativeName: "Suomi" },
   { code: "fr", name: "French", nativeName: "Français" },
   { code: "de", name: "German", nativeName: "Deutsch" },
   { code: "el", name: "Greek", nativeName: "Ελληνικά" },
   { code: "hi", name: "Hindi", nativeName: "हिन्दी" },
+  { code: "hu", name: "Hungarian", nativeName: "Magyar" },
   { code: "it", name: "Italian", nativeName: "Italiano" },
   { code: "ja", name: "Japanese", nativeName: "日本語" },
   { code: "ko", name: "Korean", nativeName: "한국어" },
+  { code: "lv", name: "Latvian", nativeName: "Latviešu" },
+  { code: "lt", name: "Lithuanian", nativeName: "Lietuvių" },
   { code: "no", name: "Norwegian", nativeName: "Norsk" },
+  { code: "pl", name: "Polish", nativeName: "Polski" },
+  { code: "pt", name: "Portuguese", nativeName: "Português" },
+  { code: "ro", name: "Romanian", nativeName: "Română" },
+  { code: "ru", name: "Russian", nativeName: "Русский" },
+  { code: "sk", name: "Slovak", nativeName: "Slovenčina" },
+  { code: "es", name: "Spanish", nativeName: "Español" },
   { code: "sv", name: "Swedish", nativeName: "Svenska" },
   { code: "tr", name: "Turkish", nativeName: "Türkçe" },
+  { code: "uk", name: "Ukrainian", nativeName: "Українська" },
   { code: "vi", name: "Vietnamese", nativeName: "Tiếng Việt" },
-  { code: "af", name: "Afrikaans", nativeName: "Afrikaans" },
 ];
 
 const employeeFormSchema = z.object({
