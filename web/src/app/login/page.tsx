@@ -85,7 +85,7 @@ function LoginForm() {
             <circle cx="7" cy="23" r="2" fill="#4d8eff" opacity="0.6"/>
           </svg>
           <CardTitle className="text-2xl font-bold tracking-tight">
-            Comply<span className="text-[#4d8eff] font-extrabold">IQ</span>
+            Certified<span className="text-[#4d8eff] font-extrabold">IQ</span>
           </CardTitle>
           <p className="text-sm text-muted-foreground">Intelligent compliance, every time.</p>
         </div>
@@ -150,7 +150,7 @@ export default function LoginPage() {
         <Card className="w-full max-w-md">
           <CardHeader className="space-y-1 text-center">
             <CardTitle className="text-2xl font-bold tracking-tight">
-              Comply<span className="text-[#4d8eff] font-extrabold">IQ</span>
+              Certified<span className="text-[#4d8eff] font-extrabold">IQ</span>
             </CardTitle>
             <CardDescription>Loading...</CardDescription>
           </CardHeader>

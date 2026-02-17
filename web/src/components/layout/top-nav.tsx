@@ -49,7 +49,7 @@ export function TopNav() {
               <circle cx="7" cy="23" r="2" fill="#4d8eff" opacity="0.6"/>
             </svg>
             <span className="text-lg font-bold tracking-tight">
-              Comply<span className="text-[#4d8eff] font-extrabold">IQ</span>
+              Certified<span className="text-[#4d8eff] font-extrabold">IQ</span>
             </span>
           </div>
         </Link>
