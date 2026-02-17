@@ -141,7 +141,7 @@ export default function AdminOverdueReportPage() {
               </Select>
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">Toolbox Talk</label>
+              <label className="text-sm font-medium">Learning</label>
               <Select
                 value={toolboxTalkId || 'all'}
                 onValueChange={(value) => updateUrlParams({ toolboxTalkId: value === 'all' ? null : value })}
@@ -177,7 +177,7 @@ export default function AdminOverdueReportPage() {
               <TableRow>
                 <TableHead>Employee</TableHead>
                 <TableHead>Site</TableHead>
-                <TableHead>Toolbox Talk</TableHead>
+                <TableHead>Learning</TableHead>
                 <TableHead className="text-right">Due Date</TableHead>
                 <TableHead className="text-right">Days Overdue</TableHead>
                 <TableHead className="text-center">Progress</TableHead>

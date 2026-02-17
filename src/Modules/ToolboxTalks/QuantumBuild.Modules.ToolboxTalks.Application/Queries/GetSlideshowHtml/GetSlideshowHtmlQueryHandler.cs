@@ -22,7 +22,7 @@ public class GetSlideshowHtmlQueryHandler : IRequestHandler<GetSlideshowHtmlQuer
             .FirstOrDefaultAsync(cancellationToken);
 
         if (talk == null)
-            return Result.Fail<SlideshowHtmlDto>("Toolbox talk not found");
+            return Result.Fail<SlideshowHtmlDto>("Learning not found");
 
         if (string.IsNullOrEmpty(talk.SlideshowHtml))
             return Result.Fail<SlideshowHtmlDto>("No slideshow available for this talk");

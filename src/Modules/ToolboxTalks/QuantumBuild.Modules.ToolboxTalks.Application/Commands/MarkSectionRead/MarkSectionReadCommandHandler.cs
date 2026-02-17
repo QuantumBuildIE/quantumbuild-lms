@@ -75,7 +75,7 @@ public class MarkSectionReadCommandHandler : IRequestHandler<MarkSectionReadComm
 
         if (section == null)
         {
-            throw new InvalidOperationException($"Section with ID '{request.SectionId}' does not belong to this toolbox talk.");
+            throw new InvalidOperationException($"Section with ID '{request.SectionId}' does not belong to this learning.");
         }
 
         // Validate sequential order - all previous sections must be read

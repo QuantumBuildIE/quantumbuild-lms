@@ -97,7 +97,7 @@ public class ContentExtractionService : IContentExtractionService
                 CombinedContent: null,
                 VideoContent: null,
                 PdfContent: null,
-                Errors: new List<string> { "Toolbox Talk not found" },
+                Errors: new List<string> { "Learning not found" },
                 Warnings: new List<string>());
         }
 

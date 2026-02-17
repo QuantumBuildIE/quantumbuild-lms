@@ -32,31 +32,31 @@ const tabConfigs: TabConfig[] = [
     value: 'pending',
     label: 'Pending',
     emptyTitle: 'No pending talks',
-    emptyDescription: 'You have no pending toolbox talks to complete.',
+    emptyDescription: 'You have no pending learnings to complete.',
   },
   {
     value: 'in-progress',
     label: 'In Progress',
     emptyTitle: 'No talks in progress',
-    emptyDescription: 'You have no toolbox talks currently in progress.',
+    emptyDescription: 'You have no learnings currently in progress.',
   },
   {
     value: 'overdue',
     label: 'Overdue',
     emptyTitle: 'No overdue talks',
-    emptyDescription: 'Great job! You have no overdue toolbox talks.',
+    emptyDescription: 'Great job! You have no overdue learnings.',
   },
   {
     value: 'completed',
     label: 'Completed',
     emptyTitle: 'No completed talks',
-    emptyDescription: 'You haven\'t completed any toolbox talks yet.',
+    emptyDescription: 'You haven\'t completed any learnings yet.',
   },
   {
     value: 'all',
     label: 'All',
-    emptyTitle: 'No toolbox talks',
-    emptyDescription: 'You have no assigned toolbox talks.',
+    emptyTitle: 'No learnings',
+    emptyDescription: 'You have no assigned learnings.',
   },
 ];
 
@@ -137,7 +137,7 @@ function ErrorState({ message }: { message: string }) {
 
 function TabContent({ tab, data, isLoading, error, onAction }: TabContentProps) {
   if (error) {
-    return <ErrorState message="Failed to load toolbox talks. Please try again." />;
+    return <ErrorState message="Failed to load learnings. Please try again." />;
   }
 
   if (!isLoading && (!data || data.length === 0)) {
@@ -191,7 +191,7 @@ export function MyTalksList() {
       {/* Header */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">My Toolbox Talks</h1>
+          <h1 className="text-2xl font-bold tracking-tight">My Learnings</h1>
           <p className="text-muted-foreground">
             Complete your assigned safety training talks
           </p>

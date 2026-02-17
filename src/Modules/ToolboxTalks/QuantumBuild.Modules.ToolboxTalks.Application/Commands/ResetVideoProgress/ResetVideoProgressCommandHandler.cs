@@ -69,7 +69,7 @@ public class ResetVideoProgressCommandHandler : IRequestHandler<ResetVideoProgre
         // Validate there is a video for this talk
         if (string.IsNullOrEmpty(scheduledTalk.ToolboxTalk.VideoUrl))
         {
-            throw new InvalidOperationException("This toolbox talk does not have a video.");
+            throw new InvalidOperationException("This learning does not have a video.");
         }
 
         // Reset video progress to 0

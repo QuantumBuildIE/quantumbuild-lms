@@ -87,9 +87,9 @@ export function BasicInfoStep({
     setError(null);
 
     try {
-      // If we don't have an ID yet, create the toolbox talk as a draft
+      // If we don't have an ID yet, create the learning as a draft
       if (!data.id) {
-        console.log('📝 No ID exists, creating new toolbox talk...');
+        console.log('📝 No ID exists, creating new learning...');
         const response = await createToolboxTalk({
           title: formData.title,
           description: formData.description,
@@ -142,7 +142,7 @@ export function BasicInfoStep({
           <div>
             <h2 className="text-lg font-semibold">Basic Information</h2>
             <p className="text-sm text-muted-foreground">
-              Enter the title and description for this Toolbox Talk
+              Enter the title and description for this Learning
             </p>
           </div>
 
@@ -244,7 +244,7 @@ export function BasicInfoStep({
                 <FormLabel>Description *</FormLabel>
                 <FormControl>
                   <Textarea
-                    placeholder="Describe what employees will learn from this Toolbox Talk..."
+                    placeholder="Describe what employees will learn from this Learning..."
                     className="min-h-[120px]"
                     {...field}
                   />

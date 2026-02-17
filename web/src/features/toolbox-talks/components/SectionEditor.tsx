@@ -88,7 +88,7 @@ export function SectionEditor({ form, fieldName = 'sections' }: SectionEditorPro
           <div className="rounded-lg border border-dashed p-8 text-center">
             <p className="text-muted-foreground">No sections added yet.</p>
             <p className="text-sm text-muted-foreground mt-1">
-              Add sections to structure the content of your toolbox talk.
+              Add sections to structure the content of your learning.
             </p>
             <Button
               type="button"

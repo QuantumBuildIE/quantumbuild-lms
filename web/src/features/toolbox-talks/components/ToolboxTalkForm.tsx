@@ -304,7 +304,7 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'An error occurred';
-      toast.error(isEditing ? 'Failed to update toolbox talk' : 'Failed to create toolbox talk', {
+      toast.error(isEditing ? 'Failed to update learning' : 'Failed to create learning', {
         description: message,
       });
     }
@@ -327,7 +327,7 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
                   <FormItem className="sm:col-span-2">
                     <FormLabel>Title *</FormLabel>
                     <FormControl>
-                      <Input placeholder="Enter toolbox talk title..." {...field} />
+                      <Input placeholder="Enter learning title..." {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -619,7 +619,7 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
                   <div className="space-y-1 leading-none">
                     <FormLabel>Requires Quiz</FormLabel>
                     <FormDescription>
-                      Employees must pass a quiz to complete this toolbox talk.
+                      Employees must pass a quiz to complete this learning.
                     </FormDescription>
                   </div>
                 </FormItem>
@@ -974,9 +974,9 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
                 {isEditing ? 'Updating...' : 'Creating...'}
               </>
             ) : isEditing ? (
-              'Update Toolbox Talk'
+              'Update Learning'
             ) : (
-              'Create Toolbox Talk'
+              'Create Learning'
             )}
           </Button>
         </div>

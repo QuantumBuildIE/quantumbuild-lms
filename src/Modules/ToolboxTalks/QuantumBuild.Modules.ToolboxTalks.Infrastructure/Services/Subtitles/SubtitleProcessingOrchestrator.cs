@@ -434,7 +434,7 @@ public class SubtitleProcessingOrchestrator : ISubtitleProcessingOrchestrator
             .FirstOrDefaultAsync(cancellationToken);
 
         if (job == null)
-            throw new InvalidOperationException("No processing job found for this toolbox talk");
+            throw new InvalidOperationException("No processing job found for this learning");
 
         var failedTranslations = job.Translations
             .Where(t => t.Status == SubtitleTranslationStatus.Failed)

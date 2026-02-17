@@ -14,7 +14,7 @@ const reportCards = [
   },
   {
     title: 'Overdue Report',
-    description: 'View and manage overdue toolbox talk assignments',
+    description: 'View and manage overdue learning assignments',
     icon: AlertTriangle,
     href: '/admin/toolbox-talks/reports/overdue',
     color: 'text-red-600',
@@ -32,9 +32,9 @@ export default function AdminToolboxTalksReportsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Toolbox Talks Reports</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Learnings Reports</h1>
         <p className="text-muted-foreground">
-          Compliance reports and analytics for toolbox talk training
+          Compliance reports and analytics for learning training
         </p>
       </div>
 

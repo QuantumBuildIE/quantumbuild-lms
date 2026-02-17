@@ -25,7 +25,7 @@ public class CreateToolboxTalkCommandHandler : IRequestHandler<CreateToolboxTalk
 
         if (titleExists)
         {
-            throw new InvalidOperationException($"A toolbox talk with title '{request.Title}' already exists.");
+            throw new InvalidOperationException($"A learning with title '{request.Title}' already exists.");
         }
 
         // Create the toolbox talk

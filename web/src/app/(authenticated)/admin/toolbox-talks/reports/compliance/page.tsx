@@ -108,7 +108,7 @@ export default function AdminComplianceReportPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Compliance Report</h1>
           <p className="text-muted-foreground">
-            Overall toolbox talk compliance metrics
+            Overall learning compliance metrics
             {report && ` - Generated ${format(new Date(report.generatedAt), 'PPp')}`}
           </p>
         </div>
@@ -371,7 +371,7 @@ export default function AdminComplianceReportPage() {
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <FileText className="h-5 w-5" />
-            Compliance by Toolbox Talk
+            Compliance by Learning
           </CardTitle>
         </CardHeader>
         <CardContent>

@@ -17,7 +17,7 @@ export default function NewSchedulePage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Create Schedule</h1>
           <p className="text-muted-foreground">
-            Schedule a toolbox talk for employees
+            Schedule a learning for employees
           </p>
         </div>
       </div>

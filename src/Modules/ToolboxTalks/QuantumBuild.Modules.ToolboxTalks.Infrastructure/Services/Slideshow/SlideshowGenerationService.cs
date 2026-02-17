@@ -41,7 +41,7 @@ public class SlideshowGenerationService : ISlideshowGenerationService
                 && !t.IsDeleted, cancellationToken);
 
         if (talk == null)
-            return Result.Fail<string>("Toolbox talk not found");
+            return Result.Fail<string>("Learning not found");
 
         if (string.IsNullOrEmpty(talk.PdfUrl))
             return Result.Fail<string>("No PDF attached to this talk");

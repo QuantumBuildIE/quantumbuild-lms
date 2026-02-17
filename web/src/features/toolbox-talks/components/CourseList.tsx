@@ -257,7 +257,7 @@ export function CourseList() {
         columns={columns}
         data={data || []}
         isLoading={isLoading}
-        emptyMessage="No courses found. Create your first course to group toolbox talks together."
+        emptyMessage="No courses found. Create your first course to group learnings together."
         keyExtractor={(item) => item.id}
       />
 

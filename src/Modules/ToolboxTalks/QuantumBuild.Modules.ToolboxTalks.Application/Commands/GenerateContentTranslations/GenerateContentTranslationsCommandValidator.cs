@@ -11,7 +11,7 @@ public class GenerateContentTranslationsCommandValidator : AbstractValidator<Gen
     {
         RuleFor(x => x.ToolboxTalkId)
             .NotEmpty()
-            .WithMessage("Toolbox talk ID is required");
+            .WithMessage("Learning ID is required");
 
         RuleFor(x => x.TenantId)
             .NotEmpty()

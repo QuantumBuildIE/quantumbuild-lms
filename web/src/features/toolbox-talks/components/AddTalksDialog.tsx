@@ -82,7 +82,7 @@ export function AddTalksDialog({ open, onOpenChange, excludeTalkIds, onAdd }: Ad
         <DialogHeader>
           <DialogTitle>Add Talks to Course</DialogTitle>
           <DialogDescription>
-            Select toolbox talks to add to this course. Only active talks are shown.
+            Select learnings to add to this course. Only active talks are shown.
           </DialogDescription>
         </DialogHeader>
 

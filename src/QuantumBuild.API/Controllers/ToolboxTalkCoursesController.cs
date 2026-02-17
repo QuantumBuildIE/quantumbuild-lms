@@ -54,8 +54,8 @@ public class ToolboxTalkCoursesController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving toolbox talk courses");
-            return StatusCode(500, Result.Fail("Error retrieving toolbox talk courses"));
+            _logger.LogError(ex, "Error retrieving learning courses");
+            return StatusCode(500, Result.Fail("Error retrieving learning courses"));
         }
     }
 

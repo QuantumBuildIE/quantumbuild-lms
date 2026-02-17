@@ -74,13 +74,13 @@ export function PendingTrainingBanner() {
   // Build the message based on what types of training are pending
   let message = "";
   if (hasOverdue) {
-    message = `You have ${overdueCount} overdue Toolbox Talk${overdueCount !== 1 ? "s" : ""} requiring immediate attention`;
+    message = `You have ${overdueCount} overdue Learning${overdueCount !== 1 ? "s" : ""} requiring immediate attention`;
     if (pendingCount > 0 || inProgressCount > 0) {
       message += ` and ${pendingCount + inProgressCount} more pending`;
     }
     message += ".";
   } else {
-    message = `You have ${totalCount} pending Toolbox Talk${totalCount !== 1 ? "s" : ""} to complete.`;
+    message = `You have ${totalCount} pending Learning${totalCount !== 1 ? "s" : ""} to complete.`;
   }
 
   return (

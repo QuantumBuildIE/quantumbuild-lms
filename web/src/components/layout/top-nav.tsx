@@ -93,7 +93,7 @@ export function TopNav() {
               <Link href="/toolbox-talks" className="flex items-center justify-between w-full">
                 <span className="flex items-center">
                   <ClipboardList className="mr-2 h-4 w-4" />
-                  <span>My Toolbox Talks</span>
+                  <span>My Learnings</span>
                 </span>
                 {pendingTrainingCount > 0 && (
                   <Badge

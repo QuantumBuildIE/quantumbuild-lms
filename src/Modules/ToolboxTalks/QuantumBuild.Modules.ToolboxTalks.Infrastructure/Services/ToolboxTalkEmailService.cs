@@ -43,7 +43,7 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
         var baseUrl = _configuration["AppSettings:BaseUrl"] ?? "https://quantumbuild-lms-web-production.up.railway.app";
         var talkUrl = $"{baseUrl}/login?returnUrl={Uri.EscapeDataString($"/toolbox-talks/{scheduledTalk.Id}")}";
 
-        var subject = $"New Toolbox Talk Assigned: {scheduledTalk.ToolboxTalk.Title}";
+        var subject = $"New Learning Assigned: {scheduledTalk.ToolboxTalk.Title}";
         var body = $@"
 <!DOCTYPE html>
 <html>
@@ -61,11 +61,11 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
 <body>
     <div class='container'>
         <div class='header'>
-            <h1>New Toolbox Talk Assigned</h1>
+            <h1>New Learning Assigned</h1>
         </div>
         <div class='content'>
             <p>Dear {employee.FirstName},</p>
-            <p>A new toolbox talk has been assigned to you:</p>
+            <p>A new learning has been assigned to you:</p>
             <p><strong>{scheduledTalk.ToolboxTalk.Title}</strong></p>
             {(string.IsNullOrEmpty(scheduledTalk.ToolboxTalk.Description) ? "" : $"<p>{scheduledTalk.ToolboxTalk.Description}</p>")}
             <p><strong>Due Date:</strong> {scheduledTalk.DueDate:dd MMM yyyy}</p>
@@ -153,7 +153,7 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
         </div>
         <div class='content'>
             <p>Dear {employee.FirstName},</p>
-            <p>This is reminder #{reminderNumber} for an overdue toolbox talk:</p>
+            <p>This is reminder #{reminderNumber} for an overdue learning:</p>
             <p><strong>{scheduledTalk.ToolboxTalk.Title}</strong></p>
             {overdueText}
             <p><strong>Original Due Date:</strong> {scheduledTalk.DueDate:dd MMM yyyy}</p>
@@ -207,7 +207,7 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
         }
 
         var scheduledTalk = completion.ScheduledTalk;
-        var subject = $"Toolbox Talk Completed: {scheduledTalk.ToolboxTalk.Title}";
+        var subject = $"Learning Completed: {scheduledTalk.ToolboxTalk.Title}";
 
         var quizSection = "";
         if (completion.QuizScore.HasValue && completion.QuizMaxScore.HasValue)
@@ -244,11 +244,11 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
     <div class='container'>
         <div class='header'>
             <div class='success-icon'>&#10004;</div>
-            <h1>Toolbox Talk Completed</h1>
+            <h1>Learning Completed</h1>
         </div>
         <div class='content'>
             <p>Dear {employee.FirstName},</p>
-            <p>Thank you for completing the toolbox talk:</p>
+            <p>Thank you for completing the learning:</p>
             <p><strong>{scheduledTalk.ToolboxTalk.Title}</strong></p>
             <p><strong>Completed:</strong> {completion.CompletedAt:dd MMM yyyy HH:mm}</p>
             <p><strong>Time Spent:</strong> {FormatTimeSpent(completion.TotalTimeSpentSeconds)}</p>
@@ -303,7 +303,7 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
         }
 
         var daysOverdue = (DateTime.Today - scheduledTalk.DueDate.Date).Days;
-        var subject = $"Escalation: Overdue Toolbox Talk - {employee.FullName}";
+        var subject = $"Escalation: Overdue Learning - {employee.FullName}";
 
         var body = $@"
 <!DOCTYPE html>
@@ -328,7 +328,7 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
         </div>
         <div class='content'>
             <p>Dear {manager.FirstName},</p>
-            <p>The following toolbox talk remains incomplete after multiple reminders and requires your attention:</p>
+            <p>The following learning remains incomplete after multiple reminders and requires your attention:</p>
             <table class='details-table'>
                 <tr>
                     <td>Employee:</td>

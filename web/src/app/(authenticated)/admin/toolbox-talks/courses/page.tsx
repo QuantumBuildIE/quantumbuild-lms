@@ -9,7 +9,7 @@ export default function CoursesPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Courses</h1>
         <p className="text-muted-foreground">
-          Group toolbox talks into structured courses with sequential completion and certificates.
+          Group learnings into structured courses with sequential completion and certificates.
         </p>
       </div>
 

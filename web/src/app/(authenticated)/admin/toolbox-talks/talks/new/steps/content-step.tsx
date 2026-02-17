@@ -526,7 +526,7 @@ export function ContentStep({ data, updateData, onNext, onBack }: ContentStepPro
           <Info className="h-4 w-4" />
           <AlertDescription>
             <strong>Note:</strong> Subtitles can be generated after completing the
-            wizard. Go to Toolbox Talks → Actions → Generate Subtitles.
+            wizard. Go to Learnings → Actions → Generate Subtitles.
           </AlertDescription>
         </Alert>
       )}

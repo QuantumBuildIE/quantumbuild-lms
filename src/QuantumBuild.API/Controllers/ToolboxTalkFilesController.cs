@@ -80,7 +80,7 @@ public class ToolboxTalkFilesController : ControllerBase
                 && !t.IsDeleted, cancellationToken);
 
         if (talk == null)
-            return NotFound(Result.Fail<VideoUploadResponseDto>("Toolbox Talk not found"));
+            return NotFound(Result.Fail<VideoUploadResponseDto>("Learning not found"));
 
         // Upload to R2
         await using var stream = file.OpenReadStream();
@@ -143,7 +143,7 @@ public class ToolboxTalkFilesController : ControllerBase
                 && !t.IsDeleted, cancellationToken);
 
         if (talk == null)
-            return NotFound(Result.Fail<PdfUploadResponseDto>("Toolbox Talk not found"));
+            return NotFound(Result.Fail<PdfUploadResponseDto>("Learning not found"));
 
         await using var stream = file.OpenReadStream();
         var result = await _storageService.UploadPdfAsync(
@@ -199,7 +199,7 @@ public class ToolboxTalkFilesController : ControllerBase
                 && !t.IsDeleted, cancellationToken);
 
         if (talk == null)
-            return NotFound(Result.Fail<SetVideoUrlResponseDto>("Toolbox Talk not found"));
+            return NotFound(Result.Fail<SetVideoUrlResponseDto>("Learning not found"));
 
         // Update entity
         talk.VideoUrl = request.Url;
@@ -230,7 +230,7 @@ public class ToolboxTalkFilesController : ControllerBase
                 && !t.IsDeleted, cancellationToken);
 
         if (talk == null)
-            return NotFound(Result.Fail("Toolbox Talk not found"));
+            return NotFound(Result.Fail("Learning not found"));
 
         // Delete from R2 storage
         await _storageService.DeleteVideoAsync(
@@ -267,7 +267,7 @@ public class ToolboxTalkFilesController : ControllerBase
                 && !t.IsDeleted, cancellationToken);
 
         if (talk == null)
-            return NotFound(Result.Fail("Toolbox Talk not found"));
+            return NotFound(Result.Fail("Learning not found"));
 
         // Delete from R2 storage
         await _storageService.DeletePdfAsync(
@@ -304,7 +304,7 @@ public class ToolboxTalkFilesController : ControllerBase
                 && !t.IsDeleted, cancellationToken);
 
         if (talk == null)
-            return NotFound(Result.Fail("Toolbox Talk not found"));
+            return NotFound(Result.Fail("Learning not found"));
 
         await _storageService.DeleteToolboxTalkFilesAsync(
             _currentUser.TenantId,

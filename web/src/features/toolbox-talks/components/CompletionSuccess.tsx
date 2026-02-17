@@ -111,7 +111,7 @@ export function CompletionSuccess({
             </div>
             <div>
               <h1 className="text-2xl font-bold text-green-800 dark:text-green-200">
-                Toolbox Talk Completed!
+                Learning Completed!
               </h1>
               <p className="text-green-700 dark:text-green-300 mt-1">
                 Well done! You have successfully completed this training.
@@ -218,7 +218,7 @@ export function CompletionSuccess({
           <Button asChild className="w-full gap-2">
             <Link href="/toolbox-talks">
               <ArrowLeft className="h-4 w-4" />
-              Back to My Toolbox Talks
+              Back to My Learnings
             </Link>
           </Button>
         </CardFooter>

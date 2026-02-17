@@ -74,8 +74,8 @@ public class ToolboxTalkSchedulesController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving toolbox talk schedules");
-            return StatusCode(500, Result.Fail("Error retrieving toolbox talk schedules"));
+            _logger.LogError(ex, "Error retrieving learning schedules");
+            return StatusCode(500, Result.Fail("Error retrieving learning schedules"));
         }
     }
 

@@ -47,7 +47,7 @@ public class SmartGenerateContentCommandHandler
         if (talk == null)
         {
             result.Success = false;
-            result.ErrorMessage = "Toolbox talk not found";
+            result.ErrorMessage = "Learning not found";
             return result;
         }
 

@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 const adminNavItems = [
   { href: "/admin/employees", label: "Employees" },
   { href: "/admin/users", label: "Users" },
-  { href: "/admin/toolbox-talks", label: "Toolbox Talks" },
+  { href: "/admin/toolbox-talks", label: "Learnings" },
 ];
 
 const corePermissions = [

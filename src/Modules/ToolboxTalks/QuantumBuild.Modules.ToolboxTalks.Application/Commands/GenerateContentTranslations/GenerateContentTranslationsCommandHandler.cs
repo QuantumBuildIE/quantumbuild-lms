@@ -62,7 +62,7 @@ public class GenerateContentTranslationsCommandHandler
             _logger.LogWarning(
                 "ToolboxTalk {ToolboxTalkId} not found for TenantId {TenantId}",
                 request.ToolboxTalkId, request.TenantId);
-            return GenerateContentTranslationsResult.FailureResult("Toolbox talk not found");
+            return GenerateContentTranslationsResult.FailureResult("Learning not found");
         }
 
         // Get the source language name from the code
@@ -311,18 +311,18 @@ public class GenerateContentTranslationsCommandHandler
 
             // Generate translated email templates
             var emailSubjectResult = await _translationService.TranslateTextAsync(
-                $"Action Required: Complete Toolbox Talk - {toolboxTalk.Title}",
+                $"Action Required: Complete Learning - {toolboxTalk.Title}",
                 language, false, cancellationToken, sourceLanguage);
             translation.EmailSubject = emailSubjectResult.Success
                 ? emailSubjectResult.TranslatedContent
-                : $"Action Required: Complete Toolbox Talk - {translation.TranslatedTitle}";
+                : $"Action Required: Complete Learning - {translation.TranslatedTitle}";
 
             var emailBodyResult = await _translationService.TranslateTextAsync(
-                $"You have been assigned a new toolbox talk: {toolboxTalk.Title}. Please complete it by the due date.",
+                $"You have been assigned a new learning: {toolboxTalk.Title}. Please complete it by the due date.",
                 language, false, cancellationToken, sourceLanguage);
             translation.EmailBody = emailBodyResult.Success
                 ? emailBodyResult.TranslatedContent
-                : $"You have been assigned a new toolbox talk: {translation.TranslatedTitle}. Please complete it by the due date.";
+                : $"You have been assigned a new learning: {translation.TranslatedTitle}. Please complete it by the due date.";
 
             // Translate slide text
             var slidesTranslated = 0;

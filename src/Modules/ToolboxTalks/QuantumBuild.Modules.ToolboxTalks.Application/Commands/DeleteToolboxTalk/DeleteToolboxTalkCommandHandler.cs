@@ -21,13 +21,13 @@ public class DeleteToolboxTalkCommandHandler : IRequestHandler<DeleteToolboxTalk
 
         if (toolboxTalk == null)
         {
-            throw new KeyNotFoundException($"Toolbox talk with ID {request.Id} not found.");
+            throw new KeyNotFoundException($"Learning with ID {request.Id} not found.");
         }
 
         // Validate tenant ownership
         if (toolboxTalk.TenantId != request.TenantId)
         {
-            throw new UnauthorizedAccessException("Access denied to this toolbox talk.");
+            throw new UnauthorizedAccessException("Access denied to this learning.");
         }
 
         // Check for active schedules that would be affected
@@ -39,7 +39,7 @@ public class DeleteToolboxTalkCommandHandler : IRequestHandler<DeleteToolboxTalk
         if (hasActiveSchedules)
         {
             throw new InvalidOperationException(
-                "Cannot delete this toolbox talk because it has active schedules. " +
+                "Cannot delete this learning because it has active schedules. " +
                 "Please cancel or complete the schedules first, or deactivate the talk instead.");
         }
 
@@ -53,7 +53,7 @@ public class DeleteToolboxTalkCommandHandler : IRequestHandler<DeleteToolboxTalk
         if (hasPendingTalks)
         {
             throw new InvalidOperationException(
-                "Cannot delete this toolbox talk because it has pending or in-progress assignments. " +
+                "Cannot delete this learning because it has pending or in-progress assignments. " +
                 "Please wait for employees to complete their assignments or deactivate the talk instead.");
         }
 

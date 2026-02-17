@@ -12,8 +12,8 @@ export interface Module {
 export const availableModules: Module[] = [
   {
     id: "toolbox-talks",
-    name: "Toolbox Talks",
-    description: "Safety training talks and compliance tracking",
+    name: "Learnings",
+    description: "Safety training and compliance tracking",
     icon: ClipboardList,
     path: "/toolbox-talks",
     requiredPermission: "ToolboxTalks.View",

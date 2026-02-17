@@ -106,7 +106,7 @@ public class SubtitleProcessingController : ControllerBase
         var status = await _orchestrator.GetStatusAsync(toolboxTalkId, cancellationToken);
 
         if (status == null)
-            return NotFound(new { Error = "No processing job found for this toolbox talk" });
+            return NotFound(new { Error = "No processing job found for this learning" });
 
         return Ok(status);
     }
@@ -129,7 +129,7 @@ public class SubtitleProcessingController : ControllerBase
             var cancelled = await _orchestrator.CancelProcessingAsync(toolboxTalkId, cancellationToken);
 
             if (!cancelled)
-                return NotFound(new { Error = "No active processing job found for this toolbox talk" });
+                return NotFound(new { Error = "No active processing job found for this learning" });
 
             return Ok(new { Message = "Processing cancelled successfully" });
         }

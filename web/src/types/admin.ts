@@ -36,7 +36,7 @@ export interface Employee {
   hasUserAccount?: boolean;
   /** The linked User ID if a user account exists */
   linkedUserId?: string;
-  /** Preferred language for Toolbox Talk subtitles and notifications (ISO 639-1 code) */
+  /** Preferred language for Learning subtitles and notifications (ISO 639-1 code) */
   preferredLanguage: string;
 }
 
@@ -58,7 +58,7 @@ export interface CreateEmployeeRequest {
   createUserAccount?: boolean;
   /** Optional role name to assign to the created user */
   userRole?: string;
-  /** Preferred language for Toolbox Talk subtitles and notifications (ISO 639-1 code) */
+  /** Preferred language for Learning subtitles and notifications (ISO 639-1 code) */
   preferredLanguage?: string;
 }
 

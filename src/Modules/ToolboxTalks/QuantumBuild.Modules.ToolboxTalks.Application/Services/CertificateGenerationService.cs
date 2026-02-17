@@ -60,7 +60,7 @@ public class CertificateGenerationService(
         }
 
         var now = DateTime.UtcNow;
-        var certificateNumber = await GenerateCertificateNumber("TBT", completedTalk.TenantId, ct);
+        var certificateNumber = await GenerateCertificateNumber("LRN", completedTalk.TenantId, ct);
 
         DateTime? expiresAt = talk.RequiresRefresher
             ? now.AddMonths(talk.RefresherIntervalMonths)

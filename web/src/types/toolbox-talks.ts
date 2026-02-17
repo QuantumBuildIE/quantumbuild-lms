@@ -12,14 +12,14 @@ export type ToolboxTalkScheduleStatus = 'Draft' | 'Active' | 'Completed' | 'Canc
 
 export type ScheduledTalkStatus = 'Pending' | 'InProgress' | 'Completed' | 'Overdue' | 'Cancelled';
 
-/** Status of a toolbox talk in the content creation workflow */
+/** Status of a learning in the content creation workflow */
 export type ToolboxTalkStatus = 'Draft' | 'Processing' | 'ReadyForReview' | 'Published';
 
-/** Source of content for toolbox talk sections and questions */
+/** Source of content for learning sections and questions */
 export type ContentSource = 'Manual' | 'Video' | 'Pdf' | 'Both';
 
 // ============================================
-// Toolbox Talk DTOs
+// Learning DTOs
 // ============================================
 
 export interface ToolboxTalkSection {
@@ -286,7 +286,7 @@ export interface ScheduledTalkListItem {
 }
 
 // ============================================
-// My Toolbox Talk DTOs (Employee Portal)
+// My Learning DTOs (Employee Portal)
 // ============================================
 
 export interface MyToolboxTalkSection {
@@ -856,11 +856,11 @@ export interface CheckDuplicateRequest {
   fileType: FileHashType;
 }
 
-/** Information about a source toolbox talk for content reuse */
+/** Information about a source learning for content reuse */
 export interface SourceToolboxTalkInfo {
-  /** ID of the source toolbox talk */
+  /** ID of the source learning */
   id: string;
-  /** Title of the source toolbox talk */
+  /** Title of the source learning */
   title: string;
   /** When the content was originally generated */
   processedAt: string | null;
@@ -880,13 +880,13 @@ export interface DuplicateCheckResponse {
   isDuplicate: boolean;
   /** The calculated file hash */
   fileHash: string;
-  /** Information about the source toolbox talk if a duplicate was found */
+  /** Information about the source learning if a duplicate was found */
   sourceToolboxTalk: SourceToolboxTalkInfo | null;
 }
 
-/** Request to reuse content from another toolbox talk */
+/** Request to reuse content from another learning */
 export interface ReuseContentRequest {
-  /** ID of the source toolbox talk to copy content from */
+  /** ID of the source learning to copy content from */
   sourceToolboxTalkId: string;
 }
 

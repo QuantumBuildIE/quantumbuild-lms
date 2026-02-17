@@ -425,8 +425,8 @@ export function Dashboard() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Toolbox Talks Dashboard</h1>
-            <p className="text-muted-foreground">Overview of toolbox talks and completions</p>
+            <h1 className="text-2xl font-semibold tracking-tight">Learnings Dashboard</h1>
+            <p className="text-muted-foreground">Overview of learnings and completions</p>
           </div>
         </div>
         <Card className="p-8 text-center">
@@ -445,8 +445,8 @@ export function Dashboard() {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Toolbox Talks Dashboard</h1>
-          <p className="text-muted-foreground">Overview of toolbox talks and completions</p>
+          <h1 className="text-2xl font-semibold tracking-tight">Learnings Dashboard</h1>
+          <p className="text-muted-foreground">Overview of learnings and completions</p>
         </div>
         <Button variant="outline" onClick={handleRefresh} disabled={isRefreshing || isLoading}>
           <RefreshCw className={cn('h-4 w-4 mr-2', (isRefreshing || isLoading) && 'animate-spin')} />

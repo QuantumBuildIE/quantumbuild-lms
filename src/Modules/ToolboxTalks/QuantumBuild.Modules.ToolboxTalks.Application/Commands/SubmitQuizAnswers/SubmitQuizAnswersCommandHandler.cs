@@ -75,7 +75,7 @@ public class SubmitQuizAnswersCommandHandler : IRequestHandler<SubmitQuizAnswers
         // Validate quiz is required for this talk
         if (!scheduledTalk.ToolboxTalk.RequiresQuiz)
         {
-            throw new InvalidOperationException("This toolbox talk does not require a quiz.");
+            throw new InvalidOperationException("This learning does not require a quiz.");
         }
 
         // Validate all sections are read
@@ -98,7 +98,7 @@ public class SubmitQuizAnswersCommandHandler : IRequestHandler<SubmitQuizAnswers
 
         if (!allQuestions.Any())
         {
-            throw new InvalidOperationException("This toolbox talk has no quiz questions configured.");
+            throw new InvalidOperationException("This learning has no quiz questions configured.");
         }
 
         // Determine which questions to grade:

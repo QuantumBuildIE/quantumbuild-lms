@@ -105,8 +105,8 @@ public class ToolboxTalksController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving toolbox talks");
-            return StatusCode(500, Result.Fail("Error retrieving toolbox talks"));
+            _logger.LogError(ex, "Error retrieving learnings");
+            return StatusCode(500, Result.Fail("Error retrieving learnings"));
         }
     }
 
@@ -131,7 +131,7 @@ public class ToolboxTalksController : ControllerBase
             var result = await _mediator.Send(query);
             if (result == null)
             {
-                return NotFound(new { message = "Toolbox talk not found" });
+                return NotFound(new { message = "Learning not found" });
             }
 
             return Ok(result);
@@ -139,7 +139,7 @@ public class ToolboxTalksController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving toolbox talk {ToolboxTalkId}", id);
-            return StatusCode(500, new { message = "Error retrieving toolbox talk" });
+            return StatusCode(500, new { message = "Error retrieving learning" });
         }
     }
 
@@ -166,7 +166,7 @@ public class ToolboxTalksController : ControllerBase
             var result = await _mediator.Send(query);
             if (result == null)
             {
-                return NotFound(new { message = "Toolbox talk not found" });
+                return NotFound(new { message = "Learning not found" });
             }
 
             return Ok(result);
@@ -174,7 +174,7 @@ public class ToolboxTalksController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving toolbox talk preview {ToolboxTalkId}", id);
-            return StatusCode(500, new { message = "Error retrieving toolbox talk preview" });
+            return StatusCode(500, new { message = "Error retrieving learning preview" });
         }
     }
 
@@ -264,8 +264,8 @@ public class ToolboxTalksController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating toolbox talk");
-            return StatusCode(500, new { message = "Error creating toolbox talk" });
+            _logger.LogError(ex, "Error creating learning");
+            return StatusCode(500, new { message = "Error creating learning" });
         }
     }
 
@@ -308,7 +308,7 @@ public class ToolboxTalksController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error updating toolbox talk {ToolboxTalkId}", id);
-            return StatusCode(500, new { message = "Error updating toolbox talk" });
+            return StatusCode(500, new { message = "Error updating learning" });
         }
     }
 
@@ -345,7 +345,7 @@ public class ToolboxTalksController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error deleting toolbox talk {ToolboxTalkId}", id);
-            return StatusCode(500, new { message = "Error deleting toolbox talk" });
+            return StatusCode(500, new { message = "Error deleting learning" });
         }
     }
 
@@ -369,8 +369,8 @@ public class ToolboxTalksController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving toolbox talks dashboard");
-            return StatusCode(500, Result.Fail("Error retrieving toolbox talks dashboard"));
+            _logger.LogError(ex, "Error retrieving learnings dashboard");
+            return StatusCode(500, Result.Fail("Error retrieving learnings dashboard"));
         }
     }
 
@@ -395,8 +395,8 @@ public class ToolboxTalksController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving toolbox talk settings");
-            return StatusCode(500, Result.Fail("Error retrieving toolbox talk settings"));
+            _logger.LogError(ex, "Error retrieving learning settings");
+            return StatusCode(500, Result.Fail("Error retrieving learning settings"));
         }
     }
 
@@ -425,8 +425,8 @@ public class ToolboxTalksController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error updating toolbox talk settings");
-            return StatusCode(500, Result.Fail("Error updating toolbox talk settings"));
+            _logger.LogError(ex, "Error updating learning settings");
+            return StatusCode(500, Result.Fail("Error updating learning settings"));
         }
     }
 
@@ -512,7 +512,7 @@ public class ToolboxTalksController : ControllerBase
             var toolboxTalk = await _mediator.Send(query);
             if (toolboxTalk == null)
             {
-                return NotFound(new { error = "Toolbox Talk not found" });
+                return NotFound(new { error = "Learning not found" });
             }
 
             // Calculate hash from URL if not provided
@@ -595,7 +595,7 @@ public class ToolboxTalksController : ControllerBase
             var toolboxTalk = await _mediator.Send(query);
             if (toolboxTalk == null)
             {
-                return NotFound(new { error = "Target Toolbox Talk not found" });
+                return NotFound(new { error = "Target Learning not found" });
             }
 
             var result = await _deduplicationService.ReuseContentAsync(
@@ -656,7 +656,7 @@ public class ToolboxTalksController : ControllerBase
             var toolboxTalk = await _mediator.Send(query);
             if (toolboxTalk == null)
             {
-                return NotFound(new { error = "Toolbox Talk not found" });
+                return NotFound(new { error = "Learning not found" });
             }
 
             // Calculate hash from URL if not provided
@@ -724,7 +724,7 @@ public class ToolboxTalksController : ControllerBase
             var toolboxTalk = await _mediator.Send(query);
             if (toolboxTalk == null)
             {
-                return NotFound(new { error = "Toolbox Talk not found" });
+                return NotFound(new { error = "Learning not found" });
             }
 
             // Validate we have content to generate from
@@ -799,12 +799,12 @@ public class ToolboxTalksController : ControllerBase
             var toolboxTalk = await _mediator.Send(query);
             if (toolboxTalk == null)
             {
-                return NotFound(new { error = "Toolbox Talk not found" });
+                return NotFound(new { error = "Learning not found" });
             }
 
             if (string.IsNullOrEmpty(toolboxTalk.PdfUrl))
             {
-                return BadRequest(new { error = "No PDF is uploaded for this toolbox talk" });
+                return BadRequest(new { error = "No PDF is uploaded for this learning" });
             }
 
             var result = await _slideshowGenerationService.GenerateSlideshowAsync(
@@ -858,7 +858,7 @@ public class ToolboxTalksController : ControllerBase
             var toolboxTalk = await _mediator.Send(query);
             if (toolboxTalk == null)
             {
-                return NotFound(new { error = "Toolbox Talk not found" });
+                return NotFound(new { error = "Learning not found" });
             }
 
             // Validate we have content to work with
@@ -1058,7 +1058,7 @@ public class ToolboxTalksController : ControllerBase
             var toolboxTalk = await _mediator.Send(query);
             if (toolboxTalk == null)
             {
-                return NotFound(new { error = "Toolbox talk not found" });
+                return NotFound(new { error = "Learning not found" });
             }
 
             // Map translations from the toolbox talk

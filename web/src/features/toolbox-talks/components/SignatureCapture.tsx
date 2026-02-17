@@ -267,7 +267,7 @@ export function SignatureCapture({ onComplete, defaultName = '', className }: Si
           ) : (
             <>
               <Check className="h-4 w-4" />
-              Complete Toolbox Talk
+              Complete Learning
             </>
           )}
         </Button>

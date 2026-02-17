@@ -29,12 +29,12 @@ public class CreateToolboxTalkScheduleCommandHandler : IRequestHandler<CreateToo
 
         if (toolboxTalk == null)
         {
-            throw new InvalidOperationException($"Toolbox talk with ID '{request.ToolboxTalkId}' not found.");
+            throw new InvalidOperationException($"Learning with ID '{request.ToolboxTalkId}' not found.");
         }
 
         if (!toolboxTalk.IsActive)
         {
-            throw new InvalidOperationException($"Toolbox talk '{toolboxTalk.Title}' is not active and cannot be scheduled.");
+            throw new InvalidOperationException($"Learning '{toolboxTalk.Title}' is not active and cannot be scheduled.");
         }
 
         // Get employee IDs to assign
@@ -49,7 +49,7 @@ public class CreateToolboxTalkScheduleCommandHandler : IRequestHandler<CreateToo
 
             if (!employeeIdsToAssign.Any())
             {
-                throw new InvalidOperationException("No active employees found to assign the toolbox talk.");
+                throw new InvalidOperationException("No active employees found to assign the learning.");
             }
         }
         else

@@ -347,9 +347,9 @@ export function TalkViewer({ scheduledTalkId }: TalkViewerProps) {
         },
       });
       setCurrentStep('complete');
-      toast.success('Toolbox Talk completed successfully!');
+      toast.success('Learning completed successfully!');
     } catch {
-      toast.error('Failed to complete toolbox talk');
+      toast.error('Failed to complete learning');
       throw new Error('Failed to complete');
     }
   };
@@ -412,12 +412,12 @@ export function TalkViewer({ scheduledTalkId }: TalkViewerProps) {
               <ChevronLeft className="h-4 w-4" />
             </Link>
           </Button>
-          <h1 className="text-xl font-semibold">Toolbox Talk</h1>
+          <h1 className="text-xl font-semibold">Learning</h1>
         </div>
         <Card className="p-8">
           <div className="text-center">
             <AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-4" />
-            <h2 className="text-lg font-semibold mb-2">Failed to load toolbox talk</h2>
+            <h2 className="text-lg font-semibold mb-2">Failed to load learning</h2>
             <p className="text-muted-foreground mb-4">
               {error instanceof Error ? error.message : 'An unexpected error occurred'}
             </p>

@@ -12,7 +12,7 @@ public class CompleteToolboxTalkCommandValidator : AbstractValidator<CompleteToo
 
         RuleFor(x => x.SignatureData)
             .NotEmpty()
-            .WithMessage("Signature is required to complete the toolbox talk.");
+            .WithMessage("Signature is required to complete the learning.");
 
         RuleFor(x => x.SignedByName)
             .NotEmpty()

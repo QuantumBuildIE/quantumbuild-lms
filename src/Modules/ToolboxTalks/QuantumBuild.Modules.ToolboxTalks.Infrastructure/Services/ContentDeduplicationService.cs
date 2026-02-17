@@ -163,7 +163,7 @@ public class ContentDeduplicationService : IContentDeduplicationService
                 return new ContentReuseResult
                 {
                     Success = false,
-                    ErrorMessage = "Source toolbox talk not found"
+                    ErrorMessage = "Source learning not found"
                 };
             }
 
@@ -180,7 +180,7 @@ public class ContentDeduplicationService : IContentDeduplicationService
                 return new ContentReuseResult
                 {
                     Success = false,
-                    ErrorMessage = "Target toolbox talk not found"
+                    ErrorMessage = "Target learning not found"
                 };
             }
 
@@ -530,7 +530,7 @@ public class ContentDeduplicationService : IContentDeduplicationService
                 return new ContentReuseResult
                 {
                     Success = false,
-                    ErrorMessage = "Source toolbox talk not found"
+                    ErrorMessage = "Source learning not found"
                 };
             }
 
@@ -547,7 +547,7 @@ public class ContentDeduplicationService : IContentDeduplicationService
                 return new ContentReuseResult
                 {
                     Success = false,
-                    ErrorMessage = "Target toolbox talk not found"
+                    ErrorMessage = "Target learning not found"
                 };
             }
 

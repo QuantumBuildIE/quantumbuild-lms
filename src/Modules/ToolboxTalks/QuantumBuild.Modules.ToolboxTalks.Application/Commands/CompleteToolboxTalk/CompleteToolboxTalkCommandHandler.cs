@@ -120,7 +120,7 @@ public class CompleteToolboxTalkCommandHandler : IRequestHandler<CompleteToolbox
 
             if (lastPassingAttempt == null)
             {
-                throw new InvalidOperationException("You must pass the quiz before completing this toolbox talk.");
+                throw new InvalidOperationException("You must pass the quiz before completing this learning.");
             }
 
             quizScore = lastPassingAttempt.Score;

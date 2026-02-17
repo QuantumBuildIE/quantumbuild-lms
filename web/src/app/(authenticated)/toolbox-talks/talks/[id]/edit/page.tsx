@@ -76,7 +76,7 @@ export default function ToolboxTalkEditPage() {
           <ChevronLeft className="h-4 w-4" />
         </Button>
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Edit Toolbox Talk</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Edit Learning</h1>
           <p className="text-muted-foreground">
             Update "{talk.title}"
           </p>

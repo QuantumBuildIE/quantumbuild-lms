@@ -63,13 +63,13 @@ public class UpdateToolboxTalkCommandHandler : IRequestHandler<UpdateToolboxTalk
 
         if (toolboxTalk == null)
         {
-            throw new KeyNotFoundException($"Toolbox talk with ID {request.Id} not found.");
+            throw new KeyNotFoundException($"Learning with ID {request.Id} not found.");
         }
 
         // Validate tenant ownership
         if (toolboxTalk.TenantId != request.TenantId)
         {
-            throw new UnauthorizedAccessException("Access denied to this toolbox talk.");
+            throw new UnauthorizedAccessException("Access denied to this learning.");
         }
 
         // Validate title uniqueness (excluding current talk)
@@ -82,7 +82,7 @@ public class UpdateToolboxTalkCommandHandler : IRequestHandler<UpdateToolboxTalk
 
             if (titleExists)
             {
-                throw new InvalidOperationException($"A toolbox talk with title '{request.Title}' already exists.");
+                throw new InvalidOperationException($"A learning with title '{request.Title}' already exists.");
             }
         }
 

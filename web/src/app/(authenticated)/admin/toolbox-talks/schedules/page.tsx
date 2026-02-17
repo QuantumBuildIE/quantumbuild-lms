@@ -34,7 +34,7 @@ export default function AdminSchedulesListPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Schedules</h1>
           <p className="text-muted-foreground">
-            Manage scheduled toolbox talk distributions
+            Manage scheduled learning distributions
           </p>
         </div>
         <Button onClick={handleCreate}>

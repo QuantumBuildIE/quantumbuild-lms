@@ -90,8 +90,8 @@ public class MyToolboxTalksController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving my toolbox talks");
-            return StatusCode(500, Result.Fail("Error retrieving my toolbox talks"));
+            _logger.LogError(ex, "Error retrieving my learnings");
+            return StatusCode(500, Result.Fail("Error retrieving my learnings"));
         }
     }
 
@@ -123,7 +123,7 @@ public class MyToolboxTalksController : ControllerBase
             var result = await _mediator.Send(query);
             if (result == null)
             {
-                return NotFound(new { message = "Toolbox talk not found or not assigned to you" });
+                return NotFound(new { message = "Learning not found or not assigned to you" });
             }
 
             return Ok(result);
@@ -131,7 +131,7 @@ public class MyToolboxTalksController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving my toolbox talk {ScheduledTalkId}", id);
-            return StatusCode(500, new { message = "Error retrieving toolbox talk" });
+            return StatusCode(500, new { message = "Error retrieving learning" });
         }
     }
 
@@ -173,7 +173,7 @@ public class MyToolboxTalksController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error starting talk {ScheduledTalkId}", id);
-            return StatusCode(500, new { message = "Error starting toolbox talk" });
+            return StatusCode(500, new { message = "Error starting learning" });
         }
     }
 
@@ -388,7 +388,7 @@ public class MyToolboxTalksController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error completing talk {ScheduledTalkId}", id);
-            return StatusCode(500, new { message = "Error completing toolbox talk" });
+            return StatusCode(500, new { message = "Error completing learning" });
         }
     }
 
@@ -424,8 +424,8 @@ public class MyToolboxTalksController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving pending toolbox talks");
-            return StatusCode(500, Result.Fail("Error retrieving pending toolbox talks"));
+            _logger.LogError(ex, "Error retrieving pending learnings");
+            return StatusCode(500, Result.Fail("Error retrieving pending learnings"));
         }
     }
 
@@ -461,8 +461,8 @@ public class MyToolboxTalksController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving in-progress toolbox talks");
-            return StatusCode(500, Result.Fail("Error retrieving in-progress toolbox talks"));
+            _logger.LogError(ex, "Error retrieving in-progress learnings");
+            return StatusCode(500, Result.Fail("Error retrieving in-progress learnings"));
         }
     }
 
@@ -498,8 +498,8 @@ public class MyToolboxTalksController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving overdue toolbox talks");
-            return StatusCode(500, Result.Fail("Error retrieving overdue toolbox talks"));
+            _logger.LogError(ex, "Error retrieving overdue learnings");
+            return StatusCode(500, Result.Fail("Error retrieving overdue learnings"));
         }
     }
 
@@ -535,8 +535,8 @@ public class MyToolboxTalksController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving completed toolbox talks");
-            return StatusCode(500, Result.Fail("Error retrieving completed toolbox talks"));
+            _logger.LogError(ex, "Error retrieving completed learnings");
+            return StatusCode(500, Result.Fail("Error retrieving completed learnings"));
         }
     }
 
@@ -632,14 +632,14 @@ public class MyToolboxTalksController : ControllerBase
             var talk = await _mediator.Send(query);
             if (talk == null)
             {
-                return NotFound(new { message = "Toolbox talk not found or not assigned to you" });
+                return NotFound(new { message = "Learning not found or not assigned to you" });
             }
 
             // Get subtitle status using the actual toolbox talk ID
             var status = await _subtitleOrchestrator.GetStatusAsync(talk.ToolboxTalkId);
             if (status == null)
             {
-                return NotFound(new { message = "No subtitles available for this toolbox talk" });
+                return NotFound(new { message = "No subtitles available for this learning" });
             }
 
             return Ok(status);
@@ -686,7 +686,7 @@ public class MyToolboxTalksController : ControllerBase
             var talk = await _mediator.Send(query);
             if (talk == null)
             {
-                return NotFound(new { message = "Toolbox talk not found or not assigned to you" });
+                return NotFound(new { message = "Learning not found or not assigned to you" });
             }
 
             // Get subtitle content using the actual toolbox talk ID
@@ -776,7 +776,7 @@ public class MyToolboxTalksController : ControllerBase
             var talk = await _mediator.Send(query);
             if (talk == null)
             {
-                return NotFound(new { message = "Toolbox talk not found or not assigned to you" });
+                return NotFound(new { message = "Learning not found or not assigned to you" });
             }
 
             // Use employee's preferred language if no language specified
@@ -831,7 +831,7 @@ public class MyToolboxTalksController : ControllerBase
             var talk = await _mediator.Send(talkQuery);
             if (talk == null)
             {
-                return NotFound(new { message = "Toolbox talk not found or not assigned to you" });
+                return NotFound(new { message = "Learning not found or not assigned to you" });
             }
 
             // Default to employee's preferred language if not specified

@@ -37,8 +37,8 @@ public static class DataSeeder
             await SeedRolesAsync(context, roleManager, logger);
             await SeedRolePermissionsAsync(context, logger);
             await SeedAdminUserAsync(userManager, roleManager, logger);
-            await SeedTestUsersAsync(userManager, roleManager, logger);
-            await SeedSitesAsync(context, logger);
+            // await SeedTestUsersAsync(userManager, roleManager, logger);
+            // await SeedSitesAsync(context, logger);
             await EnsureAdminEmployeeAsync(context, userManager, logger);
 
             logger.LogInformation("Database seeding completed successfully");
@@ -123,9 +123,10 @@ public static class DataSeeder
         {
             new { Name = "Admin", Description = "Full system administrator with all permissions" },
             new { Name = "Finance", Description = "Finance team with view permissions" },
-            new { Name = "OfficeStaff", Description = "Office staff with core and toolbox talks access" },
-            new { Name = "SiteManager", Description = "Site manager with core and toolbox talks access" },
-            new { Name = "WarehouseStaff", Description = "Warehouse staff with core and toolbox talks permissions" }
+            new { Name = "OfficeStaff", Description = "Office staff with core and learnings access" },
+            new { Name = "SiteManager", Description = "Site manager with core and learnings access" },
+            new { Name = "WarehouseStaff", Description = "Warehouse staff with core and learnings permissions" },
+            new { Name = "Operative", Description = "General Operative staff with core and learnings permissions" }
         };
 
         foreach (var roleInfo in rolesToCreate)
@@ -2814,13 +2815,13 @@ public static class DataSeeder
         return permissionName switch
         {
             // Toolbox Talks
-            Permissions.ToolboxTalks.View => "View toolbox talks",
-            Permissions.ToolboxTalks.Create => "Create toolbox talks",
-            Permissions.ToolboxTalks.Edit => "Edit toolbox talks",
-            Permissions.ToolboxTalks.Delete => "Delete toolbox talks",
-            Permissions.ToolboxTalks.Schedule => "Schedule toolbox talks",
-            Permissions.ToolboxTalks.ViewReports => "View toolbox talks reports",
-            Permissions.ToolboxTalks.Admin => "Full toolbox talks administration",
+            Permissions.ToolboxTalks.View => "View learnings",
+            Permissions.ToolboxTalks.Create => "Create learnings",
+            Permissions.ToolboxTalks.Edit => "Edit learnings",
+            Permissions.ToolboxTalks.Delete => "Delete learnings",
+            Permissions.ToolboxTalks.Schedule => "Schedule learnings",
+            Permissions.ToolboxTalks.ViewReports => "View learnings reports",
+            Permissions.ToolboxTalks.Admin => "Full learnings administration",
 
             // Core
             Permissions.Core.ManageSites => "Manage sites",

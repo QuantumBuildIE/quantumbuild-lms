@@ -17,7 +17,7 @@ const adminToolboxTalksNavItems = [
   { href: "/admin/toolbox-talks/settings", label: "Settings" },
 ];
 
-// Permissions that grant access to admin toolbox talks management
+// Permissions that grant access to admin learnings management
 const toolboxTalksAdminPermissions = [
   "ToolboxTalks.Admin",
   "ToolboxTalks.Create",
@@ -44,7 +44,7 @@ export default function AdminToolboxTalksLayout({
     return (
       <div className="flex items-center justify-center py-12">
         <div className="text-muted-foreground">
-          You do not have permission to manage Toolbox Talks.
+          You do not have permission to manage Learnings.
         </div>
       </div>
     );
@@ -64,7 +64,7 @@ export default function AdminToolboxTalksLayout({
           Administration
         </Link>
         <span>/</span>
-        <span className="text-foreground">Toolbox Talks</span>
+        <span className="text-foreground">Learnings</span>
       </div>
 
       <nav className="border-b bg-background">

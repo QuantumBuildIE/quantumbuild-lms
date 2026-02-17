@@ -62,7 +62,7 @@ public class CreateToolboxTalkCourseCommandHandler : IRequestHandler<CreateToolb
             if (talks.Count != talkIds.Count)
             {
                 var missingIds = talkIds.Except(talks.Select(t => t.Id));
-                throw new InvalidOperationException($"One or more toolbox talks not found: {string.Join(", ", missingIds)}");
+                throw new InvalidOperationException($"One or more learnings not found: {string.Join(", ", missingIds)}");
             }
 
             // Check for duplicates within the request

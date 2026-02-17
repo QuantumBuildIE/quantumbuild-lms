@@ -80,7 +80,7 @@ public class ContentGenerationService : IContentGenerationService
                     SectionsGenerated: 0,
                     QuestionsGenerated: 0,
                     HasFinalPortionQuestion: false,
-                    Errors: new List<string> { "Toolbox Talk not found" },
+                    Errors: new List<string> { "Learning not found" },
                     Warnings: new List<string>(),
                     TotalTokensUsed: 0);
             }

@@ -36,7 +36,7 @@ public class TranscriptService : ITranscriptService
             if (string.IsNullOrWhiteSpace(srtContent))
             {
                 _logger.LogWarning(
-                    "No English transcript found for toolbox talk {ToolboxTalkId}. Please generate subtitles first.",
+                    "No English transcript found for learning {ToolboxTalkId}. Please generate subtitles first.",
                     toolboxTalkId);
 
                 return TranscriptResult.FailureResult(
@@ -48,7 +48,7 @@ public class TranscriptService : ITranscriptService
         catch (Exception ex)
         {
             _logger.LogError(ex,
-                "Failed to retrieve transcript for toolbox talk {ToolboxTalkId}",
+                "Failed to retrieve transcript for learning {ToolboxTalkId}",
                 toolboxTalkId);
 
             return TranscriptResult.FailureResult($"Failed to retrieve transcript: {ex.Message}");

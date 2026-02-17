@@ -36,7 +36,7 @@ public class AddCourseItemCommandHandler : IRequestHandler<AddCourseItemCommand,
 
         if (talk == null)
         {
-            throw new KeyNotFoundException($"Toolbox talk with ID {dto.ToolboxTalkId} not found.");
+            throw new KeyNotFoundException($"Learning with ID {dto.ToolboxTalkId} not found.");
         }
 
         // Check for duplicate

@@ -124,7 +124,7 @@ export function QuestionEditor({ form, fieldName = 'questions' }: QuestionEditor
           <div className="rounded-lg border border-dashed p-8 text-center">
             <p className="text-muted-foreground">No questions added yet.</p>
             <p className="text-sm text-muted-foreground mt-1">
-              Add questions to create a quiz for this toolbox talk.
+              Add questions to create a quiz for this learning.
             </p>
             <Button
               type="button"

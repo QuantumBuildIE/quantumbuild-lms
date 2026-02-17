@@ -39,7 +39,7 @@ const AVAILABLE_ROLES = [
   { value: "Admin", label: "Admin" },
 ] as const;
 
-// Supported languages for Toolbox Talk subtitles
+// Supported languages for Learning subtitles
 // Most common construction worker languages in Ireland/UK listed first
 const SUPPORTED_LANGUAGES: Array<{ code: string; name: string; nativeName?: string }> = [
   { code: "en", name: "English" },
@@ -502,7 +502,7 @@ export function EmployeeForm({ employee, onSuccess, onCancel }: EmployeeFormProp
                 </SelectContent>
               </Select>
               <FormDescription>
-                Used for Toolbox Talk video subtitles and notifications
+                Used for Learning video subtitles and notifications
               </FormDescription>
               <FormMessage />
             </FormItem>

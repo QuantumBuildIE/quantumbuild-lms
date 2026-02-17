@@ -57,7 +57,7 @@ import { AlertCircleIcon } from 'lucide-react';
 // ============================================
 
 const scheduleFormSchema = z.object({
-  toolboxTalkId: z.string().min(1, 'Please select a toolbox talk'),
+  toolboxTalkId: z.string().min(1, 'Please select a learning'),
   scheduledDate: z.date({ message: 'Scheduled date is required' }),
   endDate: z.date().optional().nullable(),
   frequency: z.enum(['Once', 'Weekly', 'Monthly', 'Annually'] as const),
@@ -260,7 +260,7 @@ export function ScheduleDialog({
               <Alert variant="destructive">
                 <AlertCircleIcon className="h-4 w-4" />
                 <AlertDescription>
-                  This toolbox talk is inactive and cannot be scheduled. Please activate it first or select a different talk.
+                  This learning is inactive and cannot be scheduled. Please activate it first or select a different talk.
                 </AlertDescription>
               </Alert>
             )}
@@ -271,7 +271,7 @@ export function ScheduleDialog({
               name="toolboxTalkId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Toolbox Talk *</FormLabel>
+                  <FormLabel>Learning *</FormLabel>
                   <Select
                     value={field.value}
                     onValueChange={field.onChange}
@@ -279,7 +279,7 @@ export function ScheduleDialog({
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select a toolbox talk" />
+                        <SelectValue placeholder="Select a learning" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -602,11 +602,11 @@ export function ScheduleDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEditing ? 'Edit Schedule' : 'Schedule Toolbox Talk'}</DialogTitle>
+          <DialogTitle>{isEditing ? 'Edit Schedule' : 'Schedule Learning'}</DialogTitle>
           <DialogDescription>
             {isEditing
-              ? 'Update the schedule details for this toolbox talk.'
-              : 'Create a new schedule to assign this toolbox talk to employees.'}
+              ? 'Update the schedule details for this learning.'
+              : 'Create a new schedule to assign this learning to employees.'}
           </DialogDescription>
         </DialogHeader>
         {formContent}

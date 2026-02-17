@@ -249,7 +249,7 @@ export default function NewToolboxTalkWizard() {
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold">Create Toolbox Talk</h1>
+            <h1 className="text-2xl font-bold">Create Learning</h1>
             <p className="text-muted-foreground">
               Follow the steps below to create a new safety training module
             </p>

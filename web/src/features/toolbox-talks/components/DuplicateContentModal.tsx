@@ -72,12 +72,12 @@ export function DuplicateContentModal({
             Content Already Exists
           </DialogTitle>
           <DialogDescription>
-            This file was previously processed for another Toolbox Talk.
+            This file was previously processed for another Learning.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* Source Toolbox Talk Info */}
+          {/* Source Learning Info */}
           <div className="bg-muted rounded-lg p-4 space-y-3">
             <div className="flex items-start gap-3">
               {fileType === 'PDF' ? (

@@ -52,7 +52,7 @@ public class UpdateToolboxTalkScheduleCommandHandler : IRequestHandler<UpdateToo
 
             if (!employeeIdsToAssign.Any())
             {
-                throw new InvalidOperationException("No active employees found to assign the toolbox talk.");
+                throw new InvalidOperationException("No active employees found to assign the learning.");
             }
         }
         else

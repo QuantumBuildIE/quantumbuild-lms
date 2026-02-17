@@ -55,10 +55,10 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
 
     try {
       await deleteMutation.mutateAsync(talk.id);
-      toast.success('Toolbox talk deleted successfully');
+      toast.success('Learning deleted successfully');
       router.push(basePath);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to delete toolbox talk';
+      const message = error instanceof Error ? error.message : 'Failed to delete learning';
       toast.error('Error', { description: message });
     }
   };
@@ -71,7 +71,7 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
     return (
       <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
         <p className="text-destructive">
-          Error loading toolbox talk: {error instanceof Error ? error.message : 'Unknown error'}
+          Error loading learning: {error instanceof Error ? error.message : 'Unknown error'}
         </p>
       </div>
     );
@@ -80,7 +80,7 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
   if (!talk) {
     return (
       <div className="rounded-lg border p-8 text-center">
-        <p className="text-muted-foreground">Toolbox talk not found</p>
+        <p className="text-muted-foreground">Learning not found</p>
       </div>
     );
   }
@@ -312,7 +312,7 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
             <FileTextIcon className="h-5 w-5" />
             Sections ({talk.sections.length})
           </CardTitle>
-          <CardDescription>Content sections for this toolbox talk</CardDescription>
+          <CardDescription>Content sections for this learning</CardDescription>
         </CardHeader>
         <CardContent>
           <Accordion type="multiple" className="w-full">
@@ -409,7 +409,7 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
       <DeleteConfirmationDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
-        title="Delete Toolbox Talk"
+        title="Delete Learning"
         description={`Are you sure you want to delete "${talk.title}"? This action cannot be undone and will also delete all associated schedules and assignments.`}
         onConfirm={handleDelete}
         isLoading={deleteMutation.isPending}

@@ -317,7 +317,7 @@ export function GenerateStep({ data, updateData, onNext, onBack }: GenerateStepP
   // Smart generate: auto-reuse existing content, generate only what's missing
   const handleSmartGenerate = async () => {
     if (!data.id) {
-      setError('Toolbox Talk not found. Please go back and save the basic info first.');
+      setError('Learning not found. Please go back and save the basic info first.');
       return;
     }
 

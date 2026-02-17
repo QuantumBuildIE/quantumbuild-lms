@@ -187,7 +187,7 @@ export function PublishStep({
 
   const saveToolboxTalk = async (status: ToolboxTalkStatus) => {
     if (!data.id) {
-      toast.error('Toolbox Talk not found', {
+      toast.error('Learning not found', {
         description: 'Please go back to the first step and try again.',
       });
       return;
@@ -236,7 +236,7 @@ export function PublishStep({
     try {
       await saveToolboxTalk('Published');
       setShowSuccess(true);
-      toast.success('Toolbox Talk published successfully!', {
+      toast.success('Learning published successfully!', {
         description: 'It is now available for scheduling and assignments.',
       });
 
@@ -277,7 +277,7 @@ export function PublishStep({
           <PartyPopper className="h-16 w-16 text-primary" />
         </div>
         <div className="text-center space-y-2">
-          <h2 className="text-2xl font-bold">Toolbox Talk Published!</h2>
+          <h2 className="text-2xl font-bold">Learning Published!</h2>
           <p className="text-muted-foreground">
             Your training is now ready to be assigned to employees.
           </p>
@@ -295,7 +295,7 @@ export function PublishStep({
       <div>
         <h2 className="text-lg font-semibold">Publish Settings</h2>
         <p className="text-sm text-muted-foreground">
-          Review your Toolbox Talk and configure final settings before publishing
+          Review your Learning and configure final settings before publishing
         </p>
       </div>
 
@@ -420,7 +420,7 @@ export function PublishStep({
           <SettingsSection
             icon={Settings}
             title="Basic Settings"
-            description="Core configuration for this toolbox talk"
+            description="Core configuration for this learning"
           >
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
@@ -749,7 +749,7 @@ export function PublishStep({
           <CheckCircle2 className="h-4 w-4" />
           <AlertTitle>Ready to Publish</AlertTitle>
           <AlertDescription>
-            Your Toolbox Talk is complete and ready to be published. Once
+            Your Learning is complete and ready to be published. Once
             published, it can be scheduled and assigned to employees.
           </AlertDescription>
         </Alert>
@@ -787,7 +787,7 @@ export function PublishStep({
             ) : (
               <Send className="mr-2 h-4 w-4" />
             )}
-            Publish Toolbox Talk
+            Publish Learning
           </Button>
         </div>
       </div>

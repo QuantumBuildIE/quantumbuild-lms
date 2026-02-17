@@ -163,7 +163,7 @@ export default function CompletionsReportPage() {
               </Select>
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">Toolbox Talk</label>
+              <label className="text-sm font-medium">Learning</label>
               <Select
                 value={toolboxTalkId || 'all'}
                 onValueChange={(value) => updateUrlParams({ toolboxTalkId: value === 'all' ? null : value, page: '1' })}
@@ -199,7 +199,7 @@ export default function CompletionsReportPage() {
               <TableRow>
                 <TableHead>Employee</TableHead>
                 <TableHead>Site</TableHead>
-                <TableHead>Toolbox Talk</TableHead>
+                <TableHead>Learning</TableHead>
                 <TableHead className="text-right">Completed</TableHead>
                 <TableHead className="text-right">Time Spent</TableHead>
                 <TableHead className="text-center">Quiz Score</TableHead>

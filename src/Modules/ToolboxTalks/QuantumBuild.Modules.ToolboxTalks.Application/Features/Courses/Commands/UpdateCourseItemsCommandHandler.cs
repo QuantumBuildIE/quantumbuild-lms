@@ -49,7 +49,7 @@ public class UpdateCourseItemsCommandHandler : IRequestHandler<UpdateCourseItems
             var missingIds = requestedTalkIds.Except(existingTalkIds).ToList();
             if (missingIds.Any())
             {
-                throw new InvalidOperationException($"One or more toolbox talks not found: {string.Join(", ", missingIds)}");
+                throw new InvalidOperationException($"One or more learnings not found: {string.Join(", ", missingIds)}");
             }
         }
 

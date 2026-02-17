@@ -12,7 +12,7 @@ export default function AdminToolboxTalksSettingsPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
           <p className="text-muted-foreground">
-            Toolbox Talks configuration
+            Learnings configuration
           </p>
         </div>
         <Card className="p-8 text-center">
@@ -29,7 +29,7 @@ export default function AdminToolboxTalksSettingsPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
         <p className="text-muted-foreground">
-          Configure Toolbox Talks module settings
+          Configure Learnings module settings
         </p>
       </div>
 
@@ -38,7 +38,7 @@ export default function AdminToolboxTalksSettingsPage() {
           <CardHeader>
             <CardTitle>General Settings</CardTitle>
             <CardDescription>
-              Configure general toolbox talks settings
+              Configure general learnings settings
             </CardDescription>
           </CardHeader>
           <CardContent>

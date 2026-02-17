@@ -116,11 +116,11 @@ export function ToolboxTalkList({ onSchedule, basePath = '/admin/toolbox-talks' 
 
     try {
       await deleteMutation.mutateAsync(talkToDelete.id);
-      toast.success('Toolbox talk deleted successfully');
+      toast.success('Learning deleted successfully');
       setDeleteDialogOpen(false);
       setTalkToDelete(null);
     } catch (error: unknown) {
-      let message = 'Failed to delete toolbox talk';
+      let message = 'Failed to delete learning';
       if (error && typeof error === 'object' && 'response' in error) {
         const axiosError = error as { response?: { data?: { message?: string } } };
         if (axiosError.response?.data?.message) {
@@ -280,7 +280,7 @@ export function ToolboxTalkList({ onSchedule, basePath = '/admin/toolbox-talks' 
     return (
       <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
         <p className="text-destructive">
-          Error loading toolbox talks: {error instanceof Error ? error.message : 'Unknown error'}
+          Error loading learnings: {error instanceof Error ? error.message : 'Unknown error'}
         </p>
       </div>
     );
@@ -349,7 +349,7 @@ export function ToolboxTalkList({ onSchedule, basePath = '/admin/toolbox-talks' 
         columns={columns}
         data={data?.items || []}
         isLoading={isLoading}
-        emptyMessage="No toolbox talks found"
+        emptyMessage="No learnings found"
         keyExtractor={(item) => item.id}
         pagination={
           data
@@ -369,7 +369,7 @@ export function ToolboxTalkList({ onSchedule, basePath = '/admin/toolbox-talks' 
       <DeleteConfirmationDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
-        title="Delete Toolbox Talk"
+        title="Delete Learning"
         description={`Are you sure you want to delete "${talkToDelete?.title}"? This action cannot be undone.`}
         onConfirm={handleDelete}
         isLoading={deleteMutation.isPending}

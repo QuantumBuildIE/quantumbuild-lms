@@ -8,7 +8,7 @@ export default function AdminAssignmentsListPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Assignments</h1>
         <p className="text-muted-foreground">
-          Track all employee toolbox talk assignments
+          Track all employee learning assignments
         </p>
       </div>
 

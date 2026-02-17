@@ -375,7 +375,7 @@ export function CourseForm({ course }: CourseFormProps) {
         <p className="text-muted-foreground">
           {isEditing
             ? 'Update course details and manage the talks included in this course.'
-            : 'Create a new course by defining its settings and adding toolbox talks.'}
+            : 'Create a new course by defining its settings and adding learnings.'}
         </p>
       </div>
 
@@ -573,7 +573,7 @@ export function CourseForm({ course }: CourseFormProps) {
                 <h2 className="text-lg font-medium">Talks</h2>
                 <p className="text-sm text-muted-foreground">
                   {courseItems.length === 0
-                    ? 'Add toolbox talks to this course.'
+                    ? 'Add learnings to this course.'
                     : `${courseItems.length} talk${courseItems.length !== 1 ? 's' : ''} in this course. Drag to reorder.`}
                 </p>
               </div>
@@ -610,7 +610,7 @@ export function CourseForm({ course }: CourseFormProps) {
             ) : (
               <div className="rounded-md border border-dashed p-8 text-center">
                 <p className="text-sm text-muted-foreground">
-                  No talks added yet. Click &quot;Add Talks&quot; to select toolbox talks for this course.
+                  No talks added yet. Click &quot;Add Talks&quot; to select learnings for this course.
                 </p>
               </div>
             )}
