@@ -295,11 +295,11 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
             ...requestData,
           },
         });
-        toast.success('Toolbox talk updated successfully');
+        toast.success('Learning updated successfully');
         onSuccess?.(result);
       } else {
         const result = await createMutation.mutateAsync(requestData);
-        toast.success('Toolbox talk created successfully');
+        toast.success('Learning created successfully');
         onSuccess?.(result);
       }
     } catch (error) {

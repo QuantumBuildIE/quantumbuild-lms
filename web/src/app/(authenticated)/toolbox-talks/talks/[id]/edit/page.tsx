@@ -59,7 +59,7 @@ export default function ToolboxTalkEditPage() {
         </div>
         <Card className="p-8 text-center">
           <p className="text-destructive">
-            {error instanceof Error ? error.message : 'Toolbox talk not found'}
+            {error instanceof Error ? error.message : 'Learning not found'}
           </p>
           <Button className="mt-4" onClick={() => router.push('/toolbox-talks/talks')}>
             Back to Learnings
