@@ -5,6 +5,7 @@ using QuantumBuild.Core.Application.Features.Contacts;
 using QuantumBuild.Core.Application.Features.Employees;
 using QuantumBuild.Core.Application.Features.Roles;
 using QuantumBuild.Core.Application.Features.Sites;
+using QuantumBuild.Core.Application.Features.Lookups;
 using QuantumBuild.Core.Application.Features.Tenants;
 using QuantumBuild.Core.Application.Features.Users;
 
@@ -34,6 +35,7 @@ public static class DependencyInjection
         services.AddScoped<IRoleService, RoleService>();
         services.AddScoped<ITenantService, TenantService>();
         services.AddScoped<ITenantOnboardingService, TenantOnboardingService>();
+        services.AddScoped<ILookupService, LookupService>();
 
         return services;
     }

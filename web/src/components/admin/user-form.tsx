@@ -33,6 +33,7 @@ import { useUnlinkedEmployees } from "@/lib/api/admin/use-employees";
 import { useAllSites } from "@/lib/api/admin/use-sites";
 import { toast } from "sonner";
 import { cn, getApiErrorMessage } from "@/lib/utils";
+import { LookupField } from "./lookup-field";
 import { UserEmployeeRecordSection } from "./user-employee-record-section";
 
 // Password strength calculation
@@ -514,7 +515,12 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
                         <FormItem>
                           <FormLabel>Job Title</FormLabel>
                           <FormControl>
-                            <Input placeholder="e.g., Site Manager" {...field} />
+                            <LookupField
+                              categoryName="JobTitle"
+                              value={field.value ?? ""}
+                              onChange={field.onChange}
+                              placeholder="Select job title..."
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -528,7 +534,12 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
                         <FormItem>
                           <FormLabel>Department</FormLabel>
                           <FormControl>
-                            <Input placeholder="e.g., Operations" {...field} />
+                            <LookupField
+                              categoryName="Department"
+                              value={field.value ?? ""}
+                              onChange={field.onChange}
+                              placeholder="Select department..."
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>

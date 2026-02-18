@@ -18,6 +18,11 @@ public interface ICoreDbContext
     DbSet<Company> Companies { get; }
     DbSet<Contact> Contacts { get; }
 
+    // Lookup DbSets
+    DbSet<LookupCategory> LookupCategories { get; }
+    DbSet<LookupValue> LookupValues { get; }
+    DbSet<TenantLookupValue> TenantLookupValues { get; }
+
     /// <summary>
     /// Save changes to the database
     /// </summary>

@@ -27,7 +27,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { SOURCE_LANGUAGE_OPTIONS, TOOLBOX_TALK_CATEGORIES } from '../constants';
+import { SOURCE_LANGUAGE_OPTIONS } from '../constants';
+import { useLookupValues } from '@/hooks/use-lookups';
 import { SectionEditor } from './SectionEditor';
 import { QuestionEditor } from './QuestionEditor';
 import { SubtitleProcessingPanel } from './SubtitleProcessingPanel';
@@ -135,6 +136,7 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
   const isEditing = !!talk;
 
   const queryClient = useQueryClient();
+  const { data: categories = [], isLoading: categoriesLoading } = useLookupValues('TrainingCategory');
   const createMutation = useCreateToolboxTalk();
   const updateMutation = useUpdateToolboxTalk();
   const [isRegenerating, setIsRegenerating] = useState(false);
@@ -359,18 +361,24 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Category</FormLabel>
-                    <Select value={field.value || ''} onValueChange={field.onChange}>
+                    <Select value={field.value || ''} onValueChange={field.onChange} disabled={categoriesLoading}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select category" />
+                          <SelectValue placeholder={categoriesLoading ? 'Loading...' : 'Select category'} />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {TOOLBOX_TALK_CATEGORIES.map((category) => (
-                          <SelectItem key={category} value={category}>
-                            {category}
-                          </SelectItem>
-                        ))}
+                        {categories.length === 0 && !categoriesLoading ? (
+                          <div className="px-2 py-4 text-sm text-muted-foreground text-center">
+                            No categories configured — ask your admin to set up categories
+                          </div>
+                        ) : (
+                          categories.map((cat) => (
+                            <SelectItem key={cat.id} value={cat.name}>
+                              {cat.name}
+                            </SelectItem>
+                          ))
+                        )}
                       </SelectContent>
                     </Select>
                     <FormDescription>

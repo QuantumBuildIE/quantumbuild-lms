@@ -50,6 +50,11 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
     public DbSet<Company> Companies => Set<Company>();
     public DbSet<Contact> Contacts => Set<Contact>();
 
+    // Lookup DbSets
+    public DbSet<LookupCategory> LookupCategories => Set<LookupCategory>();
+    public DbSet<LookupValue> LookupValues => Set<LookupValue>();
+    public DbSet<TenantLookupValue> TenantLookupValues => Set<TenantLookupValue>();
+
     // Identity/Authorization DbSets
     public DbSet<Permission> Permissions => Set<Permission>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
@@ -180,6 +185,11 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         // modelBuilder.ApplyConfiguration(new CompanyConfiguration());
         modelBuilder.ApplyConfiguration(new ContactConfiguration());
 
+        // Apply Lookup entity configurations
+        modelBuilder.ApplyConfiguration(new LookupCategoryConfiguration());
+        modelBuilder.ApplyConfiguration(new LookupValueConfiguration());
+        modelBuilder.ApplyConfiguration(new TenantLookupValueConfiguration());
+
         // Apply Toolbox Talks entity configurations
         modelBuilder.ApplyConfiguration(new ToolboxTalkConfiguration());
         modelBuilder.ApplyConfiguration(new ToolboxTalkSectionConfiguration());
@@ -216,6 +226,11 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         // BaseEntity-based (not tenant-scoped): ToolboxTalkSlideshowTranslation
         // BaseEntity-based (not tenant-scoped): ToolboxTalkSection, ToolboxTalkQuestion, ToolboxTalkCourseItem, ToolboxTalkCourseTranslation,
         //   ToolboxTalkScheduleAssignment, ScheduledTalkSectionProgress, ScheduledTalkQuizAttempt, ScheduledTalkCompletion, ToolboxTalkSettings, SubtitleTranslation, ToolboxTalkSlideTranslation
+
+        // Apply query filters for Lookup entities
+        modelBuilder.Entity<LookupCategory>().HasQueryFilter(e => !e.IsDeleted);
+        modelBuilder.Entity<LookupValue>().HasQueryFilter(e => !e.IsDeleted);
+        modelBuilder.Entity<TenantLookupValue>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
 
         // Apply query filter for Permission (not tenant-scoped, global)
         modelBuilder.Entity<Permission>().HasQueryFilter(e => !e.IsDeleted);

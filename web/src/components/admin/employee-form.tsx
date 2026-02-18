@@ -31,6 +31,7 @@ import type { Employee } from "@/types/admin";
 import { toast } from "sonner";
 import { Info, User as UserIcon } from "lucide-react";
 import { EmployeeUserAccountSection } from "./employee-user-account-section";
+import { LookupField } from "./lookup-field";
 
 // Supported languages for Learning subtitles
 // Most common construction worker languages in Ireland/UK listed first
@@ -253,7 +254,12 @@ export function EmployeeForm({ employee, onSuccess, onCancel }: EmployeeFormProp
               <FormItem>
                 <FormLabel>Job Title</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g., Site Manager" {...field} value={field.value ?? ""} />
+                  <LookupField
+                    categoryName="JobTitle"
+                    value={field.value ?? ""}
+                    onChange={field.onChange}
+                    placeholder="Select job title..."
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -267,7 +273,12 @@ export function EmployeeForm({ employee, onSuccess, onCancel }: EmployeeFormProp
               <FormItem>
                 <FormLabel>Department</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g., Operations" {...field} value={field.value ?? ""} />
+                  <LookupField
+                    categoryName="Department"
+                    value={field.value ?? ""}
+                    onChange={field.onChange}
+                    placeholder="Select department..."
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>

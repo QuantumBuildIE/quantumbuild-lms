@@ -1,21 +1,3 @@
-export const TOOLBOX_TALK_CATEGORIES = [
-  'Working at Heights',
-  'Fire Safety',
-  'Manual Handling',
-  'PPE',
-  'Electrical Safety',
-  'Hazardous Substances',
-  'Confined Spaces',
-  'Machinery Safety',
-  'Slips, Trips and Falls',
-  'First Aid',
-  'Emergency Procedures',
-  'Site Induction',
-  'Environmental',
-  'General Safety',
-  'Other',
-] as const;
-
 export const SOURCE_LANGUAGE_OPTIONS: { value: string; label: string }[] = [
   { value: 'en', label: 'English' },
   { value: 'af', label: 'Afrikaans' },

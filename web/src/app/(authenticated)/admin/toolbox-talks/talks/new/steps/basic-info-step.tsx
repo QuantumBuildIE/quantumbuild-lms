@@ -27,7 +27,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { createToolboxTalk } from '@/lib/api/toolbox-talks';
-import { TOOLBOX_TALK_CATEGORIES } from '@/features/toolbox-talks/constants';
+import { useLookupValues } from '@/hooks/use-lookups';
 import type { ToolboxTalkWizardData } from '../page';
 
 const basicInfoSchema = z.object({
@@ -68,6 +68,7 @@ export function BasicInfoStep({
 }: BasicInfoStepProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { data: categories = [], isLoading: categoriesLoading } = useLookupValues('TrainingCategory');
 
   const form = useForm<BasicInfoForm>({
     resolver: zodResolver(basicInfoSchema),
@@ -180,18 +181,24 @@ export function BasicInfoStep({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Category *</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select onValueChange={field.onChange} defaultValue={field.value} disabled={categoriesLoading}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select a category" />
+                        <SelectValue placeholder={categoriesLoading ? 'Loading...' : 'Select a category'} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {TOOLBOX_TALK_CATEGORIES.map((category) => (
-                        <SelectItem key={category} value={category}>
-                          {category}
-                        </SelectItem>
-                      ))}
+                      {categories.length === 0 && !categoriesLoading ? (
+                        <div className="px-2 py-4 text-sm text-muted-foreground text-center">
+                          No categories configured — ask your admin to set up categories
+                        </div>
+                      ) : (
+                        categories.map((cat) => (
+                          <SelectItem key={cat.id} value={cat.name}>
+                            {cat.name}
+                          </SelectItem>
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
                   <FormDescription>

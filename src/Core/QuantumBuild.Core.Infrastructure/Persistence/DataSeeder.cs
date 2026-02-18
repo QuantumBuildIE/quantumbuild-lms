@@ -40,6 +40,7 @@ public static class DataSeeder
             await SeedSuperUserAsync(userManager, roleManager, logger);
             await SeedAdminUserAsync(userManager, roleManager, logger);
             await EnsureAdminEmployeeAsync(context, userManager, logger);
+            await SeedLookupCategoriesAsync(context, logger);
 
             logger.LogInformation("Database seeding completed successfully");
         }
@@ -357,6 +358,54 @@ public static class DataSeeder
 
             _ => $"Permission: {permissionName}"
         };
+    }
+
+    private static async Task SeedLookupCategoriesAsync(DbContext context, ILogger logger)
+    {
+        var categories = context.Set<LookupCategory>();
+
+        var categoriesToSeed = new[]
+        {
+            new { Name = "TrainingCategory", Module = "Core" },
+            new { Name = "Department", Module = "Core" },
+            new { Name = "JobTitle", Module = "Core" }
+        };
+
+        var existingNames = await categories
+            .IgnoreQueryFilters()
+            .Where(c => !c.IsDeleted)
+            .Select(c => c.Name)
+            .ToListAsync();
+
+        var newCategories = new List<LookupCategory>();
+
+        foreach (var cat in categoriesToSeed)
+        {
+            if (existingNames.Contains(cat.Name))
+                continue;
+
+            newCategories.Add(new LookupCategory
+            {
+                Id = Guid.NewGuid(),
+                Name = cat.Name,
+                Module = cat.Module,
+                AllowCustom = true,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = "system"
+            });
+        }
+
+        if (newCategories.Count > 0)
+        {
+            await categories.AddRangeAsync(newCategories);
+            await context.SaveChangesAsync();
+            logger.LogInformation("Created {Count} lookup categories", newCategories.Count);
+        }
+        else
+        {
+            logger.LogInformation("All lookup categories already exist, skipping");
+        }
     }
 
     private static async Task EnsureAdminEmployeeAsync(DbContext context, UserManager<User> userManager, ILogger logger)
