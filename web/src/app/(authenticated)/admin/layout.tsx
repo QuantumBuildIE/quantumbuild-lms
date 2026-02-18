@@ -3,14 +3,14 @@
 import { useEffect, useMemo } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { useHasAnyPermission, useIsSuperUser } from "@/lib/auth/use-auth";
+import { useAuth, useHasAnyPermission, useIsSuperUser } from "@/lib/auth/use-auth";
 import { cn } from "@/lib/utils";
 
 const adminNavItems = [
-  { href: "/admin/employees", label: "Employees", superUserOnly: false },
-  { href: "/admin/users", label: "Users", superUserOnly: false },
-  { href: "/admin/toolbox-talks", label: "Learnings", superUserOnly: false },
-  { href: "/admin/tenants", label: "Tenant Management", superUserOnly: true },
+  { href: "/admin/employees", label: "Employees", superUserOnly: false, tenantScoped: true },
+  { href: "/admin/users", label: "Users", superUserOnly: false, tenantScoped: true },
+  { href: "/admin/toolbox-talks", label: "Learnings", superUserOnly: false, tenantScoped: true },
+  { href: "/admin/tenants", label: "Tenant Management", superUserOnly: true, tenantScoped: false },
 ];
 
 const corePermissions = [
@@ -31,6 +31,7 @@ export default function AdminLayout({
   const pathname = usePathname();
   const hasCorePermission = useHasAnyPermission(corePermissions);
   const isSuperUser = useIsSuperUser();
+  const { activeTenantId } = useAuth();
 
   useEffect(() => {
     if (!hasCorePermission) {
@@ -38,9 +39,23 @@ export default function AdminLayout({
     }
   }, [hasCorePermission, router]);
 
+  // Redirect SU to /admin/tenants if navigating to a tenant-scoped page without a tenant selected
+  useEffect(() => {
+    if (isSuperUser && !activeTenantId && !pathname.startsWith("/admin/tenants")) {
+      router.replace("/admin/tenants");
+    }
+  }, [isSuperUser, activeTenantId, pathname, router]);
+
   const visibleNavItems = useMemo(
-    () => adminNavItems.filter((item) => !item.superUserOnly || isSuperUser),
-    [isSuperUser]
+    () =>
+      adminNavItems.filter((item) => {
+        // Hide superUserOnly tabs from non-SU
+        if (item.superUserOnly && !isSuperUser) return false;
+        // Hide tenant-scoped tabs when SU has no tenant selected
+        if (item.tenantScoped && isSuperUser && !activeTenantId) return false;
+        return true;
+      }),
+    [isSuperUser, activeTenantId]
   );
 
   if (!hasCorePermission) {

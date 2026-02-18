@@ -1,7 +1,9 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
+import { useIsSuperUser } from "@/lib/auth/use-auth";
 import { cn } from "@/lib/utils";
 
 // Employee-only navigation - simplified view for completing assigned talks
@@ -16,6 +18,15 @@ export default function ToolboxTalksLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const isSuperUser = useIsSuperUser();
+
+  // SuperUser is a platform role, not a learner — redirect to admin
+  useEffect(() => {
+    if (isSuperUser) {
+      router.replace("/admin/tenants");
+    }
+  }, [isSuperUser, router]);
 
   const isActive = (href: string, exact?: boolean) => {
     if (exact) {

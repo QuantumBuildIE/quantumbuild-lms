@@ -28,6 +28,13 @@ function LoginForm() {
   const [rememberMe, setRememberMe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Show success toast when redirected from set-password flow
+  useEffect(() => {
+    if (searchParams.get("passwordSet") === "true") {
+      toast.success("Password set successfully! Please sign in with your new password.");
+    }
+  }, [searchParams]);
+
   // Redirect already-logged-in users
   useEffect(() => {
     if (user && !authLoading) {

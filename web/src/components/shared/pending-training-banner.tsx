@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { AlertTriangle, Info, X, ArrowRight } from "lucide-react";
 import { useMyTrainingSummary } from "@/lib/api/toolbox-talks/use-my-toolbox-talks";
+import { useIsSuperUser } from "@/lib/auth/use-auth";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +18,7 @@ interface DismissedState {
 
 export function PendingTrainingBanner() {
   const { data: trainingSummary, isLoading } = useMyTrainingSummary();
+  const isSuperUser = useIsSuperUser();
   const [isDismissed, setIsDismissed] = useState(true); // Start dismissed to prevent flash
 
   useEffect(() => {
@@ -54,8 +56,8 @@ export function PendingTrainingBanner() {
     setIsDismissed(true);
   };
 
-  // Don't show if loading, dismissed, or no pending training
-  if (isLoading || isDismissed) {
+  // Don't show for SuperUser (platform role, not a learner), while loading, or if dismissed
+  if (isSuperUser || isLoading || isDismissed) {
     return null;
   }
 

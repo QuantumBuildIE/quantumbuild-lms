@@ -3,7 +3,8 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { apiClient } from "@/lib/api/client";
+import { apiClient, clearStoredTokens } from "@/lib/api/client";
+import { useAuth } from "@/lib/auth/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,14 +14,21 @@ import { toast } from "sonner";
 function SetPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { logout } = useAuth();
 
   const [email, setEmail] = useState("");
   const [token, setToken] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Clear any existing auth session on mount to prevent another user's
+  // session from persisting through the set-password flow
+  useEffect(() => {
+    clearStoredTokens();
+    logout();
+  }, [logout]);
 
   useEffect(() => {
     const emailParam = searchParams.get("email");
@@ -68,11 +76,7 @@ function SetPasswordForm() {
       });
 
       if (response.data.message) {
-        setIsSuccess(true);
-        toast.success("Password set successfully!");
-        setTimeout(() => {
-          router.push("/login");
-        }, 2000);
+        router.push("/login?passwordSet=true");
       }
     } catch (err) {
       const error = err as { response?: { data?: { errors?: string[] } } };
@@ -84,28 +88,6 @@ function SetPasswordForm() {
       setIsLoading(false);
     }
   };
-
-  if (isSuccess) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 px-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="space-y-1 text-center">
-            <CardTitle className="text-2xl font-bold tracking-tight text-green-600">
-              Password Set Successfully
-            </CardTitle>
-            <CardDescription>
-              Your password has been set. You will be redirected to the login page shortly.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="text-center">
-            <Link href="/login">
-              <Button className="mt-4">Go to Login</Button>
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 px-4">

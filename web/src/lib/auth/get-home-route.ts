@@ -8,5 +8,9 @@ export function getHomeRoute(user: User | null): string {
     return "/login";
   }
 
+  if (user.isSuperUser) {
+    return "/admin/tenants";
+  }
+
   return "/toolbox-talks";
 }
