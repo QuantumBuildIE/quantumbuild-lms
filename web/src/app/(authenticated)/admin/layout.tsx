@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { useHasAnyPermission } from "@/lib/auth/use-auth";
+import { useHasAnyPermission, useIsSuperUser } from "@/lib/auth/use-auth";
 import { cn } from "@/lib/utils";
 
 const adminNavItems = [
-  { href: "/admin/employees", label: "Employees" },
-  { href: "/admin/users", label: "Users" },
-  { href: "/admin/toolbox-talks", label: "Learnings" },
+  { href: "/admin/employees", label: "Employees", superUserOnly: false },
+  { href: "/admin/users", label: "Users", superUserOnly: false },
+  { href: "/admin/toolbox-talks", label: "Learnings", superUserOnly: false },
+  { href: "/admin/tenants", label: "Tenant Management", superUserOnly: true },
 ];
 
 const corePermissions = [
@@ -29,12 +30,18 @@ export default function AdminLayout({
   const router = useRouter();
   const pathname = usePathname();
   const hasCorePermission = useHasAnyPermission(corePermissions);
+  const isSuperUser = useIsSuperUser();
 
   useEffect(() => {
     if (!hasCorePermission) {
       router.replace("/dashboard");
     }
   }, [hasCorePermission, router]);
+
+  const visibleNavItems = useMemo(
+    () => adminNavItems.filter((item) => !item.superUserOnly || isSuperUser),
+    [isSuperUser]
+  );
 
   if (!hasCorePermission) {
     return (
@@ -54,7 +61,7 @@ export default function AdminLayout({
     <div className="space-y-6">
       <nav className="border-b bg-background -mx-4 px-4 sm:mx-0 sm:px-6">
         <div className="flex h-10 items-center gap-4 overflow-x-auto sm:gap-6 scrollbar-hide">
-          {adminNavItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}

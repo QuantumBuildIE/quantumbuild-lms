@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { LogOut, User, KeyRound, ClipboardList, Shield } from "lucide-react";
 import Link from "next/link";
+import { TenantSwitcher } from "@/components/layout/tenant-switcher";
 
 export function TopNav() {
   const router = useRouter();
@@ -61,6 +62,10 @@ export function TopNav() {
             </span>
           </div>
         </Link>
+
+        <div className="flex items-center gap-4">
+          {user?.isSuperUser && <TenantSwitcher />}
+        </div>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

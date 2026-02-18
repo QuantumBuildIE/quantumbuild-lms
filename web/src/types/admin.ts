@@ -90,3 +90,32 @@ export interface Contact {
   isActive: boolean;
   notes?: string;
 }
+
+export type TenantStatus = "Active" | "Suspended" | "Inactive";
+
+export interface TenantListItem {
+  id: string;
+  name: string;
+  code?: string;
+  companyName?: string;
+  status: TenantStatus;
+  contactEmail?: string;
+  contactName?: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface TenantDetail {
+  id: string;
+  name: string;
+  code?: string;
+  companyName?: string;
+  status: TenantStatus;
+  contactEmail?: string;
+  contactName?: string;
+  isActive: boolean;
+  createdAt: string;
+  createdBy: string;
+  updatedAt?: string;
+  updatedBy?: string;
+}

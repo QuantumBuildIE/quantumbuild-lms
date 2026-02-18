@@ -19,6 +19,20 @@ public class TenantConfiguration : IEntityTypeConfiguration<Tenant>
         builder.Property(e => e.Code)
             .HasMaxLength(50);
 
+        builder.Property(e => e.CompanyName)
+            .HasMaxLength(300);
+
+        builder.Property(e => e.Status)
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .HasDefaultValue(Domain.Enums.TenantStatus.Active);
+
+        builder.Property(e => e.ContactEmail)
+            .HasMaxLength(256);
+
+        builder.Property(e => e.ContactName)
+            .HasMaxLength(200);
+
         builder.HasIndex(e => e.Name)
             .IsUnique()
             .HasDatabaseName("IX_Tenants_Name");

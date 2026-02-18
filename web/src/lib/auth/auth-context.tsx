@@ -9,6 +9,8 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  activeTenantId: string | null;
+  setActiveTenantId: (tenantId: string | null) => void;
   login: (email: string, password: string, rememberMe?: boolean) => Promise<{ success: boolean; error?: string; user?: User }>;
   logout: () => void;
 }
@@ -23,6 +25,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeTenantId, setActiveTenantIdState] = useState<string | null>(null);
+
+  const setActiveTenantId = useCallback((tenantId: string | null) => {
+    setActiveTenantIdState(tenantId);
+    if (typeof window !== "undefined") {
+      if (tenantId) {
+        localStorage.setItem("activeTenantId", tenantId);
+      } else {
+        localStorage.removeItem("activeTenantId");
+      }
+    }
+  }, []);
 
   const isAuthenticated = !!user && !!token;
 
@@ -56,6 +70,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   useEffect(() => {
     const initAuth = async () => {
+      // Restore active tenant for super users
+      const storedTenantId = typeof window !== "undefined" ? localStorage.getItem("activeTenantId") : null;
+      if (storedTenantId) {
+        setActiveTenantIdState(storedTenantId);
+      }
+
       const storedToken = getStoredToken("accessToken");
       if (storedToken) {
         const success = await loadUser(storedToken);
@@ -119,7 +139,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     clearStoredTokens();
     setUser(null);
     setToken(null);
-  }, []);
+    setActiveTenantId(null);
+  }, [setActiveTenantId]);
 
   return (
     <AuthContext.Provider
@@ -128,6 +149,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         token,
         isLoading,
         isAuthenticated,
+        activeTenantId,
+        setActiveTenantId,
         login,
         logout,
       }}

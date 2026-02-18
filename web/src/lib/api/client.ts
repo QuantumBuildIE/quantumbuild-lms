@@ -78,12 +78,19 @@ const processQueue = (error: Error | null, token: string | null = null) => {
   failedQueue = [];
 };
 
-// Request interceptor to add Bearer token
+// Request interceptor to add Bearer token and tenant context
 apiClient.interceptors.request.use(
   (config) => {
     const token = getStoredToken("accessToken");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+    // Add X-Tenant-Id header for super user tenant context switching
+    if (typeof window !== "undefined") {
+      const activeTenantId = localStorage.getItem("activeTenantId");
+      if (activeTenantId) {
+        config.headers["X-Tenant-Id"] = activeTenantId;
+      }
     }
     return config;
   },
