@@ -46,10 +46,10 @@ public static class ToolboxTalksSeedData
     /// </summary>
     public static async Task SeedAsync(DbContext context, ILogger logger)
     {
-        await SeedToolboxTalkSettingsAsync(context, logger);
-        var talks = await SeedToolboxTalksAsync(context, logger);
-        var schedules = await SeedToolboxTalkSchedulesAsync(context, logger, talks);
-        logger.LogInformation("Skipping scheduled talks seed data (not needed for fresh deployment)");
+        // await SeedToolboxTalkSettingsAsync(context, logger);
+        // var talks = await SeedToolboxTalksAsync(context, logger);
+        // var schedules = await SeedToolboxTalkSchedulesAsync(context, logger, talks);
+        logger.LogInformation("*** Skipping Toolbox Talks Seeding ***");
     }
 
     private static async Task SeedToolboxTalkSettingsAsync(DbContext context, ILogger logger)

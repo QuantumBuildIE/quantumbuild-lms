@@ -170,9 +170,9 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
 
         // Apply Core entity configurations
         modelBuilder.ApplyConfiguration(new TenantConfiguration());
-        modelBuilder.ApplyConfiguration(new SiteConfiguration());
+        // modelBuilder.ApplyConfiguration(new SiteConfiguration());
         modelBuilder.ApplyConfiguration(new EmployeeConfiguration());
-        modelBuilder.ApplyConfiguration(new CompanyConfiguration());
+        // modelBuilder.ApplyConfiguration(new CompanyConfiguration());
         modelBuilder.ApplyConfiguration(new ContactConfiguration());
 
         // Apply Toolbox Talks entity configurations
