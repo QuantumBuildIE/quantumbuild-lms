@@ -48,6 +48,7 @@ import type {
   ToolboxTalkScheduleListItem,
   ToolboxTalkScheduleStatus,
 } from '@/types/toolbox-talks';
+import { usePermission } from '@/lib/auth/use-auth';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -84,6 +85,7 @@ const getStatusBadgeVariant = (status: ToolboxTalkScheduleStatus) => {
 export function ScheduleList({ toolboxTalkId, onEdit, basePath = '/admin/toolbox-talks' }: ScheduleListProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const canSchedule = usePermission('Learnings.Schedule');
 
   // URL params state
   const page = Number(searchParams.get('schedulePage')) || 1;
@@ -252,13 +254,13 @@ export function ScheduleList({ toolboxTalkId, onEdit, basePath = '/admin/toolbox
               <EyeIcon className="mr-2 h-4 w-4" />
               View
             </DropdownMenuItem>
-            {item.status === 'Draft' && (
+            {canSchedule && item.status === 'Draft' && (
               <DropdownMenuItem onClick={() => onEdit?.(item)}>
                 <PencilIcon className="mr-2 h-4 w-4" />
                 Edit
               </DropdownMenuItem>
             )}
-            {(item.status === 'Draft' || item.status === 'Active') && (
+            {canSchedule && (item.status === 'Draft' || item.status === 'Active') && (
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
@@ -272,7 +274,7 @@ export function ScheduleList({ toolboxTalkId, onEdit, basePath = '/admin/toolbox
                 </DropdownMenuItem>
               </>
             )}
-            {item.status !== 'Cancelled' && item.status !== 'Completed' && (
+            {canSchedule && item.status !== 'Cancelled' && item.status !== 'Completed' && (
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem

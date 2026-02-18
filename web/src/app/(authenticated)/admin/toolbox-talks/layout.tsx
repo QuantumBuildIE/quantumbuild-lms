@@ -18,11 +18,11 @@ const adminToolboxTalksNavItems = [
 ];
 
 // Permissions that grant access to admin learnings management
-const toolboxTalksAdminPermissions = [
-  "ToolboxTalks.Admin",
-  "ToolboxTalks.Create",
-  "ToolboxTalks.Edit",
-  "ToolboxTalks.Schedule",
+const learningsAdminPermissions = [
+  "Learnings.View",
+  "Learnings.Manage",
+  "Learnings.Schedule",
+  "Learnings.Admin",
 ];
 
 export default function AdminToolboxTalksLayout({
@@ -32,7 +32,7 @@ export default function AdminToolboxTalksLayout({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const hasAdminPermission = useHasAnyPermission(toolboxTalksAdminPermissions);
+  const hasAdminPermission = useHasAnyPermission(learningsAdminPermissions);
 
   useEffect(() => {
     if (!hasAdminPermission) {

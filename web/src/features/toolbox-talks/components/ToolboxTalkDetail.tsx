@@ -31,6 +31,7 @@ import {
 import { DeleteConfirmationDialog } from '@/components/shared/delete-confirmation-dialog';
 import { PreviewModal } from './PreviewModal';
 import { useToolboxTalk, useDeleteToolboxTalk } from '@/lib/api/toolbox-talks';
+import { usePermission } from '@/lib/auth/use-auth';
 import type { ToolboxTalk } from '@/types/toolbox-talks';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -46,6 +47,8 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
   const router = useRouter();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const canManage = usePermission('Learnings.Manage');
+  const canSchedule = usePermission('Learnings.Schedule');
 
   const { data: talk, isLoading, error } = useToolboxTalk(talkId);
   const deleteMutation = useDeleteToolboxTalk();
@@ -124,27 +127,33 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
             <EyeIcon className="mr-2 h-4 w-4" />
             Preview as Employee
           </Button>
-          <Button variant="outline" onClick={() => router.push(`${basePath}/${talk.id}/edit`)}>
-            <PencilIcon className="mr-2 h-4 w-4" />
-            Edit
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => onSchedule?.(talk)}
-            disabled={!talk.isActive}
-            title={!talk.isActive ? 'Only active talks can be scheduled' : undefined}
-          >
-            <CalendarClockIcon className="mr-2 h-4 w-4" />
-            Schedule
-          </Button>
-          <Button
-            variant="outline"
-            className="text-destructive hover:text-destructive"
-            onClick={() => setDeleteDialogOpen(true)}
-          >
-            <TrashIcon className="mr-2 h-4 w-4" />
-            Delete
-          </Button>
+          {canManage && (
+            <Button variant="outline" onClick={() => router.push(`${basePath}/${talk.id}/edit`)}>
+              <PencilIcon className="mr-2 h-4 w-4" />
+              Edit
+            </Button>
+          )}
+          {canSchedule && (
+            <Button
+              variant="outline"
+              onClick={() => onSchedule?.(talk)}
+              disabled={!talk.isActive}
+              title={!talk.isActive ? 'Only active talks can be scheduled' : undefined}
+            >
+              <CalendarClockIcon className="mr-2 h-4 w-4" />
+              Schedule
+            </Button>
+          )}
+          {canManage && (
+            <Button
+              variant="outline"
+              className="text-destructive hover:text-destructive"
+              onClick={() => setDeleteDialogOpen(true)}
+            >
+              <TrashIcon className="mr-2 h-4 w-4" />
+              Delete
+            </Button>
+          )}
         </div>
       </div>
 

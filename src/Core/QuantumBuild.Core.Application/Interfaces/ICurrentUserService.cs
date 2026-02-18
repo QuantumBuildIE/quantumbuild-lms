@@ -16,7 +16,13 @@ public interface ICurrentUserService
     string UserName { get; }
 
     /// <summary>
-    /// Current user's tenant ID
+    /// Current user's tenant ID.
+    /// For SuperUser, reads from X-Tenant-Id header; returns Guid.Empty if no header (bypass tenant filter).
     /// </summary>
     Guid TenantId { get; }
+
+    /// <summary>
+    /// Whether the current user is a super user
+    /// </summary>
+    bool IsSuperUser { get; }
 }

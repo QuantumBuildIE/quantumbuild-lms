@@ -17,7 +17,7 @@ public class GetAssignmentPreviewRequest
 
 [ApiController]
 [Route("api/toolbox-talks/course-assignments")]
-[Authorize(Policy = "ToolboxTalks.View")]
+[Authorize(Policy = "Learnings.View")]
 public class ToolboxTalkCourseAssignmentsController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -68,7 +68,7 @@ public class ToolboxTalkCourseAssignmentsController : ControllerBase
     /// Assign a course to one or more employees
     /// </summary>
     [HttpPost]
-    [Authorize(Policy = "ToolboxTalks.Create")]
+    [Authorize(Policy = "Learnings.Manage")]
     [ProducesResponseType(typeof(Result<List<ToolboxTalkCourseAssignmentDto>>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Assign([FromBody] AssignCourseDto dto)
@@ -159,7 +159,7 @@ public class ToolboxTalkCourseAssignmentsController : ControllerBase
     /// Delete a course assignment (soft delete)
     /// </summary>
     [HttpDelete("{id:guid}")]
-    [Authorize(Policy = "ToolboxTalks.Delete")]
+    [Authorize(Policy = "Learnings.Manage")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(Guid id)

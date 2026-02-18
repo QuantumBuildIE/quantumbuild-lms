@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { usePermission } from '@/lib/auth/use-auth';
 
 export default function AdminToolboxTalksSettingsPage() {
-  const hasAdminPermission = usePermission('ToolboxTalks.Admin');
+  const hasAdminPermission = usePermission('Learnings.Admin');
 
   if (!hasAdminPermission) {
     return (

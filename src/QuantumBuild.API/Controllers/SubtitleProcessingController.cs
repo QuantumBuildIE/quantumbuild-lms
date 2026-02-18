@@ -40,7 +40,7 @@ public class SubtitleProcessingController : ControllerBase
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Job ID and status URL</returns>
     [HttpPost("process")]
-    [Authorize(Policy = "ToolboxTalks.Edit")]
+    [Authorize(Policy = "Learnings.Manage")]
     [ProducesResponseType(typeof(StartProcessingResponse), StatusCodes.Status202Accepted)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -98,7 +98,7 @@ public class SubtitleProcessingController : ControllerBase
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Current processing status</returns>
     [HttpGet("status")]
-    [Authorize(Policy = "ToolboxTalks.View")]
+    [Authorize(Policy = "Learnings.View")]
     [ProducesResponseType(typeof(SubtitleProcessingStatusDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetStatus(Guid toolboxTalkId, CancellationToken cancellationToken)
@@ -118,7 +118,7 @@ public class SubtitleProcessingController : ControllerBase
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Success message</returns>
     [HttpPost("cancel")]
-    [Authorize(Policy = "ToolboxTalks.Edit")]
+    [Authorize(Policy = "Learnings.Manage")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -151,7 +151,7 @@ public class SubtitleProcessingController : ControllerBase
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Job ID and status URL</returns>
     [HttpPost("retry")]
-    [Authorize(Policy = "ToolboxTalks.Edit")]
+    [Authorize(Policy = "Learnings.Manage")]
     [ProducesResponseType(typeof(StartProcessingResponse), StatusCodes.Status202Accepted)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -194,7 +194,7 @@ public class SubtitleProcessingController : ControllerBase
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Subtitle file content in requested format</returns>
     [HttpGet("{languageCode}")]
-    [Authorize(Policy = "ToolboxTalks.View")]
+    [Authorize(Policy = "Learnings.View")]
     [ProducesResponseType(typeof(string), StatusCodes.Status200OK, "text/vtt")]
     [ProducesResponseType(typeof(string), StatusCodes.Status200OK, "application/x-subrip")]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -283,7 +283,7 @@ public class SubtitleProcessingController : ControllerBase
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Languages used by employees and all supported languages</returns>
     [HttpGet("/api/subtitles/available-languages")]
-    [Authorize(Policy = "ToolboxTalks.View")]
+    [Authorize(Policy = "Learnings.View")]
     [ProducesResponseType(typeof(AvailableLanguagesResponse), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAvailableLanguages(CancellationToken cancellationToken)
     {

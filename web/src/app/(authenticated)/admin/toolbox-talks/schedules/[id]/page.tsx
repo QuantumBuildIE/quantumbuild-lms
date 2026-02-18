@@ -42,6 +42,7 @@ import {
   useCancelToolboxTalkSchedule,
   useProcessToolboxTalkSchedule,
 } from '@/lib/api/toolbox-talks';
+import { usePermission } from '@/lib/auth/use-auth';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
@@ -133,9 +134,10 @@ export default function ScheduleDetailPage({ params }: PageProps) {
     );
   }
 
-  const canProcess = schedule.status === 'Draft' || schedule.status === 'Active';
-  const canCancel = schedule.status !== 'Cancelled' && schedule.status !== 'Completed';
-  const canEdit = schedule.status === 'Draft';
+  const hasSchedulePermission = usePermission('Learnings.Schedule');
+  const canProcess = hasSchedulePermission && (schedule.status === 'Draft' || schedule.status === 'Active');
+  const canCancel = hasSchedulePermission && schedule.status !== 'Cancelled' && schedule.status !== 'Completed';
+  const canEdit = hasSchedulePermission && schedule.status === 'Draft';
 
   return (
     <div className="space-y-6">

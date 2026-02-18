@@ -33,6 +33,11 @@ public class User : IdentityUser<Guid>
     public bool IsActive { get; set; } = true;
 
     /// <summary>
+    /// Whether the user is a super user with cross-tenant access
+    /// </summary>
+    public bool IsSuperUser { get; set; }
+
+    /// <summary>
     /// Optional link to Employee record
     /// </summary>
     public Guid? EmployeeId { get; set; }

@@ -1,36 +1,39 @@
 namespace QuantumBuild.Core.Infrastructure.Identity;
 
 /// <summary>
-/// Static class containing all permission constants for the application
-/// Simplified permission naming convention: {Module}.{PermissionName}
+/// Static class containing all permission constants for the application.
+/// 9 permissions across 3 modules: Learnings, Core, Tenant.
 /// </summary>
 public static class Permissions
 {
     /// <summary>
-    /// Toolbox Talks module permissions
+    /// Learnings module permissions (formerly ToolboxTalks)
     /// </summary>
-    public static class ToolboxTalks
+    public static class Learnings
     {
-        public const string View = "ToolboxTalks.View";
-        public const string Create = "ToolboxTalks.Create";
-        public const string Edit = "ToolboxTalks.Edit";
-        public const string Delete = "ToolboxTalks.Delete";
-        public const string Schedule = "ToolboxTalks.Schedule";
-        public const string ViewReports = "ToolboxTalks.ViewReports";
-        public const string Admin = "ToolboxTalks.Admin";
+        public const string View = "Learnings.View";
+        public const string Manage = "Learnings.Manage";
+        public const string Schedule = "Learnings.Schedule";
+        public const string Admin = "Learnings.Admin";
     }
 
     /// <summary>
-    /// Core module permissions (Sites, Employees, Companies, Users, Roles)
+    /// Core module permissions (Sites, Employees, Companies, Users)
     /// </summary>
     public static class Core
     {
-        public const string ManageSites = "Core.ManageSites";
         public const string ManageEmployees = "Core.ManageEmployees";
+        public const string ManageSites = "Core.ManageSites";
         public const string ManageCompanies = "Core.ManageCompanies";
         public const string ManageUsers = "Core.ManageUsers";
-        public const string ManageRoles = "Core.ManageRoles";
-        public const string Admin = "Core.Admin";
+    }
+
+    /// <summary>
+    /// Tenant management permissions
+    /// </summary>
+    public static class Tenant
+    {
+        public const string Manage = "Tenant.Manage";
     }
 
     /// <summary>
@@ -40,22 +43,20 @@ public static class Permissions
     {
         return new[]
         {
-            // Toolbox Talks permissions
-            ToolboxTalks.View,
-            ToolboxTalks.Create,
-            ToolboxTalks.Edit,
-            ToolboxTalks.Delete,
-            ToolboxTalks.Schedule,
-            ToolboxTalks.ViewReports,
-            ToolboxTalks.Admin,
+            // Learnings permissions
+            Learnings.View,
+            Learnings.Manage,
+            Learnings.Schedule,
+            Learnings.Admin,
 
             // Core permissions
-            Core.ManageSites,
             Core.ManageEmployees,
+            Core.ManageSites,
             Core.ManageCompanies,
             Core.ManageUsers,
-            Core.ManageRoles,
-            Core.Admin
+
+            // Tenant permissions
+            Tenant.Manage
         };
     }
 

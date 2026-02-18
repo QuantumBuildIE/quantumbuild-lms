@@ -16,7 +16,7 @@ export const availableModules: Module[] = [
     description: "Safety training and compliance tracking",
     icon: ClipboardList,
     path: "/toolbox-talks",
-    requiredPermission: "ToolboxTalks.View",
+    requiredPermission: "Learnings.View",
   },
   {
     id: "admin",
@@ -24,6 +24,6 @@ export const availableModules: Module[] = [
     description: "Manage sites, employees, companies, and users",
     icon: Settings,
     path: "/admin",
-    requiredPermission: "Core.Admin",
+    requiredPermission: "Core.ManageEmployees",
   },
 ];

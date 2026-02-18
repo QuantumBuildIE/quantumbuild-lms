@@ -8,7 +8,8 @@ using QuantumBuild.Core.Infrastructure.Identity;
 namespace QuantumBuild.Core.Infrastructure.Persistence;
 
 /// <summary>
-/// Seeds initial data for the application including permissions, roles, tenants, and users
+/// Seeds initial data for the application including permissions, roles, tenants, and users.
+/// Roles: SuperUser, Admin, Supervisor, Operator.
 /// </summary>
 public static class DataSeeder
 {
@@ -36,6 +37,7 @@ public static class DataSeeder
             await SeedPermissionsAsync(context, logger);
             await SeedRolesAsync(context, roleManager, logger);
             await SeedRolePermissionsAsync(context, logger);
+            await SeedSuperUserAsync(userManager, roleManager, logger);
             await SeedAdminUserAsync(userManager, roleManager, logger);
             await EnsureAdminEmployeeAsync(context, userManager, logger);
 
@@ -119,12 +121,10 @@ public static class DataSeeder
     {
         var rolesToCreate = new[]
         {
-            new { Name = "Admin", Description = "Full system administrator with all permissions" },
-            new { Name = "Finance", Description = "Finance team with view permissions" },
-            new { Name = "OfficeStaff", Description = "Office staff with core and learnings access" },
-            new { Name = "SiteManager", Description = "Site manager with core and learnings access" },
-            new { Name = "WarehouseStaff", Description = "Warehouse staff with core and learnings permissions" },
-            new { Name = "Operative", Description = "General Operative staff with core and learnings permissions" }
+            new { Name = "SuperUser", Description = "Super user with all permissions and cross-tenant access" },
+            new { Name = "Admin", Description = "Full system administrator with all permissions except tenant management" },
+            new { Name = "Supervisor", Description = "Supervisor with learnings view/schedule and employee/site management" },
+            new { Name = "Operator", Description = "Operator with view-only access to learnings" }
         };
 
         foreach (var roleInfo in rolesToCreate)
@@ -206,6 +206,60 @@ public static class DataSeeder
         }
     }
 
+    private static async Task SeedSuperUserAsync(UserManager<User> userManager, RoleManager<Role> roleManager, ILogger logger)
+    {
+        const string superUserEmail = "superuser@certifiediq.ai";
+        const string superUserPassword = "SuperUser123!";
+
+        var existingUser = await userManager.FindByEmailAsync(superUserEmail);
+        if (existingUser != null)
+        {
+            logger.LogInformation("SuperUser already exists, skipping");
+            return;
+        }
+
+        var superUser = new User
+        {
+            Id = Guid.NewGuid(),
+            UserName = superUserEmail,
+            Email = superUserEmail,
+            EmailConfirmed = true,
+            FirstName = "Super",
+            LastName = "User",
+            TenantId = DefaultTenantId,
+            IsActive = true,
+            IsSuperUser = true,
+            CreatedAt = DateTime.UtcNow,
+            CreatedBy = "system"
+        };
+
+        var result = await userManager.CreateAsync(superUser, superUserPassword);
+        if (result.Succeeded)
+        {
+            logger.LogInformation("Created super user: {Email}", superUserEmail);
+
+            var superUserRole = await roleManager.FindByNameAsync("SuperUser");
+            if (superUserRole != null)
+            {
+                var roleResult = await userManager.AddToRoleAsync(superUser, "SuperUser");
+                if (roleResult.Succeeded)
+                {
+                    logger.LogInformation("Assigned SuperUser role to user: {Email}", superUserEmail);
+                }
+                else
+                {
+                    logger.LogWarning("Failed to assign SuperUser role: {Errors}",
+                        string.Join(", ", roleResult.Errors.Select(e => e.Description)));
+                }
+            }
+        }
+        else
+        {
+            logger.LogWarning("Failed to create super user: {Errors}",
+                string.Join(", ", result.Errors.Select(e => e.Description)));
+        }
+    }
+
     private static async Task SeedAdminUserAsync(UserManager<User> userManager, RoleManager<Role> roleManager, ILogger logger)
     {
         const string adminEmail = "admin@quantumbuild.ai";
@@ -264,28 +318,19 @@ public static class DataSeeder
     {
         return roleName switch
         {
-            "Admin" => allPermissions, // All permissions
+            "SuperUser" => allPermissions, // All permissions
 
-            "Finance" => allPermissions.Where(p =>
-                p.Name.EndsWith(".View") ||
-                p.Name == Permissions.ToolboxTalks.ViewReports),
+            "Admin" => allPermissions.Where(p =>
+                p.Name != Permissions.Tenant.Manage), // All except Tenant.Manage
 
-            "OfficeStaff" => allPermissions.Where(p =>
-                p.Name == Permissions.ToolboxTalks.View ||
-                p.Name == Permissions.ToolboxTalks.Create ||
-                p.Name == Permissions.ToolboxTalks.Edit ||
-                p.Name == Permissions.ToolboxTalks.Schedule ||
-                p.Name == Permissions.ToolboxTalks.ViewReports ||
-                p.Name == Permissions.Core.ManageCompanies),
+            "Supervisor" => allPermissions.Where(p =>
+                p.Name == Permissions.Learnings.View ||
+                p.Name == Permissions.Learnings.Schedule ||
+                p.Name == Permissions.Core.ManageEmployees ||
+                p.Name == Permissions.Core.ManageSites),
 
-            "SiteManager" => allPermissions.Where(p =>
-                p.Name.StartsWith("ToolboxTalks.") ||
-                p.Name == Permissions.Core.ManageSites ||
-                p.Name == Permissions.Core.ManageEmployees),
-
-            "WarehouseStaff" => allPermissions.Where(p =>
-                p.Name == Permissions.ToolboxTalks.View ||
-                p.Name == Permissions.ToolboxTalks.ViewReports),
+            "Operator" => allPermissions.Where(p =>
+                p.Name == Permissions.Learnings.View),
 
             _ => Enumerable.Empty<Permission>()
         };
@@ -295,22 +340,20 @@ public static class DataSeeder
     {
         return permissionName switch
         {
-            // Toolbox Talks
-            Permissions.ToolboxTalks.View => "View learnings",
-            Permissions.ToolboxTalks.Create => "Create learnings",
-            Permissions.ToolboxTalks.Edit => "Edit learnings",
-            Permissions.ToolboxTalks.Delete => "Delete learnings",
-            Permissions.ToolboxTalks.Schedule => "Schedule learnings",
-            Permissions.ToolboxTalks.ViewReports => "View learnings reports",
-            Permissions.ToolboxTalks.Admin => "Full learnings administration",
+            // Learnings
+            Permissions.Learnings.View => "View learnings",
+            Permissions.Learnings.Manage => "Create, edit, and delete learnings",
+            Permissions.Learnings.Schedule => "Schedule and assign learnings",
+            Permissions.Learnings.Admin => "Full learnings administration",
 
             // Core
-            Permissions.Core.ManageSites => "Manage sites",
             Permissions.Core.ManageEmployees => "Manage employees",
+            Permissions.Core.ManageSites => "Manage sites",
             Permissions.Core.ManageCompanies => "Manage companies and contacts",
             Permissions.Core.ManageUsers => "Manage user accounts",
-            Permissions.Core.ManageRoles => "Manage roles and permissions",
-            Permissions.Core.Admin => "Full core system administration",
+
+            // Tenant
+            Permissions.Tenant.Manage => "Manage tenants",
 
             _ => $"Permission: {permissionName}"
         };

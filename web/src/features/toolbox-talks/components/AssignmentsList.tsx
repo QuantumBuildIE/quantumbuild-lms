@@ -36,6 +36,7 @@ import { useScheduledTalks, useSendReminder, useCancelScheduledTalk } from '@/li
 import { useToolboxTalks } from '@/lib/api/toolbox-talks';
 import { useAllEmployees } from '@/lib/api/admin/use-employees';
 import type { ScheduledTalkListItem, ScheduledTalkStatus } from '@/types/toolbox-talks';
+import { usePermission } from '@/lib/auth/use-auth';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -92,6 +93,7 @@ export function AssignmentsList({
   scheduleId,
 }: AssignmentsListProps) {
   const router = useRouter();
+  const canSchedule = usePermission('Learnings.Schedule');
   const searchParams = useSearchParams();
 
   // URL params state
@@ -292,6 +294,7 @@ export function AssignmentsList({
       header: '',
       className: 'w-[80px]',
       render: (item) => {
+        if (!canSchedule) return null;
         const isActionable = item.status === 'Pending' || item.status === 'InProgress' || item.status === 'Overdue';
 
         return (

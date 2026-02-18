@@ -14,7 +14,7 @@ namespace QuantumBuild.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/toolbox-talks/courses")]
-[Authorize(Policy = "ToolboxTalks.View")]
+[Authorize(Policy = "Learnings.View")]
 public class ToolboxTalkCoursesController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -94,7 +94,7 @@ public class ToolboxTalkCoursesController : ControllerBase
     /// Create a new course
     /// </summary>
     [HttpPost]
-    [Authorize(Policy = "ToolboxTalks.Create")]
+    [Authorize(Policy = "Learnings.Manage")]
     [ProducesResponseType(typeof(ToolboxTalkCourseDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create([FromBody] CreateToolboxTalkCourseDto dto)
@@ -125,7 +125,7 @@ public class ToolboxTalkCoursesController : ControllerBase
     /// Update an existing course
     /// </summary>
     [HttpPut("{id:guid}")]
-    [Authorize(Policy = "ToolboxTalks.Edit")]
+    [Authorize(Policy = "Learnings.Manage")]
     [ProducesResponseType(typeof(ToolboxTalkCourseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -162,7 +162,7 @@ public class ToolboxTalkCoursesController : ControllerBase
     /// Delete a course (soft delete)
     /// </summary>
     [HttpDelete("{id:guid}")]
-    [Authorize(Policy = "ToolboxTalks.Delete")]
+    [Authorize(Policy = "Learnings.Manage")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(Guid id)
@@ -197,7 +197,7 @@ public class ToolboxTalkCoursesController : ControllerBase
     /// Add a talk to a course
     /// </summary>
     [HttpPost("{id:guid}/items")]
-    [Authorize(Policy = "ToolboxTalks.Edit")]
+    [Authorize(Policy = "Learnings.Manage")]
     [ProducesResponseType(typeof(ToolboxTalkCourseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -234,7 +234,7 @@ public class ToolboxTalkCoursesController : ControllerBase
     /// Remove a talk from a course
     /// </summary>
     [HttpDelete("{id:guid}/items/{talkId:guid}")]
-    [Authorize(Policy = "ToolboxTalks.Edit")]
+    [Authorize(Policy = "Learnings.Manage")]
     [ProducesResponseType(typeof(ToolboxTalkCourseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RemoveItem(Guid id, Guid talkId)
@@ -266,7 +266,7 @@ public class ToolboxTalkCoursesController : ControllerBase
     /// Reorder/bulk update course items
     /// </summary>
     [HttpPut("{id:guid}/items")]
-    [Authorize(Policy = "ToolboxTalks.Edit")]
+    [Authorize(Policy = "Learnings.Manage")]
     [ProducesResponseType(typeof(ToolboxTalkCourseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

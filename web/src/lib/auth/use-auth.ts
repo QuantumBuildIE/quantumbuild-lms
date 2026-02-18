@@ -13,11 +13,17 @@ export function useAuth() {
   return context;
 }
 
+export function useIsSuperUser(): boolean {
+  const { user } = useAuth();
+  return user?.isSuperUser ?? false;
+}
+
 export function usePermission(permission: string): boolean {
   const { user } = useAuth();
 
   return useMemo(() => {
     if (!user) return false;
+    if (user.isSuperUser) return true;
     return user.permissions.includes(permission);
   }, [user, permission]);
 }
@@ -38,7 +44,7 @@ export function usePermissions(permissions: string[]): Record<string, boolean> {
 
     return permissions.reduce(
       (acc, perm) => {
-        acc[perm] = user.permissions.includes(perm);
+        acc[perm] = user.isSuperUser || user.permissions.includes(perm);
         return acc;
       },
       {} as Record<string, boolean>
@@ -51,6 +57,7 @@ export function useHasAnyPermission(permissions: string[]): boolean {
 
   return useMemo(() => {
     if (!user) return false;
+    if (user.isSuperUser) return true;
     return permissions.some((perm) => user.permissions.includes(perm));
   }, [user, permissions]);
 }
@@ -60,6 +67,7 @@ export function useHasAllPermissions(permissions: string[]): boolean {
 
   return useMemo(() => {
     if (!user) return false;
+    if (user.isSuperUser) return true;
     return permissions.every((perm) => user.permissions.includes(perm));
   }, [user, permissions]);
 }

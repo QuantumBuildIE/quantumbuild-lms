@@ -5,7 +5,8 @@ using QuantumBuild.Core.Application.Interfaces;
 namespace QuantumBuild.Core.Infrastructure.Services;
 
 /// <summary>
-/// Implementation of ICurrentUserService that reads from JWT claims
+/// Implementation of ICurrentUserService that reads from JWT claims.
+/// SuperUser users can override tenant via X-Tenant-Id header.
 /// </summary>
 public class CurrentUserService : ICurrentUserService
 {
@@ -45,14 +46,37 @@ public class CurrentUserService : ICurrentUserService
     }
 
     /// <summary>
-    /// Current user's tenant ID from JWT tenant_id claim
+    /// Whether the current user is a super user (from JWT claim)
+    /// </summary>
+    public bool IsSuperUser
+    {
+        get
+        {
+            var claim = _httpContextAccessor.HttpContext?.User?.FindFirstValue("is_super_user");
+            return string.Equals(claim, "true", StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    /// <summary>
+    /// Current user's tenant ID.
+    /// For SuperUser: reads X-Tenant-Id header, returns Guid.Empty if absent (bypasses tenant filter).
+    /// For regular users: reads from JWT tenant_id claim.
     /// </summary>
     public Guid TenantId
     {
         get
         {
-            var tenantIdClaim = _httpContextAccessor.HttpContext?.User?.FindFirstValue("tenant_id");
+            if (IsSuperUser)
+            {
+                var headerValue = _httpContextAccessor.HttpContext?.Request.Headers["X-Tenant-Id"].FirstOrDefault();
+                if (!string.IsNullOrEmpty(headerValue) && Guid.TryParse(headerValue, out var headerTenantId))
+                    return headerTenantId;
 
+                // No header → Guid.Empty triggers tenant filter bypass
+                return Guid.Empty;
+            }
+
+            var tenantIdClaim = _httpContextAccessor.HttpContext?.User?.FindFirstValue("tenant_id");
             if (Guid.TryParse(tenantIdClaim, out var tenantId))
                 return tenantId;
 

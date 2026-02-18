@@ -23,6 +23,7 @@ import {
 import { DataTable, type Column } from '@/components/shared/data-table';
 import { DeleteConfirmationDialog } from '@/components/shared/delete-confirmation-dialog';
 import { useToolboxTalkCourses, useDeleteToolboxTalkCourse } from '@/lib/api/toolbox-talks/use-courses';
+import { usePermission } from '@/lib/auth/use-auth';
 import type { ToolboxTalkCourseListDto } from '@/lib/api/toolbox-talks/courses';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -36,6 +37,7 @@ const STATUS_OPTIONS = [
 export function CourseList() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const canManage = usePermission('Learnings.Manage');
 
   const searchTerm = searchParams.get('search') || '';
   const activeFilter = searchParams.get('active');
@@ -186,20 +188,24 @@ export function CourseList() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => router.push(`/admin/toolbox-talks/courses/${item.id}/edit`)}>
-              <PencilIcon className="mr-2 h-4 w-4" />
-              Edit
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onClick={() => {
-                setCourseToDelete(item);
-                setDeleteDialogOpen(true);
-              }}
-            >
-              <TrashIcon className="mr-2 h-4 w-4" />
-              Delete
-            </DropdownMenuItem>
+            {canManage && (
+              <DropdownMenuItem onClick={() => router.push(`/admin/toolbox-talks/courses/${item.id}/edit`)}>
+                <PencilIcon className="mr-2 h-4 w-4" />
+                Edit
+              </DropdownMenuItem>
+            )}
+            {canManage && (
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={() => {
+                  setCourseToDelete(item);
+                  setDeleteDialogOpen(true);
+                }}
+              >
+                <TrashIcon className="mr-2 h-4 w-4" />
+                Delete
+              </DropdownMenuItem>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       ),
@@ -247,10 +253,12 @@ export function CourseList() {
           </Select>
         </div>
 
-        <Button onClick={() => router.push('/admin/toolbox-talks/courses/new')}>
-          <PlusIcon className="mr-2 h-4 w-4" />
-          Create Course
-        </Button>
+        {canManage && (
+          <Button onClick={() => router.push('/admin/toolbox-talks/courses/new')}>
+            <PlusIcon className="mr-2 h-4 w-4" />
+            Create Course
+          </Button>
+        )}
       </div>
 
       <DataTable

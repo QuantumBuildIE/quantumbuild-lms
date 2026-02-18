@@ -11,6 +11,7 @@ export interface User {
   tenantId: string;
   roles: string[];
   permissions: string[];
+  isSuperUser: boolean;
 }
 
 export interface LoginResponse {
@@ -37,4 +38,5 @@ export interface MeResponse {
   tenantId: string;
   roles: string[];
   permissions: string[];
+  isSuperUser: boolean;
 }

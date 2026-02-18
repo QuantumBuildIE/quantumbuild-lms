@@ -34,6 +34,11 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
     public Guid TenantId => _currentUserService?.TenantId ?? Guid.Empty;
 
     /// <summary>
+    /// When true, tenant query filters are bypassed (SuperUser with no tenant selected)
+    /// </summary>
+    public bool BypassTenantFilter => _currentUserService?.IsSuperUser == true && TenantId == Guid.Empty;
+
+    /// <summary>
     /// Current user ID for audit fields
     /// </summary>
     public string CurrentUserId => string.IsNullOrEmpty(_currentUserService?.UserId) ? "system" : _currentUserService.UserId;
@@ -200,10 +205,11 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.ApplyConfiguration(new SubtitleTranslationConfiguration());
 
         // Apply global query filters - Core entities
-        modelBuilder.Entity<Site>().HasQueryFilter(e => !e.IsDeleted && e.TenantId == TenantId);
-        modelBuilder.Entity<Employee>().HasQueryFilter(e => !e.IsDeleted && e.TenantId == TenantId);
-        modelBuilder.Entity<Company>().HasQueryFilter(e => !e.IsDeleted && e.TenantId == TenantId);
-        modelBuilder.Entity<Contact>().HasQueryFilter(e => !e.IsDeleted && e.TenantId == TenantId);
+        // BypassTenantFilter allows SuperUser to see all tenants' data when no tenant is selected
+        modelBuilder.Entity<Site>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
+        modelBuilder.Entity<Employee>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
+        modelBuilder.Entity<Company>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
+        modelBuilder.Entity<Contact>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
 
         // Note: Toolbox Talks query filters are defined in entity configurations
         // TenantEntity-based: ToolboxTalk, ToolboxTalkCourse, ToolboxTalkSchedule, ScheduledTalk, ToolboxTalkTranslation, ToolboxTalkVideoTranslation, ToolboxTalkCertificate, SubtitleProcessingJob, ToolboxTalkSlide

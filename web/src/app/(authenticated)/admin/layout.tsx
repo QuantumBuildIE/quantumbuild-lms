@@ -15,11 +15,10 @@ const adminNavItems = [
 const corePermissions = [
   "Core.ManageEmployees",
   "Core.ManageUsers",
-  "Core.Admin",
-  "ToolboxTalks.Admin",
-  "ToolboxTalks.Create",
-  "ToolboxTalks.Edit",
-  "ToolboxTalks.Schedule",
+  "Learnings.View",
+  "Learnings.Manage",
+  "Learnings.Schedule",
+  "Learnings.Admin",
 ];
 
 export default function AdminLayout({

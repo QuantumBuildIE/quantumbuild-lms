@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/lib/auth/use-auth";
+import { useAuth, useHasAnyPermission } from "@/lib/auth/use-auth";
 import { useMyTrainingSummary } from "@/lib/api/toolbox-talks/use-my-toolbox-talks";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,14 @@ export function TopNav() {
   const router = useRouter();
   const { user, logout } = useAuth();
   const { data: trainingSummary } = useMyTrainingSummary();
+  const hasAdminAccess = useHasAnyPermission([
+    "Core.ManageEmployees",
+    "Core.ManageUsers",
+    "Learnings.View",
+    "Learnings.Manage",
+    "Learnings.Schedule",
+    "Learnings.Admin",
+  ]);
 
   const initials = user
     ? `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toUpperCase()
@@ -105,7 +113,7 @@ export function TopNav() {
                 )}
               </Link>
             </DropdownMenuItem>
-            {user?.roles.includes("Admin") && (
+            {hasAdminAccess && (
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>

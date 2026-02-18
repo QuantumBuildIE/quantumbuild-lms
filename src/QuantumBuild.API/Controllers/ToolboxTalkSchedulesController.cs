@@ -19,7 +19,7 @@ namespace QuantumBuild.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/toolbox-talks/schedules")]
-[Authorize(Policy = "ToolboxTalks.View")]
+[Authorize(Policy = "Learnings.View")]
 public class ToolboxTalkSchedulesController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -118,7 +118,7 @@ public class ToolboxTalkSchedulesController : ControllerBase
     /// <param name="command">Schedule creation data</param>
     /// <returns>Created schedule</returns>
     [HttpPost]
-    [Authorize(Policy = "ToolboxTalks.Schedule")]
+    [Authorize(Policy = "Learnings.Schedule")]
     [ProducesResponseType(typeof(ToolboxTalkScheduleDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create([FromBody] CreateToolboxTalkScheduleCommand command)
@@ -165,7 +165,7 @@ public class ToolboxTalkSchedulesController : ControllerBase
     /// <param name="command">Updated schedule data</param>
     /// <returns>Updated schedule</returns>
     [HttpPut("{id:guid}")]
-    [Authorize(Policy = "ToolboxTalks.Schedule")]
+    [Authorize(Policy = "Learnings.Schedule")]
     [ProducesResponseType(typeof(ToolboxTalkScheduleDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -203,7 +203,7 @@ public class ToolboxTalkSchedulesController : ControllerBase
     /// <param name="id">Schedule ID</param>
     /// <returns>No content on success</returns>
     [HttpDelete("{id:guid}")]
-    [Authorize(Policy = "ToolboxTalks.Schedule")]
+    [Authorize(Policy = "Learnings.Schedule")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -237,7 +237,7 @@ public class ToolboxTalkSchedulesController : ControllerBase
     /// <param name="id">Schedule ID</param>
     /// <returns>Processing result with assignments created</returns>
     [HttpPost("{id:guid}/process")]
-    [Authorize(Policy = "ToolboxTalks.Schedule")]
+    [Authorize(Policy = "Learnings.Schedule")]
     [ProducesResponseType(typeof(ProcessScheduleResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

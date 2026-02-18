@@ -15,7 +15,7 @@ namespace QuantumBuild.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/toolbox-talks/{toolboxTalkId:guid}")]
-[Authorize(Policy = "ToolboxTalks.Edit")]
+[Authorize(Policy = "Learnings.Manage")]
 public class ToolboxTalkFilesController : ControllerBase
 {
     private readonly IR2StorageService _storageService;

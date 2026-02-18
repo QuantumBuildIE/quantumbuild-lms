@@ -26,18 +26,11 @@ import {
 } from "@/components/ui/select";
 import { useCreateEmployee, useUpdateEmployee } from "@/lib/api/admin/use-employees";
 import { useAllSites } from "@/lib/api/admin/use-sites";
+import { useRoles } from "@/lib/api/admin/use-roles";
 import type { Employee } from "@/types/admin";
 import { toast } from "sonner";
 import { Info, User as UserIcon } from "lucide-react";
 import { EmployeeUserAccountSection } from "./employee-user-account-section";
-
-const AVAILABLE_ROLES = [
-  { value: "Admin", label: "Admin" },
-  { value: "SiteManager", label: "Site Manager" },
-  { value: "WarehouseStaff", label: "Warehouse Staff" },
-  { value: "OfficeStaff", label: "Office Staff" },
-  { value: "Finance", label: "Finance" },
-] as const;
 
 // Supported languages for Learning subtitles
 // Most common construction worker languages in Ireland/UK listed first
@@ -117,6 +110,7 @@ export function EmployeeForm({ employee, onSuccess, onCancel }: EmployeeFormProp
   const createEmployee = useCreateEmployee();
   const updateEmployee = useUpdateEmployee();
   const { data: sites, isLoading: sitesLoading } = useAllSites();
+  const { data: roles, isLoading: rolesLoading } = useRoles();
 
   const form = useForm<EmployeeFormValues>({
     resolver: zodResolver(employeeFormSchema) as any,
@@ -135,7 +129,7 @@ export function EmployeeForm({ employee, onSuccess, onCancel }: EmployeeFormProp
       notes: employee?.notes ?? "",
       isActive: employee?.isActive ?? true,
       createUserAccount: !isEditing, // Only default to true for new employees
-      userRole: "SiteManager", // Default role
+      userRole: "Operator", // Default role
       preferredLanguage: employee?.preferredLanguage ?? "en",
     },
   });
@@ -372,17 +366,18 @@ export function EmployeeForm({ employee, onSuccess, onCancel }: EmployeeFormProp
                       <FormLabel>User Role</FormLabel>
                       <Select
                         onValueChange={field.onChange}
-                        value={field.value || "SiteManager"}
+                        value={field.value || ""}
+                        disabled={rolesLoading}
                       >
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select a role" />
+                            <SelectValue placeholder={rolesLoading ? "Loading roles..." : "Select a role"} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {AVAILABLE_ROLES.map((role) => (
-                            <SelectItem key={role.value} value={role.value}>
-                              {role.label}
+                          {roles?.map((role) => (
+                            <SelectItem key={role.id} value={role.name}>
+                              {role.name}
                             </SelectItem>
                           ))}
                         </SelectContent>

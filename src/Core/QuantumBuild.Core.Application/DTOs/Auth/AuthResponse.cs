@@ -29,5 +29,6 @@ public record UserInfo(
     string LastName,
     Guid TenantId,
     IEnumerable<string> Roles,
-    IEnumerable<string> Permissions
+    IEnumerable<string> Permissions,
+    bool IsSuperUser
 );

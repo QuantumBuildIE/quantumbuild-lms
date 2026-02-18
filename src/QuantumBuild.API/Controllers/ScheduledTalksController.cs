@@ -17,7 +17,7 @@ namespace QuantumBuild.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/toolbox-talks/assigned")]
-[Authorize(Policy = "ToolboxTalks.View")]
+[Authorize(Policy = "Learnings.View")]
 public class ScheduledTalksController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -296,7 +296,7 @@ public class ScheduledTalksController : ControllerBase
     /// <param name="id">Scheduled talk ID</param>
     /// <returns>Success status</returns>
     [HttpPost("{id:guid}/reminder")]
-    [Authorize(Policy = "ToolboxTalks.Schedule")]
+    [Authorize(Policy = "Learnings.Schedule")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -334,7 +334,7 @@ public class ScheduledTalksController : ControllerBase
     /// <param name="id">Scheduled talk ID</param>
     /// <returns>Success status</returns>
     [HttpDelete("{id:guid}")]
-    [Authorize(Policy = "ToolboxTalks.Schedule")]
+    [Authorize(Policy = "Learnings.Schedule")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

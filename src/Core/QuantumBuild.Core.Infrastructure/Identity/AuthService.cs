@@ -172,6 +172,12 @@ public class AuthService : IAuthService
             claims.Add(new Claim("employee_id", user.EmployeeId.Value.ToString()));
         }
 
+        // Add super user claim
+        if (user.IsSuperUser)
+        {
+            claims.Add(new Claim("is_super_user", "true"));
+        }
+
         // Add role claims
         foreach (var role in roles)
         {
@@ -211,7 +217,8 @@ public class AuthService : IAuthService
             user.LastName,
             user.TenantId,
             roles,
-            permissions
+            permissions,
+            user.IsSuperUser
         );
 
         return new AuthResponse(

@@ -23,6 +23,7 @@ import {
 import { DataTable, type Column } from '@/components/shared/data-table';
 import { DeleteConfirmationDialog } from '@/components/shared/delete-confirmation-dialog';
 import { useToolboxTalks, useDeleteToolboxTalk } from '@/lib/api/toolbox-talks';
+import { usePermission } from '@/lib/auth/use-auth';
 import type {
   ToolboxTalkListItem,
   ToolboxTalkFrequency,
@@ -53,6 +54,8 @@ const STATUS_OPTIONS = [
 export function ToolboxTalkList({ onSchedule, basePath = '/admin/toolbox-talks' }: ToolboxTalkListProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const canManage = usePermission('Learnings.Manage');
+  const canSchedule = usePermission('Learnings.Schedule');
 
   // URL params state
   const page = Number(searchParams.get('page')) || 1;
@@ -245,31 +248,37 @@ export function ToolboxTalkList({ onSchedule, basePath = '/admin/toolbox-talks' 
               <EyeIcon className="mr-2 h-4 w-4" />
               View
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => router.push(`${basePath}/talks/${item.id}/edit`)}>
-              <PencilIcon className="mr-2 h-4 w-4" />
-              Edit
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => onSchedule?.(item)}
-              disabled={!item.isActive}
-              title={!item.isActive ? 'Only active talks can be scheduled' : undefined}
-            >
-              <CalendarClockIcon className="mr-2 h-4 w-4" />
-              Schedule
-              {!item.isActive && (
-                <span className="ml-1 text-xs text-muted-foreground">(inactive)</span>
-              )}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onClick={() => {
-                setTalkToDelete(item);
-                setDeleteDialogOpen(true);
-              }}
-            >
-              <TrashIcon className="mr-2 h-4 w-4" />
-              Delete
-            </DropdownMenuItem>
+            {canManage && (
+              <DropdownMenuItem onClick={() => router.push(`${basePath}/talks/${item.id}/edit`)}>
+                <PencilIcon className="mr-2 h-4 w-4" />
+                Edit
+              </DropdownMenuItem>
+            )}
+            {canSchedule && (
+              <DropdownMenuItem
+                onClick={() => onSchedule?.(item)}
+                disabled={!item.isActive}
+                title={!item.isActive ? 'Only active talks can be scheduled' : undefined}
+              >
+                <CalendarClockIcon className="mr-2 h-4 w-4" />
+                Schedule
+                {!item.isActive && (
+                  <span className="ml-1 text-xs text-muted-foreground">(inactive)</span>
+                )}
+              </DropdownMenuItem>
+            )}
+            {canManage && (
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={() => {
+                  setTalkToDelete(item);
+                  setDeleteDialogOpen(true);
+                }}
+              >
+                <TrashIcon className="mr-2 h-4 w-4" />
+                Delete
+              </DropdownMenuItem>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       ),
@@ -338,10 +347,12 @@ export function ToolboxTalkList({ onSchedule, basePath = '/admin/toolbox-talks' 
         </div>
 
         {/* Create button */}
-        <Button onClick={() => router.push(`${basePath}/talks/new`)}>
-          <PlusIcon className="mr-2 h-4 w-4" />
-          Create New
-        </Button>
+        {canManage && (
+          <Button onClick={() => router.push(`${basePath}/talks/new`)}>
+            <PlusIcon className="mr-2 h-4 w-4" />
+            Create New
+          </Button>
+        )}
       </div>
 
       {/* Data table */}

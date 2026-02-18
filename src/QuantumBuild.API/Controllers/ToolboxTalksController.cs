@@ -35,7 +35,7 @@ namespace QuantumBuild.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/toolbox-talks")]
-[Authorize(Policy = "ToolboxTalks.View")]
+[Authorize(Policy = "Learnings.View")]
 public class ToolboxTalksController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -247,7 +247,7 @@ public class ToolboxTalksController : ControllerBase
     /// <param name="command">Toolbox talk creation data</param>
     /// <returns>Created toolbox talk</returns>
     [HttpPost]
-    [Authorize(Policy = "ToolboxTalks.Create")]
+    [Authorize(Policy = "Learnings.Manage")]
     [ProducesResponseType(typeof(ToolboxTalkDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create([FromBody] CreateToolboxTalkCommand command)
@@ -276,7 +276,7 @@ public class ToolboxTalksController : ControllerBase
     /// <param name="command">Updated toolbox talk data</param>
     /// <returns>Updated toolbox talk</returns>
     [HttpPut("{id:guid}")]
-    [Authorize(Policy = "ToolboxTalks.Edit")]
+    [Authorize(Policy = "Learnings.Manage")]
     [ProducesResponseType(typeof(ToolboxTalkDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -318,7 +318,7 @@ public class ToolboxTalksController : ControllerBase
     /// <param name="id">Toolbox talk ID</param>
     /// <returns>No content on success</returns>
     [HttpDelete("{id:guid}")]
-    [Authorize(Policy = "ToolboxTalks.Delete")]
+    [Authorize(Policy = "Learnings.Manage")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(Guid id)
@@ -379,7 +379,7 @@ public class ToolboxTalksController : ControllerBase
     /// </summary>
     /// <returns>Toolbox talk settings</returns>
     [HttpGet("settings")]
-    [Authorize(Policy = "ToolboxTalks.View")]
+    [Authorize(Policy = "Learnings.View")]
     [ProducesResponseType(typeof(ToolboxTalkSettingsDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetSettings()
     {
@@ -406,7 +406,7 @@ public class ToolboxTalksController : ControllerBase
     /// <param name="dto">Updated settings</param>
     /// <returns>Updated settings</returns>
     [HttpPut("settings")]
-    [Authorize(Policy = "ToolboxTalks.Admin")]
+    [Authorize(Policy = "Learnings.Admin")]
     [ProducesResponseType(typeof(ToolboxTalkSettingsDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> UpdateSettings([FromBody] UpdateToolboxTalkSettingsDto dto)
@@ -440,7 +440,7 @@ public class ToolboxTalksController : ControllerBase
     /// <param name="request">Content extraction options</param>
     /// <returns>Extraction result with combined content and metadata</returns>
     [HttpPost("{id:guid}/extract-content")]
-    [Authorize(Policy = "ToolboxTalks.Admin")]
+    [Authorize(Policy = "Learnings.Admin")]
     [ProducesResponseType(typeof(ContentExtractionResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -488,7 +488,7 @@ public class ToolboxTalksController : ControllerBase
     /// <param name="request">File hash and type to check</param>
     /// <returns>Duplicate check result with source toolbox talk info if found</returns>
     [HttpPost("{id:guid}/check-duplicate")]
-    [Authorize(Policy = "ToolboxTalks.Admin")]
+    [Authorize(Policy = "Learnings.Admin")]
     [ProducesResponseType(typeof(DuplicateCheckResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -571,7 +571,7 @@ public class ToolboxTalksController : ControllerBase
     /// <param name="request">Source toolbox talk information</param>
     /// <returns>Result of the reuse operation</returns>
     [HttpPost("{id:guid}/reuse-content")]
-    [Authorize(Policy = "ToolboxTalks.Admin")]
+    [Authorize(Policy = "Learnings.Admin")]
     [ProducesResponseType(typeof(ContentReuseResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -632,7 +632,7 @@ public class ToolboxTalksController : ControllerBase
     /// <param name="request">File hash information</param>
     /// <returns>Success status</returns>
     [HttpPost("{id:guid}/update-file-hash")]
-    [Authorize(Policy = "ToolboxTalks.Admin")]
+    [Authorize(Policy = "Learnings.Admin")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -704,7 +704,7 @@ public class ToolboxTalksController : ControllerBase
     /// <param name="request">Content generation options</param>
     /// <returns>Job information including the Hangfire job ID</returns>
     [HttpPost("{id:guid}/generate")]
-    [Authorize(Policy = "ToolboxTalks.Admin")]
+    [Authorize(Policy = "Learnings.Admin")]
     [ProducesResponseType(typeof(GenerateContentResponse), StatusCodes.Status202Accepted)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -782,7 +782,7 @@ public class ToolboxTalksController : ControllerBase
     /// <param name="id">Toolbox talk ID</param>
     /// <returns>Generation result with HTML length</returns>
     [HttpPost("{id:guid}/generate-slides")]
-    [Authorize(Policy = "ToolboxTalks.Edit")]
+    [Authorize(Policy = "Learnings.Manage")]
     [ProducesResponseType(typeof(GenerateSlidesResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -838,7 +838,7 @@ public class ToolboxTalksController : ControllerBase
     /// <param name="request">Smart generation options</param>
     /// <returns>Smart generation result showing what was copied vs what needs generation</returns>
     [HttpPost("{id:guid}/smart-generate")]
-    [Authorize(Policy = "ToolboxTalks.Edit")]
+    [Authorize(Policy = "Learnings.Manage")]
     [ProducesResponseType(typeof(SmartGenerateContentResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -975,7 +975,7 @@ public class ToolboxTalksController : ControllerBase
     /// <param name="request">Languages to translate to</param>
     /// <returns>Translation results per language</returns>
     [HttpPost("{id:guid}/translations/generate")]
-    [Authorize(Policy = "ToolboxTalks.Admin")]
+    [Authorize(Policy = "Learnings.Admin")]
     [ProducesResponseType(typeof(GenerateContentTranslationsResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -1087,7 +1087,7 @@ public class ToolboxTalksController : ControllerBase
     /// <param name="languageCode">Language code to delete (e.g., "pl", "ro")</param>
     /// <returns>No content on success</returns>
     [HttpDelete("{id:guid}/translations/{languageCode}")]
-    [Authorize(Policy = "ToolboxTalks.Admin")]
+    [Authorize(Policy = "Learnings.Admin")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteTranslation(Guid id, string languageCode)

@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { usePermission } from '@/lib/auth/use-auth';
 
 export default function ToolboxTalksSettingsPage() {
-  const hasAdminPermission = usePermission('ToolboxTalks.Admin');
+  const hasAdminPermission = usePermission('Learnings.Admin');
 
   if (!hasAdminPermission) {
     return (
@@ -29,7 +29,7 @@ export default function ToolboxTalksSettingsPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
         <p className="text-muted-foreground">
-          Configure Learningks module settings
+          Configure Learnings module settings
         </p>
       </div>
 
