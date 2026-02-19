@@ -64,32 +64,20 @@ public class SupervisorAssignmentService : ISupervisorAssignmentService
             if (!accessCheck.Success)
                 return Result.Fail<List<SupervisorOperatorDto>>(accessCheck.Errors);
 
-            // Get IDs of operators already assigned to this supervisor
+            // Get IDs of employees already assigned to this supervisor
             var assignedOperatorIds = await _context.SupervisorAssignments
                 .Where(sa => sa.SupervisorEmployeeId == supervisorEmployeeId)
                 .Select(sa => sa.OperatorEmployeeId)
                 .ToListAsync();
 
-            // Find employees who have the Operator role and are not yet assigned
-            var operatorRoleId = await _userManager.Users
-                .Where(u => u.TenantId == _currentUserService.TenantId)
-                .SelectMany(u => u.UserRoles)
-                .Where(ur => ur.Role.NormalizedName == "OPERATOR")
-                .Select(ur => ur.UserId)
-                .Distinct()
-                .ToListAsync();
-
-            // Get employee IDs for users with Operator role
-            var operatorEmployeeIds = await _userManager.Users
-                .Where(u => operatorRoleId.Contains(u.Id) && u.EmployeeId.HasValue)
-                .Select(u => u.EmployeeId!.Value)
-                .ToListAsync();
+            // Get employee IDs to exclude: those whose linked User is Admin, Supervisor, or SuperUser
+            var excludedEmployeeIds = await GetExcludedEmployeeIdsAsync();
 
             var availableOperators = await _context.Employees
-                .Where(e => operatorEmployeeIds.Contains(e.Id)
+                .Where(e => e.IsActive
+                    && e.Id != supervisorEmployeeId
                     && !assignedOperatorIds.Contains(e.Id)
-                    && e.IsActive
-                    && e.Id != supervisorEmployeeId)
+                    && !excludedEmployeeIds.Contains(e.Id))
                 .Select(e => new SupervisorOperatorDto(
                     e.Id,
                     e.EmployeeCode,
@@ -117,23 +105,29 @@ public class SupervisorAssignmentService : ISupervisorAssignmentService
             if (!accessCheck.Success)
                 return Result.Fail<List<SupervisorAssignmentDto>>(accessCheck.Errors);
 
-            // Validate supervisor has the Supervisor role
-            var supervisorRoleCheck = await ValidateEmployeeHasRoleAsync(supervisorEmployeeId, "Supervisor");
-            if (!supervisorRoleCheck.Success)
-                return Result.Fail<List<SupervisorAssignmentDto>>($"Employee {supervisorEmployeeId} does not have the Supervisor role");
+            // Validate supervisor exists and is active
+            var supervisorExists = await _context.Employees
+                .AnyAsync(e => e.Id == supervisorEmployeeId && e.IsActive);
+            if (!supervisorExists)
+                return Result.Fail<List<SupervisorAssignmentDto>>("Supervisor employee not found or is inactive");
 
-            // Validate all operator employees exist and have the Operator role
+            // Get employee IDs to exclude: those whose linked User is Admin, Supervisor, or SuperUser
+            var excludedEmployeeIds = await GetExcludedEmployeeIdsAsync();
+
+            // Validate all operator employees exist, are active, and are not Admin/Supervisor/SuperUser
             foreach (var operatorId in dto.OperatorEmployeeIds)
             {
                 var operatorExists = await _context.Employees
                     .AnyAsync(e => e.Id == operatorId && e.IsActive);
 
                 if (!operatorExists)
-                    return Result.Fail<List<SupervisorAssignmentDto>>($"Operator employee with ID {operatorId} not found or is inactive");
+                    return Result.Fail<List<SupervisorAssignmentDto>>($"Employee with ID {operatorId} not found or is inactive");
 
-                var operatorRoleCheck = await ValidateEmployeeHasRoleAsync(operatorId, "Operator");
-                if (!operatorRoleCheck.Success)
-                    return Result.Fail<List<SupervisorAssignmentDto>>($"Employee {operatorId} does not have the Operator role");
+                if (excludedEmployeeIds.Contains(operatorId))
+                    return Result.Fail<List<SupervisorAssignmentDto>>($"Employee {operatorId} has an Admin, Supervisor, or SuperUser role and cannot be assigned as a team member");
+
+                if (operatorId == supervisorEmployeeId)
+                    return Result.Fail<List<SupervisorAssignmentDto>>("A supervisor cannot be assigned to themselves");
             }
 
             // Get existing non-deleted assignments to prevent duplicates
@@ -268,19 +262,44 @@ public class SupervisorAssignmentService : ISupervisorAssignmentService
         var isSupervisor = currentUser.UserRoles.Any(ur =>
             ur.Role.NormalizedName == "SUPERVISOR");
 
-        if (isSupervisor && currentUser.EmployeeId == supervisorEmployeeId)
-            return Result.Ok();
+        if (isSupervisor)
+        {
+            // Check via User.EmployeeId first, then fall back to Employee.UserId
+            if (currentUser.EmployeeId == supervisorEmployeeId)
+                return Result.Ok();
+
+            var linkedEmployee = await _context.Employees
+                .AnyAsync(e => e.Id == supervisorEmployeeId && e.UserId == _currentUserService.UserId);
+
+            if (linkedEmployee)
+                return Result.Ok();
+        }
 
         return Result.Fail("You do not have permission to manage assignments for this supervisor");
     }
 
-    private async Task<Result> ValidateEmployeeHasRoleAsync(Guid employeeId, string roleName)
+    /// <summary>
+    /// Returns employee IDs that should be excluded from assignment — those whose linked User
+    /// has an Admin role, Supervisor role, or is a SuperUser.
+    /// </summary>
+    private async Task<HashSet<Guid>> GetExcludedEmployeeIdsAsync()
     {
-        var hasRole = await _userManager.Users
-            .Where(u => u.EmployeeId == employeeId)
-            .SelectMany(u => u.UserRoles)
-            .AnyAsync(ur => ur.Role.NormalizedName == roleName.ToUpperInvariant());
+        // Find users who are Admin, Supervisor, or SuperUser in this tenant
+        var excludedUserIds = await _userManager.Users
+            .Where(u => u.TenantId == _currentUserService.TenantId && u.IsActive)
+            .Where(u => u.IsSuperUser
+                || u.UserRoles.Any(ur =>
+                    ur.Role.NormalizedName == "ADMIN"
+                    || ur.Role.NormalizedName == "SUPERVISOR"))
+            .Select(u => u.Id.ToString())
+            .ToListAsync();
 
-        return hasRole ? Result.Ok() : Result.Fail($"Employee does not have the {roleName} role");
+        // Map those user IDs to employee IDs via Employee.UserId
+        var excludedEmployeeIds = await _context.Employees
+            .Where(e => e.UserId != null && excludedUserIds.Contains(e.UserId))
+            .Select(e => e.Id)
+            .ToListAsync();
+
+        return excludedEmployeeIds.ToHashSet();
     }
 }
