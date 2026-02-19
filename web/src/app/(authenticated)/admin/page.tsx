@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Card,
@@ -14,8 +16,16 @@ import { usePermission } from "@/lib/auth/use-auth";
 import { Users, UserCog, ArrowRight } from "lucide-react";
 
 export default function AdminDashboardPage() {
+  const router = useRouter();
   const { data: employeesData, isLoading } = useEmployees({ pageSize: 1 });
   const canManageUsers = usePermission("Core.ManageUsers");
+  const canManageEmployees = usePermission("Core.ManageEmployees");
+
+  useEffect(() => {
+    if (!canManageEmployees && !canManageUsers) {
+      router.replace("/admin/toolbox-talks");
+    }
+  }, [canManageEmployees, canManageUsers, router]);
 
   const totalEmployees = employeesData?.totalCount ?? 0;
 
@@ -42,13 +52,6 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Administration</h1>
-        <p className="text-muted-foreground">
-          Manage employees and users
-        </p>
-      </div>
-
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-2">
         <Card>

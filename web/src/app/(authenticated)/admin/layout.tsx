@@ -47,6 +47,11 @@ export default function AdminLayout({
     }
   }, [isSuperUser, activeTenantId, pathname, router]);
 
+  const isSupervisorOnly =
+    !isSuperUser &&
+    (user?.roles?.includes("Supervisor") ?? false) &&
+    !user?.roles?.some((r) => r === "Admin");
+
   const visibleNavItems = useMemo(
     () =>
       adminNavItems.filter((item) => {
@@ -79,6 +84,16 @@ export default function AdminLayout({
 
   return (
     <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          {isSupervisorOnly ? "Training Management" : "Administration"}
+        </h1>
+        <p className="text-muted-foreground">
+          {isSupervisorOnly
+            ? "Manage schedules and training reports"
+            : "Manage employees and users"}
+        </p>
+      </div>
       <nav className="border-b bg-background -mx-4 px-4 sm:mx-0 sm:px-6">
         <div className="flex h-10 items-center gap-4 overflow-x-auto sm:gap-6 scrollbar-hide">
           {visibleNavItems.map((item) => (

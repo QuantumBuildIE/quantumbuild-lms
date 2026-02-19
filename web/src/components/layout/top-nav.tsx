@@ -31,6 +31,11 @@ export function TopNav() {
     "Learnings.Admin",
   ]);
 
+  const isSupervisorOnly =
+    !isSuperUser &&
+    (user?.roles?.includes("Supervisor") ?? false) &&
+    !user?.roles?.some((r) => r === "Admin");
+
   const initials = user
     ? `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toUpperCase()
     : "??";
@@ -127,9 +132,9 @@ export function TopNav() {
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <Link href="/admin">
+                  <Link href={isSupervisorOnly ? "/admin/toolbox-talks" : "/admin"}>
                     <Shield className="mr-2 h-4 w-4" />
-                    <span>Administration</span>
+                    <span>{isSupervisorOnly ? "Training Management" : "Administration"}</span>
                   </Link>
                 </DropdownMenuItem>
               </>
