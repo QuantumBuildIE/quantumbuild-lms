@@ -10,10 +10,12 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useEmployees } from "@/lib/api/admin/use-employees";
+import { usePermission } from "@/lib/auth/use-auth";
 import { Users, UserCog, ArrowRight } from "lucide-react";
 
 export default function AdminDashboardPage() {
   const { data: employeesData, isLoading } = useEmployees({ pageSize: 1 });
+  const canManageUsers = usePermission("Core.ManageUsers");
 
   const totalEmployees = employeesData?.totalCount ?? 0;
 
@@ -27,15 +29,15 @@ export default function AdminDashboardPage() {
       addHref: "/admin/employees/new",
       addLabel: "Add Employee",
     },
-    {
+    ...(canManageUsers ? [{
       title: "Users",
       description: "Manage user accounts and access",
       href: "/admin/users",
       icon: UserCog,
-      count: null,
-      addHref: null,
-      addLabel: null,
-    },
+      count: null as number | null,
+      addHref: null as string | null,
+      addLabel: null as string | null,
+    }] : []),
   ];
 
   return (
@@ -71,23 +73,25 @@ export default function AdminDashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardDescription>Total Users</CardDescription>
-            <UserCog className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-muted-foreground">
-              -
-            </div>
-            <Link
-              href="/admin/users"
-              className="text-sm text-muted-foreground hover:text-foreground"
-            >
-              View all users
-            </Link>
-          </CardContent>
-        </Card>
+        {canManageUsers && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardDescription>Total Users</CardDescription>
+              <UserCog className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-muted-foreground">
+                -
+              </div>
+              <Link
+                href="/admin/users"
+                className="text-sm text-muted-foreground hover:text-foreground"
+              >
+                View all users
+              </Link>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Quick Links */}

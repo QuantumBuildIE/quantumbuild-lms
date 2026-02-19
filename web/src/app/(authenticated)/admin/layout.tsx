@@ -7,10 +7,10 @@ import { useAuth, useHasAnyPermission, useIsSuperUser } from "@/lib/auth/use-aut
 import { cn } from "@/lib/utils";
 
 const adminNavItems = [
-  { href: "/admin/employees", label: "Employees", superUserOnly: false, tenantScoped: true },
-  { href: "/admin/users", label: "Users", superUserOnly: false, tenantScoped: true },
-  { href: "/admin/toolbox-talks", label: "Learnings", superUserOnly: false, tenantScoped: true },
-  { href: "/admin/settings", label: "Settings", superUserOnly: false, tenantScoped: true },
+  { href: "/admin/employees", label: "Employees", superUserOnly: false, tenantScoped: true, permissions: ["Core.ManageEmployees"] },
+  { href: "/admin/users", label: "Users", superUserOnly: false, tenantScoped: true, permissions: ["Core.ManageUsers"] },
+  { href: "/admin/toolbox-talks", label: "Learnings", superUserOnly: false, tenantScoped: true, permissions: ["Learnings.View", "Learnings.Manage", "Learnings.Schedule", "Learnings.Admin"] },
+  { href: "/admin/settings", label: "Settings", superUserOnly: false, tenantScoped: true, permissions: ["Learnings.Admin", "Core.ManageUsers"] },
   { href: "/admin/tenants", label: "Tenant Management", superUserOnly: true, tenantScoped: false },
 ];
 
@@ -32,7 +32,7 @@ export default function AdminLayout({
   const pathname = usePathname();
   const hasCorePermission = useHasAnyPermission(corePermissions);
   const isSuperUser = useIsSuperUser();
-  const { activeTenantId } = useAuth();
+  const { user, activeTenantId } = useAuth();
 
   useEffect(() => {
     if (!hasCorePermission) {
@@ -54,9 +54,13 @@ export default function AdminLayout({
         if (item.superUserOnly && !isSuperUser) return false;
         // Hide tenant-scoped tabs when SU has no tenant selected
         if (item.tenantScoped && isSuperUser && !activeTenantId) return false;
+        // Hide tabs that require permissions the user doesn't have
+        if (item.permissions && !isSuperUser) {
+          if (!user || !item.permissions.some(p => user.permissions.includes(p))) return false;
+        }
         return true;
       }),
-    [isSuperUser, activeTenantId]
+    [isSuperUser, activeTenantId, user]
   );
 
   if (!hasCorePermission) {

@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { useHasAnyPermission } from "@/lib/auth/use-auth";
+import { useAuth, useHasAnyPermission } from "@/lib/auth/use-auth";
 import { cn } from "@/lib/utils";
 
 const adminToolboxTalksNavItems = [
@@ -14,6 +14,7 @@ const adminToolboxTalksNavItems = [
   { href: "/admin/toolbox-talks/assignments", label: "Assignments" },
   { href: "/admin/toolbox-talks/reports", label: "Reports" },
   { href: "/admin/toolbox-talks/certificates", label: "Certificates" },
+  { href: "/admin/toolbox-talks/settings", label: "Settings", permissions: ["Learnings.Admin"] },
 ];
 
 // Permissions that grant access to admin learnings management
@@ -31,7 +32,18 @@ export default function AdminToolboxTalksLayout({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { user } = useAuth();
   const hasAdminPermission = useHasAnyPermission(learningsAdminPermissions);
+
+  const visibleNavItems = useMemo(
+    () =>
+      adminToolboxTalksNavItems.filter((item) => {
+        if (!item.permissions) return true;
+        if (user?.isSuperUser) return true;
+        return user ? item.permissions.some(p => user.permissions.includes(p)) : false;
+      }),
+    [user]
+  );
 
   useEffect(() => {
     if (!hasAdminPermission) {
@@ -68,7 +80,7 @@ export default function AdminToolboxTalksLayout({
 
       <nav className="border-b bg-background">
         <div className="flex h-10 items-center gap-4 overflow-x-auto sm:gap-6 scrollbar-hide">
-          {adminToolboxTalksNavItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
