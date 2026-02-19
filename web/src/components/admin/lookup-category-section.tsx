@@ -6,6 +6,7 @@ import { Pencil, Trash2, Plus, X, Check } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { SortableList, SortableListItem, DragHandle, useSortableItem } from "@/components/ui/sortable";
 import { DeleteConfirmationDialog } from "@/components/shared/delete-confirmation-dialog";
 import {
@@ -15,6 +16,7 @@ import {
   useCreateLookupValue,
   useUpdateLookupValue,
   useDeleteLookupValue,
+  useToggleLookupValue,
 } from "@/hooks/use-lookups";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -31,6 +33,10 @@ const CATEGORY_DISPLAY_NAMES: Record<string, { title: string; description: strin
     title: "Job Titles",
     description: "Job titles available for employees",
   },
+  Language: {
+    title: "Languages",
+    description: "Available languages for subtitles, translations, and employee preferences",
+  },
 };
 
 interface LookupCategorySectionProps {
@@ -43,10 +49,14 @@ export function LookupCategorySection({ category }: LookupCategorySectionProps) 
     description: `Manage ${category.name} lookup values`,
   };
 
-  const { data: values, isLoading } = useLookupValues(category.name);
+  // For non-custom categories, load all values including disabled ones for the admin toggle UI
+  const { data: values, isLoading } = useLookupValues(category.name, {
+    includeDisabled: !category.allowCustom,
+  });
   const createMutation = useCreateLookupValue(category.name);
   const updateMutation = useUpdateLookupValue(category.name);
   const deleteMutation = useDeleteLookupValue(category.name);
+  const toggleMutation = useToggleLookupValue(category.name);
 
   const [newName, setNewName] = useState("");
   const [newCode, setNewCode] = useState("");
@@ -138,6 +148,77 @@ export function LookupCategorySection({ category }: LookupCategorySectionProps) 
     });
   };
 
+  const handleToggle = (value: LookupValue, isEnabled: boolean) => {
+    // Determine the global value ID: for overrides it's the lookupValueId, for globals it's the id
+    const globalValueId = value.lookupValueId || value.id;
+
+    toggleMutation.mutate(
+      { lookupValueId: globalValueId, isEnabled },
+      {
+        onSuccess: () => {
+          toast.success(`${value.name} ${isEnabled ? "enabled" : "disabled"}`);
+        },
+        onError: (error: any) => {
+          toast.error(error?.response?.data?.message ?? "Failed to toggle");
+        },
+      }
+    );
+  };
+
+  // Render toggle-only UI for categories that don't allow custom values
+  if (!category.allowCustom) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>{display.title}</CardTitle>
+          <CardDescription>{display.description}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
+            </div>
+          ) : values && values.length > 0 ? (
+            <div className="space-y-1">
+              {values.map((value) => {
+                const meta = value.metadata ? JSON.parse(value.metadata) : null;
+                return (
+                  <div
+                    key={value.id}
+                    className="flex items-center justify-between rounded-md border px-3 py-2"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">{value.name}</span>
+                      {meta?.nativeName && (
+                        <span className="text-xs text-muted-foreground">
+                          ({meta.nativeName})
+                        </span>
+                      )}
+                      <span className="text-xs text-muted-foreground font-mono">
+                        {value.code}
+                      </span>
+                    </div>
+                    <Switch
+                      checked={value.isActive}
+                      onCheckedChange={(checked) => handleToggle(value, checked)}
+                      disabled={toggleMutation.isPending}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground py-2">
+              No values configured.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <>
       <Card>
@@ -182,36 +263,34 @@ export function LookupCategorySection({ category }: LookupCategorySectionProps) 
           )}
 
           {/* Add new value form */}
-          {category.allowCustom && (
-            <div className="flex items-center gap-2 pt-2 border-t">
-              <Input
-                placeholder="Name"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleAdd();
-                }}
-                className="flex-1"
-              />
-              <Input
-                placeholder="Code (optional)"
-                value={newCode}
-                onChange={(e) => setNewCode(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleAdd();
-                }}
-                className="w-40"
-              />
-              <Button
-                size="sm"
-                onClick={handleAdd}
-                disabled={!newName.trim() || createMutation.isPending}
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                Add
-              </Button>
-            </div>
-          )}
+          <div className="flex items-center gap-2 pt-2 border-t">
+            <Input
+              placeholder="Name"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleAdd();
+              }}
+              className="flex-1"
+            />
+            <Input
+              placeholder="Code (optional)"
+              value={newCode}
+              onChange={(e) => setNewCode(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleAdd();
+              }}
+              className="w-40"
+            />
+            <Button
+              size="sm"
+              onClick={handleAdd}
+              disabled={!newName.trim() || createMutation.isPending}
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Add
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

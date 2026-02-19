@@ -41,6 +41,7 @@ public static class DataSeeder
             await SeedAdminUserAsync(userManager, roleManager, logger);
             await EnsureAdminEmployeeAsync(context, userManager, logger);
             await SeedLookupCategoriesAsync(context, logger);
+            await SeedLanguageLookupAsync(context, logger);
 
             logger.LogInformation("Database seeding completed successfully");
         }
@@ -405,6 +406,124 @@ public static class DataSeeder
         else
         {
             logger.LogInformation("All lookup categories already exist, skipping");
+        }
+    }
+
+    private static async Task SeedLanguageLookupAsync(DbContext context, ILogger logger)
+    {
+        var categories = context.Set<LookupCategory>();
+        var lookupValues = context.Set<LookupValue>();
+
+        // Ensure the Language category exists with AllowCustom = false
+        var category = await categories
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(c => c.Name == "Language" && !c.IsDeleted);
+
+        if (category == null)
+        {
+            category = new LookupCategory
+            {
+                Id = Guid.NewGuid(),
+                Name = "Language",
+                Module = "Core",
+                AllowCustom = false,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = "system"
+            };
+            await categories.AddAsync(category);
+            await context.SaveChangesAsync();
+            logger.LogInformation("Created Language lookup category");
+        }
+        else if (category.AllowCustom)
+        {
+            // Ensure AllowCustom is false
+            category.AllowCustom = false;
+            await context.SaveChangesAsync();
+        }
+
+        // ElevenLabs Multilingual v2 supported languages (32 total)
+        var languages = new[]
+        {
+            new { Code = "en", Name = "English", NativeName = (string?)null },
+            new { Code = "pl", Name = "Polish", NativeName = (string?)"Polski" },
+            new { Code = "de", Name = "German", NativeName = (string?)"Deutsch" },
+            new { Code = "es", Name = "Spanish", NativeName = (string?)"Español" },
+            new { Code = "fr", Name = "French", NativeName = (string?)"Français" },
+            new { Code = "it", Name = "Italian", NativeName = (string?)"Italiano" },
+            new { Code = "hi", Name = "Hindi", NativeName = (string?)"हिन्दी" },
+            new { Code = "pt", Name = "Portuguese", NativeName = (string?)"Português" },
+            new { Code = "zh", Name = "Chinese", NativeName = (string?)"中文" },
+            new { Code = "ko", Name = "Korean", NativeName = (string?)"한국어" },
+            new { Code = "ru", Name = "Russian", NativeName = (string?)"Русский" },
+            new { Code = "nl", Name = "Dutch", NativeName = (string?)"Nederlands" },
+            new { Code = "tr", Name = "Turkish", NativeName = (string?)"Türkçe" },
+            new { Code = "sv", Name = "Swedish", NativeName = (string?)"Svenska" },
+            new { Code = "id", Name = "Indonesian", NativeName = (string?)"Bahasa Indonesia" },
+            new { Code = "tl", Name = "Filipino", NativeName = (string?)"Filipino" },
+            new { Code = "ja", Name = "Japanese", NativeName = (string?)"日本語" },
+            new { Code = "uk", Name = "Ukrainian", NativeName = (string?)"Українська" },
+            new { Code = "el", Name = "Greek", NativeName = (string?)"Ελληνικά" },
+            new { Code = "cs", Name = "Czech", NativeName = (string?)"Čeština" },
+            new { Code = "fi", Name = "Finnish", NativeName = (string?)"Suomi" },
+            new { Code = "ro", Name = "Romanian", NativeName = (string?)"Română" },
+            new { Code = "da", Name = "Danish", NativeName = (string?)"Dansk" },
+            new { Code = "bg", Name = "Bulgarian", NativeName = (string?)"Български" },
+            new { Code = "ms", Name = "Malay", NativeName = (string?)"Bahasa Melayu" },
+            new { Code = "sk", Name = "Slovak", NativeName = (string?)"Slovenčina" },
+            new { Code = "hr", Name = "Croatian", NativeName = (string?)"Hrvatski" },
+            new { Code = "ar", Name = "Arabic", NativeName = (string?)"العربية" },
+            new { Code = "ta", Name = "Tamil", NativeName = (string?)"தமிழ்" },
+            new { Code = "vi", Name = "Vietnamese", NativeName = (string?)"Tiếng Việt" },
+            new { Code = "hu", Name = "Hungarian", NativeName = (string?)"Magyar" },
+            new { Code = "no", Name = "Norwegian", NativeName = (string?)"Norsk" },
+        };
+
+        var existingCodes = await lookupValues
+            .IgnoreQueryFilters()
+            .Where(v => v.CategoryId == category.Id && !v.IsDeleted)
+            .Select(v => v.Code)
+            .ToListAsync();
+
+        var newValues = new List<LookupValue>();
+        var sortOrder = 0;
+
+        foreach (var lang in languages)
+        {
+            if (existingCodes.Contains(lang.Code))
+            {
+                sortOrder++;
+                continue;
+            }
+
+            var metadata = lang.NativeName != null
+                ? $"{{\"nativeName\":\"{lang.NativeName}\"}}"
+                : null;
+
+            newValues.Add(new LookupValue
+            {
+                Id = Guid.NewGuid(),
+                CategoryId = category.Id,
+                Code = lang.Code,
+                Name = lang.Name,
+                Metadata = metadata,
+                SortOrder = sortOrder,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = "system"
+            });
+            sortOrder++;
+        }
+
+        if (newValues.Count > 0)
+        {
+            await lookupValues.AddRangeAsync(newValues);
+            await context.SaveChangesAsync();
+            logger.LogInformation("Seeded {Count} language lookup values", newValues.Count);
+        }
+        else
+        {
+            logger.LogInformation("All language lookup values already exist, skipping");
         }
     }
 

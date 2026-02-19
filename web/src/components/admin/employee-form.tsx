@@ -32,42 +32,7 @@ import { toast } from "sonner";
 import { Info, User as UserIcon } from "lucide-react";
 import { EmployeeUserAccountSection } from "./employee-user-account-section";
 import { LookupField } from "./lookup-field";
-
-// Supported languages for Learning subtitles
-// Most common construction worker languages in Ireland/UK listed first
-const SUPPORTED_LANGUAGES: Array<{ code: string; name: string; nativeName?: string }> = [
-  { code: "af", name: "Afrikaans", nativeName: "Afrikaans" },
-  { code: "ar", name: "Arabic", nativeName: "العربية" },
-  { code: "bg", name: "Bulgarian", nativeName: "Български" },
-  { code: "zh", name: "Chinese", nativeName: "中文" },
-  { code: "hr", name: "Croatian", nativeName: "Hrvatski" },
-  { code: "cs", name: "Czech", nativeName: "Čeština" },
-  { code: "da", name: "Danish", nativeName: "Dansk" },
-  { code: "nl", name: "Dutch", nativeName: "Nederlands" },
-  { code: "en", name: "English" },
-  { code: "fi", name: "Finnish", nativeName: "Suomi" },
-  { code: "fr", name: "French", nativeName: "Français" },
-  { code: "de", name: "German", nativeName: "Deutsch" },
-  { code: "el", name: "Greek", nativeName: "Ελληνικά" },
-  { code: "hi", name: "Hindi", nativeName: "हिन्दी" },
-  { code: "hu", name: "Hungarian", nativeName: "Magyar" },
-  { code: "it", name: "Italian", nativeName: "Italiano" },
-  { code: "ja", name: "Japanese", nativeName: "日本語" },
-  { code: "ko", name: "Korean", nativeName: "한국어" },
-  { code: "lv", name: "Latvian", nativeName: "Latviešu" },
-  { code: "lt", name: "Lithuanian", nativeName: "Lietuvių" },
-  { code: "no", name: "Norwegian", nativeName: "Norsk" },
-  { code: "pl", name: "Polish", nativeName: "Polski" },
-  { code: "pt", name: "Portuguese", nativeName: "Português" },
-  { code: "ro", name: "Romanian", nativeName: "Română" },
-  { code: "ru", name: "Russian", nativeName: "Русский" },
-  { code: "sk", name: "Slovak", nativeName: "Slovenčina" },
-  { code: "es", name: "Spanish", nativeName: "Español" },
-  { code: "sv", name: "Swedish", nativeName: "Svenska" },
-  { code: "tr", name: "Turkish", nativeName: "Türkçe" },
-  { code: "uk", name: "Ukrainian", nativeName: "Українська" },
-  { code: "vi", name: "Vietnamese", nativeName: "Tiếng Việt" },
-];
+import { useLookupValues } from "@/hooks/use-lookups";
 
 const employeeFormSchema = z.object({
   // Employee code is auto-generated on create, read-only on edit
@@ -112,6 +77,7 @@ export function EmployeeForm({ employee, onSuccess, onCancel }: EmployeeFormProp
   const updateEmployee = useUpdateEmployee();
   const { data: sites, isLoading: sitesLoading } = useAllSites();
   const { data: roles, isLoading: rolesLoading } = useRoles();
+  const { data: languages = [] } = useLookupValues('Language');
 
   const form = useForm<EmployeeFormValues>({
     resolver: zodResolver(employeeFormSchema) as any,
@@ -499,12 +465,15 @@ export function EmployeeForm({ employee, onSuccess, onCancel }: EmployeeFormProp
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {SUPPORTED_LANGUAGES.map((lang) => (
-                    <SelectItem key={lang.code} value={lang.code}>
-                      {lang.name}
-                      {lang.nativeName && ` (${lang.nativeName})`}
-                    </SelectItem>
-                  ))}
+                  {languages.map((lang) => {
+                    const meta = lang.metadata ? JSON.parse(lang.metadata) : null;
+                    return (
+                      <SelectItem key={lang.code} value={lang.code}>
+                        {lang.name}
+                        {meta?.nativeName && ` (${meta.nativeName})`}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
               <FormDescription>

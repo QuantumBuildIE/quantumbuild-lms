@@ -51,12 +51,15 @@ export interface UpdateLookupValueInput {
   isEnabled: boolean;
 }
 
-export function useLookupValues(categoryName: string) {
+export function useLookupValues(categoryName: string, options?: { includeDisabled?: boolean }) {
+  const includeDisabled = options?.includeDisabled ?? false;
   return useQuery({
-    queryKey: ['lookups', categoryName],
+    queryKey: ['lookups', categoryName, { includeDisabled }],
     queryFn: async () => {
+      const params = includeDisabled ? { includeDisabled: true } : {};
       const response = await apiClient.get<LookupValuesResponse>(
-        `/lookups/${encodeURIComponent(categoryName)}/values`
+        `/lookups/${encodeURIComponent(categoryName)}/values`,
+        { params }
       );
       return response.data.data;
     },
@@ -117,6 +120,23 @@ export function useDeleteLookupValue(categoryName: string) {
   return useMutation({
     mutationFn: async (id: string) => {
       await apiClient.delete(`/lookups/values/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lookups', categoryName] });
+    },
+  });
+}
+
+export function useToggleLookupValue(categoryName: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ lookupValueId, isEnabled }: { lookupValueId: string; isEnabled: boolean }) => {
+      const response = await apiClient.put<LookupValueResponse>(
+        `/lookups/${encodeURIComponent(categoryName)}/values/${lookupValueId}/toggle`,
+        { isEnabled }
+      );
+      return response.data.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['lookups', categoryName] });

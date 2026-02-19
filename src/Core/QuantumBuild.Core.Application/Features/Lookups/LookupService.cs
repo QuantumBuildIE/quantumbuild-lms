@@ -17,7 +17,7 @@ public class LookupService : ILookupService
         _currentUserService = currentUserService;
     }
 
-    public async Task<Result<List<LookupValueDto>>> GetEffectiveValuesAsync(Guid tenantId, string categoryName)
+    public async Task<Result<List<LookupValueDto>>> GetEffectiveValuesAsync(Guid tenantId, string categoryName, bool includeDisabled = false)
     {
         try
         {
@@ -54,7 +54,7 @@ public class LookupService : ILookupService
                 {
                     // Use the tenant override instead
                     var tenantOverride = tenantValues.First(tv => tv.LookupValueId == gv.Id);
-                    if (tenantOverride.IsEnabled)
+                    if (tenantOverride.IsEnabled || includeDisabled)
                     {
                         result.Add(new LookupValueDto(
                             tenantOverride.Id,
@@ -63,12 +63,12 @@ public class LookupService : ILookupService
                             tenantOverride.Name,
                             tenantOverride.Metadata,
                             tenantOverride.SortOrder,
-                            true,
+                            tenantOverride.IsEnabled,
                             IsGlobal: false,
                             LookupValueId: gv.Id
                         ));
                     }
-                    // If !IsEnabled, the global value is suppressed for this tenant
+                    // If !IsEnabled and !includeDisabled, the global value is suppressed for this tenant
                 }
                 else
                 {
@@ -86,20 +86,23 @@ public class LookupService : ILookupService
                 }
             }
 
-            // Add tenant custom values (those without a LookupValueId)
-            foreach (var tv in tenantValues.Where(tv => !tv.LookupValueId.HasValue && tv.IsEnabled && !tv.IsDeleted))
+            // Add tenant custom values only when category allows custom values
+            if (category.AllowCustom)
             {
-                result.Add(new LookupValueDto(
-                    tv.Id,
-                    category.Id,
-                    tv.Code,
-                    tv.Name,
-                    tv.Metadata,
-                    tv.SortOrder,
-                    true,
-                    IsGlobal: false,
-                    LookupValueId: null
-                ));
+                foreach (var tv in tenantValues.Where(tv => !tv.LookupValueId.HasValue && tv.IsEnabled && !tv.IsDeleted))
+                {
+                    result.Add(new LookupValueDto(
+                        tv.Id,
+                        category.Id,
+                        tv.Code,
+                        tv.Name,
+                        tv.Metadata,
+                        tv.SortOrder,
+                        true,
+                        IsGlobal: false,
+                        LookupValueId: null
+                    ));
+                }
             }
 
             return Result.Ok(result.OrderBy(v => v.SortOrder).ThenBy(v => v.Name).ToList());
@@ -257,6 +260,85 @@ public class LookupService : ILookupService
         catch (Exception ex)
         {
             return Result.Fail($"Error deleting lookup value: {ex.Message}");
+        }
+    }
+
+    public async Task<Result<LookupValueDto>> ToggleGlobalValueAsync(string categoryName, Guid lookupValueId, bool isEnabled)
+    {
+        try
+        {
+            var category = await _context.LookupCategories
+                .AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Name == categoryName && c.IsActive);
+
+            if (category == null)
+                return Result.Fail<LookupValueDto>($"Lookup category '{categoryName}' not found");
+
+            // Verify the global value exists
+            var globalValue = await _context.LookupValues
+                .AsNoTracking()
+                .FirstOrDefaultAsync(v => v.Id == lookupValueId && v.CategoryId == category.Id && v.IsActive);
+
+            if (globalValue == null)
+                return Result.Fail<LookupValueDto>($"Global lookup value with ID {lookupValueId} not found in category '{categoryName}'");
+
+            var tenantId = _currentUserService.TenantId;
+
+            // Check if a tenant override already exists
+            var tenantOverride = await _context.TenantLookupValues
+                .FirstOrDefaultAsync(v => v.TenantId == tenantId
+                    && v.CategoryId == category.Id
+                    && v.LookupValueId == lookupValueId);
+
+            if (tenantOverride != null)
+            {
+                tenantOverride.IsEnabled = isEnabled;
+                await _context.SaveChangesAsync();
+
+                return Result.Ok(new LookupValueDto(
+                    tenantOverride.Id,
+                    category.Id,
+                    tenantOverride.Code,
+                    tenantOverride.Name,
+                    tenantOverride.Metadata,
+                    tenantOverride.SortOrder,
+                    tenantOverride.IsEnabled,
+                    IsGlobal: false,
+                    LookupValueId: globalValue.Id
+                ));
+            }
+
+            // Create a new tenant override
+            var newOverride = new TenantLookupValue
+            {
+                Id = Guid.NewGuid(),
+                CategoryId = category.Id,
+                LookupValueId = globalValue.Id,
+                Code = globalValue.Code,
+                Name = globalValue.Name,
+                Metadata = globalValue.Metadata,
+                SortOrder = globalValue.SortOrder,
+                IsEnabled = isEnabled
+            };
+
+            _context.TenantLookupValues.Add(newOverride);
+            await _context.SaveChangesAsync();
+
+            return Result.Ok(new LookupValueDto(
+                newOverride.Id,
+                category.Id,
+                newOverride.Code,
+                newOverride.Name,
+                newOverride.Metadata,
+                newOverride.SortOrder,
+                newOverride.IsEnabled,
+                IsGlobal: false,
+                LookupValueId: globalValue.Id
+            ));
+        }
+        catch (Exception ex)
+        {
+            return Result.Fail<LookupValueDto>($"Error toggling lookup value: {ex.Message}");
         }
     }
 }

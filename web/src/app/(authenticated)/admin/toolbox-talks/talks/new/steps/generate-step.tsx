@@ -34,7 +34,7 @@ import { getToolboxTalk, smartGenerateContent } from '@/lib/api/toolbox-talks/to
 import { getStoredToken } from '@/lib/api/client';
 import { HubConnectionBuilder, HubConnection, LogLevel, HubConnectionState } from '@microsoft/signalr';
 import type { SmartGenerateContentResult } from '@/types/toolbox-talks';
-import { SOURCE_LANGUAGE_OPTIONS } from '@/features/toolbox-talks/constants';
+import { useLookupValues } from '@/hooks/use-lookups';
 import { toast } from 'sonner';
 
 interface GenerateStepProps {
@@ -63,6 +63,8 @@ interface GenerationComplete {
 }
 
 export function GenerateStep({ data, updateData, onNext, onBack }: GenerateStepProps) {
+  const { data: languages = [] } = useLookupValues('Language');
+
   // Local state for generation options
   const [includeVideo, setIncludeVideo] = useState(data.videoUrl ? true : false);
   const [includePdf, setIncludePdf] = useState(data.pdfUrl ? true : false);
@@ -655,9 +657,9 @@ export function GenerateStep({ data, updateData, onNext, onBack }: GenerateStepP
                     <SelectValue placeholder="Select language" />
                   </SelectTrigger>
                   <SelectContent>
-                    {SOURCE_LANGUAGE_OPTIONS.map((lang) => (
-                      <SelectItem key={lang.value} value={lang.value}>
-                        {lang.label}
+                    {languages.map((lang) => (
+                      <SelectItem key={lang.code} value={lang.code}>
+                        {lang.name}
                       </SelectItem>
                     ))}
                   </SelectContent>

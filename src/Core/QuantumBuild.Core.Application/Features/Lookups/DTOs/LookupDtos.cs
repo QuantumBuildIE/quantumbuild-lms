@@ -34,3 +34,7 @@ public record UpdateTenantLookupValueDto(
     int SortOrder,
     bool IsEnabled
 );
+
+public record ToggleGlobalValueDto(
+    bool IsEnabled
+);

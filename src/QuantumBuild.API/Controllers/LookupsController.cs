@@ -24,10 +24,10 @@ public class LookupsController : ControllerBase
     /// Get effective lookup values for a category (tenant-aware)
     /// </summary>
     [HttpGet("{categoryName}/values")]
-    public async Task<IActionResult> GetValues(string categoryName)
+    public async Task<IActionResult> GetValues(string categoryName, [FromQuery] bool includeDisabled = false)
     {
         var tenantId = _currentUserService.TenantId;
-        var result = await _lookupService.GetEffectiveValuesAsync(tenantId, categoryName);
+        var result = await _lookupService.GetEffectiveValuesAsync(tenantId, categoryName, includeDisabled);
 
         if (!result.Success)
             return NotFound(result);
@@ -93,5 +93,20 @@ public class LookupsController : ControllerBase
             return BadRequest(result);
 
         return NoContent();
+    }
+
+    /// <summary>
+    /// Toggle a global lookup value for the current tenant (enable/disable)
+    /// </summary>
+    [HttpPut("{categoryName}/values/{lookupValueId:guid}/toggle")]
+    [Authorize(Policy = "Core.Admin")]
+    public async Task<IActionResult> ToggleGlobalValue(string categoryName, Guid lookupValueId, [FromBody] ToggleGlobalValueDto dto)
+    {
+        var result = await _lookupService.ToggleGlobalValueAsync(categoryName, lookupValueId, dto.IsEnabled);
+
+        if (!result.Success)
+            return BadRequest(result);
+
+        return Ok(result);
     }
 }

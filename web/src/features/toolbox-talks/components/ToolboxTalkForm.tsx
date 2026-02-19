@@ -27,7 +27,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { SOURCE_LANGUAGE_OPTIONS } from '../constants';
 import { useLookupValues } from '@/hooks/use-lookups';
 import { SectionEditor } from './SectionEditor';
 import { QuestionEditor } from './QuestionEditor';
@@ -137,6 +136,7 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
 
   const queryClient = useQueryClient();
   const { data: categories = [], isLoading: categoriesLoading } = useLookupValues('TrainingCategory');
+  const { data: languages = [] } = useLookupValues('Language');
   const createMutation = useCreateToolboxTalk();
   const updateMutation = useUpdateToolboxTalk();
   const [isRegenerating, setIsRegenerating] = useState(false);
@@ -450,9 +450,9 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {SOURCE_LANGUAGE_OPTIONS.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
+                        {languages.map((lang) => (
+                          <SelectItem key={lang.code} value={lang.code}>
+                            {lang.name}
                           </SelectItem>
                         ))}
                       </SelectContent>

@@ -1,10 +1,11 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { getSubtitleProcessingStatus, getVttFile } from './subtitle-processing';
 import { getMySubtitleStatus, getMyVttFile } from './my-toolbox-talks';
 import type { SubtitleProcessingStatusResponse, LanguageStatus } from '@/types/toolbox-talks';
+import { useLookupValues } from '@/hooks/use-lookups';
 
 // ============================================
 // Types
@@ -45,50 +46,6 @@ export const videoSubtitlesKeys = {
 };
 
 // ============================================
-// Language name mapping
-// ============================================
-
-const languageNames: Record<string, string> = {
-  en: 'English',
-  es: 'Spanish',
-  pl: 'Polish',
-  ro: 'Romanian',
-  pt: 'Portuguese',
-  fr: 'French',
-  de: 'German',
-  it: 'Italian',
-  nl: 'Dutch',
-  ru: 'Russian',
-  uk: 'Ukrainian',
-  ar: 'Arabic',
-  zh: 'Chinese',
-  ja: 'Japanese',
-  ko: 'Korean',
-  hi: 'Hindi',
-  bn: 'Bengali',
-  tr: 'Turkish',
-  vi: 'Vietnamese',
-  th: 'Thai',
-  id: 'Indonesian',
-  ms: 'Malay',
-  tl: 'Filipino',
-  cs: 'Czech',
-  sk: 'Slovak',
-  hu: 'Hungarian',
-  bg: 'Bulgarian',
-  hr: 'Croatian',
-  sr: 'Serbian',
-  lt: 'Lithuanian',
-  lv: 'Latvian',
-  et: 'Estonian',
-  af: 'Afrikaans',
-};
-
-function getLanguageName(code: string): string {
-  return languageNames[code.toLowerCase()] || code.toUpperCase();
-}
-
-// ============================================
 // Hooks
 // ============================================
 
@@ -109,6 +66,22 @@ export function useVideoSubtitles(
   const [subtitlesWithBlobs, setSubtitlesWithBlobs] = useState<AvailableSubtitle[]>([]);
   const [blobsLoading, setBlobsLoading] = useState(false);
 
+  // Load language names from lookup
+  const { data: lookupLanguages } = useLookupValues('Language');
+  const languageNameMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    if (lookupLanguages) {
+      for (const lang of lookupLanguages) {
+        map[lang.code.toLowerCase()] = lang.name;
+      }
+    }
+    return map;
+  }, [lookupLanguages]);
+
+  const getLanguageName = useCallback((code: string): string => {
+    return languageNameMap[code.toLowerCase()] || code.toUpperCase();
+  }, [languageNameMap]);
+
   // Select the appropriate API functions based on context
   const getStatus = useEmployeeEndpoint ? getMySubtitleStatus : getSubtitleProcessingStatus;
   const getVtt = useEmployeeEndpoint ? getMyVttFile : getVttFile;
@@ -128,7 +101,17 @@ export function useVideoSubtitles(
   });
 
   // Extract completed subtitle info (without blob URLs yet)
-  const completedSubtitleInfo = extractCompletedSubtitleInfo(status);
+  const completedSubtitleInfo = useMemo(() => {
+    if (!status || !status.languages) {
+      return [];
+    }
+    return status.languages
+      .filter((lang: LanguageStatus) => lang.status === 'Completed')
+      .map((lang: LanguageStatus) => ({
+        languageCode: lang.languageCode,
+        languageName: lang.language || getLanguageName(lang.languageCode),
+      }));
+  }, [status, getLanguageName]);
 
   // Fetch VTT content and create blob URLs
   useEffect(() => {
@@ -216,28 +199,4 @@ export function useVttContent(
     enabled: enabled && !!toolboxTalkId && !!languageCode,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
-}
-
-// ============================================
-// Helper Functions
-// ============================================
-
-interface SubtitleInfo {
-  languageCode: string;
-  languageName: string;
-}
-
-function extractCompletedSubtitleInfo(
-  status: SubtitleProcessingStatusResponse | null | undefined
-): SubtitleInfo[] {
-  if (!status || !status.languages) {
-    return [];
-  }
-
-  return status.languages
-    .filter((lang: LanguageStatus) => lang.status === 'Completed')
-    .map((lang: LanguageStatus) => ({
-      languageCode: lang.languageCode,
-      languageName: lang.language || getLanguageName(lang.languageCode),
-    }));
 }

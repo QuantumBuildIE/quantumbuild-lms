@@ -1,33 +1,6 @@
-export const SOURCE_LANGUAGE_OPTIONS: { value: string; label: string }[] = [
-  { value: 'en', label: 'English' },
-  { value: 'af', label: 'Afrikaans' },
-  { value: 'ar', label: 'Arabic' },
-  { value: 'bg', label: 'Bulgarian' },
-  { value: 'zh', label: 'Chinese' },
-  { value: 'hr', label: 'Croatian' },
-  { value: 'cs', label: 'Czech' },
-  { value: 'da', label: 'Danish' },
-  { value: 'nl', label: 'Dutch' },
-  { value: 'fi', label: 'Finnish' },
-  { value: 'fr', label: 'French' },
-  { value: 'de', label: 'German' },
-  { value: 'el', label: 'Greek' },
-  { value: 'hi', label: 'Hindi' },
-  { value: 'hu', label: 'Hungarian' },
-  { value: 'it', label: 'Italian' },
-  { value: 'ja', label: 'Japanese' },
-  { value: 'ko', label: 'Korean' },
-  { value: 'lv', label: 'Latvian' },
-  { value: 'lt', label: 'Lithuanian' },
-  { value: 'no', label: 'Norwegian' },
-  { value: 'pl', label: 'Polish' },
-  { value: 'pt', label: 'Portuguese' },
-  { value: 'ro', label: 'Romanian' },
-  { value: 'ru', label: 'Russian' },
-  { value: 'sk', label: 'Slovak' },
-  { value: 'es', label: 'Spanish' },
-  { value: 'sv', label: 'Swedish' },
-  { value: 'tr', label: 'Turkish' },
-  { value: 'uk', label: 'Ukrainian' },
-  { value: 'vi', label: 'Vietnamese' },
-];
+// Language options are now loaded dynamically from the Language lookup category.
+// Use useLookupValues('Language') from @/hooks/use-lookups to get the list.
+// This file is kept for backward compatibility — the export maps lookup values
+// to the { value, label } format used by existing consumers.
+
+// No more hardcoded language list — use the hook directly.

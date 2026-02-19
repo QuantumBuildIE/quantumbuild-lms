@@ -30,7 +30,7 @@ import {
   useToolboxTalkPreviewSlides,
   useAdminSlideshowHtml,
 } from '@/lib/api/toolbox-talks/use-toolbox-talks';
-import { SOURCE_LANGUAGE_OPTIONS } from '../constants';
+import { useLookupValues } from '@/hooks/use-lookups';
 import { cn } from '@/lib/utils';
 import {
   Eye,
@@ -49,6 +49,7 @@ interface PreviewModalProps {
 }
 
 export function PreviewModal({ open, onOpenChange, talk }: PreviewModalProps) {
+  const { data: languages = [] } = useLookupValues('Language');
   const [previewLanguage, setPreviewLanguage] = useState(
     talk.sourceLanguageCode || 'en'
   );
@@ -71,13 +72,12 @@ export function PreviewModal({ open, onOpenChange, talk }: PreviewModalProps) {
   );
 
   // Build language options: source language + available translations
+  const sourceCode = talk.sourceLanguageCode || 'en';
+  const sourceName = languages.find((l) => l.code === sourceCode)?.name ?? 'English';
   const availableLanguages = [
     {
-      code: talk.sourceLanguageCode || 'en',
-      name:
-        SOURCE_LANGUAGE_OPTIONS.find(
-          (l) => l.value === (talk.sourceLanguageCode || 'en')
-        )?.label ?? 'English',
+      code: sourceCode,
+      name: sourceName,
       isSource: true,
     },
     ...talk.translations.map((t) => ({
