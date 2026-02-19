@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using QuantumBuild.Core.Application.Abstractions.Email;
+using QuantumBuild.Core.Application.Features.TenantSettings;
 using QuantumBuild.Core.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
@@ -16,15 +17,24 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
     private readonly IConfiguration _configuration;
     private readonly ILogger<ToolboxTalkEmailService> _logger;
     private readonly IEmailProvider _emailProvider;
+    private readonly ITenantSettingsService _tenantSettingsService;
 
     public ToolboxTalkEmailService(
         IConfiguration configuration,
         ILogger<ToolboxTalkEmailService> logger,
-        IEmailProvider emailProvider)
+        IEmailProvider emailProvider,
+        ITenantSettingsService tenantSettingsService)
     {
         _configuration = configuration;
         _logger = logger;
         _emailProvider = emailProvider;
+        _tenantSettingsService = tenantSettingsService;
+    }
+
+    private async Task<string> GetTeamNameAsync(Guid tenantId, CancellationToken ct)
+    {
+        return await _tenantSettingsService.GetSettingAsync(
+            tenantId, TenantSettingKeys.EmailTeamName, TenantSettingKeys.Defaults.EmailTeamName, ct);
     }
 
     public async Task SendTalkAssignmentEmailAsync(
@@ -42,6 +52,7 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
 
         var baseUrl = _configuration["AppSettings:BaseUrl"] ?? "https://quantumbuild-lms-web-production.up.railway.app";
         var talkUrl = $"{baseUrl}/login?returnUrl={Uri.EscapeDataString($"/toolbox-talks/{scheduledTalk.Id}")}";
+        var teamName = await GetTeamNameAsync(scheduledTalk.TenantId, cancellationToken);
 
         var subject = $"New Learning Assigned: {scheduledTalk.ToolboxTalk.Title}";
         var body = $@"
@@ -74,7 +85,7 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
             </p>
         </div>
         <div class='footer'>
-            <p>Thank you,<br>QUANTUMBUILD Safety Team</p>
+            <p>Thank you,<br>{teamName}</p>
             <p>This is an automated message. Please do not reply to this email.</p>
         </div>
     </div>
@@ -121,6 +132,7 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
 
         var baseUrl = _configuration["AppSettings:BaseUrl"] ?? "https://quantumbuild-lms-web-production.up.railway.app";
         var talkUrl = $"{baseUrl}/login?returnUrl={Uri.EscapeDataString($"/toolbox-talks/{scheduledTalk.Id}")}";
+        var teamName = await GetTeamNameAsync(scheduledTalk.TenantId, cancellationToken);
 
         var urgency = reminderNumber >= 3 ? "URGENT: " : "";
         var subject = $"{urgency}Reminder {reminderNumber}: {scheduledTalk.ToolboxTalk.Title}";
@@ -162,7 +174,7 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
             </p>
         </div>
         <div class='footer'>
-            <p>Thank you,<br>QUANTUMBUILD Safety Team</p>
+            <p>Thank you,<br>{teamName}</p>
             <p>This is an automated message. Please do not reply to this email.</p>
         </div>
     </div>
@@ -207,6 +219,7 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
         }
 
         var scheduledTalk = completion.ScheduledTalk;
+        var teamName = await GetTeamNameAsync(scheduledTalk.TenantId, cancellationToken);
         var subject = $"Learning Completed: {scheduledTalk.ToolboxTalk.Title}";
 
         var quizSection = "";
@@ -257,7 +270,7 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
             <p>Your completion has been recorded.</p>
         </div>
         <div class='footer'>
-            <p>Thank you,<br>QUANTUMBUILD Safety Team</p>
+            <p>Thank you,<br>{teamName}</p>
             <p>This is an automated message. Please do not reply to this email.</p>
         </div>
     </div>
@@ -303,6 +316,7 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
         }
 
         var daysOverdue = (DateTime.Today - scheduledTalk.DueDate.Date).Days;
+        var teamName = await GetTeamNameAsync(scheduledTalk.TenantId, cancellationToken);
         var subject = $"Escalation: Overdue Learning - {employee.FullName}";
 
         var body = $@"
@@ -354,7 +368,7 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
             <p>Please follow up with {employee.FirstName} to ensure compliance with safety training requirements.</p>
         </div>
         <div class='footer'>
-            <p>Thank you,<br>QUANTUMBUILD Safety Team</p>
+            <p>Thank you,<br>{teamName}</p>
             <p>This is an automated message. Please do not reply to this email.</p>
         </div>
     </div>
@@ -427,6 +441,7 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
 
         var baseUrl = _configuration["AppSettings:BaseUrl"] ?? "https://quantumbuild-lms-web-production.up.railway.app";
         var talkUrl = $"{baseUrl}/login?returnUrl={Uri.EscapeDataString($"/toolbox-talks/{refresherTalk.Id}")}";
+        var teamName = await GetTeamNameAsync(refresherTalk.TenantId, cancellationToken);
 
         var subject = $"Refresher Training Due in {timeframe}: {refresherTalk.ToolboxTalk.Title}";
         var body = $@"
@@ -457,7 +472,7 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
             </p>
         </div>
         <div class='footer'>
-            <p>Thank you,<br>QUANTUMBUILD Safety Team</p>
+            <p>Thank you,<br>{teamName}</p>
             <p>This is an automated message. Please do not reply to this email.</p>
         </div>
     </div>
@@ -503,6 +518,7 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
 
         var baseUrl = _configuration["AppSettings:BaseUrl"] ?? "https://quantumbuild-lms-web-production.up.railway.app";
         var courseUrl = $"{baseUrl}/login?returnUrl={Uri.EscapeDataString("/toolbox-talks")}";
+        var teamName = await GetTeamNameAsync(course.TenantId, cancellationToken);
 
         var subject = $"New Training Course Assigned: {course.Title}";
         var dueDateHtml = dueDate.HasValue
@@ -541,7 +557,7 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
             </p>
         </div>
         <div class='footer'>
-            <p>Thank you,<br>QUANTUMBUILD Safety Team</p>
+            <p>Thank you,<br>{teamName}</p>
             <p>This is an automated message. Please do not reply to this email.</p>
         </div>
     </div>
@@ -586,6 +602,7 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
 
         var baseUrl = _configuration["AppSettings:BaseUrl"] ?? "https://quantumbuild-lms-web-production.up.railway.app";
         var courseUrl = $"{baseUrl}/login?returnUrl={Uri.EscapeDataString($"/toolbox-talks/courses/{refresherAssignment.Id}")}";
+        var teamName = await GetTeamNameAsync(refresherAssignment.TenantId, cancellationToken);
 
         var subject = $"Course Refresher Due in {timeframe}: {refresherAssignment.Course.Title}";
         var body = $@"
@@ -616,7 +633,7 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
             </p>
         </div>
         <div class='footer'>
-            <p>Thank you,<br>QUANTUMBUILD Safety Team</p>
+            <p>Thank you,<br>{teamName}</p>
             <p>This is an automated message. Please do not reply to this email.</p>
         </div>
     </div>

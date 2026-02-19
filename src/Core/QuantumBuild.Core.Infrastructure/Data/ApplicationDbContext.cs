@@ -50,6 +50,9 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
     public DbSet<Company> Companies => Set<Company>();
     public DbSet<Contact> Contacts => Set<Contact>();
 
+    // Settings DbSets
+    public DbSet<TenantSetting> TenantSettings => Set<TenantSetting>();
+
     // Lookup DbSets
     public DbSet<LookupCategory> LookupCategories => Set<LookupCategory>();
     public DbSet<LookupValue> LookupValues => Set<LookupValue>();
@@ -184,6 +187,9 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.ApplyConfiguration(new EmployeeConfiguration());
         // modelBuilder.ApplyConfiguration(new CompanyConfiguration());
         modelBuilder.ApplyConfiguration(new ContactConfiguration());
+
+        // Apply Settings entity configurations
+        modelBuilder.ApplyConfiguration(new TenantSettingConfiguration());
 
         // Apply Lookup entity configurations
         modelBuilder.ApplyConfiguration(new LookupCategoryConfiguration());

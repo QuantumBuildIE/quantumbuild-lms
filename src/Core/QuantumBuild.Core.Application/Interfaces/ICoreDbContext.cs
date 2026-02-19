@@ -18,6 +18,9 @@ public interface ICoreDbContext
     DbSet<Company> Companies { get; }
     DbSet<Contact> Contacts { get; }
 
+    // Settings DbSets
+    DbSet<TenantSetting> TenantSettings { get; }
+
     // Lookup DbSets
     DbSet<LookupCategory> LookupCategories { get; }
     DbSet<LookupValue> LookupValues { get; }

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
+using QuantumBuild.Core.Application.Features.TenantSettings;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Storage;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
@@ -14,6 +15,7 @@ namespace QuantumBuild.Modules.ToolboxTalks.Application.Services;
 public class CertificateGenerationService(
     IToolboxTalksDbContext context,
     IR2StorageService storageService,
+    ITenantSettingsService tenantSettingsService,
     ILogger<CertificateGenerationService> logger) : ICertificateGenerationService
 {
     public async Task<ToolboxTalkCertificate?> GenerateTalkCertificateAsync(
@@ -60,7 +62,9 @@ public class CertificateGenerationService(
         }
 
         var now = DateTime.UtcNow;
-        var certificateNumber = await GenerateCertificateNumber("LRN", completedTalk.TenantId, ct);
+        var talkPrefix = await tenantSettingsService.GetSettingAsync(
+            completedTalk.TenantId, TenantSettingKeys.TalkCertificatePrefix, TenantSettingKeys.Defaults.TalkCertificatePrefix, ct);
+        var certificateNumber = await GenerateCertificateNumber(talkPrefix, completedTalk.TenantId, ct);
 
         DateTime? expiresAt = talk.RequiresRefresher
             ? now.AddMonths(talk.RefresherIntervalMonths)
@@ -147,7 +151,9 @@ public class CertificateGenerationService(
             .ToList();
 
         var now = DateTime.UtcNow;
-        var certificateNumber = await GenerateCertificateNumber("TBC", completedAssignment.TenantId, ct);
+        var coursePrefix = await tenantSettingsService.GetSettingAsync(
+            completedAssignment.TenantId, TenantSettingKeys.CourseCertificatePrefix, TenantSettingKeys.Defaults.CourseCertificatePrefix, ct);
+        var certificateNumber = await GenerateCertificateNumber(coursePrefix, completedAssignment.TenantId, ct);
 
         DateTime? expiresAt = course.RequiresRefresher
             ? now.AddMonths(course.RefresherIntervalMonths)
