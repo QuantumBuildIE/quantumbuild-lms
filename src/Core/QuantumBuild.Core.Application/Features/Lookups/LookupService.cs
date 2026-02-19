@@ -105,7 +105,7 @@ public class LookupService : ILookupService
                 }
             }
 
-            return Result.Ok(result.OrderBy(v => v.SortOrder).ThenBy(v => v.Name).ToList());
+            return Result.Ok(result.OrderBy(v => v.Name).ThenBy(v => v.SortOrder).ToList());
         }
         catch (Exception ex)
         {

@@ -59,7 +59,7 @@ export function TopNav() {
               <circle cx="7" cy="23" r="2" fill="#4d8eff" opacity="0.6"/>
             </svg>
             <span className="text-lg font-bold tracking-tight">
-              Certified<span className="text-[#4d8eff] font-extrabold">IQ</span>
+              Certified<span className="text-primary font-extrabold">IQ</span>
             </span>
           </div>
         </Link>
@@ -141,7 +141,7 @@ export function TopNav() {
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <div className="px-2 py-1.5 text-center">
-              <span className="text-xs text-muted-foreground">A QuantumBuild Product</span>
+              <span className="text-xs text-muted-foreground">A CertifiedIQ Product</span>
             </div>
           </DropdownMenuContent>
         </DropdownMenu>
