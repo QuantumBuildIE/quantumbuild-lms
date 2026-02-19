@@ -51,6 +51,10 @@ import type {
 import { usePermission } from '@/lib/auth/use-auth';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import {
+  SCHEDULE_STATUS_OPTIONS as STATUS_OPTIONS,
+  SCHEDULE_STATUS_BADGE_CLASSES,
+} from '@/lib/constants/status';
 
 interface ScheduleListProps {
   toolboxTalkId?: string;
@@ -59,28 +63,8 @@ interface ScheduleListProps {
   basePath?: string;
 }
 
-const STATUS_OPTIONS: { value: ToolboxTalkScheduleStatus | 'all'; label: string }[] = [
-  { value: 'all', label: 'All Status' },
-  { value: 'Draft', label: 'Draft' },
-  { value: 'Active', label: 'Active' },
-  { value: 'Completed', label: 'Completed' },
-  { value: 'Cancelled', label: 'Cancelled' },
-];
-
-const getStatusBadgeVariant = (status: ToolboxTalkScheduleStatus) => {
-  switch (status) {
-    case 'Active':
-      return 'bg-green-100 text-green-800 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400';
-    case 'Draft':
-      return 'bg-blue-100 text-blue-800 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400';
-    case 'Completed':
-      return 'bg-gray-100 text-gray-800 hover:bg-gray-100 dark:bg-gray-900/20 dark:text-gray-400';
-    case 'Cancelled':
-      return 'bg-red-100 text-red-800 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400';
-    default:
-      return '';
-  }
-};
+const getStatusBadgeVariant = (status: ToolboxTalkScheduleStatus) =>
+  SCHEDULE_STATUS_BADGE_CLASSES[status] ?? '';
 
 export function ScheduleList({ toolboxTalkId, onEdit, basePath = '/admin/toolbox-talks' }: ScheduleListProps) {
   const router = useRouter();

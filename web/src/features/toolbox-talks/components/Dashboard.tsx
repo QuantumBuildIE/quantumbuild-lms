@@ -49,20 +49,8 @@ import type {
   RecentCompletion,
   OverdueAssignment,
   UpcomingSchedule,
-  ScheduledTalkStatus,
 } from '@/types/toolbox-talks';
-
-// ============================================
-// Constants
-// ============================================
-
-const STATUS_COLORS: Record<ScheduledTalkStatus, string> = {
-  Pending: '#F59E0B',
-  InProgress: '#3B82F6',
-  Completed: '#10B981',
-  Overdue: '#EF4444',
-  Cancelled: '#6B7280',
-};
+import { SCHEDULED_TALK_STATUS_CHART_COLORS as STATUS_COLORS } from '@/lib/constants/status';
 
 const PIE_COLORS = ['#F59E0B', '#3B82F6', '#10B981', '#EF4444'];
 

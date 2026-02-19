@@ -7,10 +7,6 @@ import {
   BellIcon,
   UserIcon,
   CalendarIcon,
-  ClockIcon,
-  CheckCircle2Icon,
-  AlertTriangleIcon,
-  PlayCircleIcon,
   SearchIcon,
   XCircleIcon,
 } from 'lucide-react';
@@ -39,6 +35,11 @@ import type { ScheduledTalkListItem, ScheduledTalkStatus } from '@/types/toolbox
 import { usePermission } from '@/lib/auth/use-auth';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import {
+  SCHEDULED_TALK_STATUS_OPTIONS as STATUS_OPTIONS,
+  SCHEDULED_TALK_STATUS_BADGE_CLASSES,
+  getScheduledTalkStatusIcon as getStatusIcon,
+} from '@/lib/constants/status';
 
 interface AssignmentsListProps {
   toolboxTalkId?: string;
@@ -46,46 +47,8 @@ interface AssignmentsListProps {
   scheduleId?: string;
 }
 
-const STATUS_OPTIONS: { value: ScheduledTalkStatus | 'all'; label: string }[] = [
-  { value: 'all', label: 'All Status' },
-  { value: 'Pending', label: 'Pending' },
-  { value: 'InProgress', label: 'In Progress' },
-  { value: 'Completed', label: 'Completed' },
-  { value: 'Overdue', label: 'Overdue' },
-  { value: 'Cancelled', label: 'Cancelled' },
-];
-
-const getStatusBadgeVariant = (status: ScheduledTalkStatus) => {
-  switch (status) {
-    case 'Completed':
-      return 'bg-green-100 text-green-800 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400';
-    case 'Pending':
-      return 'bg-blue-100 text-blue-800 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400';
-    case 'InProgress':
-      return 'bg-yellow-100 text-yellow-800 hover:bg-yellow-100 dark:bg-yellow-900/20 dark:text-yellow-400';
-    case 'Overdue':
-      return 'bg-red-100 text-red-800 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400';
-    case 'Cancelled':
-      return 'bg-gray-100 text-gray-800 hover:bg-gray-100 dark:bg-gray-900/20 dark:text-gray-400';
-    default:
-      return '';
-  }
-};
-
-const getStatusIcon = (status: ScheduledTalkStatus) => {
-  switch (status) {
-    case 'Completed':
-      return <CheckCircle2Icon className="h-4 w-4 text-green-600" />;
-    case 'Pending':
-      return <ClockIcon className="h-4 w-4 text-blue-600" />;
-    case 'InProgress':
-      return <PlayCircleIcon className="h-4 w-4 text-yellow-600" />;
-    case 'Overdue':
-      return <AlertTriangleIcon className="h-4 w-4 text-red-600" />;
-    default:
-      return null;
-  }
-};
+const getStatusBadgeVariant = (status: ScheduledTalkStatus) =>
+  SCHEDULED_TALK_STATUS_BADGE_CLASSES[status] ?? '';
 
 export function AssignmentsList({
   toolboxTalkId,

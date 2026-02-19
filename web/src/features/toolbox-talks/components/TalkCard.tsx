@@ -9,25 +9,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
-import type { ScheduledTalkStatus, MyToolboxTalkListItem } from '@/types/toolbox-talks';
-
-// Status badge variants mapping
-const statusVariants: Record<ScheduledTalkStatus, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  Pending: 'secondary',
-  InProgress: 'default',
-  Completed: 'outline',
-  Overdue: 'destructive',
-  Cancelled: 'outline',
-};
-
-// Status display labels
-const statusLabels: Record<ScheduledTalkStatus, string> = {
-  Pending: 'Pending',
-  InProgress: 'In Progress',
-  Completed: 'Completed',
-  Overdue: 'Overdue',
-  Cancelled: 'Cancelled',
-};
+import type { MyToolboxTalkListItem } from '@/types/toolbox-talks';
+import {
+  SCHEDULED_TALK_STATUS_VARIANTS as statusVariants,
+  SCHEDULED_TALK_STATUS_LABELS as statusLabels,
+} from '@/lib/constants/status';
 
 interface TalkCardProps {
   talk: MyToolboxTalkListItem;

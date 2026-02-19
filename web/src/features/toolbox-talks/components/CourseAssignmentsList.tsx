@@ -5,10 +5,6 @@ import { format } from 'date-fns';
 import {
   UserIcon,
   CalendarIcon,
-  CheckCircle2Icon,
-  ClockIcon,
-  PlayCircleIcon,
-  AlertTriangleIcon,
   TrashIcon,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -28,47 +24,17 @@ import {
 import type { CourseAssignmentListDto } from '@/lib/api/toolbox-talks/course-assignments';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import {
+  COURSE_ASSIGNMENT_STATUS_BADGE_CLASSES,
+  COURSE_ASSIGNMENT_STATUS_LABELS,
+  getCourseAssignmentStatusIcon as getStatusIcon,
+} from '@/lib/constants/status';
 
-type CourseAssignmentStatus = 'Assigned' | 'InProgress' | 'Completed' | 'Overdue';
+const getStatusBadgeVariant = (status: string) =>
+  COURSE_ASSIGNMENT_STATUS_BADGE_CLASSES[status as keyof typeof COURSE_ASSIGNMENT_STATUS_BADGE_CLASSES] ?? '';
 
-const getStatusBadgeVariant = (status: string) => {
-  switch (status) {
-    case 'Completed':
-      return 'bg-green-100 text-green-800 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400';
-    case 'Assigned':
-      return 'bg-blue-100 text-blue-800 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400';
-    case 'InProgress':
-      return 'bg-yellow-100 text-yellow-800 hover:bg-yellow-100 dark:bg-yellow-900/20 dark:text-yellow-400';
-    case 'Overdue':
-      return 'bg-red-100 text-red-800 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400';
-    default:
-      return '';
-  }
-};
-
-const getStatusIcon = (status: string) => {
-  switch (status) {
-    case 'Completed':
-      return <CheckCircle2Icon className="h-4 w-4 text-green-600" />;
-    case 'Assigned':
-      return <ClockIcon className="h-4 w-4 text-blue-600" />;
-    case 'InProgress':
-      return <PlayCircleIcon className="h-4 w-4 text-yellow-600" />;
-    case 'Overdue':
-      return <AlertTriangleIcon className="h-4 w-4 text-red-600" />;
-    default:
-      return null;
-  }
-};
-
-const getStatusLabel = (status: string) => {
-  switch (status) {
-    case 'InProgress':
-      return 'In Progress';
-    default:
-      return status;
-  }
-};
+const getStatusLabel = (status: string) =>
+  COURSE_ASSIGNMENT_STATUS_LABELS[status as keyof typeof COURSE_ASSIGNMENT_STATUS_LABELS] ?? status;
 
 interface CourseAssignmentsListProps {
   courseId: string;

@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Check, ChevronLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { ToolboxTalkFrequency } from '@/types/toolbox-talks';
 
 // Step components
 import { BasicInfoStep } from './steps/basic-info-step';
@@ -41,7 +42,7 @@ export interface ToolboxTalkWizardData {
   title: string;
   description: string;
   category: string;
-  frequency: 'Once' | 'Weekly' | 'Monthly' | 'Annually';
+  frequency: ToolboxTalkFrequency;
 
   // Step 2: Content
   videoSource: 'DirectUrl' | 'YouTube' | 'GoogleDrive' | 'Vimeo' | null;

@@ -32,8 +32,9 @@ import {
   useCompleteToolboxTalk,
 } from '@/lib/api/toolbox-talks/use-my-toolbox-talks';
 import { useGeolocation } from '@/hooks/use-geolocation';
-import type { MyToolboxTalk, ScheduledTalkStatus, QuizResult } from '@/types/toolbox-talks';
+import type { MyToolboxTalk, QuizResult } from '@/types/toolbox-talks';
 import { toast } from 'sonner';
+import { SCHEDULED_TALK_STATUS_VARIANTS as statusVariants } from '@/lib/constants/status';
 
 import { SectionContent } from './SectionContent';
 import { VideoPlayer } from './VideoPlayer';
@@ -44,15 +45,6 @@ import { CompletionSuccess } from './CompletionSuccess';
 
 // Steps in the talk completion flow
 type ViewerStep = 'video' | 'sections' | 'quiz' | 'signature' | 'complete';
-
-// Status badge variants
-const statusVariants: Record<ScheduledTalkStatus, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  Pending: 'secondary',
-  InProgress: 'default',
-  Completed: 'outline',
-  Overdue: 'destructive',
-  Cancelled: 'outline',
-};
 
 interface StepIndicatorProps {
   steps: { key: ViewerStep; label: string; icon: React.ElementType; available: boolean }[];

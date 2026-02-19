@@ -38,11 +38,11 @@ import { useCreateToolboxTalk, useUpdateToolboxTalk, TOOLBOX_TALKS_KEY } from '@
 import { generateSlides } from '@/lib/api/toolbox-talks/toolbox-talks';
 import type {
   ToolboxTalk,
-  ToolboxTalkFrequency,
   VideoSource,
   QuestionType,
 } from '@/types/toolbox-talks';
 import { toast } from 'sonner';
+import { FREQUENCY_VALUES, FREQUENCY_OPTIONS } from '@/lib/constants/frequency';
 
 // ============================================
 // Form Schema
@@ -72,7 +72,7 @@ const toolboxTalkFormSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200),
   description: z.string().max(2000).optional().nullable(),
   category: z.string().max(100).optional().nullable(),
-  frequency: z.enum(['Once', 'Weekly', 'Monthly', 'Annually'] as const),
+  frequency: z.enum(FREQUENCY_VALUES),
   videoUrl: z.string().url('Must be a valid URL').optional().nullable().or(z.literal('')),
   videoSource: z.enum(['None', 'YouTube', 'GoogleDrive', 'Vimeo', 'DirectUrl'] as const),
   attachmentUrl: z.string().url('Must be a valid URL').optional().nullable().or(z.literal('')),
@@ -110,14 +110,6 @@ type ToolboxTalkFormValues = z.infer<typeof toolboxTalkFormSchema>;
 // ============================================
 // Component
 // ============================================
-
-const FREQUENCY_OPTIONS: { value: ToolboxTalkFrequency; label: string }[] = [
-  { value: 'Once', label: 'Once' },
-  { value: 'Weekly', label: 'Weekly' },
-  { value: 'Monthly', label: 'Monthly' },
-  { value: 'Annually', label: 'Annually' },
-];
-
 
 const VIDEO_SOURCE_OPTIONS: { value: VideoSource; label: string; description?: string }[] = [
   { value: 'None', label: 'No Video' },

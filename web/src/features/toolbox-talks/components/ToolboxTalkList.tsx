@@ -30,6 +30,7 @@ import type {
 } from '@/types/toolbox-talks';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { FREQUENCY_OPTIONS } from '@/lib/constants/frequency';
 
 interface ToolboxTalkListProps {
   onSchedule?: (talk: ToolboxTalkListItem) => void;
@@ -37,12 +38,9 @@ interface ToolboxTalkListProps {
   basePath?: string;
 }
 
-const FREQUENCY_OPTIONS: { value: ToolboxTalkFrequency | 'all'; label: string }[] = [
+const FREQUENCY_FILTER_OPTIONS: { value: ToolboxTalkFrequency | 'all'; label: string }[] = [
   { value: 'all', label: 'All Frequencies' },
-  { value: 'Once', label: 'Once' },
-  { value: 'Weekly', label: 'Weekly' },
-  { value: 'Monthly', label: 'Monthly' },
-  { value: 'Annually', label: 'Annually' },
+  ...FREQUENCY_OPTIONS,
 ];
 
 const STATUS_OPTIONS = [
@@ -320,7 +318,7 @@ export function ToolboxTalkList({ onSchedule, basePath = '/admin/toolbox-talks' 
               <SelectValue placeholder="Frequency" />
             </SelectTrigger>
             <SelectContent>
-              {FREQUENCY_OPTIONS.map((option) => (
+              {FREQUENCY_FILTER_OPTIONS.map((option) => (
                 <SelectItem key={option.value} value={option.value}>
                   {option.label}
                 </SelectItem>

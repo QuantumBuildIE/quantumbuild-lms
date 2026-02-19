@@ -20,6 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useMyCourseAssignments } from '@/lib/api/toolbox-talks/use-course-assignments';
 import type { ToolboxTalkCourseAssignmentDto } from '@/lib/api/toolbox-talks/course-assignments';
 import { cn } from '@/lib/utils';
+import { getCourseAssignmentStatusBadge } from '@/lib/constants/status';
 
 const getEffectiveStatus = (assignment: ToolboxTalkCourseAssignmentDto) => {
   // Derive effective status from progress data as a fallback
@@ -34,20 +35,8 @@ const getEffectiveStatus = (assignment: ToolboxTalkCourseAssignmentDto) => {
   return 'Assigned';
 };
 
-const getStatusBadge = (assignment: ToolboxTalkCourseAssignmentDto) => {
-  const status = getEffectiveStatus(assignment);
-  switch (status) {
-    case 'Completed':
-      return <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800">Completed</Badge>;
-    case 'InProgress':
-      return <Badge variant="default">In Progress</Badge>;
-    case 'Overdue':
-      return <Badge variant="destructive">Overdue</Badge>;
-    case 'Assigned':
-    default:
-      return <Badge variant="secondary">Assigned</Badge>;
-  }
-};
+const getStatusBadge = (assignment: ToolboxTalkCourseAssignmentDto) =>
+  getCourseAssignmentStatusBadge(getEffectiveStatus(assignment));
 
 const getActionButton = (assignment: ToolboxTalkCourseAssignmentDto) => {
   const status = getEffectiveStatus(assignment);

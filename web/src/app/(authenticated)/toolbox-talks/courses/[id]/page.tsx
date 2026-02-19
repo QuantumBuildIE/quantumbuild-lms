@@ -22,20 +22,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useMyCourseAssignment } from '@/lib/api/toolbox-talks/use-course-assignments';
 import type { CourseScheduledTalkDto } from '@/lib/api/toolbox-talks/course-assignments';
 import { cn } from '@/lib/utils';
-
-const getStatusBadge = (status: string) => {
-  switch (status) {
-    case 'Completed':
-      return <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800">Completed</Badge>;
-    case 'InProgress':
-      return <Badge variant="default">In Progress</Badge>;
-    case 'Overdue':
-      return <Badge variant="destructive">Overdue</Badge>;
-    case 'Assigned':
-    default:
-      return <Badge variant="secondary">Assigned</Badge>;
-  }
-};
+import { getCourseAssignmentStatusBadge as getStatusBadge } from '@/lib/constants/status';
 
 interface TalkItemProps {
   talk: CourseScheduledTalkDto;

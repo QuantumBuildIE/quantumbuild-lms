@@ -12,6 +12,8 @@ export type ToolboxTalkScheduleStatus = 'Draft' | 'Active' | 'Completed' | 'Canc
 
 export type ScheduledTalkStatus = 'Pending' | 'InProgress' | 'Completed' | 'Overdue' | 'Cancelled';
 
+export type CourseAssignmentStatus = 'Assigned' | 'InProgress' | 'Completed' | 'Overdue';
+
 /** Status of a learning in the content creation workflow */
 export type ToolboxTalkStatus = 'Draft' | 'Processing' | 'ReadyForReview' | 'Published';
 

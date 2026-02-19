@@ -43,7 +43,6 @@ import {
 import { useToolboxTalks, useCreateToolboxTalkSchedule, useUpdateToolboxTalkSchedule, useToolboxTalkSchedule } from '@/lib/api/toolbox-talks';
 import { useAllEmployees } from '@/lib/api/admin/use-employees';
 import type {
-  ToolboxTalkFrequency,
   ToolboxTalkSchedule,
   ToolboxTalkListItem,
 } from '@/types/toolbox-talks';
@@ -51,6 +50,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircleIcon } from 'lucide-react';
+import { FREQUENCY_VALUES, FREQUENCY_OPTIONS } from '@/lib/constants/frequency';
 
 // ============================================
 // Schema
@@ -60,24 +60,13 @@ const scheduleFormSchema = z.object({
   toolboxTalkId: z.string().min(1, 'Please select a learning'),
   scheduledDate: z.date({ message: 'Scheduled date is required' }),
   endDate: z.date().optional().nullable(),
-  frequency: z.enum(['Once', 'Weekly', 'Monthly', 'Annually'] as const),
+  frequency: z.enum(FREQUENCY_VALUES),
   assignToAllEmployees: z.boolean(),
   employeeIds: z.array(z.string()).optional(),
   notes: z.string().max(500).optional().nullable(),
 });
 
 type ScheduleFormValues = z.infer<typeof scheduleFormSchema>;
-
-// ============================================
-// Component
-// ============================================
-
-const FREQUENCY_OPTIONS: { value: ToolboxTalkFrequency; label: string }[] = [
-  { value: 'Once', label: 'Once' },
-  { value: 'Weekly', label: 'Weekly' },
-  { value: 'Monthly', label: 'Monthly' },
-  { value: 'Annually', label: 'Annually' },
-];
 
 interface ScheduleDialogProps {
   open: boolean;

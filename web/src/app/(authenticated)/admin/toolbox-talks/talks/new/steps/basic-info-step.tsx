@@ -28,6 +28,7 @@ import { Loader2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { createToolboxTalk } from '@/lib/api/toolbox-talks';
 import { useLookupValues } from '@/hooks/use-lookups';
+import { FREQUENCY_VALUES, FREQUENCY_OPTIONS_WITH_DESCRIPTIONS } from '@/lib/constants/frequency';
 import type { ToolboxTalkWizardData } from '../page';
 
 const basicInfoSchema = z.object({
@@ -40,18 +41,10 @@ const basicInfoSchema = z.object({
     .min(10, 'Description must be at least 10 characters')
     .max(2000, 'Description must be less than 2000 characters'),
   category: z.string().min(1, 'Please select a category'),
-  frequency: z.enum(['Once', 'Weekly', 'Monthly', 'Annually']),
+  frequency: z.enum(FREQUENCY_VALUES),
 });
 
 type BasicInfoForm = z.infer<typeof basicInfoSchema>;
-
-
-const FREQUENCY_OPTIONS = [
-  { value: 'Once', label: 'Once', description: 'One-time training' },
-  { value: 'Weekly', label: 'Weekly', description: 'Repeat every week' },
-  { value: 'Monthly', label: 'Monthly', description: 'Repeat every month' },
-  { value: 'Annually', label: 'Annually', description: 'Repeat every year' },
-] as const;
 
 interface BasicInfoStepProps {
   data: ToolboxTalkWizardData;
@@ -222,7 +215,7 @@ export function BasicInfoStep({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {FREQUENCY_OPTIONS.map((option) => (
+                      {FREQUENCY_OPTIONS_WITH_DESCRIPTIONS.map((option) => (
                         <SelectItem key={option.value} value={option.value}>
                           <div className="flex flex-col">
                             <span>{option.label}</span>
