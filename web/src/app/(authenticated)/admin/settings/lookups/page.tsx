@@ -19,7 +19,7 @@ export default function AdminSettingsLookupsPage() {
       </div>
 
       {isLoading ? (
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => (
             <Card key={i}>
               <CardHeader>
@@ -36,7 +36,7 @@ export default function AdminSettingsLookupsPage() {
           ))}
         </div>
       ) : lookupCategories && lookupCategories.length > 0 ? (
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {lookupCategories.map((category) => (
             <LookupCategorySection key={category.id} category={category} />
           ))}
