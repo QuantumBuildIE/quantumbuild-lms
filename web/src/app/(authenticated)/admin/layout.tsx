@@ -10,6 +10,7 @@ const adminNavItems = [
   { href: "/admin/employees", label: "Employees", superUserOnly: false, tenantScoped: true },
   { href: "/admin/users", label: "Users", superUserOnly: false, tenantScoped: true },
   { href: "/admin/toolbox-talks", label: "Learnings", superUserOnly: false, tenantScoped: true },
+  { href: "/admin/settings", label: "Settings", superUserOnly: false, tenantScoped: true },
   { href: "/admin/tenants", label: "Tenant Management", superUserOnly: true, tenantScoped: false },
 ];
 

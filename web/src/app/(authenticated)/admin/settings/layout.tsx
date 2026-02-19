@@ -6,44 +6,37 @@ import Link from "next/link";
 import { useHasAnyPermission } from "@/lib/auth/use-auth";
 import { cn } from "@/lib/utils";
 
-const adminToolboxTalksNavItems = [
-  { href: "/admin/toolbox-talks", label: "Overview", exact: true },
-  { href: "/admin/toolbox-talks/talks", label: "Learnings" },
-  { href: "/admin/toolbox-talks/courses", label: "Courses" },
-  { href: "/admin/toolbox-talks/schedules", label: "Schedules" },
-  { href: "/admin/toolbox-talks/assignments", label: "Assignments" },
-  { href: "/admin/toolbox-talks/reports", label: "Reports" },
-  { href: "/admin/toolbox-talks/certificates", label: "Certificates" },
+const settingsNavItems = [
+  { href: "/admin/settings", label: "General", exact: true },
+  { href: "/admin/settings/languages", label: "Languages" },
+  { href: "/admin/settings/lookups", label: "Lookups" },
 ];
 
-// Permissions that grant access to admin learnings management
-const learningsAdminPermissions = [
-  "Learnings.View",
-  "Learnings.Manage",
-  "Learnings.Schedule",
+const settingsPermissions = [
   "Learnings.Admin",
+  "Core.ManageUsers",
 ];
 
-export default function AdminToolboxTalksLayout({
+export default function AdminSettingsLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const hasAdminPermission = useHasAnyPermission(learningsAdminPermissions);
+  const hasPermission = useHasAnyPermission(settingsPermissions);
 
   useEffect(() => {
-    if (!hasAdminPermission) {
+    if (!hasPermission) {
       router.replace("/dashboard");
     }
-  }, [hasAdminPermission, router]);
+  }, [hasPermission, router]);
 
-  if (!hasAdminPermission) {
+  if (!hasPermission) {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="text-muted-foreground">
-          You do not have permission to manage Learnings.
+          You do not have permission to access Settings.
         </div>
       </div>
     );
@@ -63,12 +56,12 @@ export default function AdminToolboxTalksLayout({
           Administration
         </Link>
         <span>/</span>
-        <span className="text-foreground">Learnings</span>
+        <span className="text-foreground">Settings</span>
       </div>
 
       <nav className="border-b bg-background">
         <div className="flex h-10 items-center gap-4 overflow-x-auto sm:gap-6 scrollbar-hide">
-          {adminToolboxTalksNavItems.map((item) => (
+          {settingsNavItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}

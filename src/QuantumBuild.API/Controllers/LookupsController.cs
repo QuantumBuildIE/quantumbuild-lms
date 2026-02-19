@@ -39,7 +39,7 @@ public class LookupsController : ControllerBase
     /// Get all lookup categories
     /// </summary>
     [HttpGet("categories")]
-    [Authorize(Policy = "Core.Admin")]
+    [Authorize(Policy = "Learnings.Admin")]
     public async Task<IActionResult> GetCategories()
     {
         var result = await _lookupService.GetCategoriesAsync();
@@ -54,7 +54,7 @@ public class LookupsController : ControllerBase
     /// Create a tenant custom lookup value
     /// </summary>
     [HttpPost("{categoryName}/values")]
-    [Authorize(Policy = "Core.Admin")]
+    [Authorize(Policy = "Learnings.Admin")]
     public async Task<IActionResult> CreateValue(string categoryName, [FromBody] CreateTenantLookupValueDto dto)
     {
         var result = await _lookupService.CreateTenantValueAsync(categoryName, dto);
@@ -69,7 +69,7 @@ public class LookupsController : ControllerBase
     /// Update a tenant lookup value
     /// </summary>
     [HttpPut("values/{id:guid}")]
-    [Authorize(Policy = "Core.Admin")]
+    [Authorize(Policy = "Learnings.Admin")]
     public async Task<IActionResult> UpdateValue(Guid id, [FromBody] UpdateTenantLookupValueDto dto)
     {
         var result = await _lookupService.UpdateTenantValueAsync(id, dto);
@@ -84,7 +84,7 @@ public class LookupsController : ControllerBase
     /// Delete a tenant custom lookup value
     /// </summary>
     [HttpDelete("values/{id:guid}")]
-    [Authorize(Policy = "Core.Admin")]
+    [Authorize(Policy = "Learnings.Admin")]
     public async Task<IActionResult> DeleteValue(Guid id)
     {
         var result = await _lookupService.DeleteTenantValueAsync(id);
@@ -99,7 +99,7 @@ public class LookupsController : ControllerBase
     /// Toggle a global lookup value for the current tenant (enable/disable)
     /// </summary>
     [HttpPut("{categoryName}/values/{lookupValueId:guid}/toggle")]
-    [Authorize(Policy = "Core.Admin")]
+    [Authorize(Policy = "Learnings.Admin")]
     public async Task<IActionResult> ToggleGlobalValue(string categoryName, Guid lookupValueId, [FromBody] ToggleGlobalValueDto dto)
     {
         var result = await _lookupService.ToggleGlobalValueAsync(categoryName, lookupValueId, dto.IsEnabled);
