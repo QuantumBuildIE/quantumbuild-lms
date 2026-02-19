@@ -155,9 +155,11 @@ public class MissingTranslationsJob
         CancellationToken cancellationToken)
     {
         // Convert codes to language names
-        var missingLanguageNames = missingLanguageCodes
-            .Select(code => _languageCodeService.GetLanguageName(code))
-            .ToList();
+        var missingLanguageNames = new List<string>();
+        foreach (var code in missingLanguageCodes)
+        {
+            missingLanguageNames.Add(await _languageCodeService.GetLanguageNameAsync(code));
+        }
 
         _logger.LogInformation(
             "Generating missing content translations for ToolboxTalk {ToolboxTalkId}: {MissingLanguages}",

@@ -538,9 +538,9 @@ public class ContentExtractionService : IContentExtractionService
                     continue;
                 }
 
-                var languageCode = _languageCodeService.GetLanguageCode(language);
+                var languageCode = await _languageCodeService.GetLanguageCodeAsync(language);
                 var languageName = language.Length <= 3
-                    ? _languageCodeService.GetLanguageName(language)
+                    ? await _languageCodeService.GetLanguageNameAsync(language)
                     : language;
 
                 subtitleJob.Translations.Add(new SubtitleTranslation
@@ -700,7 +700,7 @@ public class ContentExtractionService : IContentExtractionService
                 // If it's a language code (2-3 chars), convert to name
                 if (lang!.Length <= 3)
                 {
-                    var name = _languageCodeService.GetLanguageName(lang);
+                    var name = await _languageCodeService.GetLanguageNameAsync(lang);
                     normalizedLanguages.Add(name);
                     _logger.LogDebug(
                         "[Auto-Transcription] Converted language code '{Code}' to name '{Name}'",

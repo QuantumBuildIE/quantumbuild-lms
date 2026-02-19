@@ -52,17 +52,21 @@ public class SubtitleProcessingController : ControllerBase
         try
         {
             // Validate languages
-            var invalidLanguages = request.TargetLanguages
-                .Where(l => !_languageCodeService.IsValidLanguage(l))
-                .ToList();
+            var invalidLanguages = new List<string>();
+            foreach (var l in request.TargetLanguages)
+            {
+                if (!await _languageCodeService.IsValidLanguageAsync(l))
+                    invalidLanguages.Add(l);
+            }
 
             if (invalidLanguages.Count != 0)
             {
+                var allLanguages = await _languageCodeService.GetAllLanguagesAsync();
                 return BadRequest(new
                 {
                     Error = "Invalid languages",
                     InvalidLanguages = invalidLanguages,
-                    ValidLanguages = _languageCodeService.GetAllLanguages().Keys
+                    ValidLanguages = allLanguages.Keys
                 });
             }
 
@@ -306,7 +310,7 @@ public class SubtitleProcessingController : ControllerBase
             if (lang.Language.Length == 2 || lang.Language.Length == 3)
             {
                 // It's likely a code, try to get the name
-                var name = _languageCodeService.GetLanguageName(lang.Language);
+                var name = await _languageCodeService.GetLanguageNameAsync(lang.Language);
                 if (name != lang.Language)
                 {
                     lang.LanguageCode = lang.Language;
@@ -316,11 +320,12 @@ public class SubtitleProcessingController : ControllerBase
             }
 
             // It's a name, get the code
-            lang.LanguageCode = _languageCodeService.GetLanguageCode(lang.Language);
+            lang.LanguageCode = await _languageCodeService.GetLanguageCodeAsync(lang.Language);
         }
 
         // Get all supported languages
-        var allLanguages = _languageCodeService.GetAllLanguages()
+        var supportedLanguages = await _languageCodeService.GetAllLanguagesAsync();
+        var allLanguages = supportedLanguages
             .Select(kvp => new SupportedLanguageInfo
             {
                 Language = kvp.Key,

@@ -84,17 +84,19 @@ public class GetToolboxTalkPreviewQueryHandler
         }).ToList();
 
         // Build available translations list
-        var availableTranslations = (talk.Translations ?? Enumerable.Empty<Domain.Entities.ToolboxTalkTranslation>())
-            .Select(t => new ToolboxTalkTranslationDto
+        var availableTranslations = new List<ToolboxTalkTranslationDto>();
+        foreach (var t in talk.Translations ?? Enumerable.Empty<Domain.Entities.ToolboxTalkTranslation>())
+        {
+            availableTranslations.Add(new ToolboxTalkTranslationDto
             {
                 LanguageCode = t.LanguageCode,
-                Language = _languageCodeService.GetLanguageName(t.LanguageCode),
+                Language = await _languageCodeService.GetLanguageNameAsync(t.LanguageCode),
                 TranslatedTitle = t.TranslatedTitle,
                 TranslatedAt = t.TranslatedAt,
                 TranslationProvider = t.TranslationProvider
-            })
-            .OrderBy(t => t.Language)
-            .ToList();
+            });
+        }
+        availableTranslations = availableTranslations.OrderBy(t => t.Language).ToList();
 
         // Get translated slideshow HTML if available
         var slideshowHtml = talk.SlideshowHtml;

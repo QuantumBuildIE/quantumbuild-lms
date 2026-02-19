@@ -463,9 +463,11 @@ public class ContentGenerationJob
 
             // Convert language codes (e.g. "pl") to language names (e.g. "Polish")
             // as the translation command expects language names
-            var languageNames = missingLanguageCodes
-                .Select(code => _languageCodeService.GetLanguageName(code))
-                .ToList();
+            var languageNames = new List<string>();
+            foreach (var code in missingLanguageCodes)
+            {
+                languageNames.Add(await _languageCodeService.GetLanguageNameAsync(code));
+            }
 
             _logger.LogInformation(
                 "[DEBUG] Converted to language names: {Names} (from codes: {Codes})",

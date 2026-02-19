@@ -117,7 +117,7 @@ public class SubtitleProcessingOrchestrator : ISubtitleProcessingOrchestrator
             job.Translations.Add(new SubtitleTranslation
             {
                 Language = language,
-                LanguageCode = _languageCodeService.GetLanguageCode(language),
+                LanguageCode = await _languageCodeService.GetLanguageCodeAsync(language),
                 Status = SubtitleTranslationStatus.Pending,
                 TotalSubtitles = 0,
                 SubtitlesProcessed = 0
@@ -601,7 +601,7 @@ public class SubtitleProcessingOrchestrator : ISubtitleProcessingOrchestrator
         {
             try
             {
-                var languageName = _languageCodeService.GetLanguageName(languageCode);
+                var languageName = await _languageCodeService.GetLanguageNameAsync(languageCode);
 
                 var translation = new SubtitleTranslation
                 {

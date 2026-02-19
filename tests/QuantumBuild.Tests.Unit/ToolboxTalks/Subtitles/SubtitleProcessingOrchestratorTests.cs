@@ -56,9 +56,9 @@ public class SubtitleProcessingOrchestratorTests
         });
 
         // Setup default language code mapping
-        _languageCodeServiceMock.Setup(x => x.GetLanguageCode("Spanish")).Returns("es");
-        _languageCodeServiceMock.Setup(x => x.GetLanguageCode("Polish")).Returns("pl");
-        _languageCodeServiceMock.Setup(x => x.GetLanguageCode("French")).Returns("fr");
+        _languageCodeServiceMock.Setup(x => x.GetLanguageCodeAsync("Spanish")).ReturnsAsync("es");
+        _languageCodeServiceMock.Setup(x => x.GetLanguageCodeAsync("Polish")).ReturnsAsync("pl");
+        _languageCodeServiceMock.Setup(x => x.GetLanguageCodeAsync("French")).ReturnsAsync("fr");
 
         SetupDbContextMocks();
     }

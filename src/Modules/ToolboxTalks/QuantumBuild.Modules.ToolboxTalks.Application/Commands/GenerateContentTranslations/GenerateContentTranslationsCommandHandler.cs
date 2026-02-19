@@ -66,7 +66,7 @@ public class GenerateContentTranslationsCommandHandler
         }
 
         // Get the source language name from the code
-        var sourceLanguageName = _languageCodeService.GetLanguageName(toolboxTalk.SourceLanguageCode);
+        var sourceLanguageName = await _languageCodeService.GetLanguageNameAsync(toolboxTalk.SourceLanguageCode);
 
         _logger.LogInformation(
             "Loaded ToolboxTalk '{Title}'. SourceLanguage: {SourceLanguage} ({SourceCode}), " +
@@ -82,7 +82,7 @@ public class GenerateContentTranslationsCommandHandler
         foreach (var language in request.TargetLanguages)
         {
             // Skip translation if target language is the same as source language
-            var targetCode = _languageCodeService.GetLanguageCode(language);
+            var targetCode = await _languageCodeService.GetLanguageCodeAsync(language);
             if (string.Equals(targetCode, toolboxTalk.SourceLanguageCode, StringComparison.OrdinalIgnoreCase))
             {
                 _logger.LogInformation(
@@ -135,7 +135,7 @@ public class GenerateContentTranslationsCommandHandler
         string sourceLanguage,
         CancellationToken cancellationToken)
     {
-        var languageCode = _languageCodeService.GetLanguageCode(language);
+        var languageCode = await _languageCodeService.GetLanguageCodeAsync(language);
 
         _logger.LogInformation(
             "Translating ToolboxTalk {ToolboxTalkId} to {Language} ({LanguageCode})",

@@ -115,14 +115,7 @@ public class GetToolboxTalkByIdQueryHandler : IRequestHandler<GetToolboxTalkById
                 VideoTimestamp = q.VideoTimestamp,
                 IsFromVideoFinalPortion = q.IsFromVideoFinalPortion
             }).ToList(),
-            Translations = talk.Translations.Select(t => new ToolboxTalkTranslationDto
-            {
-                LanguageCode = t.LanguageCode,
-                Language = _languageCodeService.GetLanguageName(t.LanguageCode),
-                TranslatedTitle = t.TranslatedTitle,
-                TranslatedAt = t.TranslatedAt,
-                TranslationProvider = t.TranslationProvider
-            }).OrderBy(t => t.Language).ToList(),
+            Translations = await BuildTranslationDtosAsync(talk.Translations),
             CompletionStats = stats != null ? new ToolboxTalkCompletionStatsDto
             {
                 TotalAssignments = stats.TotalAssignments,
@@ -197,5 +190,23 @@ public class GetToolboxTalkByIdQueryHandler : IRequestHandler<GetToolboxTalkById
         {
             return null;
         }
+    }
+
+    private async Task<List<ToolboxTalkTranslationDto>> BuildTranslationDtosAsync(
+        IEnumerable<Domain.Entities.ToolboxTalkTranslation> translations)
+    {
+        var dtos = new List<ToolboxTalkTranslationDto>();
+        foreach (var t in translations)
+        {
+            dtos.Add(new ToolboxTalkTranslationDto
+            {
+                LanguageCode = t.LanguageCode,
+                Language = await _languageCodeService.GetLanguageNameAsync(t.LanguageCode),
+                TranslatedTitle = t.TranslatedTitle,
+                TranslatedAt = t.TranslatedAt,
+                TranslationProvider = t.TranslationProvider
+            });
+        }
+        return dtos.OrderBy(t => t.Language).ToList();
     }
 }
