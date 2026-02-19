@@ -42,6 +42,7 @@ public static class DataSeeder
             await EnsureAdminEmployeeAsync(context, userManager, logger);
             await SeedLookupCategoriesAsync(context, logger);
             await SeedLanguageLookupAsync(context, logger);
+            await SeedTrainingCategoriesAsync(context, logger);
 
             logger.LogInformation("Database seeding completed successfully");
         }
@@ -524,6 +525,86 @@ public static class DataSeeder
         else
         {
             logger.LogInformation("All language lookup values already exist, skipping");
+        }
+    }
+
+    private static async Task SeedTrainingCategoriesAsync(DbContext context, ILogger logger)
+    {
+        var categories = context.Set<LookupCategory>();
+        var tenantValues = context.Set<TenantLookupValue>();
+
+        var category = await categories
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(c => c.Name == "TrainingCategory" && !c.IsDeleted);
+
+        if (category == null)
+        {
+            logger.LogInformation("TrainingCategory lookup category not found, skipping training category seeding");
+            return;
+        }
+
+        // Check if QUANTUMBUILD tenant already has training categories
+        var existingCodes = await tenantValues
+            .IgnoreQueryFilters()
+            .Where(v => v.TenantId == DefaultTenantId && v.CategoryId == category.Id && !v.IsDeleted)
+            .Select(v => v.Code)
+            .ToListAsync();
+
+        var trainingCategories = new[]
+        {
+            new { Code = "working-at-heights", Name = "Working at Heights" },
+            new { Code = "fire-safety", Name = "Fire Safety" },
+            new { Code = "manual-handling", Name = "Manual Handling" },
+            new { Code = "ppe", Name = "PPE" },
+            new { Code = "electrical-safety", Name = "Electrical Safety" },
+            new { Code = "hazardous-substances", Name = "Hazardous Substances" },
+            new { Code = "confined-spaces", Name = "Confined Spaces" },
+            new { Code = "machinery-safety", Name = "Machinery Safety" },
+            new { Code = "slips-trips-and-falls", Name = "Slips Trips and Falls" },
+            new { Code = "first-aid", Name = "First Aid" },
+            new { Code = "emergency-procedures", Name = "Emergency Procedures" },
+            new { Code = "site-induction", Name = "Site Induction" },
+            new { Code = "environmental", Name = "Environmental" },
+            new { Code = "general-safety", Name = "General Safety" },
+            new { Code = "other", Name = "Other" },
+        };
+
+        var newValues = new List<TenantLookupValue>();
+        var sortOrder = 0;
+
+        foreach (var cat in trainingCategories)
+        {
+            if (existingCodes.Contains(cat.Code))
+            {
+                sortOrder++;
+                continue;
+            }
+
+            newValues.Add(new TenantLookupValue
+            {
+                Id = Guid.NewGuid(),
+                TenantId = DefaultTenantId,
+                CategoryId = category.Id,
+                LookupValueId = null, // Custom tenant value, not a global override
+                Code = cat.Code,
+                Name = cat.Name,
+                SortOrder = sortOrder,
+                IsEnabled = true,
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = "system"
+            });
+            sortOrder++;
+        }
+
+        if (newValues.Count > 0)
+        {
+            await tenantValues.AddRangeAsync(newValues);
+            await context.SaveChangesAsync();
+            logger.LogInformation("Seeded {Count} training categories for QUANTUMBUILD tenant", newValues.Count);
+        }
+        else
+        {
+            logger.LogInformation("Training categories already seeded for QUANTUMBUILD tenant, skipping");
         }
     }
 
