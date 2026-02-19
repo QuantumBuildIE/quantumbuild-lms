@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Subtitles;
+using QuantumBuild.Modules.ToolboxTalks.Application.Prompts;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Subtitles;
@@ -39,7 +40,7 @@ public class ClaudeTranslationService : ITranslationService
         {
             _logger.LogInformation("Translating SRT batch to {Language}", targetLanguage);
 
-            var prompt = BuildTranslationPrompt(srtContent, targetLanguage);
+            var prompt = TranslationPrompts.BuildSrtTranslationPrompt(srtContent, targetLanguage);
 
             var requestBody = new
             {
@@ -95,19 +96,6 @@ public class ClaudeTranslationService : ITranslationService
             _logger.LogError(ex, "Translation to {Language} failed", targetLanguage);
             return TranslationResult.FailureResult($"Translation failed: {ex.Message}");
         }
-    }
-
-    /// <summary>
-    /// Builds the translation prompt for Claude.
-    /// Instructs the model to preserve SRT formatting while translating only the text.
-    /// </summary>
-    private static string BuildTranslationPrompt(string srtContent, string targetLanguage)
-    {
-        return $@"Translate the following SRT subtitle text to {targetLanguage}.
-Keep the exact same format with numbers and timestamps, only translate the text.
-Return only the translated SRT, nothing else:
-
-{srtContent}";
     }
 
     /// <summary>

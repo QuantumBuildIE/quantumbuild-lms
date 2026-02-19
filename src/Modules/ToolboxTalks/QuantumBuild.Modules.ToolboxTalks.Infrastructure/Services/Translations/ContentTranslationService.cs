@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Translations;
+using QuantumBuild.Modules.ToolboxTalks.Application.Prompts;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Translations;
@@ -53,7 +54,7 @@ public class ContentTranslationService : IContentTranslationService
                 source, targetLanguage, isHtml, text.Length,
                 text.Length > 80 ? text.Substring(0, 80) + "..." : text);
 
-            var prompt = BuildTranslationPrompt(text, source, targetLanguage, isHtml);
+            var prompt = TranslationPrompts.BuildContentTranslationPrompt(text, source, targetLanguage, isHtml);
             var translatedText = await CallClaudeApiAsync(prompt, cancellationToken);
 
             if (string.IsNullOrWhiteSpace(translatedText))
@@ -154,7 +155,7 @@ public class ContentTranslationService : IContentTranslationService
         {
             _logger.LogInformation("Translating batch of {Count} items from {Source} to {Language}", itemsList.Count, source, targetLanguage);
 
-            var prompt = BuildBatchTranslationPrompt(itemsList, source, targetLanguage);
+            var prompt = TranslationPrompts.BuildBatchTranslationPrompt(itemsList, source, targetLanguage);
             var responseText = await CallClaudeApiAsync(prompt, cancellationToken);
 
             var results = ParseBatchResponse(responseText, itemsList);
@@ -224,56 +225,6 @@ public class ContentTranslationService : IContentTranslationService
             string.IsNullOrWhiteSpace(parsedResult), parsedResult?.Length ?? 0);
 
         return parsedResult;
-    }
-
-    /// <summary>
-    /// Builds the translation prompt for plain text or HTML content.
-    /// </summary>
-    private static string BuildTranslationPrompt(string text, string sourceLanguage, string targetLanguage, bool isHtml)
-    {
-        if (isHtml)
-        {
-            return $@"Translate the following {sourceLanguage} HTML content to {targetLanguage}.
-IMPORTANT: Keep all HTML tags exactly as they are. Only translate the text content between tags.
-Return only the translated HTML, nothing else.
-
-{text}";
-        }
-
-        return $@"Translate the following {sourceLanguage} text to {targetLanguage}.
-Return only the translated text, nothing else.
-
-{text}";
-    }
-
-    /// <summary>
-    /// Builds a batch translation prompt for multiple items.
-    /// </summary>
-    private static string BuildBatchTranslationPrompt(List<TranslationItem> items, string sourceLanguage, string targetLanguage)
-    {
-        var sb = new StringBuilder();
-        sb.AppendLine($"Translate the following {sourceLanguage} items to {targetLanguage}.");
-        sb.AppendLine("Return the translations as a JSON array with the same order as the input.");
-        sb.AppendLine("Each element should be the translated text only.");
-        sb.AppendLine("For HTML content (marked with [HTML]), preserve all HTML tags and only translate the text.");
-        sb.AppendLine();
-        sb.AppendLine("Items to translate:");
-        sb.AppendLine("```");
-
-        for (int i = 0; i < items.Count; i++)
-        {
-            var item = items[i];
-            var prefix = item.IsHtml ? "[HTML] " : "";
-            var context = !string.IsNullOrEmpty(item.Context) ? $" ({item.Context})" : "";
-            sb.AppendLine($"{i + 1}. {prefix}{item.Text}{context}");
-        }
-
-        sb.AppendLine("```");
-        sb.AppendLine();
-        sb.AppendLine("Return only a valid JSON array of translated strings, like:");
-        sb.AppendLine("[\"translated text 1\", \"translated text 2\", ...]");
-
-        return sb.ToString();
     }
 
     /// <summary>
