@@ -30,7 +30,9 @@ builder.Services.AddCors(options =>
     {
         policy.WithOrigins(
                 "http://localhost:3000",
-                "https://quantumbuild-lms-web-production.up.railway.app"
+                "https://quantumbuild-lms-web-production.up.railway.app",
+                "https://quantumbuild-lms-web-development.up.railway.app",
+                "https://quantumbuild-lms-web-demo.up.railway.app"
               )
               .AllowAnyHeader()
               .AllowAnyMethod()
