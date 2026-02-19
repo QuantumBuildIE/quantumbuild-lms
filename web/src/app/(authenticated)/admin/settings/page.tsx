@@ -8,21 +8,21 @@ export default function AdminSettingsGeneralPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">General Settings</h1>
         <p className="text-muted-foreground">
-          Manage tenant name, contact details, and general configuration
+          Manage company name, contact details, and general configuration
         </p>
       </div>
 
       <div className="grid gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>Tenant Information</CardTitle>
+            <CardTitle>Company Information</CardTitle>
             <CardDescription>
               Organisation name, contact email, and other details
             </CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Tenant configuration coming soon.
+              Company configuration coming soon.
             </p>
           </CardContent>
         </Card>
