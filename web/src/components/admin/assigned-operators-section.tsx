@@ -22,7 +22,7 @@ import {
   useUnassignOperator,
 } from "@/lib/api/admin/use-supervisor-assignments";
 import type { SupervisorOperatorDto } from "@/lib/api/admin/supervisor-assignments";
-import { usePermission } from "@/lib/auth/use-auth";
+import { useAuth, usePermission, useIsSuperUser } from "@/lib/auth/use-auth";
 import { toast } from "sonner";
 import { Users, Plus, Trash2 } from "lucide-react";
 
@@ -31,7 +31,11 @@ interface AssignedOperatorsSectionProps {
 }
 
 export function AssignedOperatorsSection({ employeeId }: AssignedOperatorsSectionProps) {
-  const canManage = usePermission("Core.ManageEmployees");
+  const { user } = useAuth();
+  const isSuperUser = useIsSuperUser();
+  const hasManageEmployees = usePermission("Core.ManageEmployees");
+  const isOwnProfile = user?.employeeId === employeeId;
+  const canManage = isSuperUser || hasManageEmployees || isOwnProfile;
   const { data: operators = [], isLoading } = useAssignedOperators(employeeId);
 
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
@@ -151,7 +155,7 @@ export function AssignedOperatorsSection({ employeeId }: AssignedOperatorsSectio
   );
 }
 
-function AssignOperatorsDialog({
+export function AssignOperatorsDialog({
   supervisorId,
   open,
   onOpenChange,

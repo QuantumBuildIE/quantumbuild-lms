@@ -214,6 +214,9 @@ export default function EmployeesPage() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem asChild>
+                <Link href={`/admin/employees/${employee.id}`}>View</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
                 <Link href={`/admin/employees/${employee.id}/edit`}>Edit</Link>
               </DropdownMenuItem>
               {employee.hasUserAccount && (
@@ -303,6 +306,7 @@ export default function EmployeesPage() {
         sortColumn={sortColumn}
         sortDirection={sortDirection}
         onSort={handleSort}
+        onRowClick={(employee) => router.push(`/admin/employees/${employee.id}`)}
       />
     </div>
   );

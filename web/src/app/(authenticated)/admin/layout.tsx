@@ -7,7 +7,7 @@ import { useAuth, useHasAnyPermission, useIsSuperUser } from "@/lib/auth/use-aut
 import { cn } from "@/lib/utils";
 
 const adminNavItems = [
-  { href: "/admin/employees", label: "Employees", superUserOnly: false, tenantScoped: true, permissions: ["Core.ManageEmployees"] },
+  { href: "/admin/employees", label: "Employees", superUserOnly: false, tenantScoped: true, permissions: ["Core.ManageUsers", "Core.ManageEmployees"] },
   { href: "/admin/users", label: "Users", superUserOnly: false, tenantScoped: true, permissions: ["Core.ManageUsers"] },
   { href: "/admin/toolbox-talks", label: "Learnings", superUserOnly: false, tenantScoped: true, permissions: ["Learnings.View", "Learnings.Manage", "Learnings.Schedule", "Learnings.Admin"] },
   { href: "/admin/settings", label: "Settings", superUserOnly: false, tenantScoped: true, permissions: ["Learnings.Admin", "Core.ManageUsers"] },

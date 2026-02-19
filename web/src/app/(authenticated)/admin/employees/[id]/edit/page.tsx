@@ -5,10 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmployeeForm } from "@/components/admin/employee-form";
-import { EmployeeCertificatesSection } from "@/components/admin/employee-certificates-section";
 import { useEmployee } from "@/lib/api/admin/use-employees";
-import { useUser } from "@/lib/api/admin/use-users";
-import { AssignedOperatorsSection } from "@/components/admin/assigned-operators-section";
 import { ChevronLeft } from "lucide-react";
 
 export default function EditEmployeePage() {
@@ -17,16 +14,13 @@ export default function EditEmployeePage() {
   const employeeId = params.id as string;
 
   const { data: employee, isLoading, error } = useEmployee(employeeId);
-  const linkedUserId = employee?.linkedUserId ?? "";
-  const { data: linkedUser } = useUser(linkedUserId);
-  const isSupervisor = linkedUser?.roles?.some((r) => r.name === "Supervisor") ?? false;
 
   const handleSuccess = () => {
-    router.push("/admin/employees");
+    router.push(`/admin/employees/${employeeId}`);
   };
 
   const handleCancel = () => {
-    router.back();
+    router.push(`/admin/employees/${employeeId}`);
   };
 
   if (isLoading) {
@@ -34,7 +28,7 @@ export default function EditEmployeePage() {
       <div className="space-y-6">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" asChild>
-            <Link href="/admin/employees">
+            <Link href={`/admin/employees/${employeeId}`}>
               <ChevronLeft className="h-4 w-4" />
             </Link>
           </Button>
@@ -90,7 +84,7 @@ export default function EditEmployeePage() {
     <div className="space-y-6">
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" asChild>
-          <Link href="/admin/employees">
+          <Link href={`/admin/employees/${employeeId}`}>
             <ChevronLeft className="h-4 w-4" />
           </Link>
         </Button>
@@ -113,16 +107,6 @@ export default function EditEmployeePage() {
           <EmployeeForm employee={employee} onSuccess={handleSuccess} onCancel={handleCancel} />
         </CardContent>
       </Card>
-
-      <div className="max-w-2xl">
-        <EmployeeCertificatesSection employeeId={employeeId} />
-      </div>
-
-      {isSupervisor && (
-        <div className="max-w-2xl">
-          <AssignedOperatorsSection employeeId={employeeId} />
-        </div>
-      )}
     </div>
   );
 }

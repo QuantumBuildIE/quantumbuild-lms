@@ -126,7 +126,7 @@ public static class DataSeeder
         {
             new { Name = "SuperUser", Description = "Super user with all permissions and cross-tenant access" },
             new { Name = "Admin", Description = "Full system administrator with all permissions except tenant management" },
-            new { Name = "Supervisor", Description = "Supervisor with learnings view/schedule and employee/site management" },
+            new { Name = "Supervisor", Description = "Supervisor with learnings view and schedule" },
             new { Name = "Operator", Description = "Operator with view-only access to learnings" }
         };
 
@@ -206,6 +206,45 @@ public static class DataSeeder
         else
         {
             logger.LogInformation("All role permissions already assigned, skipping");
+        }
+
+        // Clean up permissions that should no longer be assigned to roles
+        await CleanupSupervisorPermissionsAsync(context, roles, allPermissions, logger);
+    }
+
+    /// <summary>
+    /// Remove Core.ManageEmployees and Core.ManageSites from the Supervisor role.
+    /// These were previously assigned but Supervisors now manage their team
+    /// exclusively through the My Team page and assignment endpoints.
+    /// </summary>
+    private static async Task CleanupSupervisorPermissionsAsync(
+        DbContext context, List<Role> roles, List<Permission> allPermissions, ILogger logger)
+    {
+        var supervisorRole = roles.FirstOrDefault(r => r.Name == "Supervisor");
+        if (supervisorRole == null) return;
+
+        var permissionsToRemove = new[]
+        {
+            Permissions.Core.ManageEmployees,
+            Permissions.Core.ManageSites
+        };
+
+        var permissionIdsToRemove = allPermissions
+            .Where(p => permissionsToRemove.Contains(p.Name))
+            .Select(p => p.Id)
+            .ToHashSet();
+
+        var staleAssignments = supervisorRole.RolePermissions
+            .Where(rp => permissionIdsToRemove.Contains(rp.PermissionId))
+            .ToList();
+
+        if (staleAssignments.Count > 0)
+        {
+            context.Set<RolePermission>().RemoveRange(staleAssignments);
+            await context.SaveChangesAsync();
+            logger.LogInformation(
+                "Removed {Count} stale permissions from Supervisor role (ManageEmployees, ManageSites)",
+                staleAssignments.Count);
         }
     }
 
@@ -328,9 +367,7 @@ public static class DataSeeder
 
             "Supervisor" => allPermissions.Where(p =>
                 p.Name == Permissions.Learnings.View ||
-                p.Name == Permissions.Learnings.Schedule ||
-                p.Name == Permissions.Core.ManageEmployees ||
-                p.Name == Permissions.Core.ManageSites),
+                p.Name == Permissions.Learnings.Schedule),
 
             "Operator" => allPermissions.Where(p =>
                 p.Name == Permissions.Learnings.View),

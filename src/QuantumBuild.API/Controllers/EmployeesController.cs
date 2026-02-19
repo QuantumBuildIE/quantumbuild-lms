@@ -266,7 +266,7 @@ public class EmployeesController : ControllerBase
     /// Get operators available to assign to a supervisor
     /// </summary>
     [HttpGet("{supervisorId:guid}/operators/available")]
-    [Authorize(Policy = "Core.ManageEmployees")]
+    [Authorize(Policy = "Learnings.View")]
     public async Task<IActionResult> GetAvailableOperators(Guid supervisorId)
     {
         if (!CanManageSupervisorData(supervisorId))
@@ -284,7 +284,7 @@ public class EmployeesController : ControllerBase
     /// Assign operators to a supervisor
     /// </summary>
     [HttpPost("{supervisorId:guid}/operators")]
-    [Authorize(Policy = "Core.ManageEmployees")]
+    [Authorize(Policy = "Learnings.View")]
     public async Task<IActionResult> AssignOperators(Guid supervisorId, [FromBody] AssignOperatorsDto dto)
     {
         if (!CanManageSupervisorData(supervisorId))
@@ -302,7 +302,7 @@ public class EmployeesController : ControllerBase
     /// Unassign an operator from a supervisor
     /// </summary>
     [HttpDelete("{supervisorId:guid}/operators/{operatorId:guid}")]
-    [Authorize(Policy = "Core.ManageEmployees")]
+    [Authorize(Policy = "Learnings.View")]
     public async Task<IActionResult> UnassignOperator(Guid supervisorId, Guid operatorId)
     {
         if (!CanManageSupervisorData(supervisorId))
@@ -368,12 +368,10 @@ public class EmployeesController : ControllerBase
 
     /// <summary>
     /// Admins/SU can manage anyone's; supervisors can manage their own.
-    /// Used for endpoints guarded by Core.ManageEmployees — if the policy
-    /// already passed, we just need the self-check for supervisors.
     /// </summary>
     private bool CanManageSupervisorData(Guid supervisorId)
     {
-        if (_currentUserService.IsSuperUser) return true;
+        if (IsAdminOrSuperUser()) return true;
         var employeeId = GetCurrentEmployeeId();
         return employeeId.HasValue && employeeId.Value == supervisorId;
     }

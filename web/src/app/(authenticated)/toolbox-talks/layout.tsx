@@ -28,6 +28,7 @@ export default function ToolboxTalksLayout({
     if (isSupervisor) {
       return [
         ...baseNavItems,
+        { href: "/toolbox-talks/team", label: "My Team" },
         { href: "/toolbox-talks/reports", label: "Team Reports" },
       ];
     }
