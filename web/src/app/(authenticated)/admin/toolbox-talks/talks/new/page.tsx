@@ -77,7 +77,7 @@ export interface ToolboxTalkWizardData {
   quizQuestionCount: number;
 
   // Slideshow
-  generateSlidesFromPdf: boolean;
+  slideshowSource: 'none' | 'pdf' | 'video';
 
   // Refresher
   requiresRefresher: boolean;
@@ -125,7 +125,7 @@ const initialData: ToolboxTalkWizardData = {
   shuffleOptions: false,
   useQuestionPool: false,
   quizQuestionCount: 5,
-  generateSlidesFromPdf: false,
+  slideshowSource: 'none',
   requiresRefresher: false,
   refresherIntervalMonths: 12,
   generateCertificate: false,

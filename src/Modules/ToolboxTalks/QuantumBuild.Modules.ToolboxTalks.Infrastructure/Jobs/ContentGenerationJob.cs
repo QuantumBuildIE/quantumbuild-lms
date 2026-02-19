@@ -142,8 +142,8 @@ public class ContentGenerationJob
                     "HasFinalPortionQuestion: {HasFinalQuestion}. Now starting auto-translation...",
                     toolboxTalkId, result.SectionsGenerated, result.QuestionsGenerated, result.HasFinalPortionQuestion);
 
-                // Generate slideshow from PDF if enabled
-                await AutoGenerateSlidesAsync(toolboxTalkId, tenantId, connectionId, cancellationToken);
+                // Generate slideshow if enabled
+                await AutoGenerateSlidesAsync(toolboxTalkId, tenantId, connectionId, options.SlideshowSource, cancellationToken);
 
                 await AutoGenerateTranslationsAsync(toolboxTalkId, tenantId, connectionId, cancellationToken);
             }
@@ -286,39 +286,49 @@ public class ContentGenerationJob
         Guid toolboxTalkId,
         Guid tenantId,
         string? connectionId,
-        CancellationToken cancellationToken)
+        string slideshowSource = "none",
+        CancellationToken cancellationToken = default)
     {
         try
         {
-            // Check if the toolbox talk has slideshow generation enabled
-            var talk = await _toolboxTalksDbContext.ToolboxTalks
-                .IgnoreQueryFilters()
-                .Where(t => t.Id == toolboxTalkId && t.TenantId == tenantId && !t.IsDeleted)
-                .Select(t => new { t.GenerateSlidesFromPdf, t.PdfUrl })
-                .FirstOrDefaultAsync(cancellationToken);
-
-            if (talk == null || !talk.GenerateSlidesFromPdf || string.IsNullOrEmpty(talk.PdfUrl))
+            // Determine effective source: use explicit slideshowSource if provided,
+            // otherwise fall back to GenerateSlidesFromPdf flag on entity
+            var effectiveSource = slideshowSource;
+            if (string.Equals(effectiveSource, "none", StringComparison.OrdinalIgnoreCase)
+                || string.IsNullOrEmpty(effectiveSource))
             {
-                _logger.LogInformation(
-                    "Slideshow generation skipped for ToolboxTalk {ToolboxTalkId}. " +
-                    "GenerateSlidesFromPdf={Enabled}, HasPdf={HasPdf}",
-                    toolboxTalkId,
-                    talk?.GenerateSlidesFromPdf ?? false,
-                    !string.IsNullOrEmpty(talk?.PdfUrl));
-                return;
+                var talk = await _toolboxTalksDbContext.ToolboxTalks
+                    .IgnoreQueryFilters()
+                    .Where(t => t.Id == toolboxTalkId && t.TenantId == tenantId && !t.IsDeleted)
+                    .Select(t => new { t.GenerateSlidesFromPdf, t.PdfUrl })
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                if (talk == null || !talk.GenerateSlidesFromPdf || string.IsNullOrEmpty(talk.PdfUrl))
+                {
+                    _logger.LogInformation(
+                        "Slideshow generation skipped for ToolboxTalk {ToolboxTalkId}. " +
+                        "SlideshowSource={Source}, GenerateSlidesFromPdf={Enabled}, HasPdf={HasPdf}",
+                        toolboxTalkId,
+                        slideshowSource,
+                        talk?.GenerateSlidesFromPdf ?? false,
+                        !string.IsNullOrEmpty(talk?.PdfUrl));
+                    return;
+                }
+
+                effectiveSource = "pdf"; // Legacy fallback
             }
 
             _logger.LogInformation(
-                "Auto-generating slideshow for ToolboxTalk {ToolboxTalkId}...",
-                toolboxTalkId);
+                "Auto-generating slideshow for ToolboxTalk {ToolboxTalkId} from source '{Source}'...",
+                toolboxTalkId, effectiveSource);
 
             await SendProgressUpdateAsync(toolboxTalkId, connectionId,
                 new ContentGenerationProgress(
                     "GeneratingSlides", 90,
-                    "Generating slideshow from PDF..."));
+                    $"Generating slideshow from {effectiveSource}..."));
 
             var slideResult = await _slideshowGenerationService.GenerateSlideshowAsync(
-                tenantId, toolboxTalkId, cancellationToken);
+                tenantId, toolboxTalkId, effectiveSource, cancellationToken);
 
             if (slideResult.Success && !string.IsNullOrEmpty(slideResult.Data))
             {

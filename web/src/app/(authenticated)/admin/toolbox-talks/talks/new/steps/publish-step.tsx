@@ -214,7 +214,7 @@ export function PublishStep({
         shuffleOptions: data.shuffleOptions,
         useQuestionPool: data.useQuestionPool,
         quizQuestionCount: data.quizQuestionCount,
-        generateSlidesFromPdf: data.generateSlidesFromPdf,
+        generateSlidesFromPdf: data.slideshowSource !== 'none',
         requiresRefresher: data.requiresRefresher,
         refresherIntervalMonths: data.refresherIntervalMonths,
         generateCertificate: data.generateCertificate,

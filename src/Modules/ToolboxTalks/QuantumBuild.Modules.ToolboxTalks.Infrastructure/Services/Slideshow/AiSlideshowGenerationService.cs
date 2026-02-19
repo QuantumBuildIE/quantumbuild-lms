@@ -145,6 +145,111 @@ public class AiSlideshowGenerationService : IAiSlideshowGenerationService
         }
     }
 
+    public async Task<Result<string>> GenerateSlideshowFromTranscriptAsync(
+        string transcriptText,
+        string documentTitle,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(_settings.Claude.ApiKey))
+            {
+                _logger.LogError("Claude API key is not configured");
+                return Result.Fail<string>("Claude API key not configured");
+            }
+
+            _logger.LogInformation(
+                "Generating AI slideshow from transcript for document: {Title}, transcript length: {Length} chars",
+                documentTitle, transcriptText.Length);
+
+            var prompt = GetTranscriptSlideshowPrompt();
+
+            var requestBody = new
+            {
+                model = _settings.Claude.Model,
+                max_tokens = 16000,
+                messages = new[]
+                {
+                    new
+                    {
+                        role = "user",
+                        content = new object[]
+                        {
+                            new
+                            {
+                                type = "text",
+                                text = $"Document title: {documentTitle}\n\nVideo Transcript:\n\n{transcriptText}"
+                            },
+                            new
+                            {
+                                type = "text",
+                                text = prompt
+                            }
+                        }
+                    }
+                }
+            };
+
+            var request = new HttpRequestMessage(HttpMethod.Post, $"{_settings.Claude.BaseUrl}/messages");
+            request.Headers.Add("x-api-key", _settings.Claude.ApiKey);
+            request.Headers.Add("anthropic-version", "2023-06-01");
+            request.Content = new StringContent(
+                JsonSerializer.Serialize(requestBody),
+                Encoding.UTF8,
+                "application/json");
+
+            _logger.LogInformation(
+                "Sending transcript to Claude for slideshow generation (document: {Title})",
+                documentTitle);
+
+            var response = await _httpClient.SendAsync(request, cancellationToken);
+            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogError(
+                    "Claude API error for transcript slideshow generation: {StatusCode} - {Response}",
+                    response.StatusCode, responseBody);
+                return Result.Fail<string>($"Claude API error: {response.StatusCode}");
+            }
+
+            var html = ExtractHtmlFromResponse(responseBody);
+
+            if (string.IsNullOrWhiteSpace(html))
+            {
+                _logger.LogWarning("Claude returned empty response for transcript slideshow generation");
+                return Result.Fail<string>("AI returned empty response");
+            }
+
+            if (!html.TrimStart().StartsWith("<!DOCTYPE html>", StringComparison.OrdinalIgnoreCase) &&
+                !html.TrimStart().StartsWith("<html", StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogWarning(
+                    "Claude response doesn't appear to be valid HTML: {Preview}",
+                    html[..Math.Min(200, html.Length)]);
+                return Result.Fail<string>("AI response is not valid HTML");
+            }
+
+            LogTokenUsage(responseBody);
+
+            _logger.LogInformation(
+                "Successfully generated HTML slideshow from transcript for {Title}, size: {Size} characters",
+                documentTitle, html.Length);
+
+            return Result.Ok(html);
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "HTTP request failed during transcript slideshow generation for {Title}", documentTitle);
+            return Result.Fail<string>($"HTTP request failed: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating AI slideshow from transcript for document: {Title}", documentTitle);
+            return Result.Fail<string>($"Failed to generate slideshow: {ex.Message}");
+        }
+    }
+
     private string? ExtractHtmlFromResponse(string responseBody)
     {
         using var jsonDoc = JsonDocument.Parse(responseBody);
@@ -437,6 +542,204 @@ Before finalizing the HTML, mentally verify:
 - The auto-play mode works as a hands-free briefing display
 - It looks polished on a phone screen held in portrait orientation
 - A safety auditor comparing the slideshow to the source document would find zero missing information
+""";
+    }
+
+    private static string GetTranscriptSlideshowPrompt()
+    {
+        return """
+You are a safety training content designer. You will receive a VIDEO TRANSCRIPT from a safety training video, toolbox talk, or workplace safety briefing.
+
+Your job is to:
+1. Read and analyze the ENTIRE transcript
+2. Extract ALL safety information workers need to know
+3. Generate a COMPLETE, self-contained HTML file that presents this information as an animated auto-playing slideshow
+
+## CRITICAL: INFORMATION EXTRACTION PROCESS
+
+Before writing ANY HTML, you MUST complete this extraction checklist. Go through the entire transcript and extract every item in each category below. If a category is not present in the transcript, skip it. If it IS present, it MUST appear in the slideshow.
+
+### EXTRACTION CHECKLIST
+
+**A. DOCUMENT IDENTITY** (→ Cover slide)
+- Topic / subject of the talk
+- Speaker name or role (if mentioned)
+- Company or organization name (if mentioned)
+- Activity / task description
+
+**B. KEY SAFETY TOPICS** (→ Dedicated slides)
+- Every safety topic discussed
+- Each hazard or risk mentioned
+- All safety procedures described
+- Any incidents or examples referenced
+
+**C. HAZARDS & RISKS** (→ One or more slides per major hazard)
+For EACH hazard or risk discussed:
+- What the hazard is
+- Who is at risk
+- What can go wrong
+- ALL control measures or precautions mentioned
+- Any severity or likelihood information discussed
+
+**D. REQUIRED PPE** (→ Dedicated slide if mentioned)
+- Every PPE item mentioned
+- Any standards or specifications referenced
+- Task-specific PPE requirements
+
+**E. EQUIPMENT & TOOLS** (→ Dedicated slide if substantial)
+- All equipment referenced
+- Safe use instructions
+- Inspection requirements mentioned
+
+**F. PROCEDURES / STEPS** (→ One or more slides)
+- Every step in any procedure described
+- Pre-work requirements
+- Safety checks to perform
+- Correct technique descriptions
+
+**G. TRAINING & COMPETENCY** (→ Include in relevant slides)
+- Required training mentioned
+- Certification requirements
+- Competency standards
+
+**H. EMERGENCY PROCEDURES** (→ Dedicated slide if mentioned)
+- Emergency contacts
+- First aid procedures
+- Reporting procedures
+- Assembly points
+
+**I. DO'S AND DON'TS** (→ Final slide)
+- Every instruction about what TO do
+- Every instruction about what NOT to do
+- Key takeaways emphasized by the speaker
+
+**J. LEGAL / REGULATORY REFERENCES** (→ Include where relevant)
+- Regulations cited
+- Standards referenced
+- Company policies mentioned
+
+## SLIDE PLANNING RULES
+
+After extraction, plan your slides following these rules:
+
+1. **Minimum slides**: Create enough slides to cover ALL extracted content. Typical range is 8-16 slides. DO NOT cap at 12 if more content exists.
+
+2. **Slide allocation priority**:
+   - Slide 1: ALWAYS a cover/title slide
+   - Next slides: One slide per major safety topic or hazard discussed
+   - Dedicated slide for: PPE requirements (if mentioned)
+   - Dedicated slide for: Equipment and safe use (if substantial)
+   - Dedicated slide for: Step-by-step procedures (split into 2 slides if >8 steps)
+   - Dedicated slide for: Emergency procedures (if mentioned)
+   - Last slide: ALWAYS a DO's and DON'Ts summary / key takeaways
+
+3. **Never combine unrelated safety topics** onto one slide. Each distinct hazard or topic gets its own slide.
+
+4. **Control measures and precautions are NOT optional**. Every safety measure mentioned must appear.
+
+5. **Numbers and specifics are mandatory**. Include:
+   - ALL weight limits, distances, measurements
+   - ALL time intervals
+   - ALL phone numbers or contact details
+   - ALL standards/regulation numbers
+
+## OUTPUT REQUIREMENTS
+
+Return ONLY the complete HTML file. No explanation, no markdown fencing, no preamble. Start with `<!DOCTYPE html>` and end with `</html>`.
+
+## CONTENT FORMATTING RULES
+
+- Keep text CONCISE — max 2 lines per bullet point. Workers on site won't read paragraphs.
+- But DO NOT sacrifice completeness for brevity. If there are many control measures, show them all as short bullets.
+- Focus on ACTIONABLE information: what to do, what not to do, what to check
+- Use ⚠️ emoji markers for critical hazards
+- Use specific numbers, limits, and penalties wherever they appear in the transcript
+- Transform spoken language into clear, scannable bullet points
+
+## DESIGN SPECIFICATION
+
+The HTML must be a dark-themed, mobile-friendly animated slideshow with these characteristics:
+
+### Layout
+- Max width 640px, centered, rounded container with shadow
+- Top bar showing: slide icon, slide title, slide counter (e.g., "3 / 14")
+- Progress bar under the top bar that fills as slides advance
+- Main content area (min-height 520px, scrollable if content overflows) with slide content
+- Bottom navigation: Back button, Auto-play/Pause toggle, Next button
+- Dot indicators for each slide
+
+### Styling
+- Import Google Font: DM Sans (body) and DM Serif Display (headings/numbers)
+- Dark backgrounds using CSS gradients — each slide gets a DIFFERENT gradient
+- VARY the gradients across slides — use deep blues, purples, dark teals, charcoals, dark reds, dark greens
+- Body background: #0a0a0f
+- Card/container background: #111
+- Text colors: white for headings, rgba(255,255,255,0.75) for body, rgba(255,255,255,0.5) for secondary
+- Accent colors — rotate through these across slides: #E63946 (red), #F4A261 (amber), #E76F51 (coral), #2A9D8F (teal), #E9C46A (gold), #264653 (dark teal), #8338EC (purple), #06D6A0 (green)
+- Each slide's accent color should be used for: the top bar title, progress bar, check icons, card borders, and the Next button background
+
+### Content Overflow
+- The slide content area MUST have `overflow-y: auto` so that slides with many items are scrollable
+- Add a subtle scroll indicator (gradient fade at bottom) when content overflows
+
+### Animations
+Every element must animate in when the slide appears. Use CSS transitions triggered by adding a 'visible' class via JavaScript:
+
+- **Staggered reveals**: Items in lists/grids animate in one by one with increasing delays (0.05–0.1s between items)
+- **Stat cards**: Scale from 0.9 to 1.0 + translate up with cubic-bezier(0.34, 1.56, 0.64, 1) for a bouncy feel
+- **List items**: Slide in from the right (translateX) with fade
+- **Warning boxes**: Scale from 0.95 to 1.0 with fade
+- **Cover elements**: Large icon scales from 0.3 to 1.0, title slides up from 40px
+- **Slide transitions**: Content fades out (opacity 0 over 300ms), new content builds, then fades in
+
+### Auto-play
+- Auto-play button toggles between "▶ Auto-play" and "⏸ Pause"
+- When playing: advances every 6 seconds
+- Stops automatically on the last slide
+- Visual indicator: button changes style when playing (red tinted background)
+
+### Navigation
+- Back/Next buttons with disabled states (dimmed when at start/end)
+- Clickable dot indicators to jump to any slide
+- Active dot is wider (20px vs 8px) and colored with the current slide's accent
+- Completed dots are slightly brighter than upcoming dots
+
+## TECHNICAL REQUIREMENTS
+
+- Single self-contained HTML file — NO external dependencies except Google Fonts CDN
+- All CSS inline in a `<style>` tag
+- All JavaScript inline in a `<script>` tag
+- Must work on mobile browsers (responsive, touch-friendly buttons min 44px tap target)
+- No frameworks — vanilla HTML/CSS/JS only
+- Store slides as a JavaScript array of objects
+- Use a single render function that builds HTML from the slide data
+- Animations triggered by adding CSS classes after a requestAnimationFrame or setTimeout
+
+## SLIDE DATA STRUCTURE
+
+Store all slides in a JS array. Each slide object should have:
+```
+{
+  id: 0,
+  title: "Slide Title",
+  icon: "emoji",
+  color: "#hexAccent",
+  bgGrad: "linear-gradient(135deg, #dark1 0%, #dark2 100%)",
+  type: "cover|checklist|warning|equipment|risks|dos|stats",
+  // Plus type-specific fields
+}
+```
+
+## WHAT MAKES A GREAT RESULT
+
+- A site worker with 30 seconds per slide should understand the key safety points
+- ALL information from the transcript is captured — nothing is lost
+- Spoken language is transformed into clear, scannable bullet points
+- The animations make it feel professional and engaging
+- Critical warnings STAND OUT with red-tinted borders and alert styling
+- Numbers, limits, and contact details are LARGE and prominent
+- The auto-play mode works as a hands-free briefing display
+- It looks polished on a phone screen held in portrait orientation
 """;
     }
 }

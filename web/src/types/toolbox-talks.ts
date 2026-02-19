@@ -973,6 +973,7 @@ export interface SmartGenerateContentRequest {
   generateSections: boolean;
   generateQuestions: boolean;
   generateSlideshow: boolean;
+  slideshowSource?: 'none' | 'pdf' | 'video';
   includeVideo: boolean;
   includePdf: boolean;
   sourceLanguageCode: string;

@@ -743,6 +743,10 @@ public class ToolboxTalksController : ControllerBase
                 return BadRequest(new { error = "Must include at least one content source (video or PDF)" });
             }
 
+            // Determine slideshow source
+            var slideshowSource = request.SlideshowSource ?? (request.GenerateSlidesFromPdf == true ? "pdf" : "none");
+            var generateSlides = !string.Equals(slideshowSource, "none", StringComparison.OrdinalIgnoreCase);
+
             // Create generation options
             var options = new ContentGenerationOptions(
                 IncludeVideo: request.IncludeVideo,
@@ -752,7 +756,8 @@ public class ToolboxTalksController : ControllerBase
                 PassThreshold: request.PassThreshold ?? 80,
                 ReplaceExisting: request.ReplaceExisting ?? true,
                 SourceLanguageCode: request.SourceLanguageCode ?? "en",
-                GenerateSlidesFromPdf: request.GenerateSlidesFromPdf ?? false);
+                GenerateSlidesFromPdf: generateSlides,
+                SlideshowSource: slideshowSource);
 
             // Queue the background job with tenant context
             var tenantId = _currentUserService.TenantId;
@@ -780,16 +785,23 @@ public class ToolboxTalksController : ControllerBase
     /// Generates a self-contained HTML slideshow with animations.
     /// </summary>
     /// <param name="id">Toolbox talk ID</param>
+    /// <param name="source">Content source: "pdf" (default) or "video" (uses transcript)</param>
     /// <returns>Generation result with HTML length</returns>
     [HttpPost("{id:guid}/generate-slides")]
     [Authorize(Policy = "Learnings.Manage")]
     [ProducesResponseType(typeof(GenerateSlidesResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GenerateSlides(Guid id)
+    public async Task<IActionResult> GenerateSlides(Guid id, [FromQuery] string source = "pdf")
     {
         try
         {
+            if (!string.Equals(source, "pdf", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(source, "video", StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(new { error = "Invalid source parameter. Must be 'pdf' or 'video'." });
+            }
+
             var query = new GetToolboxTalkByIdQuery
             {
                 TenantId = _currentUserService.TenantId,
@@ -802,13 +814,14 @@ public class ToolboxTalksController : ControllerBase
                 return NotFound(new { error = "Learning not found" });
             }
 
-            if (string.IsNullOrEmpty(toolboxTalk.PdfUrl))
+            if (string.Equals(source, "pdf", StringComparison.OrdinalIgnoreCase)
+                && string.IsNullOrEmpty(toolboxTalk.PdfUrl))
             {
                 return BadRequest(new { error = "No PDF is uploaded for this learning" });
             }
 
             var result = await _slideshowGenerationService.GenerateSlideshowAsync(
-                _currentUserService.TenantId, id, HttpContext.RequestAborted);
+                _currentUserService.TenantId, id, source, HttpContext.RequestAborted);
 
             if (!result.Success)
             {
@@ -818,7 +831,7 @@ public class ToolboxTalksController : ControllerBase
             return Ok(new GenerateSlidesResponse
             {
                 Success = true,
-                Message = "Slideshow generated successfully",
+                Message = $"Slideshow generated successfully from {source}",
                 HtmlLength = result.Data?.Length ?? 0
             });
         }
@@ -903,6 +916,7 @@ public class ToolboxTalksController : ControllerBase
                 var needSections = request.GenerateSections && result.SectionsCopied == 0;
                 var needQuestions = request.GenerateQuestions && result.QuestionsCopied == 0;
                 var needSlideshow = request.GenerateSlideshow && !result.SlideshowCopied;
+                var slideshowSource = request.SlideshowSource ?? "none";
 
                 var options = new ContentGenerationOptions(
                     IncludeVideo: includeVideo,
@@ -912,7 +926,8 @@ public class ToolboxTalksController : ControllerBase
                     PassThreshold: request.PassThreshold ?? 80,
                     ReplaceExisting: false, // Don't delete what we just copied!
                     SourceLanguageCode: request.SourceLanguageCode ?? "en",
-                    GenerateSlidesFromPdf: needSlideshow && includePdf);
+                    GenerateSlidesFromPdf: needSlideshow,
+                    SlideshowSource: needSlideshow ? slideshowSource : "none");
 
                 var tenantId = _currentUserService.TenantId;
                 jobId = BackgroundJob.Enqueue<ContentGenerationJob>(
@@ -1519,6 +1534,11 @@ public record GenerateContentRequest
     /// Whether to auto-generate an animated slideshow from the PDF after content generation.
     /// </summary>
     public bool? GenerateSlidesFromPdf { get; init; }
+
+    /// <summary>
+    /// Slideshow source: "none", "pdf", or "video". Takes precedence over GenerateSlidesFromPdf when provided.
+    /// </summary>
+    public string? SlideshowSource { get; init; }
 }
 
 /// <summary>
@@ -1771,6 +1791,9 @@ public record SmartGenerateContentRequest
 
     /// <summary>SignalR connection ID for progress updates during AI generation</summary>
     public string? ConnectionId { get; init; }
+
+    /// <summary>Slideshow source: "none", "pdf", or "video"</summary>
+    public string? SlideshowSource { get; init; }
 }
 
 /// <summary>

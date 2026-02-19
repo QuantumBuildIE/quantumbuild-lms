@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Form,
@@ -85,7 +87,7 @@ const toolboxTalkFormSchema = z.object({
   sourceLanguageCode: z.string().default('en'),
   autoAssignToNewEmployees: z.boolean(),
   autoAssignDueDays: z.number().min(1).max(365),
-  generateSlidesFromPdf: z.boolean(),
+  slideshowSource: z.enum(['none', 'pdf', 'video'] as const),
   sections: z.array(sectionSchema),
   questions: z.array(questionSchema).optional(),
 }).refine(
@@ -162,7 +164,7 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
       sourceLanguageCode: talk?.sourceLanguageCode ?? 'en',
       autoAssignToNewEmployees: talk?.autoAssignToNewEmployees ?? false,
       autoAssignDueDays: talk?.autoAssignDueDays ?? 14,
-      generateSlidesFromPdf: talk?.generateSlidesFromPdf ?? false,
+      slideshowSource: talk?.generateSlidesFromPdf ? 'pdf' : 'none',
       sections: talk?.sections?.map((s) => ({
         id: s.id,
         sectionNumber: s.sectionNumber,
@@ -213,16 +215,19 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
 
   const isSubmitting = createMutation.isPending || updateMutation.isPending;
 
-  const handleRegenerateSlides = async () => {
+  const handleRegenerateSlides = async (source?: string) => {
     if (!talk?.id) return;
+
+    const slideshowSrc = source || form.getValues('slideshowSource');
+    if (slideshowSrc === 'none') return;
 
     setIsRegenerating(true);
     try {
-      const result = await generateSlides(talk.id);
-      toast.success(`Regenerated ${result.slidesGenerated} slides`);
+      const result = await generateSlides(talk.id, slideshowSrc);
+      toast.success(`Slideshow regenerated from ${slideshowSrc}`);
       queryClient.invalidateQueries({ queryKey: ['toolbox-talk', talk.id] });
     } catch {
-      toast.error('Failed to regenerate slides');
+      toast.error('Failed to regenerate slideshow');
     } finally {
       setIsRegenerating(false);
     }
@@ -284,7 +289,7 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
         sourceLanguageCode: values.sourceLanguageCode,
         autoAssignToNewEmployees: values.autoAssignToNewEmployees,
         autoAssignDueDays: values.autoAssignDueDays,
-        generateSlidesFromPdf: values.generateSlidesFromPdf,
+        generateSlidesFromPdf: values.slideshowSource !== 'none',
         sections,
         questions,
       };
@@ -849,44 +854,89 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
         </Card>
 
         {/* Animated Slideshow */}
-        {isEditing && (talk?.pdfUrl || talk?.pdfFileName) && (
+        {isEditing && (
           <Card>
             <CardHeader>
               <CardTitle>Animated Slideshow</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Optionally generate a visual slideshow from one of your content sources
+              </p>
+
               <FormField
                 control={form.control}
-                name="generateSlidesFromPdf"
+                name="slideshowSource"
                 render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                    <div className="space-y-0.5">
-                      <FormLabel className="text-base">Generate Slideshow from PDF</FormLabel>
-                      <FormDescription>
-                        Generate an animated slideshow from the PDF pages for a more engaging experience.
-                      </FormDescription>
-                    </div>
+                  <FormItem>
                     <FormControl>
-                      <Switch checked={field.value} onCheckedChange={field.onChange} />
+                      <RadioGroup
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        className="space-y-2"
+                      >
+                        <div className="flex items-center space-x-3">
+                          <RadioGroupItem value="none" id="edit-slideshow-none" />
+                          <Label htmlFor="edit-slideshow-none">No slideshow</Label>
+                        </div>
+
+                        <div className="flex items-start space-x-3">
+                          <RadioGroupItem
+                            value="pdf"
+                            id="edit-slideshow-pdf"
+                            disabled={!talk?.pdfUrl && !talk?.pdfFileName}
+                          />
+                          <div className="space-y-0.5">
+                            <Label
+                              htmlFor="edit-slideshow-pdf"
+                              className={!talk?.pdfUrl && !talk?.pdfFileName ? 'text-muted-foreground' : ''}
+                            >
+                              Generate from PDF
+                            </Label>
+                            {!talk?.pdfUrl && !talk?.pdfFileName && (
+                              <p className="text-xs text-muted-foreground">Upload a PDF first</p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-start space-x-3">
+                          <RadioGroupItem
+                            value="video"
+                            id="edit-slideshow-video"
+                            disabled={!talk?.videoUrl}
+                          />
+                          <div className="space-y-0.5">
+                            <Label
+                              htmlFor="edit-slideshow-video"
+                              className={!talk?.videoUrl ? 'text-muted-foreground' : ''}
+                            >
+                              Generate from video transcript
+                            </Label>
+                            {!talk?.videoUrl && (
+                              <p className="text-xs text-muted-foreground">Upload a video first</p>
+                            )}
+                          </div>
+                        </div>
+                      </RadioGroup>
                     </FormControl>
                   </FormItem>
                 )}
               />
 
-              {talk?.slidesGenerated && talk.slideCount > 0 && (
-                <div className="flex items-center gap-2 text-sm">
+              {talk?.hasSlideshow && (
+                <div className="flex items-center gap-2 text-sm pt-2 border-t">
                   <svg className="h-4 w-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   <span className="text-muted-foreground">
-                    {talk.slideCount} slide{talk.slideCount !== 1 ? 's' : ''} generated
+                    Slideshow generated
                   </span>
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={handleRegenerateSlides}
-                    disabled={isRegenerating}
+                    onClick={() => handleRegenerateSlides()}
+                    disabled={isRegenerating || form.watch('slideshowSource') === 'none'}
                   >
                     {isRegenerating ? (
                       <LoadingSpinner className="mr-1 h-3 w-3" />
@@ -895,25 +945,25 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
                         <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                       </svg>
                     )}
-                    Regenerate
+                    Regenerate Slideshow
                   </Button>
                 </div>
               )}
 
-              {talk?.slidesGenerated && talk.slideCount === 0 && !talk?.slideshowHtml && (
-                <div className="flex items-center gap-2 text-sm">
+              {!talk?.hasSlideshow && talk?.slidesGenerated && (
+                <div className="flex items-center gap-2 text-sm pt-2 border-t">
                   <svg className="h-4 w-4 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
                   </svg>
                   <span className="text-yellow-700">
-                    Slide generation failed - try regenerating
+                    Slideshow generation failed - try regenerating
                   </span>
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={handleRegenerateSlides}
-                    disabled={isRegenerating}
+                    onClick={() => handleRegenerateSlides()}
+                    disabled={isRegenerating || form.watch('slideshowSource') === 'none'}
                   >
                     {isRegenerating ? (
                       <LoadingSpinner className="mr-1 h-3 w-3" />
@@ -927,9 +977,9 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
                 </div>
               )}
 
-              {form.watch('generateSlidesFromPdf') && !talk?.slidesGenerated && (
+              {form.watch('slideshowSource') !== 'none' && !talk?.slidesGenerated && !talk?.hasSlideshow && (
                 <p className="text-sm text-muted-foreground">
-                  Slides will be generated when you click &quot;Generate Content&quot;.
+                  Slideshow will be generated when content is generated, or you can save and trigger it manually.
                 </p>
               )}
             </CardContent>

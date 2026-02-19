@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -437,7 +438,8 @@ export function GenerateStep({ data, updateData, onNext, onBack }: GenerateStepP
       const smartRes = await smartGenerateContent(data.id, {
         generateSections: true,
         generateQuestions: true,
-        generateSlideshow: data.generateSlidesFromPdf && hasPdf,
+        generateSlideshow: data.slideshowSource !== 'none',
+        slideshowSource: data.slideshowSource,
         includeVideo,
         includePdf,
         sourceLanguageCode: data.sourceLanguageCode,
@@ -597,52 +599,109 @@ export function GenerateStep({ data, updateData, onNext, onBack }: GenerateStepP
       {!isGenerating && !isSmartGenerating && !result && !showSmartResult && hasContent && (
         <Card>
           <CardContent className="pt-6 space-y-6">
-            {/* Content Sources */}
+            {/* Section 1: Content Generation */}
             <div className="space-y-4">
-              <h3 className="font-medium">Content Sources</h3>
-              <p className="text-sm text-muted-foreground">
-                Select which content to use for AI generation
-              </p>
+              <div>
+                <h3 className="font-medium">Content Generation</h3>
+                <p className="text-sm text-muted-foreground">
+                  AI will generate training sections and quiz questions from your selected sources
+                </p>
+              </div>
 
               <div className="space-y-3">
-                <div className="flex items-center space-x-3">
+                <div className="flex items-start space-x-3">
                   <Checkbox
                     id="generateFromVideo"
                     checked={includeVideo}
                     onCheckedChange={(checked) => setIncludeVideo(checked === true)}
                     disabled={!hasVideo}
                   />
-                  <div className="flex items-center gap-2">
-                    <Video className="h-4 w-4 text-muted-foreground" />
+                  <div className="space-y-0.5">
                     <Label
                       htmlFor="generateFromVideo"
                       className={!hasVideo ? 'text-muted-foreground' : ''}
                     >
-                      Generate from video transcript
-                      {!hasVideo && ' (no video added)'}
+                      Use video transcript
                     </Label>
+                    {!hasVideo && (
+                      <p className="text-xs text-muted-foreground">Upload a video first</p>
+                    )}
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-3">
+                <div className="flex items-start space-x-3">
                   <Checkbox
                     id="generateFromPdf"
                     checked={includePdf}
                     onCheckedChange={(checked) => setIncludePdf(checked === true)}
                     disabled={!hasPdf}
                   />
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-muted-foreground" />
+                  <div className="space-y-0.5">
                     <Label
                       htmlFor="generateFromPdf"
                       className={!hasPdf ? 'text-muted-foreground' : ''}
                     >
-                      Generate from PDF content
-                      {!hasPdf && ' (no PDF added)'}
+                      Use PDF content
                     </Label>
+                    {!hasPdf && (
+                      <p className="text-xs text-muted-foreground">Upload a PDF first</p>
+                    )}
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* Section 2: Animated Slideshow */}
+            <div className="space-y-4 pt-4 border-t">
+              <div>
+                <h3 className="font-medium flex items-center gap-2">
+                  <Presentation className="h-4 w-4" />
+                  Animated Slideshow
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Optionally generate a visual slideshow from one of your content sources
+                </p>
+              </div>
+
+              <RadioGroup
+                value={data.slideshowSource}
+                onValueChange={(value) => updateData({ slideshowSource: value as 'none' | 'pdf' | 'video' })}
+              >
+                <div className="flex items-center space-x-3">
+                  <RadioGroupItem value="none" id="slideshow-none" />
+                  <Label htmlFor="slideshow-none">No slideshow</Label>
+                </div>
+
+                <div className="flex items-start space-x-3">
+                  <RadioGroupItem value="pdf" id="slideshow-pdf" disabled={!hasPdf} />
+                  <div className="space-y-0.5">
+                    <Label
+                      htmlFor="slideshow-pdf"
+                      className={!hasPdf ? 'text-muted-foreground' : ''}
+                    >
+                      Generate from PDF
+                    </Label>
+                    {!hasPdf && (
+                      <p className="text-xs text-muted-foreground">Upload a PDF first</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-start space-x-3">
+                  <RadioGroupItem value="video" id="slideshow-video" disabled={!hasVideo} />
+                  <div className="space-y-0.5">
+                    <Label
+                      htmlFor="slideshow-video"
+                      className={!hasVideo ? 'text-muted-foreground' : ''}
+                    >
+                      Generate from video transcript
+                    </Label>
+                    {!hasVideo && (
+                      <p className="text-xs text-muted-foreground">Upload a video first</p>
+                    )}
+                  </div>
+                </div>
+              </RadioGroup>
             </div>
 
             {/* Source Language */}
@@ -670,32 +729,6 @@ export function GenerateStep({ data, updateData, onNext, onBack }: GenerateStepP
                 </p>
               </div>
             </div>
-
-            {/* Slideshow Option - only if PDF exists */}
-            {hasPdf && (
-              <div className="space-y-4 pt-4 border-t">
-                <h3 className="font-medium flex items-center gap-2">
-                  <Presentation className="h-4 w-4" />
-                  Slideshow
-                </h3>
-                <div className="flex items-start space-x-3">
-                  <Checkbox
-                    id="generateSlideshow"
-                    checked={data.generateSlidesFromPdf}
-                    onCheckedChange={(checked) => updateData({ generateSlidesFromPdf: !!checked })}
-                  />
-                  <div className="space-y-0.5">
-                    <Label htmlFor="generateSlideshow">
-                      Generate animated slideshow from PDF
-                    </Label>
-                    <p className="text-sm text-muted-foreground">
-                      Creates an auto-playing visual presentation with Ken Burns animations
-                      and translated captions
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* Generation Settings */}
             <div className="space-y-4 pt-4 border-t">

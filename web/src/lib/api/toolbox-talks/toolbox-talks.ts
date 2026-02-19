@@ -189,6 +189,7 @@ export interface GenerateContentRequest {
   connectionId: string;
   sourceLanguageCode?: string;
   generateSlidesFromPdf?: boolean;
+  slideshowSource?: string;
 }
 
 export interface GenerateContentResponse {
@@ -294,10 +295,11 @@ export async function generateToolboxTalkContent(
 // ============================================
 
 export async function generateSlides(
-  id: string
+  id: string,
+  source: string = 'pdf'
 ): Promise<{ slidesGenerated: number }> {
   const response = await apiClient.post<{ slidesGenerated: number }>(
-    `/toolbox-talks/${id}/generate-slides`
+    `/toolbox-talks/${id}/generate-slides?source=${encodeURIComponent(source)}`
   );
   return response.data;
 }

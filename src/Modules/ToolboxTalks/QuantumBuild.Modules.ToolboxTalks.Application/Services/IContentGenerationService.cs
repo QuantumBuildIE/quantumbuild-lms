@@ -46,7 +46,8 @@ public record ContentGenerationOptions(
     int PassThreshold = 80,
     bool ReplaceExisting = true,
     string SourceLanguageCode = "en",
-    bool GenerateSlidesFromPdf = false);
+    bool GenerateSlidesFromPdf = false,
+    string SlideshowSource = "none");
 
 /// <summary>
 /// Result of a content generation operation.
