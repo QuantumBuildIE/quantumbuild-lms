@@ -7,6 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { EmployeeForm } from "@/components/admin/employee-form";
 import { EmployeeCertificatesSection } from "@/components/admin/employee-certificates-section";
 import { useEmployee } from "@/lib/api/admin/use-employees";
+import { useUser } from "@/lib/api/admin/use-users";
+import { AssignedOperatorsSection } from "@/components/admin/assigned-operators-section";
 import { ChevronLeft } from "lucide-react";
 
 export default function EditEmployeePage() {
@@ -15,6 +17,9 @@ export default function EditEmployeePage() {
   const employeeId = params.id as string;
 
   const { data: employee, isLoading, error } = useEmployee(employeeId);
+  const linkedUserId = employee?.linkedUserId ?? "";
+  const { data: linkedUser } = useUser(linkedUserId);
+  const isSupervisor = linkedUser?.roles?.some((r) => r.name === "Supervisor") ?? false;
 
   const handleSuccess = () => {
     router.push("/admin/employees");
@@ -112,6 +117,12 @@ export default function EditEmployeePage() {
       <div className="max-w-2xl">
         <EmployeeCertificatesSection employeeId={employeeId} />
       </div>
+
+      {isSupervisor && (
+        <div className="max-w-2xl">
+          <AssignedOperatorsSection employeeId={employeeId} />
+        </div>
+      )}
     </div>
   );
 }

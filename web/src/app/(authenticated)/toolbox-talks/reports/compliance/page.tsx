@@ -21,6 +21,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useMyOperators } from '@/lib/api/admin/use-supervisor-assignments';
 import {
   Select,
   SelectContent,
@@ -56,6 +57,8 @@ export default function ComplianceReportPage() {
   const { data: report, isLoading, error } = useComplianceReport({ dateFrom, dateTo, siteId });
   const { data: sitesData } = useSites();
   const exportReport = useExportComplianceReport();
+  const { data: operators } = useMyOperators();
+  const operatorCount = operators?.length ?? 0;
 
   const updateUrlParams = (updates: Record<string, string | null | undefined>) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -93,7 +96,7 @@ export default function ComplianceReportPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Compliance Report</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Team Compliance Report</h1>
           <p className="text-muted-foreground">Error loading report</p>
         </div>
         <Card className="p-8 text-center">
@@ -108,9 +111,9 @@ export default function ComplianceReportPage() {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Compliance Report</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Team Compliance Report</h1>
           <p className="text-muted-foreground">
-            Overall toolbox talk compliance metrics
+            Compliance metrics for your {operatorCount} assigned operator{operatorCount !== 1 ? 's' : ''}
             {report && ` - Generated ${format(new Date(report.generatedAt), 'PPp')}`}
           </p>
         </div>

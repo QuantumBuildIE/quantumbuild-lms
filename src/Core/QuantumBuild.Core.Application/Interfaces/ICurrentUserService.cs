@@ -25,4 +25,9 @@ public interface ICurrentUserService
     /// Whether the current user is a super user
     /// </summary>
     bool IsSuperUser { get; }
+
+    /// <summary>
+    /// Current user's linked Employee ID (null if not linked to an employee)
+    /// </summary>
+    Guid? EmployeeId { get; }
 }

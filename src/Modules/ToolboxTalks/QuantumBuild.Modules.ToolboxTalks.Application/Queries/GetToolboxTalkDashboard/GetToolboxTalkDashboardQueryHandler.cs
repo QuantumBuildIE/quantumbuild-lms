@@ -30,12 +30,18 @@ public class GetToolboxTalkDashboardQueryHandler : IRequestHandler<GetToolboxTal
         var inactiveTalks = totalTalks - activeTalks;
 
         // Get all scheduled talks for statistics
-        var scheduledTalks = await _context.ScheduledTalks
+        var scheduledTalksQuery = _context.ScheduledTalks
             .Include(st => st.ToolboxTalk)
             .Include(st => st.Employee)
             .Include(st => st.Completion)
-            .Where(st => st.TenantId == request.TenantId && !st.IsDeleted)
-            .ToListAsync(cancellationToken);
+            .Where(st => st.TenantId == request.TenantId && !st.IsDeleted);
+
+        if (request.EmployeeIds != null)
+        {
+            scheduledTalksQuery = scheduledTalksQuery.Where(st => request.EmployeeIds.Contains(st.EmployeeId));
+        }
+
+        var scheduledTalks = await scheduledTalksQuery.ToListAsync(cancellationToken);
 
         // Calculate counts by status
         var totalAssignments = scheduledTalks.Count;
@@ -64,9 +70,15 @@ public class GetToolboxTalkDashboardQueryHandler : IRequestHandler<GetToolboxTal
             : 0;
 
         // Calculate quiz statistics
-        var quizAttempts = await _context.ScheduledTalkQuizAttempts
-            .Where(qa => qa.ScheduledTalk.TenantId == request.TenantId)
-            .ToListAsync(cancellationToken);
+        var quizAttemptsQuery = _context.ScheduledTalkQuizAttempts
+            .Where(qa => qa.ScheduledTalk.TenantId == request.TenantId);
+
+        if (request.EmployeeIds != null)
+        {
+            quizAttemptsQuery = quizAttemptsQuery.Where(qa => request.EmployeeIds.Contains(qa.ScheduledTalk.EmployeeId));
+        }
+
+        var quizAttempts = await quizAttemptsQuery.ToListAsync(cancellationToken);
 
         var averageQuizScore = quizAttempts.Count > 0 && quizAttempts.Any(qa => qa.MaxScore > 0)
             ? Math.Round(quizAttempts.Where(qa => qa.MaxScore > 0).Average(qa => (decimal)qa.Score / qa.MaxScore * 100), 2)

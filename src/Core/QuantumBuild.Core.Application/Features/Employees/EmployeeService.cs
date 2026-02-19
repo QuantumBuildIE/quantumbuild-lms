@@ -19,7 +19,7 @@ public class EmployeeService : IEmployeeService
     private readonly ILogger<EmployeeService> _logger;
     private readonly IEnumerable<INewEmployeeTrainingAssigner> _trainingAssigners;
 
-    private const string DefaultUserRole = "SiteManager";
+    private const string DefaultUserRole = "Operator";
 
     public EmployeeService(
         ICoreDbContext context,
@@ -774,6 +774,26 @@ public class EmployeeService : IEmployeeService
             if (employee == null)
             {
                 return Result.Fail($"Employee with ID {id} not found");
+            }
+
+            // Check for active supervisor assignments (as supervisor)
+            var supervisorCount = await _context.SupervisorAssignments
+                .CountAsync(sa => sa.SupervisorEmployeeId == id);
+
+            if (supervisorCount > 0)
+            {
+                return Result.Fail(
+                    $"This employee is a Supervisor with {supervisorCount} assigned operator(s). Please remove all operator assignments before deleting.");
+            }
+
+            // Check for active supervisor assignments (as operator)
+            var operatorCount = await _context.SupervisorAssignments
+                .CountAsync(sa => sa.OperatorEmployeeId == id);
+
+            if (operatorCount > 0)
+            {
+                return Result.Fail(
+                    $"This employee is assigned to {operatorCount} supervisor(s). Please remove them from all supervisor assignments before deleting.");
             }
 
             // Soft delete Employee

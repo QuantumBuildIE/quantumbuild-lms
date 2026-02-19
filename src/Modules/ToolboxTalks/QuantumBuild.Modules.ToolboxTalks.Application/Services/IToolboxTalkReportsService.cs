@@ -20,7 +20,8 @@ public interface IToolboxTalkReportsService
         Guid tenantId,
         DateTime? dateFrom = null,
         DateTime? dateTo = null,
-        Guid? siteId = null);
+        Guid? siteId = null,
+        List<Guid>? employeeIds = null);
 
     /// <summary>
     /// Get list of overdue toolbox talk assignments
@@ -32,7 +33,8 @@ public interface IToolboxTalkReportsService
     Task<List<OverdueItemDto>> GetOverdueReportAsync(
         Guid tenantId,
         Guid? siteId = null,
-        Guid? toolboxTalkId = null);
+        Guid? toolboxTalkId = null,
+        List<Guid>? employeeIds = null);
 
     /// <summary>
     /// Get detailed completion records with pagination
@@ -52,5 +54,6 @@ public interface IToolboxTalkReportsService
         Guid? toolboxTalkId = null,
         Guid? siteId = null,
         int pageNumber = 1,
-        int pageSize = 20);
+        int pageSize = 20,
+        List<Guid>? employeeIds = null);
 }

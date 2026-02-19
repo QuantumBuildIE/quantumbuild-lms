@@ -33,7 +33,8 @@ public class ToolboxTalkReportsService : IToolboxTalkReportsService
         Guid tenantId,
         DateTime? dateFrom = null,
         DateTime? dateTo = null,
-        Guid? siteId = null)
+        Guid? siteId = null,
+        List<Guid>? employeeIds = null)
     {
         try
         {
@@ -50,6 +51,11 @@ public class ToolboxTalkReportsService : IToolboxTalkReportsService
                 employeesQuery = employeesQuery.Where(e => e.PrimarySiteId == siteId.Value);
             }
 
+            if (employeeIds != null)
+            {
+                employeesQuery = employeesQuery.Where(e => employeeIds.Contains(e.Id));
+            }
+
             var totalEmployees = await employeesQuery.CountAsync();
 
             // Build scheduled talks query
@@ -64,6 +70,12 @@ public class ToolboxTalkReportsService : IToolboxTalkReportsService
             if (utcDateTo.HasValue)
             {
                 scheduledTalksQuery = scheduledTalksQuery.Where(st => st.RequiredDate <= utcDateTo.Value);
+            }
+
+            // Filter by employee IDs (supervisor scoping)
+            if (employeeIds != null)
+            {
+                scheduledTalksQuery = scheduledTalksQuery.Where(st => employeeIds.Contains(st.EmployeeId));
             }
 
             // If site filter, join with employees
@@ -201,7 +213,8 @@ public class ToolboxTalkReportsService : IToolboxTalkReportsService
     public async Task<List<OverdueItemDto>> GetOverdueReportAsync(
         Guid tenantId,
         Guid? siteId = null,
-        Guid? toolboxTalkId = null)
+        Guid? toolboxTalkId = null,
+        List<Guid>? employeeIds = null)
     {
         try
         {
@@ -227,6 +240,11 @@ public class ToolboxTalkReportsService : IToolboxTalkReportsService
             if (siteId.HasValue)
             {
                 query = query.Where(st => st.Employee.PrimarySiteId == siteId.Value);
+            }
+
+            if (employeeIds != null)
+            {
+                query = query.Where(st => employeeIds.Contains(st.EmployeeId));
             }
 
             var overdueItems = await query
@@ -265,7 +283,8 @@ public class ToolboxTalkReportsService : IToolboxTalkReportsService
         Guid? toolboxTalkId = null,
         Guid? siteId = null,
         int pageNumber = 1,
-        int pageSize = 20)
+        int pageSize = 20,
+        List<Guid>? employeeIds = null)
     {
         try
         {
@@ -300,6 +319,11 @@ public class ToolboxTalkReportsService : IToolboxTalkReportsService
             if (siteId.HasValue)
             {
                 query = query.Where(c => c.ScheduledTalk.Employee.PrimarySiteId == siteId.Value);
+            }
+
+            if (employeeIds != null)
+            {
+                query = query.Where(c => employeeIds.Contains(c.ScheduledTalk.EmployeeId));
             }
 
             var totalCount = await query.CountAsync();

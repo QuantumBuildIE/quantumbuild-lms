@@ -12,4 +12,9 @@ public record GetToolboxTalkDashboardQuery : IRequest<ToolboxTalkDashboardDto>
     /// Tenant ID for multi-tenancy filtering (resolved from context)
     /// </summary>
     public Guid TenantId { get; init; }
+
+    /// <summary>
+    /// Optional employee IDs for supervisor scoping. When set, only data for these employees is included.
+    /// </summary>
+    public List<Guid>? EmployeeIds { get; init; }
 }

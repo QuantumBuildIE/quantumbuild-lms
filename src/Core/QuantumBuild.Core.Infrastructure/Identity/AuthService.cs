@@ -218,7 +218,8 @@ public class AuthService : IAuthService
             user.TenantId,
             roles,
             permissions,
-            user.IsSuperUser
+            user.IsSuperUser,
+            user.EmployeeId
         );
 
         return new AuthResponse(

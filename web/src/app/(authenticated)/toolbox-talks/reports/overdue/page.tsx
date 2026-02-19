@@ -8,6 +8,7 @@ import { AlertTriangle, Download, Bell, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useMyOperators } from '@/lib/api/admin/use-supervisor-assignments';
 import {
   Select,
   SelectContent,
@@ -44,6 +45,8 @@ export default function OverdueReportPage() {
   const { data: talksData } = useToolboxTalks({ isActive: true });
   const exportReport = useExportOverdueReport();
   const sendReminder = useSendReminder();
+  const { data: operators } = useMyOperators();
+  const operatorCount = operators?.length ?? 0;
 
   const updateUrlParams = (updates: Record<string, string | null | undefined>) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -81,7 +84,7 @@ export default function OverdueReportPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Overdue Report</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Team Overdue Report</h1>
           <p className="text-muted-foreground">Error loading report</p>
         </div>
         <Card className="p-8 text-center">
@@ -100,12 +103,12 @@ export default function OverdueReportPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
             <AlertTriangle className={`h-6 w-6 ${overdueCount > 0 ? 'text-red-600' : 'text-muted-foreground'}`} />
-            Overdue Report
+            Team Overdue Report
           </h1>
           <p className="text-muted-foreground">
             {overdueCount > 0
-              ? `${overdueCount} overdue assignment${overdueCount !== 1 ? 's' : ''} requiring attention`
-              : 'No overdue assignments'}
+              ? `${overdueCount} overdue assignment${overdueCount !== 1 ? 's' : ''} across your ${operatorCount} assigned operator${operatorCount !== 1 ? 's' : ''}`
+              : `No overdue assignments for your ${operatorCount} assigned operator${operatorCount !== 1 ? 's' : ''}`}
           </p>
         </div>
         <Button variant="outline" onClick={handleExport} disabled={exportReport.isPending || isLoading}>

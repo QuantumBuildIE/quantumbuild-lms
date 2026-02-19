@@ -58,6 +58,20 @@ public class CurrentUserService : ICurrentUserService
     }
 
     /// <summary>
+    /// Current user's linked Employee ID from JWT claim (null if not linked)
+    /// </summary>
+    public Guid? EmployeeId
+    {
+        get
+        {
+            var claim = _httpContextAccessor.HttpContext?.User?.FindFirstValue("employee_id");
+            if (Guid.TryParse(claim, out var employeeId))
+                return employeeId;
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Current user's tenant ID.
     /// For SuperUser: reads X-Tenant-Id header, returns Guid.Empty if absent (bypasses tenant filter).
     /// For regular users: reads from JWT tenant_id claim.

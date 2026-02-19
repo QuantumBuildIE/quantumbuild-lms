@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { useIsSuperUser } from "@/lib/auth/use-auth";
+import { useAuth, useIsSuperUser } from "@/lib/auth/use-auth";
 import { cn } from "@/lib/utils";
 
-// Employee-only navigation - simplified view for completing assigned talks
-const myTalksNavItems = [
+// Base navigation items for all employees
+const baseNavItems = [
   { href: "/toolbox-talks", label: "My Learnings", exact: true },
   { href: "/toolbox-talks/certificates", label: "My Certificates" },
 ];
@@ -19,7 +19,20 @@ export default function ToolboxTalksLayout({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { user } = useAuth();
   const isSuperUser = useIsSuperUser();
+
+  const isSupervisor = user?.roles?.includes("Supervisor") ?? false;
+
+  const navItems = useMemo(() => {
+    if (isSupervisor) {
+      return [
+        ...baseNavItems,
+        { href: "/toolbox-talks/reports", label: "Team Reports" },
+      ];
+    }
+    return baseNavItems;
+  }, [isSupervisor]);
 
   // SuperUser is a platform role, not a learner — redirect to admin
   useEffect(() => {
@@ -39,7 +52,7 @@ export default function ToolboxTalksLayout({
     <div className="space-y-6">
       <nav className="border-b bg-background -mx-4 px-4 sm:mx-0 sm:px-6">
         <div className="flex h-10 items-center gap-4 overflow-x-auto sm:gap-6 scrollbar-hide">
-          {myTalksNavItems.map((item) => (
+          {navItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}

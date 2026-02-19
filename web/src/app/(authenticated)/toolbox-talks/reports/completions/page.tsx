@@ -8,6 +8,7 @@ import { CheckCircle, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useMyOperators } from '@/lib/api/admin/use-supervisor-assignments';
 import {
   Select,
   SelectContent,
@@ -52,6 +53,8 @@ export default function CompletionsReportPage() {
   const { data: sitesData } = useSites();
   const { data: talksData } = useToolboxTalks({ isActive: true });
   const exportReport = useExportCompletionsReport();
+  const { data: operators } = useMyOperators();
+  const operatorCount = operators?.length ?? 0;
 
   const updateUrlParams = (updates: Record<string, string | null | undefined>) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -83,7 +86,7 @@ export default function CompletionsReportPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Completions Report</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Team Completions Report</h1>
           <p className="text-muted-foreground">Error loading report</p>
         </div>
         <Card className="p-8 text-center">
@@ -104,12 +107,12 @@ export default function CompletionsReportPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
             <CheckCircle className="h-6 w-6 text-green-600" />
-            Completions Report
+            Team Completions Report
           </h1>
           <p className="text-muted-foreground">
             {report?.totalCount
-              ? `${report.totalCount} completion${report.totalCount !== 1 ? 's' : ''} found`
-              : 'Detailed completion records'}
+              ? `${report.totalCount} completion${report.totalCount !== 1 ? 's' : ''} across your ${operatorCount} assigned operator${operatorCount !== 1 ? 's' : ''}`
+              : `Completion records for your ${operatorCount} assigned operator${operatorCount !== 1 ? 's' : ''}`}
           </p>
         </div>
         <Button variant="outline" onClick={handleExport} disabled={exportReport.isPending || isLoading}>

@@ -30,5 +30,6 @@ public record UserInfo(
     Guid TenantId,
     IEnumerable<string> Roles,
     IEnumerable<string> Permissions,
-    bool IsSuperUser
+    bool IsSuperUser,
+    Guid? EmployeeId
 );

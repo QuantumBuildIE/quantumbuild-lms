@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using QuantumBuild.Core.Application.Features.Employees;
 using QuantumBuild.Core.Application.Features.Employees.DTOs;
+using QuantumBuild.Core.Application.Interfaces;
 
 namespace QuantumBuild.API.Controllers;
 
@@ -11,10 +12,17 @@ namespace QuantumBuild.API.Controllers;
 public class EmployeesController : ControllerBase
 {
     private readonly IEmployeeService _employeeService;
+    private readonly ISupervisorAssignmentService _supervisorAssignmentService;
+    private readonly ICurrentUserService _currentUserService;
 
-    public EmployeesController(IEmployeeService employeeService)
+    public EmployeesController(
+        IEmployeeService employeeService,
+        ISupervisorAssignmentService supervisorAssignmentService,
+        ICurrentUserService currentUserService)
     {
         _employeeService = employeeService;
+        _supervisorAssignmentService = supervisorAssignmentService;
+        _currentUserService = currentUserService;
     }
 
     /// <summary>
@@ -232,5 +240,141 @@ public class EmployeesController : ControllerBase
         }
 
         return Ok(result);
+    }
+
+    // ── Supervisor Assignment Endpoints ──────────────────────────────────
+
+    /// <summary>
+    /// Get operators assigned to a supervisor
+    /// </summary>
+    [HttpGet("{supervisorId:guid}/operators")]
+    [Authorize(Policy = "Learnings.View")]
+    public async Task<IActionResult> GetAssignedOperators(Guid supervisorId)
+    {
+        if (!CanAccessSupervisorData(supervisorId))
+            return Forbid();
+
+        var result = await _supervisorAssignmentService.GetAssignedOperatorsAsync(supervisorId);
+
+        if (!result.Success)
+            return BadRequest(result);
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Get operators available to assign to a supervisor
+    /// </summary>
+    [HttpGet("{supervisorId:guid}/operators/available")]
+    [Authorize(Policy = "Core.ManageEmployees")]
+    public async Task<IActionResult> GetAvailableOperators(Guid supervisorId)
+    {
+        if (!CanManageSupervisorData(supervisorId))
+            return Forbid();
+
+        var result = await _supervisorAssignmentService.GetAvailableOperatorsAsync(supervisorId);
+
+        if (!result.Success)
+            return BadRequest(result);
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Assign operators to a supervisor
+    /// </summary>
+    [HttpPost("{supervisorId:guid}/operators")]
+    [Authorize(Policy = "Core.ManageEmployees")]
+    public async Task<IActionResult> AssignOperators(Guid supervisorId, [FromBody] AssignOperatorsDto dto)
+    {
+        if (!CanManageSupervisorData(supervisorId))
+            return Forbid();
+
+        var result = await _supervisorAssignmentService.AssignOperatorsAsync(supervisorId, dto);
+
+        if (!result.Success)
+            return BadRequest(result);
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Unassign an operator from a supervisor
+    /// </summary>
+    [HttpDelete("{supervisorId:guid}/operators/{operatorId:guid}")]
+    [Authorize(Policy = "Core.ManageEmployees")]
+    public async Task<IActionResult> UnassignOperator(Guid supervisorId, Guid operatorId)
+    {
+        if (!CanManageSupervisorData(supervisorId))
+            return Forbid();
+
+        var result = await _supervisorAssignmentService.UnassignOperatorAsync(supervisorId, operatorId);
+
+        if (!result.Success)
+            return BadRequest(result);
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Get the current supervisor's own assigned operators
+    /// </summary>
+    [HttpGet("my-operators")]
+    [Authorize(Policy = "Learnings.View")]
+    public async Task<IActionResult> GetMyOperators()
+    {
+        var employeeId = GetCurrentEmployeeId();
+        if (employeeId == null)
+            return BadRequest(new { message = "Current user is not linked to an employee" });
+
+        var result = await _supervisorAssignmentService.GetAssignedOperatorsAsync(employeeId.Value);
+
+        if (!result.Success)
+            return BadRequest(result);
+
+        return Ok(result);
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────
+
+    private Guid? GetCurrentEmployeeId()
+    {
+        var employeeIdClaim = User.FindFirst("employee_id")?.Value;
+        if (string.IsNullOrEmpty(employeeIdClaim) || !Guid.TryParse(employeeIdClaim, out var employeeId))
+            return null;
+        return employeeId;
+    }
+
+    private bool IsAdminOrSuperUser()
+    {
+        var isSuperUser = User.FindAll("is_super_user")
+            .Any(c => string.Equals(c.Value, "true", StringComparison.OrdinalIgnoreCase));
+        if (isSuperUser) return true;
+
+        var hasManageEmployees = User.FindAll("permission")
+            .Any(c => c.Value == "Core.ManageEmployees");
+        return hasManageEmployees;
+    }
+
+    /// <summary>
+    /// Supervisors can view their own data; admins/SU can view anyone's.
+    /// </summary>
+    private bool CanAccessSupervisorData(Guid supervisorId)
+    {
+        if (IsAdminOrSuperUser()) return true;
+        var employeeId = GetCurrentEmployeeId();
+        return employeeId.HasValue && employeeId.Value == supervisorId;
+    }
+
+    /// <summary>
+    /// Admins/SU can manage anyone's; supervisors can manage their own.
+    /// Used for endpoints guarded by Core.ManageEmployees — if the policy
+    /// already passed, we just need the self-check for supervisors.
+    /// </summary>
+    private bool CanManageSupervisorData(Guid supervisorId)
+    {
+        if (_currentUserService.IsSuperUser) return true;
+        var employeeId = GetCurrentEmployeeId();
+        return employeeId.HasValue && employeeId.Value == supervisorId;
     }
 }

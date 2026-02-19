@@ -107,6 +107,10 @@ public class Employee : TenantEntity
         GeoTrackerID = geoTrackerId;
     }
 
+    // Supervisor assignments
+    public ICollection<SupervisorAssignment> SupervisorAssignments { get; set; } = new List<SupervisorAssignment>();
+    public ICollection<SupervisorAssignment> OperatorAssignments { get; set; } = new List<SupervisorAssignment>();
+
     /// <summary>
     /// Float person ID - links this employee to a Float person record
     /// </summary>

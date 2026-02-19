@@ -21,6 +21,7 @@ import {
   type SortDirection,
 } from "@/components/shared/data-table";
 import { useEmployees, useDeleteEmployee, useResendInvite } from "@/lib/api/admin/use-employees";
+import { getApiErrorMessage } from "@/lib/utils";
 import type { Employee } from "@/types/admin";
 
 function useDebounce<T>(value: T, delay: number): T {
@@ -112,8 +113,10 @@ export default function EmployeesPage() {
       try {
         await deleteEmployee.mutateAsync(id);
         toast.success("Employee deleted successfully");
-      } catch {
-        toast.error("Failed to delete employee");
+      } catch (error) {
+        toast.error("Failed to delete employee", {
+          description: getApiErrorMessage(error, "An unexpected error occurred"),
+        });
       }
     }
   };

@@ -115,6 +115,8 @@ public class AuthController : ControllerBase
         var roles = User.FindAll(ClaimTypes.Role).Select(c => c.Value);
         var permissions = await _authService.GetUserPermissionsAsync(userId);
         var isSuperUser = User.FindFirst("is_super_user")?.Value == "true";
+        var employeeIdClaim = User.FindFirst("employee_id")?.Value;
+        Guid? employeeId = Guid.TryParse(employeeIdClaim, out var eid) ? eid : null;
 
         return Ok(new
         {
@@ -125,7 +127,8 @@ public class AuthController : ControllerBase
             tenantId,
             roles,
             permissions,
-            isSuperUser
+            isSuperUser,
+            employeeId
         });
     }
 

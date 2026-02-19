@@ -29,8 +29,8 @@ public record CreateEmployeeDto(
     bool CreateUserAccount = true,
     /// <summary>
     /// Optional role name to assign to the created user.
-    /// Defaults to "SiteManager" if not specified.
-    /// Valid roles: Admin, Finance, OfficeStaff, SiteManager, WarehouseStaff
+    /// Defaults to "Operator" if not specified.
+    /// Valid roles: Admin, Finance, OfficeStaff, Operator, Supervisor, WarehouseStaff
     /// </summary>
     string? UserRole = null,
     /// <summary>

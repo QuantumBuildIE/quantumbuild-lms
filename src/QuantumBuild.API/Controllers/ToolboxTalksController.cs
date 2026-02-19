@@ -2,8 +2,12 @@ using Hangfire;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using QuantumBuild.Core.Application.Features.Employees;
 using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Core.Application.Models;
+using QuantumBuild.Core.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.CreateToolboxTalk;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.DeleteToolboxTalk;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.GenerateContentTranslations;
@@ -46,6 +50,8 @@ public class ToolboxTalksController : ControllerBase
     private readonly IContentDeduplicationService _deduplicationService;
     private readonly IR2StorageService _r2StorageService;
     private readonly ISlideshowGenerationService _slideshowGenerationService;
+    private readonly ISupervisorAssignmentService _supervisorAssignmentService;
+    private readonly UserManager<User> _userManager;
     private readonly ILogger<ToolboxTalksController> _logger;
 
     public ToolboxTalksController(
@@ -57,6 +63,8 @@ public class ToolboxTalksController : ControllerBase
         IContentDeduplicationService deduplicationService,
         IR2StorageService r2StorageService,
         ISlideshowGenerationService slideshowGenerationService,
+        ISupervisorAssignmentService supervisorAssignmentService,
+        UserManager<User> userManager,
         ILogger<ToolboxTalksController> logger)
     {
         _mediator = mediator;
@@ -67,7 +75,52 @@ public class ToolboxTalksController : ControllerBase
         _deduplicationService = deduplicationService;
         _r2StorageService = r2StorageService;
         _slideshowGenerationService = slideshowGenerationService;
+        _supervisorAssignmentService = supervisorAssignmentService;
+        _userManager = userManager;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Resolves employee IDs for report scoping based on the current user's role.
+    /// Returns null for Admin/SU (see all), a list of operator IDs for Supervisors,
+    /// or a single-element list for Operators scoped to themselves.
+    /// </summary>
+    private async Task<List<Guid>?> ResolveScopedEmployeeIdsAsync()
+    {
+        // SuperUser and Admin see all data
+        if (_currentUserService.IsSuperUser)
+            return null;
+
+        var user = await _userManager.Users
+            .Include(u => u.UserRoles)
+                .ThenInclude(ur => ur.Role)
+            .FirstOrDefaultAsync(u => u.Id.ToString() == _currentUserService.UserId);
+
+        if (user == null)
+            return new List<Guid>(); // No user found — return empty to show nothing
+
+        var roleNames = user.UserRoles.Select(ur => ur.Role.NormalizedName).ToHashSet();
+
+        // Admin sees all
+        if (roleNames.Contains("ADMIN"))
+            return null;
+
+        // Supervisor sees only their assigned operators
+        if (roleNames.Contains("SUPERVISOR"))
+        {
+            var employeeId = _currentUserService.EmployeeId;
+            if (!employeeId.HasValue)
+                return new List<Guid>();
+
+            var result = await _supervisorAssignmentService.GetAssignedOperatorIdsAsync(employeeId.Value);
+            return result.Success ? result.Data : new List<Guid>();
+        }
+
+        // Operator (or any other role) sees only their own data
+        var ownEmployeeId = _currentUserService.EmployeeId;
+        return ownEmployeeId.HasValue
+            ? new List<Guid> { ownEmployeeId.Value }
+            : new List<Guid>();
     }
 
     /// <summary>
@@ -359,9 +412,12 @@ public class ToolboxTalksController : ControllerBase
     {
         try
         {
+            var employeeIds = await ResolveScopedEmployeeIdsAsync();
+
             var query = new GetToolboxTalkDashboardQuery
             {
-                TenantId = _currentUserService.TenantId
+                TenantId = _currentUserService.TenantId,
+                EmployeeIds = employeeIds
             };
 
             var result = await _mediator.Send(query);
@@ -1140,11 +1196,14 @@ public class ToolboxTalksController : ControllerBase
     {
         try
         {
+            var employeeIds = await ResolveScopedEmployeeIdsAsync();
+
             var report = await _reportsService.GetComplianceReportAsync(
                 _currentUserService.TenantId,
                 dateFrom,
                 dateTo,
-                siteId);
+                siteId,
+                employeeIds);
             return Ok(Result.Ok(report));
         }
         catch (Exception ex)
@@ -1168,10 +1227,13 @@ public class ToolboxTalksController : ControllerBase
     {
         try
         {
+            var employeeIds = await ResolveScopedEmployeeIdsAsync();
+
             var report = await _reportsService.GetOverdueReportAsync(
                 _currentUserService.TenantId,
                 siteId,
-                toolboxTalkId);
+                toolboxTalkId,
+                employeeIds);
             return Ok(Result.Ok(report));
         }
         catch (Exception ex)
@@ -1203,6 +1265,8 @@ public class ToolboxTalksController : ControllerBase
     {
         try
         {
+            var employeeIds = await ResolveScopedEmployeeIdsAsync();
+
             var report = await _reportsService.GetCompletionReportAsync(
                 _currentUserService.TenantId,
                 dateFrom,
@@ -1210,7 +1274,8 @@ public class ToolboxTalksController : ControllerBase
                 toolboxTalkId,
                 siteId,
                 pageNumber,
-                pageSize);
+                pageSize,
+                employeeIds);
             return Ok(Result.Ok(report));
         }
         catch (Exception ex)
@@ -1234,10 +1299,13 @@ public class ToolboxTalksController : ControllerBase
     {
         try
         {
+            var employeeIds = await ResolveScopedEmployeeIdsAsync();
+
             var report = await _reportsService.GetOverdueReportAsync(
                 _currentUserService.TenantId,
                 siteId,
-                toolboxTalkId);
+                toolboxTalkId,
+                employeeIds);
 
             var fileBytes = await _exportService.GenerateOverdueReportExcelAsync(report);
 
@@ -1274,6 +1342,8 @@ public class ToolboxTalksController : ControllerBase
     {
         try
         {
+            var employeeIds = await ResolveScopedEmployeeIdsAsync();
+
             // Get all completions (no pagination for export)
             var report = await _reportsService.GetCompletionReportAsync(
                 _currentUserService.TenantId,
@@ -1282,7 +1352,8 @@ public class ToolboxTalksController : ControllerBase
                 toolboxTalkId,
                 siteId,
                 1,
-                10000); // Large page size for export
+                10000, // Large page size for export
+                employeeIds);
 
             var fileBytes = await _exportService.GenerateCompletionsReportExcelAsync(report.Items);
 
@@ -1317,11 +1388,14 @@ public class ToolboxTalksController : ControllerBase
     {
         try
         {
+            var employeeIds = await ResolveScopedEmployeeIdsAsync();
+
             var report = await _reportsService.GetComplianceReportAsync(
                 _currentUserService.TenantId,
                 dateFrom,
                 dateTo,
-                siteId);
+                siteId,
+                employeeIds);
 
             var fileBytes = await _exportService.GenerateComplianceReportPdfAsync(report);
 
@@ -1359,6 +1433,8 @@ public class ToolboxTalksController : ControllerBase
     {
         try
         {
+            var employeeIds = await ResolveScopedEmployeeIdsAsync();
+
             var query = new GetCertificateReportQuery
             {
                 TenantId = _currentUserService.TenantId,
@@ -1366,7 +1442,8 @@ public class ToolboxTalksController : ControllerBase
                 Type = type,
                 Search = search,
                 Page = page,
-                PageSize = pageSize
+                PageSize = pageSize,
+                EmployeeIds = employeeIds
             };
 
             var result = await _mediator.Send(query);

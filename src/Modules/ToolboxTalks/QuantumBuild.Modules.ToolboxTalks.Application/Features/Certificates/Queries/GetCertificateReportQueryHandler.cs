@@ -32,6 +32,12 @@ public class GetCertificateReportQueryHandler : IRequestHandler<GetCertificateRe
             }
         }
 
+        // Filter by employee IDs (supervisor scoping)
+        if (request.EmployeeIds != null)
+        {
+            query = query.Where(c => request.EmployeeIds.Contains(c.EmployeeId));
+        }
+
         // Filter by search (employee name, training title, employee code)
         if (!string.IsNullOrEmpty(request.Search))
         {
