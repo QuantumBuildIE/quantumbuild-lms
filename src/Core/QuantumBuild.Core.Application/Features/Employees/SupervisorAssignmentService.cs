@@ -37,6 +37,8 @@ public class SupervisorAssignmentService : ISupervisorAssignmentService
 
             var operators = await _context.SupervisorAssignments
                 .Where(sa => sa.SupervisorEmployeeId == supervisorEmployeeId)
+                .OrderBy(sa => sa.Operator.LastName)
+                .ThenBy(sa => sa.Operator.FirstName)
                 .Select(sa => new SupervisorOperatorDto(
                     sa.Operator.Id,
                     sa.Operator.EmployeeCode,
@@ -44,7 +46,6 @@ public class SupervisorAssignmentService : ISupervisorAssignmentService
                     sa.Operator.Department,
                     sa.Operator.JobTitle
                 ))
-                .OrderBy(o => o.FullName)
                 .ToListAsync();
 
             return Result.Ok(operators);
@@ -60,47 +61,26 @@ public class SupervisorAssignmentService : ISupervisorAssignmentService
     {
         try
         {
-            _logger.LogWarning("[AvailOps] START — supervisorEmployeeId={SupervisorEmployeeId}", supervisorEmployeeId);
-            _logger.LogWarning("[AvailOps] TenantId={TenantId}, IsSuperUser={IsSuperUser}, UserId={UserId}",
-                _currentUserService.TenantId, _currentUserService.IsSuperUser, _currentUserService.UserId);
-
             var accessCheck = await CheckSupervisorAccessAsync(supervisorEmployeeId);
             if (!accessCheck.Success)
-            {
-                _logger.LogWarning("[AvailOps] Access check FAILED: {Errors}", string.Join("; ", accessCheck.Errors));
                 return Result.Fail<List<SupervisorOperatorDto>>(accessCheck.Errors);
-            }
-
-            // Log total employees visible through tenant filter
-            var allEmployees = await _context.Employees.ToListAsync();
-            _logger.LogWarning("[AvailOps] Total employees visible (all, incl inactive/deleted filtered): {Count}", allEmployees.Count);
-            foreach (var emp in allEmployees)
-            {
-                _logger.LogWarning("[AvailOps]   Employee: Id={Id}, Name={Name}, IsActive={IsActive}, UserId={UserId}, TenantId={TenantId}",
-                    emp.Id, emp.FirstName + " " + emp.LastName, emp.IsActive, emp.UserId ?? "(null)", emp.TenantId);
-            }
-
-            var activeEmployees = allEmployees.Where(e => e.IsActive).ToList();
-            _logger.LogWarning("[AvailOps] Active employees: {Count}", activeEmployees.Count);
 
             // Get IDs of employees already assigned to this supervisor
             var assignedOperatorIds = await _context.SupervisorAssignments
                 .Where(sa => sa.SupervisorEmployeeId == supervisorEmployeeId)
                 .Select(sa => sa.OperatorEmployeeId)
                 .ToListAsync();
-            _logger.LogWarning("[AvailOps] Already assigned operator IDs: [{Ids}]",
-                assignedOperatorIds.Count > 0 ? string.Join(", ", assignedOperatorIds) : "(none)");
 
             // Get employee IDs to exclude: those whose linked User is Admin, Supervisor, or SuperUser
             var excludedEmployeeIds = await GetExcludedEmployeeIdsAsync();
-            _logger.LogWarning("[AvailOps] Excluded employee IDs (Admin/Supervisor/SuperUser): [{Ids}]",
-                excludedEmployeeIds.Count > 0 ? string.Join(", ", excludedEmployeeIds) : "(none)");
 
             var availableOperators = await _context.Employees
                 .Where(e => e.IsActive
                     && e.Id != supervisorEmployeeId
                     && !assignedOperatorIds.Contains(e.Id)
                     && !excludedEmployeeIds.Contains(e.Id))
+                .OrderBy(e => e.LastName)
+                .ThenBy(e => e.FirstName)
                 .Select(e => new SupervisorOperatorDto(
                     e.Id,
                     e.EmployeeCode,
@@ -108,14 +88,7 @@ public class SupervisorAssignmentService : ISupervisorAssignmentService
                     e.Department,
                     e.JobTitle
                 ))
-                .OrderBy(o => o.FullName)
                 .ToListAsync();
-
-            _logger.LogWarning("[AvailOps] Final available operators: {Count}", availableOperators.Count);
-            foreach (var op in availableOperators)
-            {
-                _logger.LogWarning("[AvailOps]   Available: Id={Id}, Name={Name}", op.EmployeeId, op.FullName);
-            }
 
             return Result.Ok(availableOperators);
         }
@@ -314,39 +287,21 @@ public class SupervisorAssignmentService : ISupervisorAssignmentService
     private async Task<HashSet<Guid>> GetExcludedEmployeeIdsAsync()
     {
         // Find users who are Admin, Supervisor, or SuperUser in this tenant
-        var excludedUsers = await _userManager.Users
+        var excludedUserIds = await _userManager.Users
             .Where(u => u.TenantId == _currentUserService.TenantId && u.IsActive)
             .Where(u => u.IsSuperUser
                 || u.UserRoles.Any(ur =>
                     ur.Role.NormalizedName == "ADMIN"
                     || ur.Role.NormalizedName == "SUPERVISOR"))
-            .Select(u => new { u.Id, u.FirstName, u.LastName, u.IsSuperUser, u.EmployeeId,
-                Roles = u.UserRoles.Select(ur => ur.Role.NormalizedName).ToList() })
+            .Select(u => u.Id.ToString())
             .ToListAsync();
-
-        var excludedUserIds = excludedUsers.Select(u => u.Id.ToString()).ToList();
-
-        _logger.LogWarning("[ExcludedEmp] Tenant={TenantId} — found {Count} excluded users (Admin/Supervisor/SuperUser):",
-            _currentUserService.TenantId, excludedUsers.Count);
-        foreach (var u in excludedUsers)
-        {
-            _logger.LogWarning("[ExcludedEmp]   User: Id={UserId}, Name={Name}, IsSuperUser={IsSuperUser}, EmployeeId={EmployeeId}, Roles=[{Roles}]",
-                u.Id, u.FirstName + " " + u.LastName, u.IsSuperUser, u.EmployeeId?.ToString() ?? "(null)", string.Join(", ", u.Roles));
-        }
 
         // Map those user IDs to employee IDs via Employee.UserId
         var excludedEmployeeIds = await _context.Employees
             .Where(e => e.UserId != null && excludedUserIds.Contains(e.UserId))
-            .Select(e => new { e.Id, e.UserId, e.FirstName, e.LastName })
+            .Select(e => e.Id)
             .ToListAsync();
 
-        _logger.LogWarning("[ExcludedEmp] Mapped to {Count} excluded employees:", excludedEmployeeIds.Count);
-        foreach (var e in excludedEmployeeIds)
-        {
-            _logger.LogWarning("[ExcludedEmp]   Employee: Id={Id}, Name={Name}, UserId={UserId}",
-                e.Id, e.FirstName + " " + e.LastName, e.UserId);
-        }
-
-        return excludedEmployeeIds.Select(e => e.Id).ToHashSet();
+        return excludedEmployeeIds.ToHashSet();
     }
 }
