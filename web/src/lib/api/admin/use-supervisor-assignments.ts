@@ -42,6 +42,9 @@ export function useAssignOperators() {
       queryClient.invalidateQueries({
         queryKey: [...SUPERVISOR_ASSIGNMENTS_KEY, variables.supervisorId],
       });
+      queryClient.invalidateQueries({
+        queryKey: [...SUPERVISOR_ASSIGNMENTS_KEY, "my-operators"],
+      });
     },
   });
 }
@@ -60,6 +63,9 @@ export function useUnassignOperator() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
         queryKey: [...SUPERVISOR_ASSIGNMENTS_KEY, variables.supervisorId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: [...SUPERVISOR_ASSIGNMENTS_KEY, "my-operators"],
       });
     },
   });
