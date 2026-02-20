@@ -22,29 +22,37 @@ const PAGE_SIZE = 25;
 
 const STATUS_CONFIG: Record<
   SkillsMatrixCellStatus,
-  { bg: string; text: string; label: string }
+  { bg: string; text: string; label: string; hover: string }
 > = {
-  Completed: { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'Completed' },
-  InProgress: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'In Progress' },
-  Overdue: { bg: 'bg-red-100', text: 'text-red-700', label: 'Overdue' },
-  Assigned: { bg: 'bg-sky-100', text: 'text-sky-700', label: 'Assigned' },
-  NotAssigned: { bg: 'bg-gray-50', text: 'text-gray-400', label: 'Not Assigned' },
+  Completed: { bg: 'bg-emerald-200', text: 'text-emerald-800', label: 'Completed', hover: 'hover:bg-emerald-300' },
+  InProgress: { bg: 'bg-blue-200', text: 'text-blue-800', label: 'In Progress', hover: 'hover:bg-blue-300' },
+  Overdue: { bg: 'bg-red-200', text: 'text-red-800', label: 'Overdue', hover: 'hover:bg-red-300' },
+  Assigned: { bg: 'bg-amber-200', text: 'text-amber-800', label: 'Assigned', hover: 'hover:bg-amber-300' },
+  NotAssigned: { bg: 'bg-gray-100', text: 'text-gray-400', label: 'Not Assigned', hover: '' },
 };
 
 function CellContent({ cell }: { cell: SkillsMatrixCell | undefined }) {
   if (!cell || cell.status === 'NotAssigned') {
     return (
-      <span className="text-gray-400">&mdash;</span>
+      <span className="text-gray-400 text-sm">&mdash;</span>
     );
   }
 
   const config = STATUS_CONFIG[cell.status as SkillsMatrixCellStatus] ?? STATUS_CONFIG.NotAssigned;
 
-  let displayText = '';
-  if (cell.status === 'Completed' && cell.score != null) {
-    displayText = `${cell.score}%`;
-  } else if (cell.status === 'Overdue' && cell.daysOverdue != null) {
-    displayText = `${cell.daysOverdue}d`;
+  let displayText: React.ReactNode = '';
+  if (cell.status === 'Completed') {
+    displayText = cell.score != null
+      ? <><span className="font-bold">&#10003;</span> {cell.score}%</>
+      : <span className="font-bold">&#10003;</span>;
+  } else if (cell.status === 'InProgress') {
+    displayText = 'In Progress';
+  } else if (cell.status === 'Overdue') {
+    displayText = cell.daysOverdue != null
+      ? <span className="font-bold">&#9888; {cell.daysOverdue}d</span>
+      : <span className="font-bold">Overdue</span>;
+  } else if (cell.status === 'Assigned') {
+    displayText = 'Pending';
   }
 
   let tooltipText = config.label;
@@ -58,9 +66,9 @@ function CellContent({ cell }: { cell: SkillsMatrixCell | undefined }) {
     <Tooltip>
       <TooltipTrigger asChild>
         <div
-          className={`flex items-center justify-center h-full w-full rounded px-1.5 py-1 text-xs font-medium ${config.bg} ${config.text}`}
+          className={`flex items-center justify-center h-full w-full rounded px-3 py-2 text-sm font-medium cursor-pointer transition-colors ${config.bg} ${config.text} ${config.hover}`}
         >
-          {displayText || config.label.charAt(0)}
+          {displayText}
         </div>
       </TooltipTrigger>
       <TooltipContent>
@@ -72,10 +80,10 @@ function CellContent({ cell }: { cell: SkillsMatrixCell | undefined }) {
 
 function Legend() {
   return (
-    <div className="flex flex-wrap gap-3 text-xs">
+    <div className="flex flex-wrap gap-4 text-sm">
       {Object.entries(STATUS_CONFIG).map(([status, config]) => (
-        <div key={status} className="flex items-center gap-1.5">
-          <div className={`h-3 w-3 rounded ${config.bg} border border-gray-200`} />
+        <div key={status} className="flex items-center gap-2">
+          <div className={`h-4 w-4 rounded ${config.bg} border border-gray-200`} />
           <span className="text-muted-foreground">{config.label}</span>
         </div>
       ))}
@@ -156,18 +164,18 @@ export function SkillsMatrixGrid({ data, isLoading }: SkillsMatrixGridProps) {
       <div className="space-y-4">
         <Legend />
 
-        <div className="relative overflow-x-auto border rounded-lg">
-          <table className="w-full text-sm">
+        <div className="relative overflow-x-auto rounded-lg shadow-sm border border-gray-200">
+          <table className="w-full text-sm border-collapse">
             <thead>
               {/* Category header row */}
               {hasMultipleCategories && (
-                <tr className="border-b bg-muted/30">
-                  <th className="sticky left-0 z-20 bg-muted/30 border-r min-w-[200px]" />
+                <tr className="border-b border-gray-200 bg-gray-100">
+                  <th className="sticky left-0 z-20 bg-gray-100 border-r-2 border-gray-300 min-w-[220px]" />
                   {groupedLearnings.map((group) => (
                     <th
                       key={group.category}
                       colSpan={group.learnings.length}
-                      className="px-2 py-1.5 text-center text-xs font-semibold text-muted-foreground border-r last:border-r-0"
+                      className="px-3 py-2 text-center text-sm font-semibold text-gray-700 border-r border-gray-200 last:border-r-0"
                     >
                       {group.category}
                     </th>
@@ -175,15 +183,15 @@ export function SkillsMatrixGrid({ data, isLoading }: SkillsMatrixGridProps) {
                 </tr>
               )}
               {/* Learning code header row */}
-              <tr className="border-b bg-muted/50">
-                <th className="sticky left-0 z-20 bg-muted/50 border-r px-3 py-2 text-left text-xs font-semibold min-w-[200px]">
+              <tr className="border-b border-gray-200 bg-white">
+                <th className="sticky left-0 z-20 bg-white border-r-2 border-gray-300 px-3 py-2.5 text-left text-sm font-semibold min-w-[220px]">
                   Employee
                 </th>
                 {allLearnings.map((learning) => (
                   <Tooltip key={learning.id}>
                     <TooltipTrigger asChild>
-                      <th className="px-1.5 py-2 text-center text-xs font-medium min-w-[70px] max-w-[90px] cursor-help">
-                        <span className="font-mono">{learning.code}</span>
+                      <th className="px-2 py-2.5 text-center min-w-[100px] max-w-[120px] cursor-help border-r border-gray-200 last:border-r-0">
+                        <span className="font-mono font-semibold text-sm">{learning.code}</span>
                       </th>
                     </TooltipTrigger>
                     <TooltipContent side="bottom">
@@ -200,11 +208,11 @@ export function SkillsMatrixGrid({ data, isLoading }: SkillsMatrixGridProps) {
               {paginatedEmployees.map((employee, idx) => (
                 <tr
                   key={employee.id}
-                  className={idx % 2 === 0 ? 'bg-background' : 'bg-muted/20'}
+                  className={`border-b border-gray-200 last:border-b-0 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
                 >
-                  <td className={`sticky left-0 z-10 border-r px-3 py-1.5 ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/20'}`}>
+                  <td className={`sticky left-0 z-10 border-r-2 border-gray-300 px-3 py-2 min-w-[220px] ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
                     <div className="flex flex-col">
-                      <span className="font-medium text-sm truncate max-w-[180px]">
+                      <span className="font-medium text-sm truncate max-w-[200px]">
                         {employee.fullName}
                       </span>
                       <span className="text-xs text-muted-foreground font-mono">
@@ -215,7 +223,7 @@ export function SkillsMatrixGrid({ data, isLoading }: SkillsMatrixGridProps) {
                   {allLearnings.map((learning) => (
                     <td
                       key={learning.id}
-                      className="px-1 py-1 text-center"
+                      className="px-1 py-1 text-center h-12 border-r border-gray-200 last:border-r-0"
                     >
                       <CellContent
                         cell={cellMap.get(`${employee.id}:${learning.id}`)}
