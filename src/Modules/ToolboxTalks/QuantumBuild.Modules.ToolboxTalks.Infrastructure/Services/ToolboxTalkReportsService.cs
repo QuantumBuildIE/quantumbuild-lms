@@ -411,31 +411,40 @@ public class ToolboxTalkReportsService : IToolboxTalkReportsService
 
             var scheduledTalks = await scheduledTalksQuery.ToListAsync();
 
+            // Build learnings list — always derived from ScheduledTalks
+            var learnings = scheduledTalks
+                .Select(st => st.ToolboxTalk)
+                .DistinctBy(tt => tt.Id)
+                .OrderBy(tt => tt.Code)
+                .Select(tt => new SkillsMatrixLearningDto
+                {
+                    Id = tt.Id,
+                    Code = tt.Code,
+                    Title = tt.Title,
+                    Category = tt.Category
+                }).ToList();
+
             // Build employees list
             List<SkillsMatrixEmployeeDto> employees;
+
+            // Employees from ScheduledTalks (common to all paths)
+            var employeesFromTalks = scheduledTalks
+                .Select(st => st.Employee)
+                .DistinctBy(e => e.Id)
+                .ToList();
+
             if (employeeIds == null)
             {
-                // Admin view: include ALL active employees in the tenant
-                var allEmployees = await _coreContext.Employees
-                    .Where(e => e.TenantId == tenantId && !e.IsDeleted && e.IsActive)
-                    .OrderBy(e => e.LastName).ThenBy(e => e.FirstName)
+                // Admin view: employees from ScheduledTalks + active employees with zero assignments
+                var employeeIdsFromTalks = employeesFromTalks.Select(e => e.Id).ToHashSet();
+
+                var unassignedEmployees = await _coreContext.Employees
+                    .Where(e => e.TenantId == tenantId && !e.IsDeleted && e.IsActive
+                        && !employeeIdsFromTalks.Contains(e.Id))
                     .ToListAsync();
 
-                employees = allEmployees.Select(e => new SkillsMatrixEmployeeDto
-                {
-                    Id = e.Id,
-                    EmployeeCode = e.EmployeeCode,
-                    FullName = e.FullName,
-                    Department = e.Department,
-                    JobTitle = e.JobTitle
-                }).ToList();
-            }
-            else
-            {
-                // Supervisor/Operator view: only employees from filtered scheduled talks
-                employees = scheduledTalks
-                    .Select(st => st.Employee)
-                    .DistinctBy(e => e.Id)
+                employees = employeesFromTalks
+                    .Concat(unassignedEmployees)
                     .OrderBy(e => e.LastName).ThenBy(e => e.FirstName)
                     .Select(e => new SkillsMatrixEmployeeDto
                     {
@@ -446,44 +455,18 @@ public class ToolboxTalkReportsService : IToolboxTalkReportsService
                         JobTitle = e.JobTitle
                     }).ToList();
             }
-
-            // Build learnings list
-            List<SkillsMatrixLearningDto> learnings;
-            if (employeeIds == null)
-            {
-                // Admin view: include all published learnings in tenant
-                var learningsQuery = _context.ToolboxTalks
-                    .Where(tt => tt.TenantId == tenantId && !tt.IsDeleted && tt.IsActive
-                        && tt.Status == ToolboxTalkStatus.Published);
-
-                if (!string.IsNullOrEmpty(category))
-                {
-                    learningsQuery = learningsQuery.Where(tt => tt.Category == category);
-                }
-
-                learnings = await learningsQuery
-                    .OrderBy(tt => tt.Code)
-                    .Select(tt => new SkillsMatrixLearningDto
-                    {
-                        Id = tt.Id,
-                        Code = tt.Code,
-                        Title = tt.Title,
-                        Category = tt.Category
-                    }).ToListAsync();
-            }
             else
             {
-                // Supervisor/Operator view: only learnings that have assignments
-                learnings = scheduledTalks
-                    .Select(st => st.ToolboxTalk)
-                    .DistinctBy(tt => tt.Id)
-                    .OrderBy(tt => tt.Code)
-                    .Select(tt => new SkillsMatrixLearningDto
+                // Supervisor/Operator view: only employees from filtered scheduled talks
+                employees = employeesFromTalks
+                    .OrderBy(e => e.LastName).ThenBy(e => e.FirstName)
+                    .Select(e => new SkillsMatrixEmployeeDto
                     {
-                        Id = tt.Id,
-                        Code = tt.Code,
-                        Title = tt.Title,
-                        Category = tt.Category
+                        Id = e.Id,
+                        EmployeeCode = e.EmployeeCode,
+                        FullName = e.FullName,
+                        Department = e.Department,
+                        JobTitle = e.JobTitle
                     }).ToList();
             }
 
