@@ -226,34 +226,15 @@ export function SkillsMatrixGrid({ data, isLoading, categoryFilter }: SkillsMatr
     setPage(0);
   }
 
-  if (isLoading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-6 w-48" />
-        <Skeleton className="h-[400px] w-full" />
-      </div>
-    );
-  }
-
-  if (!data || data.employees.length === 0 || data.learnings.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 text-center">
-        <p className="text-muted-foreground">No learning assignments found</p>
-        <p className="text-sm text-muted-foreground mt-1">
-          Assignments will appear here once learnings are scheduled to employees.
-        </p>
-      </div>
-    );
-  }
-
+  const hasData = !!data && data.employees.length > 0 && data.learnings.length > 0;
   const allLearnings = groupedLearnings.flatMap((g) => g.learnings);
-  const totalLearnings = data.learnings.length;
+  const totalLearnings = data?.learnings?.length ?? 0;
   const isFilteringLearnings = selectedLearningIds.length > 0 && selectedLearningIds.length < totalLearnings;
 
   return (
     <TooltipProvider delayDuration={200}>
       <div className="space-y-4">
-        {/* Controls row: Legend on left, controls on right */}
+        {/* Controls row: Legend on left, controls on right — ALWAYS visible */}
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <Legend />
           <div className="flex flex-wrap items-center gap-2">
@@ -311,6 +292,7 @@ export function SkillsMatrixGrid({ data, isLoading, categoryFilter }: SkillsMatr
               maxDisplayItems={0}
               showSelectAll
               className="w-[200px] h-9"
+              disabled={isLoading || learningOptions.length === 0}
               renderTriggerContent={
                 isFilteringLearnings
                   ? () => (
@@ -327,117 +309,134 @@ export function SkillsMatrixGrid({ data, isLoading, categoryFilter }: SkillsMatr
           </div>
         </div>
 
-        <div className="relative overflow-x-auto rounded-lg shadow-sm border border-gray-200">
-          <table className="w-full text-sm border-collapse">
-            <thead>
-              {/* Category header row */}
-              {hasMultipleCategories && (
-                <tr className="border-b border-gray-200 bg-gray-100">
-                  <th className="sticky left-0 z-20 bg-gray-100 border-r-2 border-gray-300 min-w-[220px]" />
-                  {groupedLearnings.map((group) => (
-                    <th
-                      key={group.category}
-                      colSpan={group.learnings.length}
-                      className="px-3 py-2 text-center text-sm font-semibold text-gray-700 border-r border-gray-200 last:border-r-0"
-                    >
-                      {group.category}
+        {/* Grid content — conditional based on data */}
+        {isLoading ? (
+          <div className="space-y-4">
+            <Skeleton className="h-6 w-48" />
+            <Skeleton className="h-[400px] w-full" />
+          </div>
+        ) : !hasData ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <p className="text-muted-foreground">No learning assignments found</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Assignments will appear here once learnings are scheduled to employees.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="relative overflow-x-auto rounded-lg shadow-sm border border-gray-200">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  {/* Category header row */}
+                  {hasMultipleCategories && (
+                    <tr className="border-b border-gray-200 bg-gray-100">
+                      <th className="sticky left-0 z-20 bg-gray-100 border-r-2 border-gray-300 min-w-[220px]" />
+                      {groupedLearnings.map((group) => (
+                        <th
+                          key={group.category}
+                          colSpan={group.learnings.length}
+                          className="px-3 py-2 text-center text-sm font-semibold text-gray-700 border-r border-gray-200 last:border-r-0"
+                        >
+                          {group.category}
+                        </th>
+                      ))}
+                    </tr>
+                  )}
+                  {/* Learning code header row */}
+                  <tr className="border-b border-gray-200 bg-white">
+                    <th className="sticky left-0 z-20 bg-white border-r-2 border-gray-300 px-3 py-2.5 text-left text-sm font-semibold min-w-[220px]">
+                      Employee
                     </th>
-                  ))}
-                </tr>
-              )}
-              {/* Learning code header row */}
-              <tr className="border-b border-gray-200 bg-white">
-                <th className="sticky left-0 z-20 bg-white border-r-2 border-gray-300 px-3 py-2.5 text-left text-sm font-semibold min-w-[220px]">
-                  Employee
-                </th>
-                {allLearnings.map((learning) => (
-                  <Tooltip key={learning.id}>
-                    <TooltipTrigger asChild>
-                      <th className={`px-2 py-2.5 text-center cursor-help border-r border-gray-200 last:border-r-0 ${
-                        compact ? 'min-w-[40px] max-w-[64px]' : 'min-w-[100px] max-w-[120px]'
-                      }`}>
-                        <span className={`font-mono font-semibold ${compact ? 'text-xs truncate block overflow-hidden' : 'text-sm'}`}>
-                          {learning.code}
-                        </span>
-                      </th>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">
-                      <p className="font-semibold">{learning.code}</p>
-                      <p>{learning.title}</p>
-                      {learning.category && (
-                        <p className="text-xs opacity-80">{learning.category}</p>
-                      )}
-                    </TooltipContent>
-                  </Tooltip>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedEmployees.map((employee, idx) => (
-                <tr
-                  key={employee.id}
-                  className={`border-b border-gray-200 last:border-b-0 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
-                >
-                  <td className={`sticky left-0 z-10 border-r-2 border-gray-300 px-3 py-2 min-w-[220px] ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
-                    <div className="flex flex-col">
-                      <span className="font-medium text-sm truncate max-w-[200px]">
-                        {employee.fullName}
-                      </span>
-                      <span className="text-xs text-muted-foreground font-mono">
-                        {employee.employeeCode}
-                      </span>
-                    </div>
-                  </td>
-                  {allLearnings.map((learning) => (
-                    <td
-                      key={learning.id}
-                      className={`px-1 py-1 text-center border-r border-gray-200 last:border-r-0 ${
-                        compact ? 'h-10' : 'h-12'
-                      }`}
+                    {allLearnings.map((learning) => (
+                      <Tooltip key={learning.id}>
+                        <TooltipTrigger asChild>
+                          <th className={`px-2 py-2.5 text-center cursor-help border-r border-gray-200 last:border-r-0 ${
+                            compact ? 'min-w-[40px] max-w-[64px]' : 'min-w-[100px] max-w-[120px]'
+                          }`}>
+                            <span className={`font-mono font-semibold ${compact ? 'text-xs truncate block overflow-hidden' : 'text-sm'}`}>
+                              {learning.code}
+                            </span>
+                          </th>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">
+                          <p className="font-semibold">{learning.code}</p>
+                          <p>{learning.title}</p>
+                          {learning.category && (
+                            <p className="text-xs opacity-80">{learning.category}</p>
+                          )}
+                        </TooltipContent>
+                      </Tooltip>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedEmployees.map((employee, idx) => (
+                    <tr
+                      key={employee.id}
+                      className={`border-b border-gray-200 last:border-b-0 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
                     >
-                      <CellContent
-                        cell={cellMap.get(`${employee.id}:${learning.id}`)}
-                        compact={compact}
-                      />
-                    </td>
+                      <td className={`sticky left-0 z-10 border-r-2 border-gray-300 px-3 py-2 min-w-[220px] ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
+                        <div className="flex flex-col">
+                          <span className="font-medium text-sm truncate max-w-[200px]">
+                            {employee.fullName}
+                          </span>
+                          <span className="text-xs text-muted-foreground font-mono">
+                            {employee.employeeCode}
+                          </span>
+                        </div>
+                      </td>
+                      {allLearnings.map((learning) => (
+                        <td
+                          key={learning.id}
+                          className={`px-1 py-1 text-center border-r border-gray-200 last:border-r-0 ${
+                            compact ? 'h-10' : 'h-12'
+                          }`}
+                        >
+                          <CellContent
+                            cell={cellMap.get(`${employee.id}:${learning.id}`)}
+                            compact={compact}
+                          />
+                        </td>
+                      ))}
+                    </tr>
                   ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination */}
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>
-            Showing {page * PAGE_SIZE + 1}–
-            {Math.min((page + 1) * PAGE_SIZE, totalEmployees)} of{' '}
-            {totalEmployees} employees
-          </span>
-          {totalPages > 1 && (
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
-                disabled={page === 0}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span>
-                Page {page + 1} of {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-                disabled={page >= totalPages - 1}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+                </tbody>
+              </table>
             </div>
-          )}
-        </div>
+
+            {/* Pagination */}
+            <div className="flex items-center justify-between text-sm text-muted-foreground">
+              <span>
+                Showing {page * PAGE_SIZE + 1}–
+                {Math.min((page + 1) * PAGE_SIZE, totalEmployees)} of{' '}
+                {totalEmployees} employees
+              </span>
+              {totalPages > 1 && (
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage((p) => Math.max(0, p - 1))}
+                    disabled={page === 0}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span>
+                    Page {page + 1} of {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                    disabled={page >= totalPages - 1}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </TooltipProvider>
   );
