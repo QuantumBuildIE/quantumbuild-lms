@@ -37,6 +37,7 @@ A multi-tenant Learning Management System for workplace safety training and comp
 | Hangfire | Latest | Background job processing |
 | SignalR | Latest | Real-time progress updates |
 | QuestPDF | Latest | Certificate PDF generation |
+| ClosedXML | 0.105.0 | Excel export (Skills Matrix) |
 | Cloudflare R2 | — | File storage (videos, PDFs, subtitles, certificates) |
 
 ### Frontend
@@ -246,9 +247,11 @@ quantumbuild-lms/
 | GET | `/compliance` | Compliance report by department/talk | ToolboxTalks.View |
 | GET | `/overdue` | Overdue assignments list | ToolboxTalks.View |
 | GET | `/completions` | Detailed completion records (paginated) | ToolboxTalks.View |
+| GET | `/skills-matrix` | Skills matrix: employees × learnings grid with cell statuses | ToolboxTalks.View |
 | GET | `/overdue/export` | Export overdue report as Excel | ToolboxTalks.View |
 | GET | `/completions/export` | Export completions as Excel | ToolboxTalks.View |
 | GET | `/compliance/export` | Export compliance as PDF | ToolboxTalks.View |
+| GET | `/skills-matrix/export` | Export skills matrix as colour-coded Excel (ClosedXML) | ToolboxTalks.View |
 
 #### Toolbox Talks — Certificates (`/api/toolbox-talks/certificates`)
 | Method | Endpoint | Description | Permission |
@@ -370,6 +373,7 @@ quantumbuild-lms/
 | `/toolbox-talks/courses/[id]` | Course detail and progress |
 | `/toolbox-talks/certificates` | View earned certificates |
 | `/toolbox-talks/team` | My Team page (Supervisor only — assign/unassign operators) |
+| `/toolbox-talks/team/skills-matrix` | Skills Matrix (Supervisor view — assigned operators × learnings) |
 
 #### Admin — Toolbox Talks (`/admin/toolbox-talks/*`)
 | Path | Description |
@@ -390,6 +394,7 @@ quantumbuild-lms/
 | `/admin/toolbox-talks/reports/compliance` | Compliance report |
 | `/admin/toolbox-talks/reports/completions` | Completion records |
 | `/admin/toolbox-talks/reports/overdue` | Overdue assignments |
+| `/admin/toolbox-talks/reports/skills-matrix` | Skills Matrix (Admin view — all employees × learnings) |
 | `/admin/toolbox-talks/certificates` | Certificate management |
 | `/admin/toolbox-talks/settings` | Module settings |
 
@@ -489,7 +494,7 @@ The `User` TypeScript type now includes `employeeId` (`string | null`), populate
 | Role | Profile Menu | Employee Nav Items |
 |------|-------------|-------------------|
 | **Admin / SuperUser** | "Administration" → all admin tabs | N/A (admin-focused) |
-| **Supervisor** | "Training Management" → Learnings tab only | My Learnings, My Certificates, My Team, Team Reports |
+| **Supervisor** | "Training Management" → Learnings tab only | My Learnings, My Certificates, My Team, Skills Matrix, Team Reports |
 | **Operator** | No admin access | My Learnings, My Certificates |
 
 ### Frontend Guards
@@ -565,7 +570,7 @@ Progress updates sent via SignalR hub in real-time.
 ## Toolbox Talks Module Entities (22 Total)
 
 ### Content
-1. **ToolboxTalk** — Core entity: title, description, category, video, PDF, sections, questions, quiz settings, certificate/refresher options, AI generation state, translations
+1. **ToolboxTalk** — Core entity: code (unique per tenant, max 20 chars, auto-generated from title initials), title, description, category, video, PDF, sections, questions, quiz settings, certificate/refresher options, AI generation state, translations
 2. **ToolboxTalkSection** — Content section with title, HTML content, ordering, acknowledgment requirement
 3. **ToolboxTalkQuestion** — Quiz question (MultipleChoice, TrueFalse, ShortAnswer) with options, correct answer, points
 4. **ToolboxTalkSlide** — PDF page slide with image path and extracted text
@@ -752,6 +757,77 @@ const mutation = useMutation({
 
 ---
 
+## ToolboxTalk Code Field
+
+- **Required field** on ToolboxTalk entity, `string`, max 20 chars
+- **Unique per tenant** — index `IX_ToolboxTalks_TenantId_Code`
+- **Auto-generated from title initials** + numeric suffix (e.g., "Manual Handling Safety" → `MHS-001`)
+- User can override on create; edit freely on update
+- Code propagated to all DTOs: scheduled talks, schedules, courses, certificates, dashboard, reports
+- **Display:** First column in list views, badge in detail views, prefix in employee-facing views
+- **Frontend auto-generation:** Generated as user types title; tracks dirty state to avoid overwriting manual edits
+
+---
+
+## Skills Matrix
+
+### Overview
+Employee × learning grid showing training status per combination. Role-scoped via `ResolveScopedEmployeeIdsAsync()`.
+
+### API Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/toolbox-talks/reports/skills-matrix?category=` | Skills matrix grid data |
+| GET | `/api/toolbox-talks/reports/skills-matrix/export?category=` | Excel export (ClosedXML) |
+
+### Response: `SkillsMatrixDto`
+- **Employees** (rows) — name, code, site
+- **Learnings** (columns) — talk code, title, category
+- **Cells** — status per employee × learning combination
+
+### Cell Statuses (5)
+| Status | Description |
+|--------|-------------|
+| **Completed** | With score percentage |
+| **InProgress** | Currently in progress |
+| **Overdue** | With days overdue count |
+| **Assigned** | Assigned but not started |
+| **NotAssigned** | No assignment exists |
+
+### Data Derivation (Admin Path)
+- Both employees and learnings are derived from `ScheduledTalks` (not independent ToolboxTalk query)
+- Unassigned employees included for compliance visibility
+
+### Role Scoping
+| Role | Employees Shown |
+|------|----------------|
+| Admin / SuperUser | All employees |
+| Supervisor | Assigned operators only |
+| Operator | Self only |
+
+### Frontend Pages
+| Path | Context |
+|------|---------|
+| `/toolbox-talks/team/skills-matrix` | Supervisor view (nav: after My Team, before Team Reports) |
+| `/admin/toolbox-talks/reports/skills-matrix` | Admin view (from Reports landing page) |
+
+### UI Features
+- **Category filter** — TrainingCategory lookups
+- **Learning multi-select filter** — Client-side column filtering from fetched data
+- **Compact mode toggle** — Dot/icon cells for dense grids; auto-enables at 6+ learnings
+- **Client-side pagination** — 25 employees per page
+- **Sticky first column** — Employee name/code for horizontal scrolling
+- **Columns grouped by category** with header row
+
+### Excel Export
+- Generated with **ClosedXML** (dependency in ToolboxTalks.Infrastructure)
+- Colour-coded cells matching UI status colours
+- Frozen panes + auto-fit columns
+- Separate **Legend sheet** explaining colour codes
+- Filename: `SkillsMatrix_{date}.xlsx`
+
+---
+
 ## Notes for Claude Code
 
 1. **Multi-tenancy is critical** — every query filters by TenantId
@@ -768,6 +844,8 @@ const mutation = useMutation({
 12. **Restore-on-reassign pattern** — SupervisorAssignment uses soft-delete unassignment with restore instead of insert to avoid unique index violations
 13. **Employee delete validation** — Must check for active supervisor assignments before allowing soft delete
 14. **ICurrentUserService.EmployeeId** — Available from JWT `employee_id` claim; used for supervisor scoping and operator self-service
+15. **ToolboxTalk Code field** — Auto-generated from title initials + numeric suffix; unique per tenant (`IX_ToolboxTalks_TenantId_Code`); propagated to all DTOs throughout the system
+16. **Skills Matrix** — Employee × learning grid with 5 cell statuses; role-scoped; derives data from ScheduledTalks; Excel export via ClosedXML
 
 ---
 
