@@ -14,7 +14,8 @@ A multi-tenant Learning Management System for workplace safety training and comp
 ### Currently Implemented
 - **Toolbox Talks Module** — Full training lifecycle: content creation, AI generation, scheduling, assignment, completion, certificates, courses, reports
 - **Admin Module (Core)** — Sites, Employees, Companies, Users management
-- **Authentication & Authorization** — JWT with permission-based policies
+- **Supervisor-Operator Assignments** — Supervisors manage their team of operators; reports auto-scoped by role
+- **Authentication & Authorization** — JWT with permission-based policies, role-based report scoping
 - **Dashboard** — Module selector
 - **Subtitle Processing** — Video transcription (ElevenLabs) + translation (Claude API) to SRT files
 - **Content Translation** — AI-powered translation of sections, quizzes, slideshows, email templates
@@ -64,7 +65,7 @@ quantumbuild-lms/
 │   ├── Core/                                    # Shared across all modules
 │   │   ├── QuantumBuild.Core.Domain/            # Shared entities, base classes
 │   │   │   ├── Common/                          # BaseEntity, TenantEntity
-│   │   │   └── Entities/                        # Tenant, User, Role, Permission, Site, Employee, Company, Contact
+│   │   │   └── Entities/                        # Tenant, User, Role, Permission, Site, Employee, Company, Contact, SupervisorAssignment
 │   │   ├── QuantumBuild.Core.Application/       # Shared interfaces, models, DTOs
 │   │   │   ├── Abstractions/Email/              # IEmailProvider, EmailMessage
 │   │   │   ├── DTOs/Auth/                       # Auth DTOs
@@ -182,7 +183,18 @@ quantumbuild-lms/
 | GET | `/{id}` | Get employee by ID | Core.ManageEmployees |
 | POST | `/` | Create employee | Core.ManageEmployees |
 | PUT | `/{id}` | Update employee | Core.ManageEmployees |
-| DELETE | `/{id}` | Delete employee (soft) | Core.ManageEmployees |
+| DELETE | `/{id}` | Delete employee (soft, checks for active supervisor assignments) | Core.ManageEmployees |
+
+#### Supervisor Assignments (`/api/employees`)
+| Method | Endpoint | Description | Permission |
+|--------|----------|-------------|------------|
+| GET | `/{supervisorId}/operators` | List operators assigned to a supervisor | Learnings.View |
+| GET | `/{supervisorId}/operators/available` | List employees available for assignment | Learnings.View |
+| POST | `/{supervisorId}/operators` | Assign operator to supervisor (restore-on-reassign) | Learnings.View |
+| DELETE | `/{supervisorId}/operators/{operatorId}` | Unassign operator from supervisor (soft delete) | Learnings.View |
+| GET | `/my-operators` | List current supervisor's operators (uses JWT employee_id) | Learnings.View |
+
+> **Note:** All supervisor assignment endpoints use `Learnings.View` as the auth policy, with business-level scoping ensuring supervisors can only manage their own assignments.
 
 #### Companies (`/api/companies`)
 | Method | Endpoint | Description | Permission |
@@ -357,6 +369,7 @@ quantumbuild-lms/
 | `/toolbox-talks/[id]` | View and complete an assigned talk |
 | `/toolbox-talks/courses/[id]` | Course detail and progress |
 | `/toolbox-talks/certificates` | View earned certificates |
+| `/toolbox-talks/team` | My Team page (Supervisor only — assign/unassign operators) |
 
 #### Admin — Toolbox Talks (`/admin/toolbox-talks/*`)
 | Path | Description |
@@ -389,6 +402,7 @@ quantumbuild-lms/
 | `/admin/sites/[id]/edit` | Edit site |
 | `/admin/employees` | List employees |
 | `/admin/employees/new` | Create employee |
+| `/admin/employees/[id]` | Employee detail view (read-only summary, certificates, assigned operators for Supervisors) |
 | `/admin/employees/[id]/edit` | Edit employee |
 | `/admin/companies` | List companies |
 | `/admin/companies/new` | Create company |
@@ -436,14 +450,53 @@ quantumbuild-lms/
 | `ToolboxTalks.ViewReports` | View toolbox talk reports |
 | `ToolboxTalks.Admin` | Full toolbox talks administration |
 
+#### Learnings Module
+| Permission | Description |
+|------------|-------------|
+| `Learnings.View` | View learnings, manage team assignments (Supervisor) |
+| `Learnings.Schedule` | Schedule and assign learnings to team members |
+
 ### Roles
 | Role | Description |
 |------|-------------|
 | **Admin** | All permissions |
+| **Supervisor** | `Learnings.View`, `Learnings.Schedule` only — manages team via "My Team" page, not the Employees admin section |
+| **Operator** | No admin permissions — default user role; employee-facing pages only (My Learnings, My Certificates) |
 | **Finance** | View-only access |
 | **OfficeStaff** | Core admin + Toolbox Talks view |
 | **SiteManager** | Site operations + Toolbox Talks view |
 | **WarehouseStaff** | Warehouse operations |
+
+> **Note:** The `DefaultUserRole` constant is `"Operator"` (previously `"SiteManager"`). The seeder includes `CleanupSupervisorPermissionsAsync` to remove stale permissions (e.g., `Core.ManageEmployees`, `Core.ManageSites`) from existing Supervisor roles.
+
+### Report Scoping
+Reports (compliance, overdue, completions, certificates, dashboard) are auto-scoped by role via `ToolboxTalksController.ResolveScopedEmployeeIdsAsync()`:
+
+| Role | Scope | employeeIds |
+|------|-------|-------------|
+| **SuperUser / Admin** | All data | `null` (no filter) |
+| **Supervisor** | Assigned operators only | Resolved from SupervisorAssignments |
+| **Operator** | Own data only | Current user's EmployeeId |
+
+### ICurrentUserService
+Now includes `EmployeeId` (`Guid?`) resolved from the JWT `employee_id` claim, in addition to existing `UserId`, `TenantId`, etc.
+
+### Frontend Auth
+The `User` TypeScript type now includes `employeeId` (`string | null`), populated from the `/api/auth/me` response.
+
+### Navigation by Role
+
+| Role | Profile Menu | Employee Nav Items |
+|------|-------------|-------------------|
+| **Admin / SuperUser** | "Administration" → all admin tabs | N/A (admin-focused) |
+| **Supervisor** | "Training Management" → Learnings tab only | My Learnings, My Certificates, My Team, Team Reports |
+| **Operator** | No admin access | My Learnings, My Certificates |
+
+### Frontend Guards
+- `admin/employees/layout.tsx` — requires `Core.ManageEmployees` or `Core.ManageUsers`
+- `admin/users/layout.tsx` — requires `Core.ManageUsers`
+- Admin layout gate excludes `Learnings.View`-only users (Operators) from accessing admin
+- Admin nav tabs filtered by individual permissions per role
 
 ---
 
@@ -493,6 +546,19 @@ Course Created → Course Items Added (ordered talks) → Course Assigned to Emp
 Start Processing → Transcribing (ElevenLabs) → Translating (Claude API) → Uploading (R2) → Completed
 ```
 Progress updates sent via SignalR hub in real-time.
+
+---
+
+## Core Domain Entities
+
+### SupervisorAssignment (New)
+- **SupervisorAssignment** — Many-to-many join between Employee (supervisor) and Employee (operator) at the TenantEntity level
+  - `SupervisorEmployeeId` (Guid) — FK to Employee acting as supervisor
+  - `OperatorEmployeeId` (Guid) — FK to Employee acting as operator
+  - Unique composite index on `{TenantId, SupervisorEmployeeId, OperatorEmployeeId}`
+  - **Soft delete for unassignment:** `CreatedBy`/`CreatedAt` = assigned by/when; `IsDeleted` + `UpdatedBy`/`UpdatedAt` = unassigned by/when
+  - **Restore-on-reassign pattern:** Re-assigning a previously unassigned operator restores the soft-deleted row (clears `IsDeleted`, updates `UpdatedBy`/`UpdatedAt`) rather than inserting a new row that would violate the unique index
+  - Employee deletion validates no active supervisor assignments exist before allowing soft delete
 
 ---
 
@@ -698,8 +764,12 @@ const mutation = useMutation({
 8. **Translation is JSON-based** — Sections and questions stored as JSON arrays in translation entities
 9. **File deduplication** — SHA-256 hashes used to detect duplicate PDF/video uploads across talks
 10. **Quiz randomization** — Questions can be shuffled, pooled, and option-randomized per attempt
+11. **Role-based report scoping** — Reports auto-scope via `ResolveScopedEmployeeIdsAsync()`. Admin sees all, Supervisor sees assigned operators, Operator sees only self
+12. **Restore-on-reassign pattern** — SupervisorAssignment uses soft-delete unassignment with restore instead of insert to avoid unique index violations
+13. **Employee delete validation** — Must check for active supervisor assignments before allowing soft delete
+14. **ICurrentUserService.EmployeeId** — Available from JWT `employee_id` claim; used for supervisor scoping and operator self-service
 
 ---
 
-*Last Updated: February 16, 2026*
+*Last Updated: February 20, 2026*
 *Architecture: Modular Monolith with Clean Architecture*
