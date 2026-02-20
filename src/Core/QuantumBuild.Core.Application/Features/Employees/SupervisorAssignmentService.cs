@@ -288,8 +288,9 @@ public class SupervisorAssignmentService : ISupervisorAssignmentService
             if (currentUser.EmployeeId == supervisorEmployeeId)
                 return Result.Ok();
 
+            var currentUserGuid = _currentUserService.UserIdGuid != Guid.Empty ? _currentUserService.UserIdGuid : (Guid?)null;
             var linkedEmployee = await _context.Employees
-                .AnyAsync(e => e.Id == supervisorEmployeeId && e.UserId == _currentUserService.UserId);
+                .AnyAsync(e => e.Id == supervisorEmployeeId && e.UserId == currentUserGuid);
 
             if (linkedEmployee)
                 return Result.Ok();
@@ -311,12 +312,12 @@ public class SupervisorAssignmentService : ISupervisorAssignmentService
                 || u.UserRoles.Any(ur =>
                     ur.Role.NormalizedName == "ADMIN"
                     || ur.Role.NormalizedName == "SUPERVISOR"))
-            .Select(u => u.Id.ToString())
+            .Select(u => u.Id)
             .ToListAsync();
 
         // Map those user IDs to employee IDs via Employee.UserId
         var excludedEmployeeIds = await _context.Employees
-            .Where(e => e.UserId != null && excludedUserIds.Contains(e.UserId))
+            .Where(e => e.UserId.HasValue && excludedUserIds.Contains(e.UserId.Value))
             .Select(e => e.Id)
             .ToListAsync();
 

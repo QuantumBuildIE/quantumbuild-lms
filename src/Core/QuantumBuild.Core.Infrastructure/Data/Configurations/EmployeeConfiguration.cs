@@ -37,8 +37,7 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
         builder.Property(e => e.Department)
             .HasMaxLength(100);
 
-        builder.Property(e => e.UserId)
-            .HasMaxLength(450);
+        builder.Property(e => e.UserId);
 
         builder.Property(e => e.Notes)
             .HasMaxLength(2000);

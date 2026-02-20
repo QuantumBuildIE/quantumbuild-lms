@@ -6,9 +6,14 @@ namespace QuantumBuild.Core.Application.Interfaces;
 public interface ICurrentUserService
 {
     /// <summary>
-    /// Current user's ID
+    /// Current user's ID (string form, used for audit fields like CreatedBy/UpdatedBy)
     /// </summary>
     string UserId { get; }
+
+    /// <summary>
+    /// Current user's ID as a Guid (parsed from UserId with fallback to Guid.Empty)
+    /// </summary>
+    Guid UserIdGuid { get; }
 
     /// <summary>
     /// Current user's name

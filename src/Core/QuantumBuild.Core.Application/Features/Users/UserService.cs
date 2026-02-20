@@ -247,12 +247,12 @@ public class UserService : IUserService
                         return Result.Fail<UserDto>($"Employee with ID {dto.ExistingEmployeeId} not found");
                     }
 
-                    if (!string.IsNullOrEmpty(employee.UserId))
+                    if (employee.UserId.HasValue)
                     {
                         return Result.Fail<UserDto>("This employee is already linked to a user account");
                     }
 
-                    employee.UserId = user.Id.ToString();
+                    employee.UserId = user.Id;
                     user.EmployeeId = employee.Id;
 
                     await _userManager.UpdateAsync(user);
@@ -298,7 +298,7 @@ public class UserService : IUserService
                         Department = dto.NewEmployee.Department,
                         PrimarySiteId = dto.NewEmployee.PrimarySiteId,
                         IsActive = true,
-                        UserId = user.Id.ToString(),
+                        UserId = user.Id,
                         TenantId = tenantId
                     };
 
@@ -640,7 +640,7 @@ public class UserService : IUserService
                 return Result.Fail<UserDto>($"Employee with ID {dto.EmployeeId} not found");
             }
 
-            if (!string.IsNullOrWhiteSpace(employee.UserId))
+            if (employee.UserId.HasValue)
             {
                 return Result.Fail<UserDto>("This employee is already linked to another user account");
             }
@@ -649,7 +649,7 @@ public class UserService : IUserService
             user.EmployeeId = employee.Id;
             user.UpdatedAt = DateTime.UtcNow;
             user.UpdatedBy = _currentUserService.UserId;
-            employee.UserId = user.Id.ToString();
+            employee.UserId = user.Id;
 
             await _userManager.UpdateAsync(user);
             await _context.SaveChangesAsync();
@@ -740,7 +740,7 @@ public class UserService : IUserService
                 Department = dto.Department,
                 PrimarySiteId = dto.PrimarySiteId,
                 IsActive = true,
-                UserId = user.Id.ToString(),
+                UserId = user.Id,
                 TenantId = tenantId,
                 PreferredLanguage = dto.PreferredLanguage
             };

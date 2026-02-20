@@ -676,7 +676,7 @@ public static class DataSeeder
             JobTitle = "Administrator",
             Department = "Management",
             IsActive = true,
-            UserId = adminUser.Id.ToString(),
+            UserId = adminUser.Id,
             StartDate = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
             CreatedAt = DateTime.UtcNow,
             CreatedBy = "system"

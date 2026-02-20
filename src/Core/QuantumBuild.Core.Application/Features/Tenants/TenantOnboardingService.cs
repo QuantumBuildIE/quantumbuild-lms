@@ -139,7 +139,7 @@ public class TenantOnboardingService(
             JobTitle = "Administrator",
             Department = "Management",
             IsActive = true,
-            UserId = user.Id.ToString(),
+            UserId = user.Id,
             StartDate = DateTime.UtcNow,
             CreatedAt = DateTime.UtcNow,
             CreatedBy = "system"

@@ -26,8 +26,9 @@ public class ResetVideoProgressCommandHandler : IRequestHandler<ResetVideoProgre
     public async Task<VideoProgressDto> Handle(ResetVideoProgressCommand request, CancellationToken cancellationToken)
     {
         // Get the current user's employee record
+        var currentUserId = _currentUserService.UserIdGuid;
         var employee = await _coreDbContext.Employees
-            .FirstOrDefaultAsync(e => e.UserId == _currentUserService.UserId &&
+            .FirstOrDefaultAsync(e => e.UserId == currentUserId &&
                                       e.TenantId == _currentUserService.TenantId &&
                                       !e.IsDeleted,
                                  cancellationToken);

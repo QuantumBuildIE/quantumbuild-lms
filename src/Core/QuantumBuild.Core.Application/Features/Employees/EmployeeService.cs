@@ -65,7 +65,7 @@ public class EmployeeService : IEmployeeService
                     e.Notes,
                     e.GeoTrackerID,
                     e.UserId != null,
-                    e.UserId != null ? Guid.Parse(e.UserId) : null,
+                    e.UserId,
                     e.PreferredLanguage,
                     e.FloatPersonId,
                     e.FloatLinkedAt,
@@ -132,7 +132,7 @@ public class EmployeeService : IEmployeeService
                     e.Notes,
                     e.GeoTrackerID,
                     e.UserId != null,
-                    e.UserId != null ? Guid.Parse(e.UserId) : null,
+                    e.UserId,
                     e.PreferredLanguage,
                     e.FloatPersonId,
                     e.FloatLinkedAt,
@@ -197,7 +197,7 @@ public class EmployeeService : IEmployeeService
                     e.Notes,
                     e.GeoTrackerID,
                     e.UserId != null,
-                    e.UserId != null ? Guid.Parse(e.UserId) : null,
+                    e.UserId,
                     e.PreferredLanguage,
                     e.FloatPersonId,
                     e.FloatLinkedAt,
@@ -310,7 +310,7 @@ public class EmployeeService : IEmployeeService
                 }
 
                 createdUser = userCreationResult.Data;
-                employee.UserId = createdUser.Id.ToString();
+                employee.UserId = createdUser.Id;
             }
 
             await _context.SaveChangesAsync();
@@ -618,9 +618,9 @@ public class EmployeeService : IEmployeeService
             }
 
             // Sync User account if email changed and employee has a linked user
-            if (emailChanged && !string.IsNullOrWhiteSpace(employee.UserId))
+            if (emailChanged && employee.UserId.HasValue)
             {
-                var syncResult = await SyncUserEmailAsync(employee.UserId, dto.Email);
+                var syncResult = await SyncUserEmailAsync(employee.UserId.Value, dto.Email);
                 if (!syncResult.Success)
                 {
                     _logger.LogWarning(
@@ -631,9 +631,9 @@ public class EmployeeService : IEmployeeService
             }
 
             // Sync name changes to linked User if exists
-            if (!string.IsNullOrWhiteSpace(employee.UserId))
+            if (employee.UserId.HasValue)
             {
-                await SyncUserNameAsync(employee.UserId, dto.FirstName, dto.LastName);
+                await SyncUserNameAsync(employee.UserId.Value, dto.FirstName, dto.LastName);
             }
 
             await _context.SaveChangesAsync();
@@ -663,7 +663,7 @@ public class EmployeeService : IEmployeeService
                 employee.Notes,
                 employee.GeoTrackerID,
                 employee.UserId != null,
-                employee.UserId != null ? Guid.Parse(employee.UserId) : null,
+                employee.UserId,
                 employee.PreferredLanguage,
                 employee.FloatPersonId,
                 employee.FloatLinkedAt,
@@ -679,11 +679,11 @@ public class EmployeeService : IEmployeeService
         }
     }
 
-    private async Task<Result> SyncUserEmailAsync(string userId, string? newEmail)
+    private async Task<Result> SyncUserEmailAsync(Guid userId, string? newEmail)
     {
         try
         {
-            var user = await _userManager.FindByIdAsync(userId);
+            var user = await _userManager.FindByIdAsync(userId.ToString());
             if (user == null)
             {
                 return Result.Fail($"Linked user account {userId} not found");
@@ -732,11 +732,11 @@ public class EmployeeService : IEmployeeService
         }
     }
 
-    private async Task SyncUserNameAsync(string userId, string firstName, string lastName)
+    private async Task SyncUserNameAsync(Guid userId, string firstName, string lastName)
     {
         try
         {
-            var user = await _userManager.FindByIdAsync(userId);
+            var user = await _userManager.FindByIdAsync(userId.ToString());
             if (user == null)
             {
                 return;
@@ -801,9 +801,9 @@ public class EmployeeService : IEmployeeService
             employee.IsActive = false;
 
             // Deactivate linked User account
-            if (!string.IsNullOrWhiteSpace(employee.UserId))
+            if (employee.UserId.HasValue)
             {
-                await DeactivateLinkedUserAsync(employee.UserId);
+                await DeactivateLinkedUserAsync(employee.UserId.Value);
             }
 
             await _context.SaveChangesAsync();
@@ -863,11 +863,11 @@ public class EmployeeService : IEmployeeService
         }
     }
 
-    private async Task DeactivateLinkedUserAsync(string userId)
+    private async Task DeactivateLinkedUserAsync(Guid userId)
     {
         try
         {
-            var user = await _userManager.FindByIdAsync(userId);
+            var user = await _userManager.FindByIdAsync(userId.ToString());
             if (user == null)
             {
                 _logger.LogWarning("Linked user account {UserId} not found for deactivation", userId);
@@ -912,7 +912,7 @@ public class EmployeeService : IEmployeeService
                 return Result.Fail($"Employee with ID {employeeId} not found");
             }
 
-            if (string.IsNullOrWhiteSpace(employee.UserId))
+            if (!employee.UserId.HasValue)
             {
                 return Result.Fail("This employee does not have a linked user account. Cannot resend invite.");
             }
@@ -922,7 +922,7 @@ public class EmployeeService : IEmployeeService
                 return Result.Fail("This employee does not have an email address. Cannot send invite.");
             }
 
-            var user = await _userManager.FindByIdAsync(employee.UserId);
+            var user = await _userManager.FindByIdAsync(employee.UserId.Value.ToString());
             if (user == null)
             {
                 return Result.Fail("The linked user account could not be found. The account may have been deleted.");
@@ -967,7 +967,7 @@ public class EmployeeService : IEmployeeService
                 return Result.Fail<EmployeeDto>($"Employee with ID {employeeId} not found");
             }
 
-            if (!string.IsNullOrWhiteSpace(employee.UserId))
+            if (employee.UserId.HasValue)
             {
                 return Result.Fail<EmployeeDto>("This employee is already linked to a user account");
             }
@@ -988,7 +988,7 @@ public class EmployeeService : IEmployeeService
             }
 
             // Create the bidirectional link
-            employee.UserId = user.Id.ToString();
+            employee.UserId = user.Id;
             user.EmployeeId = employee.Id;
             user.UpdatedAt = DateTime.UtcNow;
             user.UpdatedBy = _currentUserService.UserId;
@@ -1051,7 +1051,7 @@ public class EmployeeService : IEmployeeService
                 return Result.Fail<EmployeeDto>($"Employee with ID {employeeId} not found");
             }
 
-            if (!string.IsNullOrWhiteSpace(employee.UserId))
+            if (employee.UserId.HasValue)
             {
                 return Result.Fail<EmployeeDto>("This employee already has a linked user account");
             }
@@ -1099,7 +1099,7 @@ public class EmployeeService : IEmployeeService
             }
 
             var user = userCreationResult.Data!;
-            employee.UserId = user.Id.ToString();
+            employee.UserId = user.Id;
 
             // Add any additional roles (first one was added by CreateLinkedUserAccountAsync)
             foreach (var role in roles.Skip(1))
@@ -1173,12 +1173,12 @@ public class EmployeeService : IEmployeeService
                 return Result.Fail($"Employee with ID {employeeId} not found");
             }
 
-            if (string.IsNullOrWhiteSpace(employee.UserId))
+            if (!employee.UserId.HasValue)
             {
                 return Result.Fail("This employee is not linked to any user account");
             }
 
-            var user = await _userManager.FindByIdAsync(employee.UserId);
+            var user = await _userManager.FindByIdAsync(employee.UserId.Value.ToString());
             if (user != null)
             {
                 user.EmployeeId = null;

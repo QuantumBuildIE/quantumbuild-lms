@@ -24,8 +24,9 @@ public class StartToolboxTalkCommandHandler : IRequestHandler<StartToolboxTalkCo
 
     public async Task<Unit> Handle(StartToolboxTalkCommand request, CancellationToken cancellationToken)
     {
+        var currentUserId = _currentUserService.UserIdGuid;
         var employee = await _coreDbContext.Employees
-            .FirstOrDefaultAsync(e => e.UserId == _currentUserService.UserId &&
+            .FirstOrDefaultAsync(e => e.UserId == currentUserId &&
                                       e.TenantId == _currentUserService.TenantId &&
                                       !e.IsDeleted,
                                  cancellationToken);

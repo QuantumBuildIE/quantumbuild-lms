@@ -55,7 +55,7 @@ public class Employee : TenantEntity
     /// <summary>
     /// Associated User ID (links to Identity system)
     /// </summary>
-    public string? UserId { get; set; }
+    public Guid? UserId { get; set; }
 
     /// <summary>
     /// Primary site where employee is based

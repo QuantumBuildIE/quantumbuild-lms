@@ -24,6 +24,19 @@ public class CurrentUserService : ICurrentUserService
         _httpContextAccessor.HttpContext?.User?.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
 
     /// <summary>
+    /// Current user's ID as a Guid (parsed from UserId with fallback to Guid.Empty)
+    /// </summary>
+    public Guid UserIdGuid
+    {
+        get
+        {
+            if (Guid.TryParse(UserId, out var userId))
+                return userId;
+            return Guid.Empty;
+        }
+    }
+
+    /// <summary>
     /// Current user's name from JWT claims (combines given_name and family_name)
     /// </summary>
     public string UserName
