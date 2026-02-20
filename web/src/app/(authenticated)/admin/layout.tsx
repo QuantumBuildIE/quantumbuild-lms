@@ -17,7 +17,6 @@ const adminNavItems = [
 const corePermissions = [
   "Core.ManageEmployees",
   "Core.ManageUsers",
-  "Learnings.View",
   "Learnings.Manage",
   "Learnings.Schedule",
   "Learnings.Admin",
