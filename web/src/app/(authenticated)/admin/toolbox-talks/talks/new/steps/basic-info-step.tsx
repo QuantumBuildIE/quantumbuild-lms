@@ -212,7 +212,7 @@ export function BasicInfoStep({
                     />
                   </FormControl>
                   <FormDescription>
-                    Auto-generated from title. Edit to customise.
+                    Auto-generated from title. (Editable)
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
