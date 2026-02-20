@@ -17,6 +17,8 @@ interface DeleteConfirmationDialogProps {
   description: string;
   onConfirm: () => void;
   isLoading?: boolean;
+  confirmLabel?: string;
+  confirmLoadingLabel?: string;
 }
 
 export function DeleteConfirmationDialog({
@@ -26,6 +28,8 @@ export function DeleteConfirmationDialog({
   description,
   onConfirm,
   isLoading = false,
+  confirmLabel = "Delete",
+  confirmLoadingLabel = "Deleting...",
 }: DeleteConfirmationDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -52,10 +56,10 @@ export function DeleteConfirmationDialog({
             {isLoading ? (
               <>
                 <LoadingSpinner className="mr-2 h-4 w-4" />
-                Deleting...
+                {confirmLoadingLabel}
               </>
             ) : (
-              "Delete"
+              confirmLabel
             )}
           </Button>
         </DialogFooter>

@@ -24,7 +24,7 @@ import {
 import type { SupervisorOperatorDto } from "@/lib/api/admin/supervisor-assignments";
 import { useAuth, usePermission, useIsSuperUser } from "@/lib/auth/use-auth";
 import { toast } from "sonner";
-import { Users, Plus, Trash2 } from "lucide-react";
+import { Users, Plus, UserMinus } from "lucide-react";
 
 interface AssignedOperatorsSectionProps {
   employeeId: string;
@@ -127,7 +127,7 @@ export function AssignedOperatorsSection({ employeeId }: AssignedOperatorsSectio
                       className="h-8 w-8 text-destructive hover:text-destructive"
                       onClick={() => setRemoveTarget(operator)}
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <UserMinus className="h-4 w-4" />
                     </Button>
                   )}
                 </div>
@@ -147,9 +147,11 @@ export function AssignedOperatorsSection({ employeeId }: AssignedOperatorsSectio
         open={!!removeTarget}
         onOpenChange={(open) => !open && setRemoveTarget(null)}
         title="Remove Operator"
-        description={`Are you sure you want to remove ${removeTarget?.fullName} from this supervisor's assigned operators?`}
+        description={`Remove ${removeTarget?.fullName} from this supervisor's team?`}
         onConfirm={handleRemoveConfirm}
         isLoading={unassignMutation.isPending}
+        confirmLabel="Remove"
+        confirmLoadingLabel="Removing..."
       />
     </>
   );

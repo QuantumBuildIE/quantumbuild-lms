@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Users, Plus, Trash2, UserX } from "lucide-react";
+import { Users, Plus, UserMinus, UserX } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -129,7 +129,7 @@ export default function MyTeamPage() {
                     className="h-8 w-8 text-destructive hover:text-destructive"
                     onClick={() => setRemoveTarget(operator)}
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <UserMinus className="h-4 w-4" />
                   </Button>
                 </div>
               ))}
@@ -150,9 +150,11 @@ export default function MyTeamPage() {
         open={!!removeTarget}
         onOpenChange={(open) => !open && setRemoveTarget(null)}
         title="Remove Operator"
-        description={`Are you sure you want to remove ${removeTarget?.fullName} from your team?`}
+        description={`Remove ${removeTarget?.fullName} from your team?`}
         onConfirm={handleRemoveConfirm}
         isLoading={unassignMutation.isPending}
+        confirmLabel="Remove"
+        confirmLoadingLabel="Removing..."
       />
     </div>
   );

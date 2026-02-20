@@ -139,11 +139,29 @@ public class SupervisorAssignmentService : ISupervisorAssignmentService
                 .Select(sa => sa.OperatorEmployeeId)
                 .ToListAsync();
 
+            // Find soft-deleted assignments that can be restored instead of inserting new rows
+            // (the unique index doesn't exclude soft-deleted rows)
+            var softDeletedAssignments = await _context.SupervisorAssignments
+                .IgnoreQueryFilters()
+                .Where(sa => sa.SupervisorEmployeeId == supervisorEmployeeId
+                    && sa.IsDeleted
+                    && dto.OperatorEmployeeIds.Contains(sa.OperatorEmployeeId))
+                .ToListAsync();
+            var softDeletedByOperator = softDeletedAssignments.ToDictionary(sa => sa.OperatorEmployeeId);
+
             var newAssignments = new List<SupervisorAssignment>();
             foreach (var operatorId in dto.OperatorEmployeeIds)
             {
                 if (existingOperatorIds.Contains(operatorId))
                     continue;
+
+                // Restore soft-deleted record if one exists for this pair
+                if (softDeletedByOperator.TryGetValue(operatorId, out var existing))
+                {
+                    existing.IsDeleted = false;
+                    newAssignments.Add(existing);
+                    continue;
+                }
 
                 var assignment = new SupervisorAssignment
                 {
