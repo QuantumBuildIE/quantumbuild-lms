@@ -1,13 +1,6 @@
 'use client';
 
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Download, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -35,15 +28,13 @@ export default function AdminSkillsMatrixPage() {
     });
   };
 
-  const updateUrlParams = (updates: Record<string, string | null | undefined>) => {
+  const updateCategory = (newCategory: string | undefined) => {
     const params = new URLSearchParams(searchParams.toString());
-    Object.entries(updates).forEach(([key, value]) => {
-      if (value === null || value === undefined || value === 'all') {
-        params.delete(key);
-      } else {
-        params.set(key, String(value));
-      }
-    });
+    if (!newCategory) {
+      params.delete('category');
+    } else {
+      params.set('category', newCategory);
+    }
     const queryString = params.toString();
     router.push(queryString ? `${pathname}?${queryString}` : pathname);
   };
@@ -57,45 +48,31 @@ export default function AdminSkillsMatrixPage() {
             Organisation-wide learning progress overview
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExport}
-            disabled={exportMutation.isPending || isLoading || !data}
-          >
-            {exportMutation.isPending ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Download className="mr-2 h-4 w-4" />
-            )}
-            Export to Excel
-          </Button>
-          <Select
-            value={category || 'all'}
-            onValueChange={(value) =>
-              updateUrlParams({ category: value === 'all' ? null : value })
-            }
-            disabled={categoriesLoading}
-          >
-            <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder="All Categories" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              {categories
-                .filter((c) => c.isActive)
-                .map((cat) => (
-                  <SelectItem key={cat.id} value={cat.name}>
-                    {cat.name}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleExport}
+          disabled={exportMutation.isPending || isLoading || !data}
+        >
+          {exportMutation.isPending ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Download className="mr-2 h-4 w-4" />
+          )}
+          Export to Excel
+        </Button>
       </div>
 
-      <SkillsMatrixGrid data={data} isLoading={isLoading} />
+      <SkillsMatrixGrid
+        data={data}
+        isLoading={isLoading}
+        categoryFilter={{
+          categories,
+          selectedCategory: category,
+          onCategoryChange: updateCategory,
+          isLoading: categoriesLoading,
+        }}
+      />
     </div>
   );
 }
