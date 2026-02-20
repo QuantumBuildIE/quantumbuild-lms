@@ -3,12 +3,15 @@ import {
   getComplianceReport,
   getOverdueReport,
   getCompletionsReport,
+  getSkillsMatrix,
   exportOverdueReport,
   exportCompletionsReport,
   exportComplianceReport,
+  exportSkillsMatrix,
   type ComplianceReportParams,
   type OverdueReportParams,
   type CompletionsReportParams,
+  type SkillsMatrixParams,
 } from './reports';
 
 // ============================================
@@ -42,6 +45,13 @@ export function useCompletionsReport(params?: CompletionsReportParams) {
   });
 }
 
+export function useSkillsMatrix(params?: SkillsMatrixParams) {
+  return useQuery({
+    queryKey: [...TOOLBOX_TALKS_REPORTS_KEY, 'skills-matrix', params],
+    queryFn: () => getSkillsMatrix(params),
+  });
+}
+
 // ============================================
 // Export Mutation Hooks
 // ============================================
@@ -70,6 +80,22 @@ export function useExportCompletionsReport() {
       const link = document.createElement('a');
       link.href = url;
       link.download = `ToolboxTalkCompletions_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    },
+  });
+}
+
+export function useExportSkillsMatrix() {
+  return useMutation({
+    mutationFn: async (params?: SkillsMatrixParams) => {
+      const blob = await exportSkillsMatrix(params);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `SkillsMatrix_${new Date().toISOString().slice(0, 10)}.xlsx`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

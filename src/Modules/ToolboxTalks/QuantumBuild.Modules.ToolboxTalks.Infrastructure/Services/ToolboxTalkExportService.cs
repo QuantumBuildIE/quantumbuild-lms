@@ -1,3 +1,4 @@
+using ClosedXML.Excel;
 using Microsoft.Extensions.Logging;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Reports;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services;
@@ -48,6 +49,151 @@ public class ToolboxTalkExportService : IToolboxTalkExportService
         // TODO: Implement Excel generation using ClosedXML
         var excelStub = GenerateStubExcel("Completions Report");
         return Task.FromResult(excelStub);
+    }
+
+    /// <inheritdoc />
+    public Task<byte[]> GenerateSkillsMatrixExcelAsync(SkillsMatrixDto data)
+    {
+        _logger.LogInformation("Generating Skills Matrix Excel export with {EmployeeCount} employees and {LearningCount} learnings",
+            data.Employees.Count, data.Learnings.Count);
+
+        using var workbook = new XLWorkbook();
+
+        // --- Main "Skills Matrix" sheet ---
+        var ws = workbook.Worksheets.Add("Skills Matrix");
+
+        // Build cell lookup: (employeeId, learningId) -> cell
+        var cellMap = new Dictionary<(Guid, Guid), SkillsMatrixCellDto>();
+        foreach (var cell in data.Cells)
+            cellMap[(cell.EmployeeId, cell.LearningId)] = cell;
+
+        // Row 1: Headers
+        var col = 1;
+        ws.Cell(1, col++).Value = "Employee Code";
+        ws.Cell(1, col++).Value = "Employee Name";
+        ws.Cell(1, col++).Value = "Department";
+        ws.Cell(1, col++).Value = "Job Title";
+
+        var learningStartCol = col;
+        foreach (var learning in data.Learnings)
+        {
+            var headerCell = ws.Cell(1, col);
+            headerCell.Value = learning.Code;
+            if (!string.IsNullOrWhiteSpace(learning.Title))
+                headerCell.GetComment().AddText(learning.Title);
+            col++;
+        }
+
+        // Style header row
+        var headerRange = ws.Range(1, 1, 1, col - 1);
+        headerRange.Style.Font.Bold = true;
+        headerRange.Style.Fill.BackgroundColor = XLColor.FromHtml("#1F2937");
+        headerRange.Style.Font.FontColor = XLColor.White;
+        headerRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+        headerRange.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
+
+        // Data rows
+        var row = 2;
+        foreach (var employee in data.Employees)
+        {
+            ws.Cell(row, 1).Value = employee.EmployeeCode;
+            ws.Cell(row, 2).Value = employee.FullName;
+            ws.Cell(row, 3).Value = employee.Department ?? "";
+            ws.Cell(row, 4).Value = employee.JobTitle ?? "";
+
+            var lCol = learningStartCol;
+            foreach (var learning in data.Learnings)
+            {
+                var dataCell = ws.Cell(row, lCol);
+
+                if (cellMap.TryGetValue((employee.Id, learning.Id), out var matrixCell))
+                {
+                    var (displayText, bgColor) = FormatSkillsMatrixCell(matrixCell);
+                    dataCell.Value = displayText;
+                    if (bgColor != null)
+                    {
+                        dataCell.Style.Fill.BackgroundColor = bgColor;
+                    }
+                    dataCell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                }
+
+                lCol++;
+            }
+            row++;
+        }
+
+        // Auto-fit employee columns
+        ws.Column(1).AdjustToContents();
+        ws.Column(2).AdjustToContents();
+        ws.Column(3).AdjustToContents();
+        ws.Column(4).AdjustToContents();
+
+        // Set learning columns to a fixed width
+        for (var c = learningStartCol; c < learningStartCol + data.Learnings.Count; c++)
+            ws.Column(c).Width = 16;
+
+        // Freeze panes: freeze employee info columns and header row
+        ws.SheetView.FreezeRows(1);
+        ws.SheetView.FreezeColumns(4);
+
+        // --- Legend sheet ---
+        var legend = workbook.Worksheets.Add("Legend");
+        legend.Cell(1, 1).Value = "Colour";
+        legend.Cell(1, 2).Value = "Status";
+        legend.Cell(1, 3).Value = "Description";
+        var legendHeader = legend.Range(1, 1, 1, 3);
+        legendHeader.Style.Font.Bold = true;
+        legendHeader.Style.Fill.BackgroundColor = XLColor.FromHtml("#1F2937");
+        legendHeader.Style.Font.FontColor = XLColor.White;
+
+        var legendItems = new (string Label, string Hex, string Desc)[]
+        {
+            ("Completed", "#D1FAE5", "Employee has completed this learning (score shown if quiz taken)"),
+            ("In Progress", "#DBEAFE", "Employee has started but not yet completed"),
+            ("Overdue", "#FEE2E2", "Assignment is past due date (days overdue shown)"),
+            ("Assigned", "#E0F2FE", "Assigned but not yet started"),
+            ("Not Assigned", "#F9FAFB", "No assignment exists (cell left blank)"),
+        };
+
+        for (var i = 0; i < legendItems.Length; i++)
+        {
+            var r = i + 2;
+            legend.Cell(r, 1).Style.Fill.BackgroundColor = XLColor.FromHtml(legendItems[i].Hex);
+            legend.Cell(r, 2).Value = legendItems[i].Label;
+            legend.Cell(r, 3).Value = legendItems[i].Desc;
+        }
+
+        legend.Column(1).Width = 10;
+        legend.Column(2).AdjustToContents();
+        legend.Column(3).AdjustToContents();
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return Task.FromResult(stream.ToArray());
+    }
+
+    private static (string DisplayText, XLColor? BackgroundColor) FormatSkillsMatrixCell(SkillsMatrixCellDto cell)
+    {
+        return cell.Status switch
+        {
+            "Completed" => (
+                cell.Score.HasValue ? $"Completed ({cell.Score}%)" : "Completed",
+                XLColor.FromHtml("#D1FAE5") // emerald-100
+            ),
+            "InProgress" => (
+                "In Progress",
+                XLColor.FromHtml("#DBEAFE") // blue-100
+            ),
+            "Overdue" => (
+                cell.DaysOverdue.HasValue ? $"Overdue ({cell.DaysOverdue} days)" : "Overdue",
+                XLColor.FromHtml("#FEE2E2") // red-100
+            ),
+            "Assigned" => (
+                "Assigned",
+                XLColor.FromHtml("#E0F2FE") // sky-100
+            ),
+            _ => ("", null) // NotAssigned — blank
+        };
     }
 
     /// <inheritdoc />

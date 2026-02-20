@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { AlertTriangle, CheckCircle, BarChart3 } from 'lucide-react';
+import { AlertTriangle, CheckCircle, BarChart3, Grid3X3 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 
 const reportCards = [
@@ -25,6 +25,13 @@ const reportCards = [
     icon: CheckCircle,
     href: '/admin/toolbox-talks/reports/completions',
     color: 'text-green-600',
+  },
+  {
+    title: 'Skills Matrix',
+    description: 'Employee-by-learning grid showing completion status across the organisation',
+    icon: Grid3X3,
+    href: '/admin/toolbox-talks/reports/skills-matrix',
+    color: 'text-purple-600',
   },
 ];
 

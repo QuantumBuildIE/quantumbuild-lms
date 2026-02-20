@@ -380,4 +380,205 @@ public class ToolboxTalkReportsService : IToolboxTalkReportsService
             throw;
         }
     }
+
+    /// <inheritdoc />
+    public async Task<SkillsMatrixDto> GetSkillsMatrixAsync(
+        Guid tenantId,
+        List<Guid>? employeeIds = null,
+        string? category = null)
+    {
+        try
+        {
+            var now = DateTime.UtcNow;
+
+            // Build scheduled talks query
+            var scheduledTalksQuery = _context.ScheduledTalks
+                .Where(st => st.TenantId == tenantId && st.Status != ScheduledTalkStatus.Cancelled)
+                .Include(st => st.ToolboxTalk)
+                .Include(st => st.Employee)
+                .Include(st => st.Completion)
+                .AsQueryable();
+
+            if (employeeIds != null)
+            {
+                scheduledTalksQuery = scheduledTalksQuery.Where(st => employeeIds.Contains(st.EmployeeId));
+            }
+
+            if (!string.IsNullOrEmpty(category))
+            {
+                scheduledTalksQuery = scheduledTalksQuery.Where(st => st.ToolboxTalk.Category == category);
+            }
+
+            var scheduledTalks = await scheduledTalksQuery.ToListAsync();
+
+            // Build employees list
+            List<SkillsMatrixEmployeeDto> employees;
+            if (employeeIds == null)
+            {
+                // Admin view: include ALL active employees in the tenant
+                var allEmployees = await _coreContext.Employees
+                    .Where(e => e.TenantId == tenantId && !e.IsDeleted && e.IsActive)
+                    .OrderBy(e => e.LastName).ThenBy(e => e.FirstName)
+                    .ToListAsync();
+
+                employees = allEmployees.Select(e => new SkillsMatrixEmployeeDto
+                {
+                    Id = e.Id,
+                    EmployeeCode = e.EmployeeCode,
+                    FullName = e.FullName,
+                    Department = e.Department,
+                    JobTitle = e.JobTitle
+                }).ToList();
+            }
+            else
+            {
+                // Supervisor/Operator view: only employees from filtered scheduled talks
+                employees = scheduledTalks
+                    .Select(st => st.Employee)
+                    .DistinctBy(e => e.Id)
+                    .OrderBy(e => e.LastName).ThenBy(e => e.FirstName)
+                    .Select(e => new SkillsMatrixEmployeeDto
+                    {
+                        Id = e.Id,
+                        EmployeeCode = e.EmployeeCode,
+                        FullName = e.FullName,
+                        Department = e.Department,
+                        JobTitle = e.JobTitle
+                    }).ToList();
+            }
+
+            // Build learnings list
+            List<SkillsMatrixLearningDto> learnings;
+            if (employeeIds == null)
+            {
+                // Admin view: include all published learnings in tenant
+                var learningsQuery = _context.ToolboxTalks
+                    .Where(tt => tt.TenantId == tenantId && !tt.IsDeleted && tt.IsActive
+                        && tt.Status == ToolboxTalkStatus.Published);
+
+                if (!string.IsNullOrEmpty(category))
+                {
+                    learningsQuery = learningsQuery.Where(tt => tt.Category == category);
+                }
+
+                learnings = await learningsQuery
+                    .OrderBy(tt => tt.Code)
+                    .Select(tt => new SkillsMatrixLearningDto
+                    {
+                        Id = tt.Id,
+                        Code = tt.Code,
+                        Title = tt.Title,
+                        Category = tt.Category
+                    }).ToListAsync();
+            }
+            else
+            {
+                // Supervisor/Operator view: only learnings that have assignments
+                learnings = scheduledTalks
+                    .Select(st => st.ToolboxTalk)
+                    .DistinctBy(tt => tt.Id)
+                    .OrderBy(tt => tt.Code)
+                    .Select(tt => new SkillsMatrixLearningDto
+                    {
+                        Id = tt.Id,
+                        Code = tt.Code,
+                        Title = tt.Title,
+                        Category = tt.Category
+                    }).ToList();
+            }
+
+            // Build cells: for each employee × learning combination
+            var scheduledTalksByPair = scheduledTalks
+                .GroupBy(st => new { st.EmployeeId, st.ToolboxTalkId })
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            var cells = new List<SkillsMatrixCellDto>();
+
+            foreach (var employee in employees)
+            {
+                foreach (var learning in learnings)
+                {
+                    var key = new { EmployeeId = employee.Id, ToolboxTalkId = learning.Id };
+
+                    if (scheduledTalksByPair.TryGetValue(key, out var pairTalks))
+                    {
+                        // Determine status from the most relevant ScheduledTalk
+                        // Priority: Completed > InProgress > Overdue/Pending
+                        var completed = pairTalks.FirstOrDefault(st => st.Status == ScheduledTalkStatus.Completed);
+                        if (completed != null)
+                        {
+                            int? score = null;
+                            if (completed.Completion?.QuizScore != null && completed.Completion?.QuizMaxScore is > 0)
+                            {
+                                score = (int)Math.Round((decimal)completed.Completion.QuizScore.Value / completed.Completion.QuizMaxScore.Value * 100);
+                            }
+
+                            cells.Add(new SkillsMatrixCellDto
+                            {
+                                EmployeeId = employee.Id,
+                                LearningId = learning.Id,
+                                Status = "Completed",
+                                Score = score,
+                                CompletedAt = completed.Completion?.CompletedAt
+                            });
+                            continue;
+                        }
+
+                        var inProgress = pairTalks.FirstOrDefault(st => st.Status == ScheduledTalkStatus.InProgress);
+                        if (inProgress != null)
+                        {
+                            cells.Add(new SkillsMatrixCellDto
+                            {
+                                EmployeeId = employee.Id,
+                                LearningId = learning.Id,
+                                Status = "InProgress",
+                                DueDate = inProgress.DueDate
+                            });
+                            continue;
+                        }
+
+                        // Remaining are Pending or Overdue
+                        var latest = pairTalks
+                            .Where(st => st.Status == ScheduledTalkStatus.Pending || st.Status == ScheduledTalkStatus.Overdue)
+                            .OrderByDescending(st => st.DueDate)
+                            .FirstOrDefault();
+
+                        if (latest != null)
+                        {
+                            var isOverdue = latest.Status == ScheduledTalkStatus.Overdue || latest.DueDate < now;
+                            cells.Add(new SkillsMatrixCellDto
+                            {
+                                EmployeeId = employee.Id,
+                                LearningId = learning.Id,
+                                Status = isOverdue ? "Overdue" : "Assigned",
+                                DueDate = latest.DueDate,
+                                DaysOverdue = isOverdue ? (int)Math.Ceiling((now - latest.DueDate).TotalDays) : null
+                            });
+                            continue;
+                        }
+                    }
+
+                    // No ScheduledTalk exists for this pair
+                    cells.Add(new SkillsMatrixCellDto
+                    {
+                        EmployeeId = employee.Id,
+                        LearningId = learning.Id,
+                        Status = "NotAssigned"
+                    });
+                }
+            }
+
+            return new SkillsMatrixDto
+            {
+                Employees = employees,
+                Learnings = learnings,
+                Cells = cells
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating skills matrix report for tenant {TenantId}", tenantId);
+            throw;
+        }
+    }
 }

@@ -56,4 +56,16 @@ public interface IToolboxTalkReportsService
         int pageNumber = 1,
         int pageSize = 20,
         List<Guid>? employeeIds = null);
+
+    /// <summary>
+    /// Get skills matrix report showing employees × learnings with completion status
+    /// </summary>
+    /// <param name="tenantId">Tenant ID</param>
+    /// <param name="employeeIds">Optional employee IDs for role-based scoping (null = all)</param>
+    /// <param name="category">Optional category filter</param>
+    /// <returns>Skills matrix with employees, learnings, and status cells</returns>
+    Task<SkillsMatrixDto> GetSkillsMatrixAsync(
+        Guid tenantId,
+        List<Guid>? employeeIds = null,
+        string? category = null);
 }

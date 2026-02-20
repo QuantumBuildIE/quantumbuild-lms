@@ -30,6 +30,13 @@ public interface IToolboxTalkExportService
     Task<byte[]> GenerateCompletionsReportExcelAsync(List<CompletionDetailDto> data);
 
     /// <summary>
+    /// Generate Excel export of skills matrix
+    /// </summary>
+    /// <param name="data">Skills matrix data</param>
+    /// <returns>Excel file bytes</returns>
+    Task<byte[]> GenerateSkillsMatrixExcelAsync(SkillsMatrixDto data);
+
+    /// <summary>
     /// Generate completion certificate PDF for an individual completion
     /// </summary>
     /// <param name="completion">Completion record with related data</param>

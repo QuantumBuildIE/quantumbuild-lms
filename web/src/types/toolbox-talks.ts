@@ -761,6 +761,43 @@ export interface CompletionDetail {
 }
 
 // ============================================
+// Skills Matrix DTOs
+// ============================================
+
+export type SkillsMatrixCellStatus = 'Completed' | 'InProgress' | 'Overdue' | 'Assigned' | 'NotAssigned';
+
+export interface SkillsMatrixEmployee {
+  id: string;
+  employeeCode: string;
+  fullName: string;
+  department: string | null;
+  jobTitle: string | null;
+}
+
+export interface SkillsMatrixLearning {
+  id: string;
+  code: string;
+  title: string;
+  category: string | null;
+}
+
+export interface SkillsMatrixCell {
+  employeeId: string;
+  learningId: string;
+  status: SkillsMatrixCellStatus;
+  score: number | null;
+  completedAt: string | null;
+  dueDate: string | null;
+  daysOverdue: number | null;
+}
+
+export interface SkillsMatrix {
+  employees: SkillsMatrixEmployee[];
+  learnings: SkillsMatrixLearning[];
+  cells: SkillsMatrixCell[];
+}
+
+// ============================================
 // Paginated Response
 // ============================================
 

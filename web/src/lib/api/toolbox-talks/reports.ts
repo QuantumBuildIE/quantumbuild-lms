@@ -4,6 +4,7 @@ import type {
   OverdueItem,
   CompletionDetail,
   PaginatedResponse,
+  SkillsMatrix,
 } from '@/types/toolbox-talks';
 
 // ============================================
@@ -38,6 +39,10 @@ export interface CompletionsReportParams {
   siteId?: string;
   pageNumber?: number;
   pageSize?: number;
+}
+
+export interface SkillsMatrixParams {
+  category?: string;
 }
 
 // ============================================
@@ -82,6 +87,22 @@ export async function exportCompletionsReport(
   params?: Omit<CompletionsReportParams, 'pageNumber' | 'pageSize'>
 ): Promise<Blob> {
   const response = await apiClient.get('/toolbox-talks/reports/completions/export', {
+    params,
+    responseType: 'blob',
+  });
+  return response.data;
+}
+
+export async function getSkillsMatrix(params?: SkillsMatrixParams): Promise<SkillsMatrix> {
+  const response = await apiClient.get<ApiResponse<SkillsMatrix>>(
+    '/toolbox-talks/reports/skills-matrix',
+    { params }
+  );
+  return response.data.data;
+}
+
+export async function exportSkillsMatrix(params?: SkillsMatrixParams): Promise<Blob> {
+  const response = await apiClient.get('/toolbox-talks/reports/skills-matrix/export', {
     params,
     responseType: 'blob',
   });

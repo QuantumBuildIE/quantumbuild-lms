@@ -1286,6 +1286,69 @@ public class ToolboxTalksController : ControllerBase
     }
 
     /// <summary>
+    /// Get skills matrix report showing employees × learnings with completion status
+    /// </summary>
+    /// <param name="category">Optional category filter</param>
+    /// <returns>Skills matrix with employees, learnings, and status cells</returns>
+    [HttpGet("reports/skills-matrix")]
+    [ProducesResponseType(typeof(SkillsMatrixDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetSkillsMatrix(
+        [FromQuery] string? category = null)
+    {
+        try
+        {
+            var employeeIds = await ResolveScopedEmployeeIdsAsync();
+
+            var report = await _reportsService.GetSkillsMatrixAsync(
+                _currentUserService.TenantId,
+                employeeIds,
+                category);
+            return Ok(Result.Ok(report));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating skills matrix report");
+            return StatusCode(500, Result.Fail("Error generating skills matrix report"));
+        }
+    }
+
+    /// <summary>
+    /// Export skills matrix as Excel file
+    /// </summary>
+    /// <param name="category">Optional category filter</param>
+    /// <returns>Excel file</returns>
+    [HttpGet("reports/skills-matrix/export")]
+    [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ExportSkillsMatrix(
+        [FromQuery] string? category = null)
+    {
+        try
+        {
+            var employeeIds = await ResolveScopedEmployeeIdsAsync();
+
+            var report = await _reportsService.GetSkillsMatrixAsync(
+                _currentUserService.TenantId,
+                employeeIds,
+                category);
+
+            var fileBytes = await _exportService.GenerateSkillsMatrixExcelAsync(report);
+
+            if (fileBytes.Length == 0)
+            {
+                return BadRequest(Result.Fail("Export functionality is not yet implemented."));
+            }
+
+            var fileName = $"SkillsMatrix_{DateTime.Now:yyyyMMdd}.xlsx";
+            return File(fileBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error exporting skills matrix");
+            return StatusCode(500, Result.Fail("Error exporting skills matrix"));
+        }
+    }
+
+    /// <summary>
     /// Export overdue report as Excel file
     /// </summary>
     /// <param name="siteId">Optional site/department filter</param>
