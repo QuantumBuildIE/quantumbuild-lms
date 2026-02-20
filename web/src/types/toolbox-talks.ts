@@ -75,6 +75,7 @@ export interface SlideDto {
 
 export interface ToolboxTalk {
   id: string;
+  code: string;
   title: string;
   description: string | null;
   category: string | null;
@@ -126,6 +127,7 @@ export interface ToolboxTalk {
 
 export interface ToolboxTalkListItem {
   id: string;
+  code: string;
   title: string;
   description: string | null;
   category: string | null;
@@ -161,6 +163,7 @@ export interface ToolboxTalkScheduleAssignment {
 export interface ToolboxTalkSchedule {
   id: string;
   toolboxTalkId: string;
+  toolboxTalkCode: string;
   toolboxTalkTitle: string;
   scheduledDate: string;
   endDate: string | null;
@@ -181,6 +184,7 @@ export interface ToolboxTalkSchedule {
 export interface ToolboxTalkScheduleListItem {
   id: string;
   toolboxTalkId: string;
+  toolboxTalkCode: string;
   toolboxTalkTitle: string;
   scheduledDate: string;
   endDate: string | null;
@@ -246,6 +250,7 @@ export interface ScheduledTalkCompletion {
 export interface ScheduledTalk {
   id: string;
   toolboxTalkId: string;
+  toolboxTalkCode: string;
   toolboxTalkTitle: string;
   employeeId: string;
   employeeName: string;
@@ -271,6 +276,7 @@ export interface ScheduledTalk {
 export interface ScheduledTalkListItem {
   id: string;
   toolboxTalkId: string;
+  toolboxTalkCode: string;
   toolboxTalkTitle: string;
   employeeId: string;
   employeeName: string;
@@ -318,6 +324,7 @@ export interface MyToolboxTalkQuestion {
 export interface MyToolboxTalk {
   scheduledTalkId: string;
   toolboxTalkId: string;
+  code: string;
   title: string;
   description: string | null;
   videoUrl: string | null;
@@ -354,6 +361,7 @@ export interface MyToolboxTalk {
 export interface MyToolboxTalkListItem {
   scheduledTalkId: string;
   toolboxTalkId: string;
+  code: string;
   title: string;
   description: string | null;
   requiredDate: string;
@@ -389,6 +397,7 @@ export interface MyTrainingSummary {
 export interface RecentCompletion {
   scheduledTalkId: string;
   employeeName: string;
+  toolboxTalkCode: string;
   toolboxTalkTitle: string;
   completedAt: string;
   totalTimeSpentSeconds: number;
@@ -401,6 +410,7 @@ export interface OverdueAssignment {
   employeeId: string;
   employeeName: string;
   employeeEmail: string | null;
+  toolboxTalkCode: string;
   toolboxTalkTitle: string;
   dueDate: string;
   daysOverdue: number;
@@ -410,6 +420,7 @@ export interface OverdueAssignment {
 
 export interface UpcomingSchedule {
   scheduleId: string;
+  toolboxTalkCode: string;
   toolboxTalkTitle: string;
   scheduledDate: string;
   frequency: ToolboxTalkFrequency;
@@ -545,6 +556,7 @@ export interface CreateToolboxTalkQuestionRequest {
 }
 
 export interface CreateToolboxTalkRequest {
+  code?: string;
   title: string;
   description?: string;
   category?: string;
@@ -673,6 +685,7 @@ export interface DepartmentCompliance {
 
 export interface TalkCompliance {
   toolboxTalkId: string;
+  code: string;
   title: string;
   assignedCount: number;
   completedCount: number;
@@ -704,6 +717,7 @@ export interface OverdueItem {
   email: string | null;
   siteName: string | null;
   toolboxTalkId: string;
+  talkCode: string;
   talkTitle: string;
   dueDate: string;
   daysOverdue: number;
@@ -721,6 +735,7 @@ export interface CompletionDetail {
   email: string | null;
   siteName: string | null;
   toolboxTalkId: string;
+  talkCode: string;
   talkTitle: string;
   requiredDate: string;
   dueDate: string;
@@ -930,6 +945,7 @@ export interface PreviewQuestionDto {
 
 export interface ToolboxTalkPreview {
   id: string;
+  code: string;
   title: string;
   description: string | null;
   category: string | null;

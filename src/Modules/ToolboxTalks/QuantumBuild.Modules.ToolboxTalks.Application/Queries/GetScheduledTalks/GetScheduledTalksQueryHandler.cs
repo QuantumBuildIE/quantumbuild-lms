@@ -63,6 +63,7 @@ public class GetScheduledTalksQueryHandler : IRequestHandler<GetScheduledTalksQu
             {
                 Id = st.Id,
                 ToolboxTalkId = st.ToolboxTalkId,
+                ToolboxTalkCode = st.ToolboxTalk.Code,
                 ToolboxTalkTitle = st.ToolboxTalk.Title,
                 EmployeeId = st.EmployeeId,
                 EmployeeName = st.Employee.FirstName + " " + st.Employee.LastName,

@@ -86,6 +86,22 @@ public class UpdateToolboxTalkCommandHandler : IRequestHandler<UpdateToolboxTalk
             }
         }
 
+        // Validate code uniqueness if provided and changed
+        if (!string.IsNullOrWhiteSpace(request.Code) && toolboxTalk.Code != request.Code.Trim())
+        {
+            var codeExists = await _dbContext.ToolboxTalks
+                .AnyAsync(t => t.TenantId == request.TenantId &&
+                              t.Code == request.Code.Trim() &&
+                              t.Id != request.Id, cancellationToken);
+
+            if (codeExists)
+            {
+                throw new InvalidOperationException($"A learning with code '{request.Code}' already exists.");
+            }
+
+            toolboxTalk.Code = request.Code.Trim();
+        }
+
         // Update basic properties
         toolboxTalk.Title = request.Title;
         toolboxTalk.Description = request.Description;
@@ -347,6 +363,7 @@ public class UpdateToolboxTalkCommandHandler : IRequestHandler<UpdateToolboxTalk
         return new ToolboxTalkDto
         {
             Id = entity.Id,
+            Code = entity.Code,
             Title = entity.Title,
             Description = entity.Description,
             Category = entity.Category,

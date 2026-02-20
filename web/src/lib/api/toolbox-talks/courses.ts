@@ -28,6 +28,7 @@ export interface ToolboxTalkCourseItemDto {
   toolboxTalkId: string;
   orderIndex: number;
   isRequired: boolean;
+  talkCode: string;
   talkTitle: string;
   talkDescription?: string;
   talkHasVideo: boolean;

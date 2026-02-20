@@ -17,6 +17,11 @@ public class CreateToolboxTalkCommandHandler : IRequestHandler<CreateToolboxTalk
         _dbContext = dbContext;
     }
 
+    private static readonly HashSet<string> CommonWords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "a", "an", "the", "and", "or", "for", "in", "to", "of", "on", "at", "by", "with", "from", "is", "it"
+    };
+
     public async Task<ToolboxTalkDto> Handle(CreateToolboxTalkCommand request, CancellationToken cancellationToken)
     {
         // Validate title is unique within tenant
@@ -28,11 +33,32 @@ public class CreateToolboxTalkCommandHandler : IRequestHandler<CreateToolboxTalk
             throw new InvalidOperationException($"A learning with title '{request.Title}' already exists.");
         }
 
+        // Generate or validate the code
+        string code;
+        if (!string.IsNullOrWhiteSpace(request.Code))
+        {
+            // Validate uniqueness of provided code
+            var codeExists = await _dbContext.ToolboxTalks
+                .AnyAsync(t => t.TenantId == request.TenantId && t.Code == request.Code, cancellationToken);
+
+            if (codeExists)
+            {
+                throw new InvalidOperationException($"A learning with code '{request.Code}' already exists.");
+            }
+
+            code = request.Code.Trim();
+        }
+        else
+        {
+            code = await GenerateCodeAsync(request.Title, request.TenantId, cancellationToken);
+        }
+
         // Create the toolbox talk
         var toolboxTalk = new ToolboxTalk
         {
             Id = Guid.NewGuid(),
             TenantId = request.TenantId,
+            Code = code,
             Title = request.Title,
             Description = request.Description,
             Category = request.Category,
@@ -99,6 +125,7 @@ public class CreateToolboxTalkCommandHandler : IRequestHandler<CreateToolboxTalk
         return new ToolboxTalkDto
         {
             Id = entity.Id,
+            Code = entity.Code,
             Title = entity.Title,
             Description = entity.Description,
             Category = entity.Category,
@@ -143,6 +170,49 @@ public class CreateToolboxTalkCommandHandler : IRequestHandler<CreateToolboxTalk
                 Points = q.Points
             }).OrderBy(q => q.QuestionNumber).ToList()
         };
+    }
+
+    private async Task<string> GenerateCodeAsync(string title, Guid tenantId, CancellationToken cancellationToken)
+    {
+        // Strip common words and take first letter of each remaining word
+        var words = title.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Where(w => !CommonWords.Contains(w))
+            .ToList();
+
+        string prefix;
+        if (words.Count >= 2)
+        {
+            prefix = string.Concat(words.Select(w => char.ToUpperInvariant(w[0])));
+        }
+        else
+        {
+            // Fewer than 2 characters — take first 3 chars of title
+            var cleaned = new string(title.Where(c => !char.IsWhiteSpace(c)).ToArray());
+            prefix = cleaned.Length >= 3
+                ? cleaned[..3].ToUpperInvariant()
+                : cleaned.ToUpperInvariant();
+        }
+
+        // Truncate prefix if it would exceed max length with suffix (20 - 4 for "-NNN")
+        if (prefix.Length > 16)
+            prefix = prefix[..16];
+
+        // Find existing codes with the same prefix to determine next number
+        var pattern = prefix + "-";
+        var existingCodes = await _dbContext.ToolboxTalks
+            .Where(t => t.TenantId == tenantId && t.Code.StartsWith(pattern))
+            .Select(t => t.Code)
+            .ToListAsync(cancellationToken);
+
+        var maxNumber = 0;
+        foreach (var existingCode in existingCodes)
+        {
+            var suffix = existingCode[pattern.Length..];
+            if (int.TryParse(suffix, out var number) && number > maxNumber)
+                maxNumber = number;
+        }
+
+        return $"{prefix}-{(maxNumber + 1):D3}";
     }
 
     private static string GetFrequencyDisplay(ToolboxTalkFrequency frequency) => frequency switch

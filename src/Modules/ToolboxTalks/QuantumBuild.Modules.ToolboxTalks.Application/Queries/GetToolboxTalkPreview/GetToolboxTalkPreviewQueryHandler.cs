@@ -116,6 +116,7 @@ public class GetToolboxTalkPreviewQueryHandler
         return new ToolboxTalkPreviewDto
         {
             Id = talk.Id,
+            Code = talk.Code,
             Title = translation?.TranslatedTitle ?? talk.Title,
             Description = translation?.TranslatedDescription ?? talk.Description,
             Category = talk.Category,

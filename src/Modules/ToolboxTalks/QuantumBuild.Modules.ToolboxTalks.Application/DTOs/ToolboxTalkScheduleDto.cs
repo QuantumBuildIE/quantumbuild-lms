@@ -9,6 +9,7 @@ public record ToolboxTalkScheduleDto
 {
     public Guid Id { get; init; }
     public Guid ToolboxTalkId { get; init; }
+    public string ToolboxTalkCode { get; init; } = string.Empty;
     public string ToolboxTalkTitle { get; init; } = string.Empty;
     public DateTime ScheduledDate { get; init; }
     public DateTime? EndDate { get; init; }

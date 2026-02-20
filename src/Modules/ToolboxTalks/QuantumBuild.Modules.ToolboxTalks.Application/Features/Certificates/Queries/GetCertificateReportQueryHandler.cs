@@ -78,6 +78,7 @@ public class GetCertificateReportQueryHandler : IRequestHandler<GetCertificateRe
                 Id = c.Id,
                 CertificateNumber = c.CertificateNumber,
                 CertificateType = c.CertificateType.ToString(),
+                TrainingCode = c.ToolboxTalk != null ? c.ToolboxTalk.Code : string.Empty,
                 TrainingTitle = c.TrainingTitle,
                 EmployeeName = c.EmployeeName,
                 EmployeeCode = c.EmployeeCode,

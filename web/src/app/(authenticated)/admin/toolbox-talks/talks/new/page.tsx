@@ -39,6 +39,7 @@ export interface GeneratedQuestion {
 export interface ToolboxTalkWizardData {
   // Step 1: Basic Info
   id?: string;
+  code: string;
   title: string;
   description: string;
   category: string;
@@ -101,6 +102,7 @@ const STEPS = [
 ];
 
 const initialData: ToolboxTalkWizardData = {
+  code: '',
   title: '',
   description: '',
   category: '',

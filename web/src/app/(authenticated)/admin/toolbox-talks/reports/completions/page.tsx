@@ -244,7 +244,12 @@ export default function AdminCompletionsReportPage() {
                       </div>
                     </TableCell>
                     <TableCell>{item.siteName || '-'}</TableCell>
-                    <TableCell className="max-w-[200px] truncate">{item.talkTitle}</TableCell>
+                    <TableCell className="max-w-[200px] truncate">
+                      {item.talkCode && (
+                        <span className="text-muted-foreground font-mono text-sm mr-1.5">{item.talkCode}</span>
+                      )}
+                      {item.talkTitle}
+                    </TableCell>
                     <TableCell className="text-right">
                       <div>
                         <div>{format(new Date(item.completedAt), 'MMM dd, yyyy')}</div>

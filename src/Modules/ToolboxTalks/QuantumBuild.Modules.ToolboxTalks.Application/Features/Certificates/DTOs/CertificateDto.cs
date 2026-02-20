@@ -5,6 +5,7 @@ public class CertificateDto
     public Guid Id { get; set; }
     public string CertificateNumber { get; set; } = string.Empty;
     public string CertificateType { get; set; } = string.Empty;
+    public string TrainingCode { get; set; } = string.Empty;
     public string TrainingTitle { get; set; } = string.Empty;
     public List<string>? IncludedTalks { get; set; }
     public DateTime IssuedAt { get; set; }

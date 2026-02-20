@@ -27,6 +27,7 @@ public class GetToolboxTalksQueryHandler : IRequestHandler<GetToolboxTalksQuery,
         {
             var searchLower = request.SearchTerm.ToLower();
             query = query.Where(t =>
+                t.Code.ToLower().Contains(searchLower) ||
                 t.Title.ToLower().Contains(searchLower) ||
                 (t.Description != null && t.Description.ToLower().Contains(searchLower)));
         }
@@ -54,6 +55,7 @@ public class GetToolboxTalksQueryHandler : IRequestHandler<GetToolboxTalksQuery,
             .Select(t => new ToolboxTalkListDto
             {
                 Id = t.Id,
+                Code = t.Code,
                 Title = t.Title,
                 Description = t.Description,
                 Category = t.Category,

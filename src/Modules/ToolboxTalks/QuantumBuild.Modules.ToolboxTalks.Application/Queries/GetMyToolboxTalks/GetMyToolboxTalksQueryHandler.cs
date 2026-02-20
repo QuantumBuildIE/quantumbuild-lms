@@ -46,6 +46,7 @@ public class GetMyToolboxTalksQueryHandler : IRequestHandler<GetMyToolboxTalksQu
             {
                 ScheduledTalkId = st.Id,
                 ToolboxTalkId = st.ToolboxTalkId,
+                Code = st.ToolboxTalk.Code,
                 Title = st.ToolboxTalk.Title,
                 Description = st.ToolboxTalk.Description,
                 RequiredDate = st.RequiredDate,

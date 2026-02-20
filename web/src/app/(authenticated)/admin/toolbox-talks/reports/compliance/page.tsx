@@ -409,7 +409,12 @@ export default function AdminComplianceReportPage() {
               ) : (
                 report?.byTalk.map((talk) => (
                   <TableRow key={talk.toolboxTalkId}>
-                    <TableCell className="font-medium">{talk.title}</TableCell>
+                    <TableCell className="font-medium">
+                      {talk.code && (
+                        <span className="text-muted-foreground font-mono text-sm mr-1.5">{talk.code}</span>
+                      )}
+                      {talk.title}
+                    </TableCell>
                     <TableCell className="text-right">{talk.assignedCount}</TableCell>
                     <TableCell className="text-right">{talk.completedCount}</TableCell>
                     <TableCell className="text-right">

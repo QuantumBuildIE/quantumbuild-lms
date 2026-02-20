@@ -59,6 +59,7 @@ public class GetToolboxTalkSchedulesQueryHandler : IRequestHandler<GetToolboxTal
             {
                 Id = s.Id,
                 ToolboxTalkId = s.ToolboxTalkId,
+                ToolboxTalkCode = s.ToolboxTalk.Code,
                 ToolboxTalkTitle = s.ToolboxTalk.Title,
                 ScheduledDate = s.ScheduledDate,
                 EndDate = s.EndDate,

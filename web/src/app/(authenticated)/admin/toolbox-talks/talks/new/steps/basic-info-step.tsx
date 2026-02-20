@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -31,7 +31,18 @@ import { useLookupValues } from '@/hooks/use-lookups';
 import { FREQUENCY_VALUES, FREQUENCY_OPTIONS_WITH_DESCRIPTIONS } from '@/lib/constants/frequency';
 import type { ToolboxTalkWizardData } from '../page';
 
+const COMMON_WORDS = new Set([
+  'a', 'an', 'the', 'and', 'or', 'for', 'in', 'to', 'of', 'on', 'at', 'by', 'with', 'from', 'is', 'it',
+]);
+
+function generateCodeFromTitle(title: string): string {
+  const words = title.trim().split(/\s+/).filter((w) => !COMMON_WORDS.has(w.toLowerCase()));
+  const acronym = words.map((w) => w.charAt(0).toUpperCase()).join('');
+  return acronym ? `${acronym}-001` : '';
+}
+
 const basicInfoSchema = z.object({
+  code: z.string().max(50, 'Code must be less than 50 characters').optional().or(z.literal('')),
   title: z
     .string()
     .min(5, 'Title must be at least 5 characters')
@@ -61,17 +72,29 @@ export function BasicInfoStep({
 }: BasicInfoStepProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const codeDirtyRef = useRef(!!data.code);
   const { data: categories = [], isLoading: categoriesLoading } = useLookupValues('TrainingCategory');
 
   const form = useForm<BasicInfoForm>({
     resolver: zodResolver(basicInfoSchema),
     defaultValues: {
+      code: data.code,
       title: data.title,
       description: data.description,
       category: data.category,
       frequency: data.frequency,
     },
   });
+
+  const handleTitleChange = useCallback(
+    (value: string, onChange: (v: string) => void) => {
+      onChange(value);
+      if (!codeDirtyRef.current) {
+        form.setValue('code', generateCodeFromTitle(value));
+      }
+    },
+    [form]
+  );
 
   const onSubmit = async (formData: BasicInfoForm) => {
     console.log('📝 Step 1: onSubmit called');
@@ -85,6 +108,7 @@ export function BasicInfoStep({
       if (!data.id) {
         console.log('📝 No ID exists, creating new learning...');
         const response = await createToolboxTalk({
+          code: formData.code || undefined,
           title: formData.title,
           description: formData.description,
           category: formData.category,
@@ -98,6 +122,7 @@ export function BasicInfoStep({
 
         updateData({
           id: response.id,
+          code: formData.code || '',
           title: formData.title,
           description: formData.description,
           category: formData.category,
@@ -110,6 +135,7 @@ export function BasicInfoStep({
         console.log('📝 ID already exists, updating:', data.id);
         // Just update local state, API will be called when content is added
         updateData({
+          code: formData.code || '',
           title: formData.title,
           description: formData.description,
           category: formData.category,
@@ -147,25 +173,52 @@ export function BasicInfoStep({
             </Alert>
           )}
 
-          <FormField
-            control={form.control}
-            name="title"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Title *</FormLabel>
-                <FormControl>
-                  <Input
-                    placeholder="e.g., Working at Heights Safety Training"
-                    {...field}
-                  />
-                </FormControl>
-                <FormDescription>
-                  A clear, descriptive title for this safety training
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          <div className="flex gap-4">
+            <FormField
+              control={form.control}
+              name="title"
+              render={({ field }) => (
+                <FormItem className="flex-[7]">
+                  <FormLabel>Title *</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="e.g., Working at Heights Safety Training"
+                      {...field}
+                      onChange={(e) => handleTitleChange(e.target.value, field.onChange)}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    A clear, descriptive title for this safety training
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="code"
+              render={({ field }) => (
+                <FormItem className="flex-[3]">
+                  <FormLabel>Code</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="e.g., MHS-001"
+                      {...field}
+                      onChange={(e) => {
+                        codeDirtyRef.current = e.target.value !== '';
+                        field.onChange(e.target.value);
+                      }}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Auto-generated from title. Edit to customise.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <FormField

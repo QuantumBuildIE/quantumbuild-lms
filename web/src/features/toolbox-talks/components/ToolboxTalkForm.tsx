@@ -69,6 +69,7 @@ const questionSchema = z.object({
 });
 
 const toolboxTalkFormSchema = z.object({
+  code: z.string().max(50, 'Code must be less than 50 characters').optional().or(z.literal('')),
   title: z.string().min(1, 'Title is required').max(200),
   description: z.string().max(2000).optional().nullable(),
   category: z.string().max(100).optional().nullable(),
@@ -138,6 +139,7 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
   const form = useForm<ToolboxTalkFormValues>({
     resolver: zodResolver(toolboxTalkFormSchema) as any,
     defaultValues: {
+      code: talk?.code ?? '',
       title: talk?.title ?? '',
       description: talk?.description ?? '',
       category: talk?.category ?? '',
@@ -263,6 +265,7 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
         : undefined;
 
       const requestData = {
+        code: values.code || undefined,
         title: values.title,
         description: values.description || undefined,
         category: values.category || undefined,
@@ -319,19 +322,35 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
-              <FormField
-                control={form.control}
-                name="title"
-                render={({ field }) => (
-                  <FormItem className="sm:col-span-2">
-                    <FormLabel>Title *</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Enter learning title..." {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <div className="sm:col-span-2 flex gap-4">
+                <FormField
+                  control={form.control}
+                  name="title"
+                  render={({ field }) => (
+                    <FormItem className="flex-[7]">
+                      <FormLabel>Title *</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Enter learning title..." {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="code"
+                  render={({ field }) => (
+                    <FormItem className="flex-[3]">
+                      <FormLabel>Code</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., MHS-001" {...field} value={field.value ?? ''} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
               <FormField
                 control={form.control}

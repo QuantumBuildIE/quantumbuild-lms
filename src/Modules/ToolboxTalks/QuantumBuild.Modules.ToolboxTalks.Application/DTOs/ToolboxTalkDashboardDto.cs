@@ -47,6 +47,7 @@ public record RecentCompletionDto
 {
     public Guid ScheduledTalkId { get; init; }
     public string EmployeeName { get; init; } = string.Empty;
+    public string ToolboxTalkCode { get; init; } = string.Empty;
     public string ToolboxTalkTitle { get; init; } = string.Empty;
     public DateTime CompletedAt { get; init; }
     public int TotalTimeSpentSeconds { get; init; }
@@ -63,6 +64,7 @@ public record OverdueAssignmentDto
     public Guid EmployeeId { get; init; }
     public string EmployeeName { get; init; } = string.Empty;
     public string? EmployeeEmail { get; init; }
+    public string ToolboxTalkCode { get; init; } = string.Empty;
     public string ToolboxTalkTitle { get; init; } = string.Empty;
     public DateTime DueDate { get; init; }
     public int DaysOverdue { get; init; }
@@ -76,6 +78,7 @@ public record OverdueAssignmentDto
 public record UpcomingScheduleDto
 {
     public Guid ScheduleId { get; init; }
+    public string ToolboxTalkCode { get; init; } = string.Empty;
     public string ToolboxTalkTitle { get; init; } = string.Empty;
     public DateTime ScheduledDate { get; init; }
     public ToolboxTalkFrequency Frequency { get; init; }

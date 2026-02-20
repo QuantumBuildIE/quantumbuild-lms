@@ -89,6 +89,7 @@ interface CourseItem {
   toolboxTalkId: string;
   orderIndex: number;
   isRequired: boolean;
+  talkCode: string;
   talkTitle: string;
   talkDescription?: string;
   talkHasVideo: boolean;
@@ -143,7 +144,12 @@ function SortableItem({ item, index, onToggleRequired, onRemove }: SortableItemP
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="font-medium text-sm truncate">{item.talkTitle}</span>
+          <span className="font-medium text-sm truncate">
+            {item.talkCode && (
+              <span className="text-muted-foreground font-mono mr-1.5">{item.talkCode}</span>
+            )}
+            {item.talkTitle}
+          </span>
           {item.talkHasVideo && (
             <VideoIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           )}
@@ -212,6 +218,7 @@ export function CourseForm({ course }: CourseFormProps) {
           toolboxTalkId: item.toolboxTalkId,
           orderIndex: item.orderIndex,
           isRequired: item.isRequired,
+          talkCode: item.talkCode,
           talkTitle: item.talkTitle,
           talkDescription: item.talkDescription ?? undefined,
           talkHasVideo: item.talkHasVideo,
@@ -266,6 +273,7 @@ export function CourseForm({ course }: CourseFormProps) {
       toolboxTalkId: talk.id,
       orderIndex: startIndex + idx,
       isRequired: true,
+      talkCode: talk.code,
       talkTitle: talk.title,
       talkDescription: talk.description ?? undefined,
       talkHasVideo: false,

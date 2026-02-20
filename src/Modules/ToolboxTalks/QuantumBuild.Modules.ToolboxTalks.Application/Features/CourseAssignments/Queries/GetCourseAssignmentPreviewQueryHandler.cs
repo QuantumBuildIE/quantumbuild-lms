@@ -95,6 +95,7 @@ public class GetCourseAssignmentPreviewQueryHandler
                     .Select(ci => new CourseTalkPreviewDto
                     {
                         ToolboxTalkId = ci.ToolboxTalkId,
+                        Code = ci.ToolboxTalk!.Code,
                         Title = ci.ToolboxTalk!.Title,
                         OrderIndex = ci.OrderIndex,
                         IsRequired = ci.IsRequired,

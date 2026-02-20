@@ -15,6 +15,11 @@ public class UpdateToolboxTalkCommandValidator : AbstractValidator<UpdateToolbox
             .NotEmpty()
             .WithMessage("TenantId is required.");
 
+        RuleFor(x => x.Code)
+            .MaximumLength(20)
+            .When(x => !string.IsNullOrEmpty(x.Code))
+            .WithMessage("Code must not exceed 20 characters.");
+
         RuleFor(x => x.Title)
             .NotEmpty()
             .WithMessage("Title is required.")

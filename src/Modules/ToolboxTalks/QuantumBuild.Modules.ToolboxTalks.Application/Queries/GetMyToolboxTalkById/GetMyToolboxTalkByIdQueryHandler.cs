@@ -119,6 +119,7 @@ public class GetMyToolboxTalkByIdQueryHandler : IRequestHandler<GetMyToolboxTalk
         {
             ScheduledTalkId = scheduledTalk.Id,
             ToolboxTalkId = talk.Id,
+            Code = talk.Code,
             Title = translation?.TranslatedTitle ?? talk.Title,
             Description = translation?.TranslatedDescription ?? talk.Description,
             VideoUrl = talk.VideoUrl,

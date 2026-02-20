@@ -27,6 +27,7 @@ public class GetMyCertificatesQueryHandler : IRequestHandler<GetMyCertificatesQu
                 c.Id,
                 c.CertificateNumber,
                 CertificateType = c.CertificateType.ToString(),
+                TrainingCode = c.ToolboxTalk != null ? c.ToolboxTalk.Code : string.Empty,
                 c.TrainingTitle,
                 c.IncludedTalksJson,
                 c.IssuedAt,
@@ -40,6 +41,7 @@ public class GetMyCertificatesQueryHandler : IRequestHandler<GetMyCertificatesQu
             Id = c.Id,
             CertificateNumber = c.CertificateNumber,
             CertificateType = c.CertificateType,
+            TrainingCode = c.TrainingCode,
             TrainingTitle = c.TrainingTitle,
             IncludedTalks = c.IncludedTalksJson != null
                 ? JsonSerializer.Deserialize<List<string>>(c.IncludedTalksJson)

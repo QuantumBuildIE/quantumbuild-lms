@@ -9,6 +9,7 @@ export interface CertificateDto {
   id: string;
   certificateNumber: string;
   certificateType: string; // "Talk" or "Course"
+  trainingCode: string;
   trainingTitle: string;
   includedTalks?: string[];
   issuedAt: string;
@@ -81,6 +82,7 @@ export interface CertificateReportItemDto {
   id: string;
   certificateNumber: string;
   certificateType: string;
+  trainingCode: string;
   trainingTitle: string;
   employeeName: string;
   employeeCode?: string;

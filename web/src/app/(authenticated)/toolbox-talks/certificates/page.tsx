@@ -127,6 +127,9 @@ export default function CertificatesPage() {
                   </div>
                 </div>
                 <CardTitle className="text-lg mt-2">
+                  {cert.trainingCode && (
+                    <span className="text-muted-foreground font-mono text-sm mr-1.5">{cert.trainingCode}</span>
+                  )}
                   {cert.trainingTitle}
                 </CardTitle>
               </CardHeader>

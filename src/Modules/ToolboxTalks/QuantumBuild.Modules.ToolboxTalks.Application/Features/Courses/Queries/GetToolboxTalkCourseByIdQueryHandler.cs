@@ -52,6 +52,7 @@ public class GetToolboxTalkCourseByIdQueryHandler : IRequestHandler<GetToolboxTa
                     ToolboxTalkId = ci.ToolboxTalkId,
                     OrderIndex = ci.OrderIndex,
                     IsRequired = ci.IsRequired,
+                    TalkCode = ci.ToolboxTalk!.Code,
                     TalkTitle = ci.ToolboxTalk!.Title,
                     TalkDescription = ci.ToolboxTalk.Description,
                     TalkHasVideo = !string.IsNullOrEmpty(ci.ToolboxTalk.VideoUrl),

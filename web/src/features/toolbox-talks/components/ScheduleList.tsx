@@ -151,7 +151,12 @@ export function ScheduleList({ toolboxTalkId, onEdit, basePath = '/admin/toolbox
       sortable: true,
       render: (item) => (
         <div className="flex flex-col">
-          <span className="font-medium">{item.toolboxTalkTitle}</span>
+          <span className="font-medium">
+            {item.toolboxTalkCode && (
+              <span className="text-muted-foreground font-mono text-sm mr-1.5">{item.toolboxTalkCode}</span>
+            )}
+            {item.toolboxTalkTitle}
+          </span>
           <span className="text-xs text-muted-foreground">
             {item.frequencyDisplay}
           </span>

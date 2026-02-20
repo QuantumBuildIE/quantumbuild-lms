@@ -472,7 +472,10 @@ export function TalkViewer({ scheduledTalkId }: TalkViewerProps) {
           </Button>
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-xl font-semibold">{talk.title}</h1>
+              <h1 className="text-xl font-semibold">
+                {talk.code && <span className="text-muted-foreground font-mono text-base mr-2">{talk.code} &mdash;</span>}
+                {talk.title}
+              </h1>
               {talk.pdfUrl && (
                 <Button variant="outline" size="sm" asChild>
                   <a href={talk.pdfUrl} target="_blank" rel="noopener noreferrer" download>

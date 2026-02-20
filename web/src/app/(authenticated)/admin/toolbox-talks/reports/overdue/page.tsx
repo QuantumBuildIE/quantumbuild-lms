@@ -223,7 +223,12 @@ export default function AdminOverdueReportPage() {
                       </div>
                     </TableCell>
                     <TableCell>{item.siteName || '-'}</TableCell>
-                    <TableCell className="max-w-[200px] truncate">{item.talkTitle}</TableCell>
+                    <TableCell className="max-w-[200px] truncate">
+                      {item.talkCode && (
+                        <span className="text-muted-foreground font-mono text-sm mr-1.5">{item.talkCode}</span>
+                      )}
+                      {item.talkTitle}
+                    </TableCell>
                     <TableCell className="text-right">
                       {format(new Date(item.dueDate), 'MMM dd, yyyy')}
                     </TableCell>

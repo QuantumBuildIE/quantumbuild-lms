@@ -169,7 +169,12 @@ export function AssignmentsList({
       header: 'Talk',
       sortable: true,
       render: (item) => (
-        <span className="font-medium">{item.toolboxTalkTitle}</span>
+        <span className="font-medium">
+          {item.toolboxTalkCode && (
+            <span className="text-muted-foreground font-mono text-xs mr-1.5">{item.toolboxTalkCode}</span>
+          )}
+          {item.toolboxTalkTitle}
+        </span>
       ),
     },
     {

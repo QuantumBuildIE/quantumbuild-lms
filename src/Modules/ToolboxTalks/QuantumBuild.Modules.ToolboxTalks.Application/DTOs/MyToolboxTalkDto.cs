@@ -9,6 +9,7 @@ public record MyToolboxTalkDto
 {
     public Guid ScheduledTalkId { get; init; }
     public Guid ToolboxTalkId { get; init; }
+    public string Code { get; init; } = string.Empty;
 
     // Talk details (translated if available)
     public string Title { get; init; } = string.Empty;

@@ -111,6 +111,7 @@ public class GetToolboxTalkDashboardQueryHandler : IRequestHandler<GetToolboxTal
             {
                 ScheduledTalkId = st.Id,
                 EmployeeName = $"{st.Employee?.FirstName} {st.Employee?.LastName}".Trim(),
+                ToolboxTalkCode = st.ToolboxTalk?.Code ?? string.Empty,
                 ToolboxTalkTitle = st.ToolboxTalk?.Title ?? "Unknown",
                 CompletedAt = st.Completion!.CompletedAt,
                 TotalTimeSpentSeconds = st.Completion.TotalTimeSpentSeconds,
@@ -133,6 +134,7 @@ public class GetToolboxTalkDashboardQueryHandler : IRequestHandler<GetToolboxTal
                 EmployeeId = st.EmployeeId,
                 EmployeeName = $"{st.Employee?.FirstName} {st.Employee?.LastName}".Trim(),
                 EmployeeEmail = st.Employee?.Email,
+                ToolboxTalkCode = st.ToolboxTalk?.Code ?? string.Empty,
                 ToolboxTalkTitle = st.ToolboxTalk?.Title ?? "Unknown",
                 DueDate = st.DueDate,
                 DaysOverdue = (int)Math.Floor((now - st.DueDate).TotalDays),
@@ -154,6 +156,7 @@ public class GetToolboxTalkDashboardQueryHandler : IRequestHandler<GetToolboxTal
             .Select(s => new UpcomingScheduleDto
             {
                 ScheduleId = s.Id,
+                ToolboxTalkCode = s.ToolboxTalk.Code,
                 ToolboxTalkTitle = s.ToolboxTalk.Title,
                 ScheduledDate = s.NextRunDate ?? s.ScheduledDate,
                 Frequency = s.Frequency,

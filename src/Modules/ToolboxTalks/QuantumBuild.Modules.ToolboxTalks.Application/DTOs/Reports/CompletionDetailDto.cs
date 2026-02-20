@@ -41,6 +41,11 @@ public record CompletionDetailDto
     public Guid ToolboxTalkId { get; init; }
 
     /// <summary>
+    /// Toolbox talk code
+    /// </summary>
+    public string TalkCode { get; init; } = string.Empty;
+
+    /// <summary>
     /// Toolbox talk title
     /// </summary>
     public string TalkTitle { get; init; } = string.Empty;

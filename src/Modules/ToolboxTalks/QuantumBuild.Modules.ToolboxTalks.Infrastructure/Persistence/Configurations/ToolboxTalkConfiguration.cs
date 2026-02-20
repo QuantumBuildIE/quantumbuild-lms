@@ -19,6 +19,10 @@ public class ToolboxTalkConfiguration : IEntityTypeConfiguration<ToolboxTalk>
         builder.HasKey(t => t.Id);
 
         // Properties
+        builder.Property(t => t.Code)
+            .IsRequired()
+            .HasMaxLength(20);
+
         builder.Property(t => t.Title)
             .IsRequired()
             .HasMaxLength(200);
@@ -208,6 +212,10 @@ public class ToolboxTalkConfiguration : IEntityTypeConfiguration<ToolboxTalk>
             .OnDelete(DeleteBehavior.Cascade);
 
         // Indexes
+        builder.HasIndex(t => new { t.TenantId, t.Code })
+            .IsUnique()
+            .HasDatabaseName("IX_ToolboxTalks_TenantId_Code");
+
         builder.HasIndex(t => new { t.TenantId, t.IsDeleted, t.IsActive })
             .HasDatabaseName("ix_toolbox_talks_tenant_deleted_active");
 

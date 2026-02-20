@@ -118,6 +118,11 @@ public record TalkComplianceDto
     public Guid ToolboxTalkId { get; init; }
 
     /// <summary>
+    /// Toolbox talk code
+    /// </summary>
+    public string Code { get; init; } = string.Empty;
+
+    /// <summary>
     /// Toolbox talk title
     /// </summary>
     public string Title { get; init; } = string.Empty;

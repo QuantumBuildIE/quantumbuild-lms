@@ -4,6 +4,7 @@ public record CourseScheduledTalkDto
 {
     public Guid ScheduledTalkId { get; init; }
     public Guid ToolboxTalkId { get; init; }
+    public string TalkCode { get; init; } = string.Empty;
     public string TalkTitle { get; init; } = string.Empty;
     public int OrderIndex { get; init; }
     public bool IsRequired { get; init; }

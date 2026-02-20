@@ -393,7 +393,12 @@ function CertificateRow({
       </TableCell>
       <TableCell>
         <div className="flex items-center gap-2">
-          <span>{item.trainingTitle}</span>
+          <span>
+            {item.trainingCode && (
+              <span className="text-muted-foreground font-mono text-sm mr-1.5">{item.trainingCode}</span>
+            )}
+            {item.trainingTitle}
+          </span>
           {item.isRefresher && (
             <Badge variant="outline" className="text-xs gap-1">
               <RefreshCw className="h-3 w-3" />

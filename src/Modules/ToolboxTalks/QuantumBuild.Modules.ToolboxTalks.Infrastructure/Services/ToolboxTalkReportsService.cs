@@ -142,7 +142,7 @@ public class ToolboxTalkReportsService : IToolboxTalkReportsService
             // Get breakdown by toolbox talk
             var byTalk = new List<TalkComplianceDto>();
             var talkGroups = scheduledTalks
-                .GroupBy(st => new { st.ToolboxTalkId, st.ToolboxTalk.Title })
+                .GroupBy(st => new { st.ToolboxTalkId, st.ToolboxTalk.Code, st.ToolboxTalk.Title })
                 .ToList();
 
             foreach (var group in talkGroups)
@@ -174,6 +174,7 @@ public class ToolboxTalkReportsService : IToolboxTalkReportsService
                 byTalk.Add(new TalkComplianceDto
                 {
                     ToolboxTalkId = group.Key.ToolboxTalkId,
+                    Code = group.Key.Code,
                     Title = group.Key.Title,
                     AssignedCount = talkTalks.Count,
                     CompletedCount = talkCompleted,
@@ -259,6 +260,7 @@ public class ToolboxTalkReportsService : IToolboxTalkReportsService
                 Email = st.Employee.Email,
                 SiteName = st.Employee.PrimarySite?.SiteName,
                 ToolboxTalkId = st.ToolboxTalkId,
+                TalkCode = st.ToolboxTalk.Code,
                 TalkTitle = st.ToolboxTalk.Title,
                 DueDate = st.DueDate,
                 DaysOverdue = (int)Math.Ceiling((now - st.DueDate).TotalDays),
@@ -343,6 +345,7 @@ public class ToolboxTalkReportsService : IToolboxTalkReportsService
                 Email = c.ScheduledTalk.Employee.Email,
                 SiteName = c.ScheduledTalk.Employee.PrimarySite?.SiteName,
                 ToolboxTalkId = c.ScheduledTalk.ToolboxTalkId,
+                TalkCode = c.ScheduledTalk.ToolboxTalk.Code,
                 TalkTitle = c.ScheduledTalk.ToolboxTalk.Title,
                 RequiredDate = c.ScheduledTalk.RequiredDate,
                 DueDate = c.ScheduledTalk.DueDate,

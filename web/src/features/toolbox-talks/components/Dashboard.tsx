@@ -289,6 +289,9 @@ export function Dashboard() {
       header: 'Talk',
       render: (item) => (
         <span className="text-sm text-muted-foreground truncate max-w-[200px] block">
+          {item.toolboxTalkCode && (
+            <span className="font-mono mr-1">{item.toolboxTalkCode}</span>
+          )}
           {item.toolboxTalkTitle}
         </span>
       ),
@@ -328,6 +331,9 @@ export function Dashboard() {
       header: 'Talk',
       render: (item) => (
         <span className="text-sm text-muted-foreground truncate max-w-[200px] block">
+          {item.toolboxTalkCode && (
+            <span className="font-mono mr-1">{item.toolboxTalkCode}</span>
+          )}
           {item.toolboxTalkTitle}
         </span>
       ),
@@ -376,7 +382,14 @@ export function Dashboard() {
     {
       key: 'toolboxTalkTitle',
       header: 'Talk',
-      render: (item) => <span className="font-medium">{item.toolboxTalkTitle}</span>,
+      render: (item) => (
+        <span className="font-medium">
+          {item.toolboxTalkCode && (
+            <span className="text-muted-foreground font-mono text-sm mr-1.5">{item.toolboxTalkCode}</span>
+          )}
+          {item.toolboxTalkTitle}
+        </span>
+      ),
     },
     {
       key: 'scheduledDate',

@@ -19,6 +19,7 @@ public class CertificateReportItemDto
     public Guid Id { get; set; }
     public string CertificateNumber { get; set; } = string.Empty;
     public string CertificateType { get; set; } = string.Empty;
+    public string TrainingCode { get; set; } = string.Empty;
     public string TrainingTitle { get; set; } = string.Empty;
     public string EmployeeName { get; set; } = string.Empty;
     public string? EmployeeCode { get; set; }

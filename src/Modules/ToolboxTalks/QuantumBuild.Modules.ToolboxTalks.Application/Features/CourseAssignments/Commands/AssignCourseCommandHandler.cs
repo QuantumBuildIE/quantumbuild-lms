@@ -139,6 +139,7 @@ public class AssignCourseCommandHandler : IRequestHandler<AssignCourseCommand, L
                 {
                     ScheduledTalkId = scheduledTalk.Id,
                     ToolboxTalkId = item.ToolboxTalkId,
+                    TalkCode = item.ToolboxTalk.Code,
                     TalkTitle = item.ToolboxTalk.Title,
                     OrderIndex = item.OrderIndex,
                     IsRequired = item.IsRequired,

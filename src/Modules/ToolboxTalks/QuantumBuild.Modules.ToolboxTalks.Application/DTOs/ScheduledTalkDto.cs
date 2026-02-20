@@ -9,6 +9,7 @@ public record ScheduledTalkDto
 {
     public Guid Id { get; init; }
     public Guid ToolboxTalkId { get; init; }
+    public string ToolboxTalkCode { get; init; } = string.Empty;
     public string ToolboxTalkTitle { get; init; } = string.Empty;
     public Guid EmployeeId { get; init; }
     public string EmployeeName { get; init; } = string.Empty;

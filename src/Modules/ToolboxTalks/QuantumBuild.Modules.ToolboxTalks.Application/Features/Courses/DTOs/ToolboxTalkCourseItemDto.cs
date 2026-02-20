@@ -11,6 +11,7 @@ public record ToolboxTalkCourseItemDto
     public bool IsRequired { get; init; }
 
     // Talk details (for display)
+    public string TalkCode { get; init; } = string.Empty;
     public string TalkTitle { get; init; } = string.Empty;
     public string? TalkDescription { get; init; }
     public bool TalkHasVideo { get; init; }

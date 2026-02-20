@@ -64,6 +64,9 @@ export function EmployeeCertificatesSection({ employeeId }: EmployeeCertificates
                   )}
                   <div>
                     <div className="font-medium flex items-center gap-2">
+                      {cert.trainingCode && (
+                        <span className="text-muted-foreground font-mono text-sm">{cert.trainingCode}</span>
+                      )}
                       {cert.trainingTitle}
                       {cert.isRefresher && (
                         <Badge variant="outline" className="text-orange-600 border-orange-300 text-xs">

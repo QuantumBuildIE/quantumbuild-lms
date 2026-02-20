@@ -20,6 +20,7 @@ public record CourseAssignmentEmployeePreviewDto
 public record CourseTalkPreviewDto
 {
     public Guid ToolboxTalkId { get; init; }
+    public string Code { get; init; } = string.Empty;
     public string Title { get; init; } = string.Empty;
     public int OrderIndex { get; init; }
     public bool IsRequired { get; init; }

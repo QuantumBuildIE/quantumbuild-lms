@@ -136,6 +136,12 @@ export function ToolboxTalkList({ onSchedule, basePath = '/admin/toolbox-talks' 
 
   const columns: Column<ToolboxTalkListItem>[] = [
     {
+      key: 'code',
+      header: 'Code',
+      sortable: true,
+      className: 'font-medium',
+    },
+    {
       key: 'title',
       header: 'Title',
       sortable: true,

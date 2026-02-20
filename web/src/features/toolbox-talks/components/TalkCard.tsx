@@ -72,7 +72,12 @@ export function TalkCard({ talk, onAction, className }: TalkCardProps) {
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2">
-            <CardTitle className="text-base font-medium line-clamp-2">{talk.title}</CardTitle>
+            <CardTitle className="text-base font-medium line-clamp-2">
+              {talk.code && (
+                <span className="text-muted-foreground font-mono text-sm mr-1.5">{talk.code}</span>
+              )}
+              {talk.title}
+            </CardTitle>
           </div>
           <div className="flex items-center gap-1 shrink-0">
             {talk.isRefresher && (

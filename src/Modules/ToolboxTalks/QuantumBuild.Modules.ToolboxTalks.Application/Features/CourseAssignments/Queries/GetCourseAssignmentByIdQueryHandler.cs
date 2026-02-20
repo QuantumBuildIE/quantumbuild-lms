@@ -60,6 +60,7 @@ public class GetCourseAssignmentByIdQueryHandler : IRequestHandler<GetCourseAssi
             {
                 ScheduledTalkId = talk.Id,
                 ToolboxTalkId = talk.ToolboxTalkId,
+                TalkCode = talk.ToolboxTalk?.Code ?? string.Empty,
                 TalkTitle = talk.ToolboxTalk?.Title ?? string.Empty,
                 OrderIndex = talk.CourseOrderIndex ?? i,
                 IsRequired = true,

@@ -10,6 +10,11 @@ namespace QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 public class ToolboxTalk : TenantEntity
 {
     /// <summary>
+    /// Short unique code for the toolbox talk (e.g., "MHS-001")
+    /// </summary>
+    public string Code { get; set; } = string.Empty;
+
+    /// <summary>
     /// Title of the toolbox talk
     /// </summary>
     public string Title { get; set; } = string.Empty;

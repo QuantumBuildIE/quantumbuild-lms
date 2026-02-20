@@ -96,6 +96,11 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
           <div className="flex items-center gap-3">
+            {talk.code && (
+              <Badge variant="outline" className="text-sm font-mono">
+                {talk.code}
+              </Badge>
+            )}
             <h1 className="text-2xl font-bold">{talk.title}</h1>
             <Badge
               variant={talk.isActive ? 'default' : 'secondary'}

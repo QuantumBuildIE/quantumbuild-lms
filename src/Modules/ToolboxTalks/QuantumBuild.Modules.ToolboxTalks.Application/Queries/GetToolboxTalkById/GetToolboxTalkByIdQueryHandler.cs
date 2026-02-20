@@ -53,6 +53,7 @@ public class GetToolboxTalkByIdQueryHandler : IRequestHandler<GetToolboxTalkById
         return new ToolboxTalkDto
         {
             Id = talk.Id,
+            Code = talk.Code,
             Title = talk.Title,
             Description = talk.Description,
             Category = talk.Category,
