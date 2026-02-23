@@ -27,6 +27,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Core\QuantumBuild.Core.Infrastructure\QuantumBuild.Core.Infrastructure.csproj" />
     <ProjectReference Include="..\Modules\ToolboxTalks\QuantumBuild.Modules.ToolboxTalks.Infrastructure\QuantumBuild.Modules.ToolboxTalks.Infrastructure.csproj" />
+    <ProjectReference Include="..\Modules\LessonParser\QuantumBuild.Modules.LessonParser.Infrastructure\QuantumBuild.Modules.LessonParser.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

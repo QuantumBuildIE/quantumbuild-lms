@@ -18,6 +18,9 @@ using QuantumBuild.Modules.ToolboxTalks.Infrastructure;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Persistence.Seed;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Hubs;
+using QuantumBuild.Modules.LessonParser.Application;
+using QuantumBuild.Modules.LessonParser.Infrastructure;
+using QuantumBuild.Modules.LessonParser.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -60,6 +63,10 @@ builder.Services.AddScoped<IToolboxTalksDbContext>(provider =>
 
 // Register ToolboxTalks module services
 builder.Services.AddToolboxTalksInfrastructure(builder.Configuration);
+
+// Register LessonParser module services
+builder.Services.AddLessonParserApplication();
+builder.Services.AddLessonParserInfrastructure(builder.Configuration);
 
 // Register DbContext (for DataSeeder)
 builder.Services.AddScoped<DbContext>(provider =>
@@ -229,6 +236,55 @@ var app = builder.Build();
         {
             var logger = app.Services.GetRequiredService<ILogger<Program>>();
             logger.LogCritical(ex, "Failed to apply database migrations after {MaxRetries} attempts", maxRetries);
+            throw;
+        }
+    }
+}
+
+// Apply Lesson Parser module migrations
+{
+    var maxRetries = 5;
+    var delay = TimeSpan.FromSeconds(5);
+
+    for (int i = 0; i < maxRetries; i++)
+    {
+        try
+        {
+            using var scope = app.Services.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<LessonParserDbContext>();
+            var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+
+            var pendingMigrations = (await context.Database.GetPendingMigrationsAsync()).ToList();
+
+            if (pendingMigrations.Any())
+            {
+                logger.LogInformation("Applying {Count} Lesson Parser migration(s): {Migrations}",
+                    pendingMigrations.Count,
+                    string.Join(", ", pendingMigrations));
+
+                await context.Database.MigrateAsync();
+
+                logger.LogInformation("Lesson Parser migrations applied successfully");
+            }
+            else
+            {
+                logger.LogInformation("Lesson Parser schema is up to date");
+            }
+            break;
+        }
+        catch (Exception ex) when (i < maxRetries - 1)
+        {
+            var logger = app.Services.GetRequiredService<ILogger<Program>>();
+            logger.LogWarning(ex,
+                "Lesson Parser migration failed on attempt {Attempt}/{MaxRetries}. Retrying in {Delay}s...",
+                i + 1, maxRetries, delay.TotalSeconds);
+            await Task.Delay(delay);
+            delay *= 2;
+        }
+        catch (Exception ex)
+        {
+            var logger = app.Services.GetRequiredService<ILogger<Program>>();
+            logger.LogCritical(ex, "Failed to apply Lesson Parser migrations after {MaxRetries} attempts", maxRetries);
             throw;
         }
     }

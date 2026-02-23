@@ -388,6 +388,10 @@ public static class DataSeeder
             Permissions.Learnings.Schedule => "Schedule and assign learnings",
             Permissions.Learnings.Admin => "Full learnings administration",
 
+            // Lesson Parser
+            Permissions.LessonParser.Use => "Submit documents for parsing and view own jobs",
+            Permissions.LessonParser.Admin => "View all tenant jobs and retry failed jobs",
+
             // Core
             Permissions.Core.ManageEmployees => "Manage employees",
             Permissions.Core.ManageSites => "Manage sites",

@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\QuantumBuild.Modules.LessonParser.Domain\QuantumBuild.Modules.LessonParser.Domain.csproj" />
+    <ProjectReference Include="..\..\..\Core\QuantumBuild.Core.Application\QuantumBuild.Core.Application.csproj" />
+  </ItemGroup>
+
+</Project>
