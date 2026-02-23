@@ -1,8 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using QuantumBuild.Core.Application.Abstractions.AI;
+using QuantumBuild.Modules.LessonParser.Application.Abstractions;
 using QuantumBuild.Modules.LessonParser.Application.Common.Interfaces;
 using QuantumBuild.Modules.LessonParser.Infrastructure.Persistence;
+using QuantumBuild.Modules.LessonParser.Infrastructure.Services;
 
 namespace QuantumBuild.Modules.LessonParser.Infrastructure;
 
@@ -34,6 +37,27 @@ public static class LessonParserInfrastructureExtensions
         // Register ILessonParserDbContext
         services.AddScoped<ILessonParserDbContext>(provider =>
             provider.GetRequiredService<LessonParserDbContext>());
+
+        // Register document extraction service
+        services.AddScoped<IDocumentExtractor, DocumentExtractorService>();
+
+        // Bind Claude API settings from the shared config section
+        services.Configure<ClaudeSettings>(
+            configuration.GetSection(ClaudeSettings.SectionName));
+
+        // Register named HttpClient for URL content fetching
+        services.AddHttpClient("LessonParser", client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(30);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd(
+                "Mozilla/5.0 QuantumBuild-LessonParser/1.0");
+        });
+
+        // Register lesson generator service (Claude AI → ToolboxTalks + Course)
+        services.AddHttpClient<ILessonGeneratorService, LessonGeneratorService>(client =>
+        {
+            client.Timeout = TimeSpan.FromMinutes(5); // 5 minutes for AI content generation
+        });
 
         return services;
     }

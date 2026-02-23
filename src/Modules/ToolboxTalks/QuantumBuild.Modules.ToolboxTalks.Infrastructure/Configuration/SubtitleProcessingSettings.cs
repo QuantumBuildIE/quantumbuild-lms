@@ -1,3 +1,5 @@
+using QuantumBuild.Core.Application.Abstractions.AI;
+
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
 
 /// <summary>
@@ -72,35 +74,6 @@ public class ElevenLabsSettings
     /// Default: https://api.elevenlabs.io/v1
     /// </summary>
     public string BaseUrl { get; set; } = "https://api.elevenlabs.io/v1";
-}
-
-/// <summary>
-/// Claude API configuration for subtitle translation
-/// </summary>
-public class ClaudeSettings
-{
-    /// <summary>
-    /// Anthropic API key for Claude
-    /// </summary>
-    public string ApiKey { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Claude model to use for translation.
-    /// Default: claude-sonnet-4-20250514
-    /// </summary>
-    public string Model { get; set; } = "claude-sonnet-4-20250514";
-
-    /// <summary>
-    /// Maximum tokens for translation responses.
-    /// Default: 4000
-    /// </summary>
-    public int MaxTokens { get; set; } = 4000;
-
-    /// <summary>
-    /// Anthropic API base URL.
-    /// Default: https://api.anthropic.com/v1
-    /// </summary>
-    public string BaseUrl { get; set; } = "https://api.anthropic.com/v1";
 }
 
 /// <summary>

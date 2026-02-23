@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using Moq.Protected;
+using QuantumBuild.Core.Application.Abstractions.AI;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Subtitles;
 
