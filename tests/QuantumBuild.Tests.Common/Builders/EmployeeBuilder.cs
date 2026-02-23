@@ -17,7 +17,7 @@ public class EmployeeBuilder
     private string? _mobile = null;
     private string? _jobTitle = "Site Worker";
     private string? _department = null;
-    private string? _userId = null;
+    private Guid? _userId = null;
     private Guid? _primarySiteId = null;
     private bool _isActive = true;
     private DateTime? _startDate = null;
@@ -80,7 +80,7 @@ public class EmployeeBuilder
         return this;
     }
 
-    public EmployeeBuilder LinkedToUser(string userId)
+    public EmployeeBuilder LinkedToUser(Guid userId)
     {
         _userId = userId;
         return this;

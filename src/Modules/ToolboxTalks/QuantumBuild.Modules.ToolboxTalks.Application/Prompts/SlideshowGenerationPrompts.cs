@@ -118,9 +118,13 @@ After extraction, plan your slides following these rules:
    - ALL reference numbers and standards
    - ALL ratings, scores, or calculations
 
+CRITICAL: Every slide MUST have unique content. No two slides should share the same items/content arrays. Each slide's data must reflect the specific section of the source material it represents.
+
 ## OUTPUT REQUIREMENTS
 
 Return ONLY the complete HTML file. No explanation, no markdown fencing, no preamble. Start with `<!DOCTYPE html>` and end with `</html>`.
+
+The output MUST be complete valid HTML starting with `<!DOCTYPE html>` and ending with `</html>`. Do not stop mid-output.
 
 ## CONTENT FORMATTING RULES
 
@@ -129,6 +133,10 @@ Return ONLY the complete HTML file. No explanation, no markdown fencing, no prea
 - Focus on ACTIONABLE information: what to do, what not to do, what to check
 - Use ⚠️ emoji markers for critical warnings or high-priority items
 - Use specific numbers, limits, and deadlines wherever they appear
+
+## EFFICIENCY GUIDANCE
+
+Keep CSS concise — no comments, no redundant properties. Use shorthand CSS (e.g., `margin: 8px 16px` not separate margin-top/bottom/left/right). Minimize JavaScript comments. Prioritize complete slide content data over verbose styling.
 
 ## DESIGN SPECIFICATION
 
@@ -200,9 +208,21 @@ Store all slides in a JS array. Each slide object should have:
   color: "#hexAccent",
   bgGrad: "linear-gradient(135deg, #dark1 0%, #dark2 100%)",
   type: "cover|contacts|stats|checklist|warning|equipment|risks|dos|detail",
-  // Plus type-specific fields
+  // Type-specific fields (see below)
 }
 ```
+
+### Type-Specific Fields by Slide Type
+
+- **cover**: `{ title: "Document Title", subtitle: "Subtitle or tagline", organizationName: "Org Name", badge: "SOP" | "POLICY" | etc., mainIcon: "🏗️" }`
+- **contacts**: `{ items: [{ name: "John Smith", role: "Safety Officer", phone: "+1 555-0100" }] }`
+- **stats**: `{ items: [{ label: "Incidents This Year", value: "12" }] }`
+- **checklist**: `{ items: ["Step 1 description", "Step 2 description", ...] }`
+- **warning**: `{ description: "Critical alert message", items: ["Warning point 1", "Warning point 2"], severity: "high" | "medium" | "low" }`
+- **equipment**: `{ items: [{ name: "Hard Hat", description: "AS/NZS 1801 compliant" }] }`
+- **risks**: `{ items: [{ label: "Fall from height", percentage: 85 }] }`
+- **dos**: `{ doItems: ["Wear PPE at all times", "Report hazards immediately"], dontItems: ["Never work alone at height", "Don't bypass safety guards"] }`
+- **detail**: `{ sections: [{ title: "Category Name", items: ["Detail point 1", "Detail point 2"] }] }`
 
 Slide Types Available:
 - **cover**: Title slide with document name, organization, badge
@@ -212,7 +232,7 @@ Slide Types Available:
 - **warning**: Alert-styled boxes with critical information + bullet points
 - **equipment**: Icon cards in a grid for equipment, tools, or resources
 - **risks**: Animated progress bars showing levels or ratings
-- **detail**: Detailed view with categorized information, controls, and ratings
+- **detail**: Detailed view with categorized information and controls
 - **dos**: Two-column DO's and DON'Ts summary
 
 ## COMPLETENESS VERIFICATION
@@ -336,9 +356,13 @@ After extraction, plan your slides following these rules:
    - ALL phone numbers or contact details
    - ALL standards/regulation numbers
 
+CRITICAL: Every slide MUST have unique content. No two slides should share the same items/content arrays. Each slide's data must reflect the specific section of the source material it represents.
+
 ## OUTPUT REQUIREMENTS
 
 Return ONLY the complete HTML file. No explanation, no markdown fencing, no preamble. Start with `<!DOCTYPE html>` and end with `</html>`.
+
+The output MUST be complete valid HTML starting with `<!DOCTYPE html>` and ending with `</html>`. Do not stop mid-output.
 
 ## CONTENT FORMATTING RULES
 
@@ -348,6 +372,10 @@ Return ONLY the complete HTML file. No explanation, no markdown fencing, no prea
 - Use ⚠️ emoji markers for critical warnings
 - Use specific numbers, limits, and deadlines wherever they appear in the transcript
 - Transform spoken language into clear, scannable bullet points
+
+## EFFICIENCY GUIDANCE
+
+Keep CSS concise — no comments, no redundant properties. Use shorthand CSS (e.g., `margin: 8px 16px` not separate margin-top/bottom/left/right). Minimize JavaScript comments. Prioritize complete slide content data over verbose styling.
 
 ## DESIGN SPECIFICATION
 
@@ -418,10 +446,22 @@ Store all slides in a JS array. Each slide object should have:
   icon: "emoji",
   color: "#hexAccent",
   bgGrad: "linear-gradient(135deg, #dark1 0%, #dark2 100%)",
-  type: "cover|checklist|warning|equipment|risks|dos|stats",
-  // Plus type-specific fields
+  type: "cover|contacts|stats|checklist|warning|equipment|risks|dos|detail",
+  // Type-specific fields (see below)
 }
 ```
+
+### Type-Specific Fields by Slide Type
+
+- **cover**: `{ title: "Document Title", subtitle: "Subtitle or tagline", organizationName: "Org Name", badge: "SOP" | "POLICY" | etc., mainIcon: "🏗️" }`
+- **contacts**: `{ items: [{ name: "John Smith", role: "Safety Officer", phone: "+1 555-0100" }] }`
+- **stats**: `{ items: [{ label: "Incidents This Year", value: "12" }] }`
+- **checklist**: `{ items: ["Step 1 description", "Step 2 description", ...] }`
+- **warning**: `{ description: "Critical alert message", items: ["Warning point 1", "Warning point 2"], severity: "high" | "medium" | "low" }`
+- **equipment**: `{ items: [{ name: "Hard Hat", description: "AS/NZS 1801 compliant" }] }`
+- **risks**: `{ items: [{ label: "Fall from height", percentage: 85 }] }`
+- **dos**: `{ doItems: ["Wear PPE at all times", "Report hazards immediately"], dontItems: ["Never work alone at height", "Don't bypass safety guards"] }`
+- **detail**: `{ sections: [{ title: "Category Name", items: ["Detail point 1", "Detail point 2"] }] }`
 
 ## WHAT MAKES A GREAT RESULT
 

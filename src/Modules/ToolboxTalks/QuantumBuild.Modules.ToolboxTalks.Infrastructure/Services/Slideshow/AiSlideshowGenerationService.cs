@@ -19,6 +19,14 @@ public class AiSlideshowGenerationService : IAiSlideshowGenerationService
     private readonly SubtitleProcessingSettings _settings;
     private readonly ILogger<AiSlideshowGenerationService> _logger;
 
+    private static readonly JsonSerializerOptions NullIgnoringJsonOptions = new()
+    {
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+    };
+
+    private const string TruncationRetryPrefix =
+        "Generate MINIMAL CSS. No comments. Prioritize slide content data completeness over styling.\n\n";
+
     public AiSlideshowGenerationService(
         HttpClient httpClient,
         IOptions<SubtitleProcessingSettings> settings,
@@ -49,10 +57,10 @@ public class AiSlideshowGenerationService : IAiSlideshowGenerationService
             var pdfBase64 = Convert.ToBase64String(pdfBytes);
             var prompt = SlideshowGenerationPrompts.GetPdfSlideshowPrompt();
 
-            var requestBody = new
+            string SerializeBody(string p) => JsonSerializer.Serialize(new
             {
                 model = _settings.Claude.Model,
-                max_tokens = 16000,
+                max_tokens = 32000,
                 messages = new[]
                 {
                     new
@@ -74,65 +82,55 @@ public class AiSlideshowGenerationService : IAiSlideshowGenerationService
                             {
                                 type = "text",
                                 source = (object?)null,
-                                text = prompt
+                                text = p
                             }
                         }
                     }
                 }
-            };
-
-            var request = new HttpRequestMessage(HttpMethod.Post, $"{_settings.Claude.BaseUrl}/messages");
-            request.Headers.Add("x-api-key", _settings.Claude.ApiKey);
-            request.Headers.Add("anthropic-version", "2023-06-01");
-            request.Content = new StringContent(
-                JsonSerializer.Serialize(requestBody, new JsonSerializerOptions
-                {
-                    DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-                }),
-                Encoding.UTF8,
-                "application/json");
+            }, NullIgnoringJsonOptions);
 
             _logger.LogInformation(
                 "Sending PDF to Claude for slideshow generation (document: {Title})",
                 documentTitle);
 
-            var response = await _httpClient.SendAsync(request, cancellationToken);
-            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            // First attempt
+            var (html, wasTruncated, error) = await SendAndParseAsync(
+                SerializeBody(prompt), documentTitle, cancellationToken);
 
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogError(
-                    "Claude API error for slideshow generation: {StatusCode} - {Response}",
-                    response.StatusCode, responseBody);
-                return Result.Fail<string>($"Claude API error: {response.StatusCode}");
-            }
+            if (error != null)
+                return Result.Fail<string>(error);
 
-            var html = ExtractHtmlFromResponse(responseBody);
-
-            if (string.IsNullOrWhiteSpace(html))
-            {
-                _logger.LogWarning("Claude returned empty response for slideshow generation");
-                return Result.Fail<string>("AI returned empty response");
-            }
-
-            // Validate it looks like HTML
-            if (!html.TrimStart().StartsWith("<!DOCTYPE html>", StringComparison.OrdinalIgnoreCase) &&
-                !html.TrimStart().StartsWith("<html", StringComparison.OrdinalIgnoreCase))
+            // Retry once on truncation with efficiency instructions
+            if (wasTruncated)
             {
                 _logger.LogWarning(
-                    "Claude response doesn't appear to be valid HTML: {Preview}",
-                    html[..Math.Min(200, html.Length)]);
-                return Result.Fail<string>("AI response is not valid HTML");
+                    "Retrying slideshow generation with efficiency instructions for {Title}",
+                    documentTitle);
+
+                var (retryHtml, retryTruncated, retryError) = await SendAndParseAsync(
+                    SerializeBody(TruncationRetryPrefix + prompt), documentTitle, cancellationToken);
+
+                if (retryError == null && retryHtml != null)
+                {
+                    html = retryHtml;
+                    if (retryTruncated)
+                    {
+                        _logger.LogError(
+                            "Slideshow generation still truncated after retry for {Title}",
+                            documentTitle);
+                    }
+                }
             }
 
-            // Log token usage
-            LogTokenUsage(responseBody);
+            // Validate HTML completeness
+            var validation = ValidateHtml(html, documentTitle);
+            if (!validation.Success) return Result.Fail<string>(validation.Errors.First());
 
             _logger.LogInformation(
                 "Successfully generated HTML slideshow for {Title}, size: {Size} characters",
-                documentTitle, html.Length);
+                documentTitle, html!.Length);
 
-            return Result.Ok(html);
+            return Result.Ok(html!);
         }
         catch (HttpRequestException ex)
         {
@@ -165,10 +163,10 @@ public class AiSlideshowGenerationService : IAiSlideshowGenerationService
 
             var prompt = SlideshowGenerationPrompts.GetTranscriptSlideshowPrompt();
 
-            var requestBody = new
+            string SerializeBody(string p) => JsonSerializer.Serialize(new
             {
                 model = _settings.Claude.Model,
-                max_tokens = 16000,
+                max_tokens = 32000,
                 messages = new[]
                 {
                     new
@@ -184,60 +182,55 @@ public class AiSlideshowGenerationService : IAiSlideshowGenerationService
                             new
                             {
                                 type = "text",
-                                text = prompt
+                                text = p
                             }
                         }
                     }
                 }
-            };
-
-            var request = new HttpRequestMessage(HttpMethod.Post, $"{_settings.Claude.BaseUrl}/messages");
-            request.Headers.Add("x-api-key", _settings.Claude.ApiKey);
-            request.Headers.Add("anthropic-version", "2023-06-01");
-            request.Content = new StringContent(
-                JsonSerializer.Serialize(requestBody),
-                Encoding.UTF8,
-                "application/json");
+            });
 
             _logger.LogInformation(
                 "Sending transcript to Claude for slideshow generation (document: {Title})",
                 documentTitle);
 
-            var response = await _httpClient.SendAsync(request, cancellationToken);
-            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            // First attempt
+            var (html, wasTruncated, error) = await SendAndParseAsync(
+                SerializeBody(prompt), documentTitle, cancellationToken);
 
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogError(
-                    "Claude API error for transcript slideshow generation: {StatusCode} - {Response}",
-                    response.StatusCode, responseBody);
-                return Result.Fail<string>($"Claude API error: {response.StatusCode}");
-            }
+            if (error != null)
+                return Result.Fail<string>(error);
 
-            var html = ExtractHtmlFromResponse(responseBody);
-
-            if (string.IsNullOrWhiteSpace(html))
-            {
-                _logger.LogWarning("Claude returned empty response for transcript slideshow generation");
-                return Result.Fail<string>("AI returned empty response");
-            }
-
-            if (!html.TrimStart().StartsWith("<!DOCTYPE html>", StringComparison.OrdinalIgnoreCase) &&
-                !html.TrimStart().StartsWith("<html", StringComparison.OrdinalIgnoreCase))
+            // Retry once on truncation with efficiency instructions
+            if (wasTruncated)
             {
                 _logger.LogWarning(
-                    "Claude response doesn't appear to be valid HTML: {Preview}",
-                    html[..Math.Min(200, html.Length)]);
-                return Result.Fail<string>("AI response is not valid HTML");
+                    "Retrying transcript slideshow generation with efficiency instructions for {Title}",
+                    documentTitle);
+
+                var (retryHtml, retryTruncated, retryError) = await SendAndParseAsync(
+                    SerializeBody(TruncationRetryPrefix + prompt), documentTitle, cancellationToken);
+
+                if (retryError == null && retryHtml != null)
+                {
+                    html = retryHtml;
+                    if (retryTruncated)
+                    {
+                        _logger.LogError(
+                            "Transcript slideshow generation still truncated after retry for {Title}",
+                            documentTitle);
+                    }
+                }
             }
 
-            LogTokenUsage(responseBody);
+            // Validate HTML completeness
+            var validation = ValidateHtml(html, documentTitle);
+            if (!validation.Success) return Result.Fail<string>(validation.Errors.First());
 
             _logger.LogInformation(
                 "Successfully generated HTML slideshow from transcript for {Title}, size: {Size} characters",
-                documentTitle, html.Length);
+                documentTitle, html!.Length);
 
-            return Result.Ok(html);
+            return Result.Ok(html!);
         }
         catch (HttpRequestException ex)
         {
@@ -251,25 +244,92 @@ public class AiSlideshowGenerationService : IAiSlideshowGenerationService
         }
     }
 
-    private string? ExtractHtmlFromResponse(string responseBody)
+    private async Task<(string? Html, bool WasTruncated, string? Error)> SendAndParseAsync(
+        string jsonContent,
+        string documentTitle,
+        CancellationToken cancellationToken)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, $"{_settings.Claude.BaseUrl}/messages");
+        request.Headers.Add("x-api-key", _settings.Claude.ApiKey);
+        request.Headers.Add("anthropic-version", "2023-06-01");
+        request.Headers.Add("anthropic-beta", "output-128k-2025-02-19");
+        request.Content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+        var response = await _httpClient.SendAsync(request, cancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogError(
+                "Claude API error for slideshow generation: {StatusCode} - {Response}",
+                response.StatusCode, responseBody);
+            return (null, false, $"Claude API error: {response.StatusCode}");
+        }
+
+        var (html, stopReason) = ParseApiResponse(responseBody);
+        LogTokenUsage(responseBody);
+
+        var wasTruncated = stopReason == "max_tokens";
+        if (wasTruncated)
+        {
+            _logger.LogWarning(
+                "Slideshow generation was truncated — output exceeded max_tokens limit for {Title}",
+                documentTitle);
+        }
+
+        return (html, wasTruncated, null);
+    }
+
+    private (string? Html, string? StopReason) ParseApiResponse(string responseBody)
     {
         using var jsonDoc = JsonDocument.Parse(responseBody);
 
-        if (!jsonDoc.RootElement.TryGetProperty("content", out var contentArray))
-        {
-            _logger.LogWarning("No content property found in Claude response");
-            return null;
-        }
+        var stopReason = jsonDoc.RootElement.TryGetProperty("stop_reason", out var stopEl)
+            ? stopEl.GetString()
+            : null;
 
-        foreach (var item in contentArray.EnumerateArray())
+        string? html = null;
+        if (jsonDoc.RootElement.TryGetProperty("content", out var contentArray))
         {
-            if (item.TryGetProperty("text", out var textEl))
+            foreach (var item in contentArray.EnumerateArray())
             {
-                return textEl.GetString();
+                if (item.TryGetProperty("text", out var textEl))
+                {
+                    html = textEl.GetString();
+                    break;
+                }
             }
         }
 
-        return null;
+        return (html, stopReason);
+    }
+
+    private Result ValidateHtml(string? html, string documentTitle)
+    {
+        if (string.IsNullOrWhiteSpace(html))
+        {
+            _logger.LogWarning("Claude returned empty response for slideshow generation");
+            return Result.Fail("AI returned empty response");
+        }
+
+        if (!html.TrimStart().StartsWith("<!DOCTYPE html>", StringComparison.OrdinalIgnoreCase) &&
+            !html.TrimStart().StartsWith("<html", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning(
+                "Claude response doesn't appear to be valid HTML: {Preview}",
+                html[..Math.Min(200, html.Length)]);
+            return Result.Fail("AI response is not valid HTML");
+        }
+
+        if (!html.TrimEnd().EndsWith("</html>", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning(
+                "HTML output is incomplete — missing closing </html> tag for {Title}",
+                documentTitle);
+            return Result.Fail("AI response is incomplete — HTML output was truncated");
+        }
+
+        return Result.Ok();
     }
 
     private void LogTokenUsage(string responseBody)
@@ -291,5 +351,4 @@ public class AiSlideshowGenerationService : IAiSlideshowGenerationService
             _logger.LogWarning(ex, "Failed to parse token usage from response");
         }
     }
-
 }
