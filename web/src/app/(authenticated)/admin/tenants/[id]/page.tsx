@@ -185,76 +185,81 @@ export default function TenantDetailPage() {
         </div>
       </div>
 
-      {/* Status Actions */}
-      <Card className="max-w-2xl">
-        <CardHeader>
-          <CardTitle>Status</CardTitle>
-          <CardDescription>
-            Activate or suspend this tenant. Suspended tenants cannot log in.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-3">
-            {currentStatus !== "Active" && (
-              <Button
-                variant="default"
-                onClick={() => handleStatusChange("Active")}
-                disabled={updateStatus.isPending}
-              >
-                Activate
-              </Button>
-            )}
-            {currentStatus !== "Suspended" && (
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Left column: Status + Modules */}
+        <div className="space-y-6">
+          {/* Status Actions */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Status</CardTitle>
+              <CardDescription>
+                Activate or suspend this tenant. Suspended tenants cannot log in.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-3">
+                {currentStatus !== "Active" && (
                   <Button
-                    variant="destructive"
+                    variant="default"
+                    onClick={() => handleStatusChange("Active")}
                     disabled={updateStatus.isPending}
                   >
-                    Suspend
+                    Activate
                   </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Suspend Tenant?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Suspending this tenant will prevent all their users from
-                      logging in. This can be reversed by activating the tenant
-                      again.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={() => handleStatusChange("Suspended")}
-                    >
-                      Suspend
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+                )}
+                {currentStatus !== "Suspended" && (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="destructive"
+                        disabled={updateStatus.isPending}
+                      >
+                        Suspend
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Suspend Tenant?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Suspending this tenant will prevent all their users from
+                          logging in. This can be reversed by activating the tenant
+                          again.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => handleStatusChange("Suspended")}
+                        >
+                          Suspend
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
+              </div>
+            </CardContent>
+          </Card>
 
-      {/* Modules */}
-      <TenantModulesCard tenantId={tenantId} />
+          {/* Modules */}
+          <TenantModulesCard tenantId={tenantId} />
+        </div>
 
-      {/* Edit Form */}
-      <Card className="max-w-2xl">
-        <CardHeader>
-          <CardTitle>Tenant Details</CardTitle>
-          <CardDescription>Update tenant information</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <TenantForm
-            tenant={tenant}
-            onSuccess={handleSuccess}
-            onCancel={handleCancel}
-          />
-        </CardContent>
-      </Card>
+        {/* Right column: Edit Form */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Tenant Details</CardTitle>
+            <CardDescription>Update tenant information</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <TenantForm
+              tenant={tenant}
+              onSuccess={handleSuccess}
+              onCancel={handleCancel}
+            />
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
