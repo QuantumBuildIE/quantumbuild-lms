@@ -18,6 +18,7 @@ public interface ICoreDbContext
     DbSet<Company> Companies { get; }
     DbSet<Contact> Contacts { get; }
     DbSet<SupervisorAssignment> SupervisorAssignments { get; }
+    DbSet<TenantModule> TenantModules { get; }
 
     // Settings DbSets
     DbSet<TenantSetting> TenantSettings { get; }

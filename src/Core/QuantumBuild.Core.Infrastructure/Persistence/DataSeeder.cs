@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using QuantumBuild.Core.Domain;
 using QuantumBuild.Core.Domain.Entities;
 using QuantumBuild.Core.Infrastructure.Identity;
 
@@ -43,6 +44,7 @@ public static class DataSeeder
             await SeedLookupCategoriesAsync(context, logger);
             await SeedLanguageLookupAsync(context, logger);
             await SeedTrainingCategoriesAsync(context, logger);
+            await SeedTenantModulesAsync(context, logger);
 
             logger.LogInformation("Database seeding completed successfully");
         }
@@ -643,6 +645,52 @@ public static class DataSeeder
         else
         {
             logger.LogInformation("Training categories already seeded for QUANTUMBUILD tenant, skipping");
+        }
+    }
+
+    private static async Task SeedTenantModulesAsync(DbContext context, ILogger logger)
+    {
+        var tenantModules = context.Set<TenantModule>();
+        var tenants = context.Set<Tenant>();
+
+        var allTenantIds = await tenants
+            .IgnoreQueryFilters()
+            .Where(t => !t.IsDeleted)
+            .Select(t => t.Id)
+            .ToListAsync();
+
+        var existingModules = await tenantModules
+            .IgnoreQueryFilters()
+            .Where(m => !m.IsDeleted && m.ModuleName == ModuleNames.Learnings)
+            .Select(m => m.TenantId)
+            .ToListAsync();
+
+        var newModules = new List<TenantModule>();
+
+        foreach (var tenantId in allTenantIds)
+        {
+            if (existingModules.Contains(tenantId))
+                continue;
+
+            newModules.Add(new TenantModule
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                ModuleName = ModuleNames.Learnings,
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = "system"
+            });
+        }
+
+        if (newModules.Count > 0)
+        {
+            await tenantModules.AddRangeAsync(newModules);
+            await context.SaveChangesAsync();
+            logger.LogInformation("Seeded Learnings module for {Count} tenants", newModules.Count);
+        }
+        else
+        {
+            logger.LogInformation("All tenants already have Learnings module, skipping");
         }
     }
 

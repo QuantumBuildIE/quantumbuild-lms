@@ -23,6 +23,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { TenantForm } from "@/components/admin/tenant-form";
+import { TenantModulesCard } from "@/components/admin/tenant-modules-card";
 import { useTenant, useUpdateTenantStatus } from "@/lib/api/admin/use-tenants";
 import { useIsSuperUser } from "@/lib/auth/use-auth";
 import type { TenantStatus } from "@/types/admin";
@@ -236,6 +237,9 @@ export default function TenantDetailPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Modules */}
+      <TenantModulesCard tenantId={tenantId} />
 
       {/* Edit Form */}
       <Card className="max-w-2xl">

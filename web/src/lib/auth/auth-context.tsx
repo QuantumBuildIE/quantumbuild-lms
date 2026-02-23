@@ -59,6 +59,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           permissions: userData.permissions,
           isSuperUser: userData.isSuperUser ?? false,
           employeeId: userData.employeeId ?? null,
+          enabledModules: userData.enabledModules ?? [],
         });
         setToken(accessToken);
         return true;
@@ -119,6 +120,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           permissions: userData.permissions,
           isSuperUser: userData.isSuperUser ?? false,
           employeeId: userData.employeeId ?? null,
+          enabledModules: userData.enabledModules ?? [],
         };
 
         setUser(loggedInUser);

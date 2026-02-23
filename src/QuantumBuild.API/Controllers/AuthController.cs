@@ -1,10 +1,12 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using QuantumBuild.Core.Application.DTOs.Auth;
 using QuantumBuild.Core.Application.Features.Users;
 using QuantumBuild.Core.Application.Features.Users.DTOs;
 using QuantumBuild.Core.Application.Interfaces;
+using QuantumBuild.Core.Domain;
 
 namespace QuantumBuild.API.Controllers;
 
@@ -14,11 +16,13 @@ public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
     private readonly IUserService _userService;
+    private readonly ICoreDbContext _db;
 
-    public AuthController(IAuthService authService, IUserService userService)
+    public AuthController(IAuthService authService, IUserService userService, ICoreDbContext db)
     {
         _authService = authService;
         _userService = userService;
+        _db = db;
     }
 
     /// <summary>
@@ -118,6 +122,24 @@ public class AuthController : ControllerBase
         var employeeIdClaim = User.FindFirst("employee_id")?.Value;
         Guid? employeeId = Guid.TryParse(employeeIdClaim, out var eid) ? eid : null;
 
+        // Resolve enabled modules for this user's tenant
+        string[] enabledModules;
+        if (isSuperUser)
+        {
+            enabledModules = ModuleNames.All.ToArray();
+        }
+        else if (Guid.TryParse(tenantId, out var tid))
+        {
+            enabledModules = await _db.TenantModules
+                .Where(m => m.TenantId == tid)
+                .Select(m => m.ModuleName)
+                .ToArrayAsync();
+        }
+        else
+        {
+            enabledModules = [];
+        }
+
         return Ok(new
         {
             id = userId,
@@ -128,7 +150,8 @@ public class AuthController : ControllerBase
             roles,
             permissions,
             isSuperUser,
-            employeeId
+            employeeId,
+            enabledModules
         });
     }
 

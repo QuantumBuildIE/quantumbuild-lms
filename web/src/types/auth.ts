@@ -13,6 +13,7 @@ export interface User {
   permissions: string[];
   isSuperUser: boolean;
   employeeId: string | null;
+  enabledModules: string[];
 }
 
 export interface LoginResponse {
@@ -41,4 +42,5 @@ export interface MeResponse {
   permissions: string[];
   isSuperUser: boolean;
   employeeId: string | null;
+  enabledModules: string[];
 }
