@@ -64,7 +64,7 @@ export function TenantModulesCard({ tenantId }: TenantModulesCardProps) {
   };
 
   return (
-    <Card className="max-w-2xl">
+    <Card>
       <CardHeader>
         <CardTitle>Modules</CardTitle>
         <CardDescription>

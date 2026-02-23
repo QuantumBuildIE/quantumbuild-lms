@@ -147,8 +147,7 @@ The HTML must be a dark-themed, mobile-friendly animated slideshow with these ch
 - Top bar showing: slide icon, slide title, slide counter (e.g., "3 / 14")
 - Progress bar under the top bar that fills as slides advance
 - Main content area (min-height 520px, scrollable if content overflows) with slide content
-- Bottom navigation: Back button, Auto-play/Pause toggle, Next button
-- Dot indicators for each slide
+- The parent application provides external navigation controls. You may optionally include subtle slide-indicator dots but do NOT include Back/Next/Auto-play buttons — these are handled externally.
 
 ### Styling
 - Import Google Font: DM Sans (body) and DM Serif Display (headings/numbers)
@@ -158,7 +157,7 @@ The HTML must be a dark-themed, mobile-friendly animated slideshow with these ch
 - Card/container background: #111
 - Text colors: white for headings, rgba(255,255,255,0.75) for body, rgba(255,255,255,0.5) for secondary
 - Accent colors — rotate through these across slides: #E63946 (red), #F4A261 (amber), #E76F51 (coral), #2A9D8F (teal), #E9C46A (gold), #264653 (dark teal), #8338EC (purple), #06D6A0 (green)
-- Each slide's accent color should be used for: the top bar title, progress bar, check icons, card borders, and the Next button background
+- Each slide's accent color should be used for: the top bar title, progress bar, check icons, and card borders
 
 ### Content Overflow
 - The slide content area MUST have `overflow-y: auto` so that slides with many items are scrollable
@@ -174,18 +173,6 @@ Every element must animate in when the slide appears. Use CSS transitions trigge
 - **Cover elements**: Large icon scales from 0.3 to 1.0, title slides up from 40px
 - **Slide transitions**: Content fades out (opacity 0 over 300ms), new content builds, then fades in
 
-### Auto-play
-- Auto-play button toggles between "▶ Auto-play" and "⏸ Pause"
-- When playing: advances every 6 seconds
-- Stops automatically on the last slide
-- Visual indicator: button changes style when playing (red tinted background)
-
-### Navigation
-- Back/Next buttons with disabled states (dimmed when at start/end)
-- Clickable dot indicators to jump to any slide
-- Active dot is wider (20px vs 8px) and colored with the current slide's accent
-- Completed dots are slightly brighter than upcoming dots
-
 ## TECHNICAL REQUIREMENTS
 
 - Single self-contained HTML file — NO external dependencies except Google Fonts CDN
@@ -196,6 +183,8 @@ Every element must animate in when the slide appears. Use CSS transitions trigge
 - Store slides as a JavaScript array of objects
 - Use a single render function that builds HTML from the slide data
 - Animations triggered by adding CSS classes after a requestAnimationFrame or setTimeout
+
+IMPORTANT: Navigation functions must be globally accessible. Expose these as `window.goToSlide(n)`, `window.nextSlide()`, `window.prevSlide()`, and `window.getSlideCount()`. The parent application will call these via postMessage. `goToSlide(n)` receives a 0-based slide index.
 
 ## SLIDE DATA STRUCTURE
 
@@ -256,7 +245,6 @@ Before finalizing the HTML, mentally verify:
 - The animations make it feel professional and engaging, not like a boring PDF
 - Critical warnings STAND OUT with red-tinted borders and alert styling
 - Numbers, limits, and contact details are LARGE and prominent
-- The auto-play mode works as a hands-free briefing display
 - It looks polished on a phone screen held in portrait orientation
 - An auditor comparing the slideshow to the source document would find zero missing information
 """;
@@ -386,8 +374,7 @@ The HTML must be a dark-themed, mobile-friendly animated slideshow with these ch
 - Top bar showing: slide icon, slide title, slide counter (e.g., "3 / 14")
 - Progress bar under the top bar that fills as slides advance
 - Main content area (min-height 520px, scrollable if content overflows) with slide content
-- Bottom navigation: Back button, Auto-play/Pause toggle, Next button
-- Dot indicators for each slide
+- The parent application provides external navigation controls. You may optionally include subtle slide-indicator dots but do NOT include Back/Next/Auto-play buttons — these are handled externally.
 
 ### Styling
 - Import Google Font: DM Sans (body) and DM Serif Display (headings/numbers)
@@ -397,7 +384,7 @@ The HTML must be a dark-themed, mobile-friendly animated slideshow with these ch
 - Card/container background: #111
 - Text colors: white for headings, rgba(255,255,255,0.75) for body, rgba(255,255,255,0.5) for secondary
 - Accent colors — rotate through these across slides: #E63946 (red), #F4A261 (amber), #E76F51 (coral), #2A9D8F (teal), #E9C46A (gold), #264653 (dark teal), #8338EC (purple), #06D6A0 (green)
-- Each slide's accent color should be used for: the top bar title, progress bar, check icons, card borders, and the Next button background
+- Each slide's accent color should be used for: the top bar title, progress bar, check icons, and card borders
 
 ### Content Overflow
 - The slide content area MUST have `overflow-y: auto` so that slides with many items are scrollable
@@ -413,18 +400,6 @@ Every element must animate in when the slide appears. Use CSS transitions trigge
 - **Cover elements**: Large icon scales from 0.3 to 1.0, title slides up from 40px
 - **Slide transitions**: Content fades out (opacity 0 over 300ms), new content builds, then fades in
 
-### Auto-play
-- Auto-play button toggles between "▶ Auto-play" and "⏸ Pause"
-- When playing: advances every 6 seconds
-- Stops automatically on the last slide
-- Visual indicator: button changes style when playing (red tinted background)
-
-### Navigation
-- Back/Next buttons with disabled states (dimmed when at start/end)
-- Clickable dot indicators to jump to any slide
-- Active dot is wider (20px vs 8px) and colored with the current slide's accent
-- Completed dots are slightly brighter than upcoming dots
-
 ## TECHNICAL REQUIREMENTS
 
 - Single self-contained HTML file — NO external dependencies except Google Fonts CDN
@@ -435,6 +410,8 @@ Every element must animate in when the slide appears. Use CSS transitions trigge
 - Store slides as a JavaScript array of objects
 - Use a single render function that builds HTML from the slide data
 - Animations triggered by adding CSS classes after a requestAnimationFrame or setTimeout
+
+IMPORTANT: Navigation functions must be globally accessible. Expose these as `window.goToSlide(n)`, `window.nextSlide()`, `window.prevSlide()`, and `window.getSlideCount()`. The parent application will call these via postMessage. `goToSlide(n)` receives a 0-based slide index.
 
 ## SLIDE DATA STRUCTURE
 
@@ -471,7 +448,6 @@ Store all slides in a JS array. Each slide object should have:
 - The animations make it feel professional and engaging
 - Critical warnings STAND OUT with red-tinted borders and alert styling
 - Numbers, limits, and contact details are LARGE and prominent
-- The auto-play mode works as a hands-free briefing display
 - It looks polished on a phone screen held in portrait orientation
 """;
     }

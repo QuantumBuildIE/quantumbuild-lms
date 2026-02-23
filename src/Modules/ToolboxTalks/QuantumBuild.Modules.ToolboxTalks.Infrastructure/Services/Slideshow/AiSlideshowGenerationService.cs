@@ -126,11 +126,13 @@ public class AiSlideshowGenerationService : IAiSlideshowGenerationService
             var validation = ValidateHtml(html, documentTitle);
             if (!validation.Success) return Result.Fail<string>(validation.Errors.First());
 
+            html = InjectPostMessageBridge(html!);
+
             _logger.LogInformation(
                 "Successfully generated HTML slideshow for {Title}, size: {Size} characters",
-                documentTitle, html!.Length);
+                documentTitle, html.Length);
 
-            return Result.Ok(html!);
+            return Result.Ok(html);
         }
         catch (HttpRequestException ex)
         {
@@ -226,11 +228,13 @@ public class AiSlideshowGenerationService : IAiSlideshowGenerationService
             var validation = ValidateHtml(html, documentTitle);
             if (!validation.Success) return Result.Fail<string>(validation.Errors.First());
 
+            html = InjectPostMessageBridge(html!);
+
             _logger.LogInformation(
                 "Successfully generated HTML slideshow from transcript for {Title}, size: {Size} characters",
-                documentTitle, html!.Length);
+                documentTitle, html.Length);
 
-            return Result.Ok(html!);
+            return Result.Ok(html);
         }
         catch (HttpRequestException ex)
         {
@@ -331,6 +335,101 @@ public class AiSlideshowGenerationService : IAiSlideshowGenerationService
 
         return Result.Ok();
     }
+
+    /// <summary>
+    /// Injects a postMessage bridge script into the generated HTML so the parent React
+    /// component can control navigation (goToSlide, nextSlide, prevSlide, getSlideCount).
+    /// The bridge tries the AI-generated global functions first, then falls back to
+    /// finding and clicking navigation buttons in the DOM.
+    /// </summary>
+    private static string InjectPostMessageBridge(string html)
+    {
+        // Insert just before </body> (or </html> as fallback)
+        var insertIndex = html.LastIndexOf("</body>", StringComparison.OrdinalIgnoreCase);
+        if (insertIndex < 0)
+            insertIndex = html.LastIndexOf("</html>", StringComparison.OrdinalIgnoreCase);
+        if (insertIndex < 0)
+            return html; // Can't inject — return as-is
+
+        return string.Concat(html.AsSpan(0, insertIndex), PostMessageBridgeScript, html.AsSpan(insertIndex));
+    }
+
+    private const string PostMessageBridgeScript = """
+
+    <script>
+    /* postMessage bridge — injected by QuantumBuild to enable parent-frame navigation control */
+    (function(){
+      // Resolve navigation functions from the AI-generated code.
+      // The prompt asks for window.goToSlide/nextSlide/prevSlide/getSlideCount,
+      // but we try common alternatives for resilience.
+      function resolve(names){
+        for(var i=0;i<names.length;i++){if(typeof window[names[i]]==='function')return window[names[i]];}
+        return null;
+      }
+      var _goTo=resolve(['goToSlide','showSlide','navigateToSlide','gotoSlide']);
+      var _next=resolve(['nextSlide','goNext','nextPage']);
+      var _prev=resolve(['prevSlide','previousSlide','goPrev','prevPage']);
+      var _count=resolve(['getSlideCount','getTotalSlides','slideCount']);
+
+      // Fallback: try clicking nav buttons if functions not found
+      function clickBtn(sel){
+        var b=document.querySelector(sel);
+        if(b){b.click();return true;}
+        return false;
+      }
+      function fallbackNext(){return clickBtn('[data-nav="next"],.next-btn,.nav-next,button:last-of-type');}
+      function fallbackPrev(){return clickBtn('[data-nav="prev"],.prev-btn,.nav-prev,button:first-of-type');}
+
+      // Count slides by checking the slides array or DOM elements
+      function countSlides(){
+        if(_count)return _count();
+        if(window.slides&&window.slides.length)return window.slides.length;
+        var dots=document.querySelectorAll('.dot,.slide-dot,[data-slide]');
+        return dots.length||1;
+      }
+
+      // Detect current slide index from the slides array or active dot
+      function currentSlide(){
+        if(typeof window.currentSlideIndex==='number')return window.currentSlideIndex;
+        if(typeof window.current==='number')return window.current;
+        if(typeof window.currentSlide==='number')return window.currentSlide;
+        var active=document.querySelector('.dot.active,.slide-dot.active,[data-slide].active');
+        if(active&&active.dataset.slide)return parseInt(active.dataset.slide,10);
+        return 0;
+      }
+
+      function notifyParent(){
+        parent.postMessage({type:'slideChanged',current:currentSlide(),total:countSlides()},'*');
+      }
+
+      // Listen for commands from the React parent
+      window.addEventListener('message',function(e){
+        var d=e.data;
+        if(!d||!d.type)return;
+        if(d.type==='goToSlide'){
+          if(_goTo)_goTo(d.slide);
+          setTimeout(notifyParent,350);
+        }else if(d.type==='nextSlide'){
+          if(_next)_next();else fallbackNext();
+          setTimeout(notifyParent,350);
+        }else if(d.type==='prevSlide'){
+          if(_prev)_prev();else fallbackPrev();
+          setTimeout(notifyParent,350);
+        }else if(d.type==='getSlideCount'){
+          notifyParent();
+        }
+      });
+
+      // Observe slide changes via a MutationObserver on the content area
+      var observer=new MutationObserver(function(){setTimeout(notifyParent,400);});
+      var target=document.querySelector('.slide-content,.content,main,[class*="slide"]');
+      if(target)observer.observe(target,{childList:true,subtree:true,attributes:true});
+
+      // Notify parent on initial load
+      setTimeout(notifyParent,500);
+    })();
+    </script>
+    """;
 
     private void LogTokenUsage(string responseBody)
     {
