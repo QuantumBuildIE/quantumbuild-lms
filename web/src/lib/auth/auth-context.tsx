@@ -21,11 +21,24 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
+// Combined auth state guarantees atomic transitions — user, token, and
+// isLoading always update in a single setState call, eliminating any
+// intermediate renders where isLoading is false but user data is stale.
+interface AuthState {
+  user: User | null;
+  token: string | null;
+  isLoading: boolean;
+}
+
 export function AuthProvider({ children }: AuthProviderProps) {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [authState, setAuthState] = useState<AuthState>({
+    user: null,
+    token: null,
+    isLoading: true,
+  });
   const [activeTenantId, setActiveTenantIdState] = useState<string | null>(null);
+
+  const { user, token, isLoading } = authState;
 
   const setActiveTenantId = useCallback((tenantId: string | null) => {
     setActiveTenantIdState(tenantId);
@@ -49,19 +62,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       const userData = response.data;
       if (userData && userData.id) {
-        setUser({
-          id: userData.id,
-          email: userData.email,
-          firstName: userData.firstName,
-          lastName: userData.lastName,
-          tenantId: userData.tenantId,
-          roles: userData.roles,
-          permissions: userData.permissions,
-          isSuperUser: userData.isSuperUser ?? false,
-          employeeId: userData.employeeId ?? null,
-          enabledModules: userData.enabledModules ?? [],
+        setAuthState({
+          user: {
+            id: userData.id,
+            email: userData.email,
+            firstName: userData.firstName,
+            lastName: userData.lastName,
+            tenantId: userData.tenantId,
+            roles: userData.roles,
+            permissions: userData.permissions,
+            isSuperUser: userData.isSuperUser ?? false,
+            employeeId: userData.employeeId ?? null,
+            enabledModules: userData.enabledModules ?? [],
+          },
+          token: accessToken,
+          isLoading: false,
         });
-        setToken(accessToken);
         return true;
       }
       return false;
@@ -87,13 +103,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
           const newToken = getStoredToken("accessToken");
           if (newToken && newToken !== storedToken) {
             // Token was refreshed, try again
-            await loadUser(newToken);
+            const retrySuccess = await loadUser(newToken);
+            if (!retrySuccess) {
+              clearStoredTokens();
+              setAuthState({ user: null, token: null, isLoading: false });
+            }
           } else {
             clearStoredTokens();
+            setAuthState({ user: null, token: null, isLoading: false });
           }
         }
+        // If loadUser succeeded, it already set isLoading: false atomically
+      } else {
+        setAuthState({ user: null, token: null, isLoading: false });
       }
-      setIsLoading(false);
     };
 
     initAuth();
@@ -123,8 +146,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           enabledModules: userData.enabledModules ?? [],
         };
 
-        setUser(loggedInUser);
-        setToken(accessToken);
+        setAuthState({ user: loggedInUser, token: accessToken, isLoading: false });
 
         return { success: true, user: loggedInUser };
       }
@@ -141,8 +163,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const logout = useCallback(() => {
     clearStoredTokens();
-    setUser(null);
-    setToken(null);
+    setAuthState({ user: null, token: null, isLoading: false });
     setActiveTenantId(null);
   }, [setActiveTenantId]);
 
