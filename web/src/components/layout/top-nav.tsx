@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useAuth, useHasAnyPermission, usePermission } from "@/lib/auth/use-auth";
 import { useMyTrainingSummary } from "@/lib/api/toolbox-talks/use-my-toolbox-talks";
+import { getHomeRoute } from "@/lib/auth/get-home-route";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -53,7 +54,7 @@ export function TopNav() {
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-14 items-center justify-between px-4">
-        <Link href={isSuperUser ? "/admin/tenants" : "/toolbox-talks"} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+        <Link href={getHomeRoute(user)} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
           <div className="flex items-center gap-2">
             <svg viewBox="0 0 46 46" fill="none" className="w-8 h-8">
               <circle cx="23" cy="23" r="21" fill="#4d8eff" fillOpacity="0.1" stroke="#4d8eff" strokeWidth="1.5" strokeOpacity="0.3"/>
