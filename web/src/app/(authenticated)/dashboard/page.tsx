@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { BookOpen, FileSearch, type LucideIcon } from "lucide-react";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth/use-auth";
 import { MODULE_CONFIG, type ModuleName } from "@/lib/modules";
 
@@ -35,19 +36,26 @@ export default function DashboardPage() {
     }
   }, [isLoading, user, modules, router]);
 
-  if (isLoading) {
+  // Show loading skeleton while auth is loading, user data hasn't propagated,
+  // or a redirect is in progress (superuser / single module)
+  if (isLoading || !user || user.isSuperUser || modules.length === 1) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
+      <div className="flex flex-col items-center py-12 px-4">
+        <div className="max-w-3xl w-full space-y-8">
+          <div className="text-center space-y-2">
+            <Skeleton className="h-9 w-64 mx-auto" />
+            <Skeleton className="h-5 w-48 mx-auto" />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Skeleton className="h-24 w-full rounded-lg" />
+            <Skeleton className="h-24 w-full rounded-lg" />
+          </div>
+        </div>
       </div>
     );
   }
 
-  // Single module or superuser — redirect handled by useEffect
-  if (modules.length <= 1 || user?.isSuperUser) {
-    return null;
-  }
-
+  // No modules assigned
   if (modules.length === 0) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -62,6 +70,7 @@ export default function DashboardPage() {
     );
   }
 
+  // Multiple modules — show module selector
   return (
     <div className="flex flex-col items-center py-12 px-4">
       <div className="max-w-3xl w-full space-y-8">
