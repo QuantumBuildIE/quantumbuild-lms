@@ -29,8 +29,12 @@ public class LessonParserController : ControllerBase
     private readonly ICurrentUserService _currentUserService;
     private readonly ILogger<LessonParserController> _logger;
 
-    private const long MaxPdfSizeBytes = 50 * 1024 * 1024;   // 50MB
-    private const long MaxDocxSizeBytes = 50 * 1024 * 1024;   // 50MB
+    private const long MaxDocumentSizeBytes = 50 * 1024 * 1024; // 50MB
+
+    private static readonly HashSet<string> SupportedDocumentExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".pdf", ".docx"
+    };
 
     public LessonParserController(
         ILessonParserDbContext dbContext,
@@ -47,12 +51,64 @@ public class LessonParserController : ControllerBase
     #region Parse Endpoints
 
     /// <summary>
-    /// Parse a PDF document into a course with talks
+    /// Parse a PDF or Word document into a course with talks.
+    /// Detects the file type from the extension and routes to the correct extractor.
     /// </summary>
-    /// <param name="file">PDF file (max 50MB)</param>
+    /// <param name="file">PDF or DOCX file (max 50MB)</param>
     /// <param name="connectionId">SignalR connection ID for progress updates</param>
     /// <returns>Parse job information</returns>
+    [HttpPost("parse/document")]
+    [RequestSizeLimit(52428800)] // 50MB
+    [ProducesResponseType(typeof(StartParseResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ParseDocument(
+        IFormFile file,
+        [FromQuery] string? connectionId = null)
+    {
+        try
+        {
+            // Validate file
+            if (file == null || file.Length == 0)
+                return BadRequest(new { error = "No file provided" });
+
+            var extension = Path.GetExtension(file.FileName)?.ToLowerInvariant();
+            if (string.IsNullOrEmpty(extension) || !SupportedDocumentExtensions.Contains(extension))
+                return BadRequest(new { error = "Unsupported file type. Please upload a PDF or Word document (.pdf, .docx)" });
+
+            if (file.Length > MaxDocumentSizeBytes)
+                return BadRequest(new { error = $"File size ({file.Length / 1024 / 1024}MB) exceeds maximum ({MaxDocumentSizeBytes / 1024 / 1024}MB)" });
+
+            // Detect input type and extract content
+            await using var stream = file.OpenReadStream();
+            var (inputType, extractionResult) = extension switch
+            {
+                ".pdf" => (ParseInputType.Pdf, await _documentExtractor.ExtractFromPdfAsync(stream, file.FileName)),
+                ".docx" => (ParseInputType.Docx, await _documentExtractor.ExtractFromDocxAsync(stream, file.FileName)),
+                _ => throw new InvalidOperationException($"Unhandled extension: {extension}")
+            };
+
+            if (extractionResult.IsEmpty)
+                return BadRequest(new { error = $"Could not extract text from the {extension} file" });
+
+            // Create and enqueue job
+            return await CreateAndEnqueueJobAsync(
+                inputType,
+                file.FileName,
+                extractionResult,
+                connectionId);
+        }
+        catch (Exception ex) when (ex is not InvalidOperationException)
+        {
+            _logger.LogError(ex, "Error parsing document {FileName}", file?.FileName);
+            return StatusCode(500, new { error = "Error processing document" });
+        }
+    }
+
+    /// <summary>
+    /// Parse a PDF document into a course with talks
+    /// </summary>
     [HttpPost("parse/pdf")]
+    [ApiExplorerSettings(IgnoreApi = true)]
     [RequestSizeLimit(52428800)] // 50MB
     [ProducesResponseType(typeof(StartParseResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -70,8 +126,8 @@ public class LessonParserController : ControllerBase
             if (extension != ".pdf")
                 return BadRequest(new { error = "File must be a PDF (.pdf)" });
 
-            if (file.Length > MaxPdfSizeBytes)
-                return BadRequest(new { error = $"File size ({file.Length / 1024 / 1024}MB) exceeds maximum ({MaxPdfSizeBytes / 1024 / 1024}MB)" });
+            if (file.Length > MaxDocumentSizeBytes)
+                return BadRequest(new { error = $"File size ({file.Length / 1024 / 1024}MB) exceeds maximum ({MaxDocumentSizeBytes / 1024 / 1024}MB)" });
 
             // Extract content
             await using var stream = file.OpenReadStream();
@@ -97,10 +153,8 @@ public class LessonParserController : ControllerBase
     /// <summary>
     /// Parse a DOCX document into a course with talks
     /// </summary>
-    /// <param name="file">DOCX file (max 50MB)</param>
-    /// <param name="connectionId">SignalR connection ID for progress updates</param>
-    /// <returns>Parse job information</returns>
     [HttpPost("parse/docx")]
+    [ApiExplorerSettings(IgnoreApi = true)]
     [RequestSizeLimit(52428800)] // 50MB
     [ProducesResponseType(typeof(StartParseResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -118,8 +172,8 @@ public class LessonParserController : ControllerBase
             if (extension != ".docx")
                 return BadRequest(new { error = "File must be a Word document (.docx)" });
 
-            if (file.Length > MaxDocxSizeBytes)
-                return BadRequest(new { error = $"File size ({file.Length / 1024 / 1024}MB) exceeds maximum ({MaxDocxSizeBytes / 1024 / 1024}MB)" });
+            if (file.Length > MaxDocumentSizeBytes)
+                return BadRequest(new { error = $"File size ({file.Length / 1024 / 1024}MB) exceeds maximum ({MaxDocumentSizeBytes / 1024 / 1024}MB)" });
 
             // Extract content
             await using var stream = file.OpenReadStream();

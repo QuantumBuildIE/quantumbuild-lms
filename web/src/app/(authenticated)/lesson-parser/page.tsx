@@ -19,7 +19,6 @@ import {
   FileText,
   Globe,
   Type,
-  FileSearch,
 } from 'lucide-react';
 import { DataTable } from '@/components/shared/data-table';
 import type { Column } from '@/components/shared/data-table';
@@ -39,7 +38,7 @@ export default function LessonParserPage() {
 
   // Form state
   const [formState, setFormState] = useState<FormState>('idle');
-  const [activeTab, setActiveTab] = useState('pdf');
+  const [activeTab, setActiveTab] = useState('document');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Input state
@@ -48,9 +47,8 @@ export default function LessonParserPage() {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
 
-  // File input refs for resetting
-  const pdfInputRef = useRef<HTMLInputElement>(null);
-  const docxInputRef = useRef<HTMLInputElement>(null);
+  // File input ref for resetting
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Parse history
   const [page, setPage] = useState(1);
@@ -80,8 +78,7 @@ export default function LessonParserPage() {
     setTitle('');
     setContent('');
     reset();
-    if (pdfInputRef.current) pdfInputRef.current.value = '';
-    if (docxInputRef.current) docxInputRef.current.value = '';
+    if (fileInputRef.current) fileInputRef.current.value = '';
   }, [reset]);
 
   const handleTabChange = (tab: string) => {
@@ -91,32 +88,17 @@ export default function LessonParserPage() {
       setUrl('');
       setTitle('');
       setContent('');
-      if (pdfInputRef.current) pdfInputRef.current.value = '';
-      if (docxInputRef.current) docxInputRef.current.value = '';
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
     reset();
   };
 
-  const handleSubmitPdf = async () => {
+  const handleSubmitDocument = async () => {
     if (!file || !connectionId) return;
     setFormState('submitting');
     setErrorMessage(null);
     try {
-      await lessonParserApi.submitPdf(file, connectionId);
-      setFormState('processing');
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to upload PDF';
-      toast.error(message);
-      setFormState('idle');
-    }
-  };
-
-  const handleSubmitDocx = async () => {
-    if (!file || !connectionId) return;
-    setFormState('submitting');
-    setErrorMessage(null);
-    try {
-      await lessonParserApi.submitDocx(file, connectionId);
+      await lessonParserApi.submitDocument(file, connectionId);
       setFormState('processing');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to upload document';
@@ -242,14 +224,10 @@ export default function LessonParserPage() {
         <Card>
           <CardContent className="pt-6">
             <Tabs value={activeTab} onValueChange={handleTabChange}>
-              <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="pdf" className="gap-1.5">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="document" className="gap-1.5">
                   <FileText className="h-4 w-4" />
-                  PDF
-                </TabsTrigger>
-                <TabsTrigger value="docx" className="gap-1.5">
-                  <FileSearch className="h-4 w-4" />
-                  Word
+                  Document
                 </TabsTrigger>
                 <TabsTrigger value="url" className="gap-1.5">
                   <Globe className="h-4 w-4" />
@@ -261,47 +239,22 @@ export default function LessonParserPage() {
                 </TabsTrigger>
               </TabsList>
 
-              {/* PDF Tab */}
-              <TabsContent value="pdf" className="space-y-4 pt-4">
+              {/* Document Tab */}
+              <TabsContent value="document" className="space-y-4 pt-4">
                 <div className="space-y-2">
-                  <Label>Upload PDF Document</Label>
+                  <Label>Upload Document</Label>
                   <Input
-                    ref={pdfInputRef}
+                    ref={fileInputRef}
                     type="file"
-                    accept=".pdf"
+                    accept=".pdf,.docx"
                     onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                   />
-                  <p className="text-sm text-muted-foreground">Maximum file size: 50MB</p>
+                  <p className="text-sm text-muted-foreground">
+                    Supported formats: PDF (.pdf) and Word (.docx). Maximum file size: 50MB
+                  </p>
                 </div>
                 <Button
-                  onClick={handleSubmitPdf}
-                  disabled={!file || submitDisabled}
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Uploading...
-                    </>
-                  ) : (
-                    'Parse Document'
-                  )}
-                </Button>
-              </TabsContent>
-
-              {/* Word Tab */}
-              <TabsContent value="docx" className="space-y-4 pt-4">
-                <div className="space-y-2">
-                  <Label>Upload Word Document</Label>
-                  <Input
-                    ref={docxInputRef}
-                    type="file"
-                    accept=".docx"
-                    onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                  />
-                  <p className="text-sm text-muted-foreground">Maximum file size: 50MB</p>
-                </div>
-                <Button
-                  onClick={handleSubmitDocx}
+                  onClick={handleSubmitDocument}
                   disabled={!file || submitDisabled}
                 >
                   {isSubmitting ? (

@@ -10,6 +10,23 @@ import type {
 // Parse Endpoints
 // ============================================
 
+export async function submitDocument(
+  file: File,
+  connectionId: string
+): Promise<StartParseResponse> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await apiClient.post<StartParseResponse>(
+    `/lesson-parser/parse/document?connectionId=${encodeURIComponent(connectionId)}`,
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  );
+
+  return response.data;
+}
+
+/** @deprecated Use submitDocument instead */
 export async function submitPdf(
   file: File,
   connectionId: string
@@ -26,6 +43,7 @@ export async function submitPdf(
   return response.data;
 }
 
+/** @deprecated Use submitDocument instead */
 export async function submitDocx(
   file: File,
   connectionId: string
@@ -107,6 +125,7 @@ export async function retryJob(id: string): Promise<void> {
 }
 
 export const lessonParserApi = {
+  submitDocument,
   submitPdf,
   submitDocx,
   submitUrl,
