@@ -31,5 +31,6 @@ public record UserInfo(
     IEnumerable<string> Roles,
     IEnumerable<string> Permissions,
     bool IsSuperUser,
-    Guid? EmployeeId
+    Guid? EmployeeId,
+    IEnumerable<string> EnabledModules
 );

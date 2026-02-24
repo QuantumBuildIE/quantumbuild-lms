@@ -8,6 +8,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using QuantumBuild.Core.Application.DTOs.Auth;
 using QuantumBuild.Core.Application.Interfaces;
+using QuantumBuild.Core.Domain;
 using QuantumBuild.Core.Domain.Entities;
 
 namespace QuantumBuild.Core.Infrastructure.Identity;
@@ -20,15 +21,18 @@ public class AuthService : IAuthService
     private readonly UserManager<User> _userManager;
     private readonly RoleManager<Role> _roleManager;
     private readonly JwtSettings _jwtSettings;
+    private readonly ICoreDbContext _db;
 
     public AuthService(
         UserManager<User> userManager,
         RoleManager<Role> roleManager,
-        IOptions<JwtSettings> jwtSettings)
+        IOptions<JwtSettings> jwtSettings,
+        ICoreDbContext db)
     {
         _userManager = userManager;
         _roleManager = roleManager;
         _jwtSettings = jwtSettings.Value;
+        _db = db;
     }
 
     public async Task<AuthResponse> LoginAsync(LoginRequest request)
@@ -210,6 +214,14 @@ public class AuthService : IAuthService
         user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(_jwtSettings.RefreshTokenExpiryDays);
         await _userManager.UpdateAsync(user);
 
+        // Resolve enabled modules for the user's tenant
+        var enabledModules = user.IsSuperUser
+            ? ModuleNames.All
+            : await _db.TenantModules
+                .Where(m => m.TenantId == user.TenantId)
+                .Select(m => m.ModuleName)
+                .ToArrayAsync();
+
         var userInfo = new UserInfo(
             user.Id,
             user.Email!,
@@ -219,7 +231,8 @@ public class AuthService : IAuthService
             roles,
             permissions,
             user.IsSuperUser,
-            user.EmployeeId
+            user.EmployeeId,
+            enabledModules
         );
 
         return new AuthResponse(

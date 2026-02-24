@@ -53,7 +53,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const isAuthenticated = !!user && !!token;
 
-  const loadUser = useCallback(async (accessToken: string) => {
+  const loadUser = useCallback(async (accessToken: string): Promise<User | null> => {
     try {
       // The /me endpoint returns the user data directly, not wrapped in ApiResponse
       const response = await apiClient.get<MeResponse>("/auth/me", {
@@ -62,27 +62,28 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       const userData = response.data;
       if (userData && userData.id) {
+        const loadedUser: User = {
+          id: userData.id,
+          email: userData.email,
+          firstName: userData.firstName,
+          lastName: userData.lastName,
+          tenantId: userData.tenantId,
+          roles: userData.roles,
+          permissions: userData.permissions,
+          isSuperUser: userData.isSuperUser ?? false,
+          employeeId: userData.employeeId ?? null,
+          enabledModules: userData.enabledModules ?? [],
+        };
         setAuthState({
-          user: {
-            id: userData.id,
-            email: userData.email,
-            firstName: userData.firstName,
-            lastName: userData.lastName,
-            tenantId: userData.tenantId,
-            roles: userData.roles,
-            permissions: userData.permissions,
-            isSuperUser: userData.isSuperUser ?? false,
-            employeeId: userData.employeeId ?? null,
-            enabledModules: userData.enabledModules ?? [],
-          },
+          user: loadedUser,
           token: accessToken,
           isLoading: false,
         });
-        return true;
+        return loadedUser;
       }
-      return false;
+      return null;
     } catch {
-      return false;
+      return null;
     }
   }, []);
 
@@ -96,15 +97,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       const storedToken = getStoredToken("accessToken");
       if (storedToken) {
-        const success = await loadUser(storedToken);
-        if (!success) {
+        const loadedUser = await loadUser(storedToken);
+        if (!loadedUser) {
           // Token refresh is handled by the API client interceptor
           // If we still fail after refresh, clear tokens
           const newToken = getStoredToken("accessToken");
           if (newToken && newToken !== storedToken) {
             // Token was refreshed, try again
-            const retrySuccess = await loadUser(newToken);
-            if (!retrySuccess) {
+            const retryUser = await loadUser(newToken);
+            if (!retryUser) {
               clearStoredTokens();
               setAuthState({ user: null, token: null, isLoading: false });
             }
@@ -127,12 +128,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const response = await apiClient.post<LoginResponse>("/auth/login", { email, password });
 
       if (response.data.success) {
-        const { accessToken, refreshToken, user: userData } = response.data;
+        const { accessToken, refreshToken } = response.data;
 
         setRememberMe(rememberMe);
         setStoredToken("accessToken", accessToken, rememberMe);
         setStoredToken("refreshToken", refreshToken, rememberMe);
 
+        // Hydrate full user from /me to get complete data (enabledModules, etc.)
+        // rather than relying on the login response which may have a subset of fields
+        const hydratedUser = await loadUser(accessToken);
+        if (hydratedUser) {
+          return { success: true, user: hydratedUser };
+        }
+
+        // Fallback: construct from login response if /me fails
+        const userData = response.data.user;
         const loggedInUser: User = {
           id: userData.id,
           email: userData.email,
