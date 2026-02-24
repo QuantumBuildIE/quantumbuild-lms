@@ -627,7 +627,8 @@ Progress updates sent via SignalR hub in real-time.
 | Job | Schedule | Description |
 |-----|----------|-------------|
 | ContentGenerationJob | On-demand | AI content generation from video/PDF |
-| MissingTranslationsJob | Periodic | Find and generate missing translations |
+| MissingTranslationsJob | On-demand | Single-talk translation gap fill. Triggered by content generation, smart-generate reuse, direct content reuse, and new employee language detection. |
+| DailyTranslationScanJob | Daily at 2am UTC | Scans talks created/modified in last 25 hours across all tenants for translation gaps. Dispatches MissingTranslationsJob per gap found. |
 | ProcessToolboxTalkSchedulesJob | Daily | Process active schedules to create assignments |
 | SendRefresherRemindersJob | Daily | Send reminders for upcoming refresher due dates |
 | SendToolboxTalkRemindersJob | Daily | Send reminders for overdue/pending talks |

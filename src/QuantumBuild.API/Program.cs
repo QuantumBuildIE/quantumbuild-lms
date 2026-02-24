@@ -121,6 +121,7 @@ builder.Services.AddScoped<ProcessToolboxTalkSchedulesJob>();
 builder.Services.AddScoped<SendToolboxTalkRemindersJob>();
 builder.Services.AddScoped<UpdateOverdueToolboxTalksJob>();
 builder.Services.AddScoped<ContentGenerationJob>();
+builder.Services.AddScoped<DailyTranslationScanJob>();
 builder.Services.AddScoped<LessonParseJob>();
 
 // Add Hangfire with PostgreSQL storage
@@ -370,6 +371,11 @@ using (var scope = app.Services.CreateScope())
         job => job.ExecuteAsync(CancellationToken.None),
         "0 9 * * *", // Run daily at 9:00 AM
         new RecurringJobOptions { TimeZone = irelandTimeZone });
+
+    recurringJobManager.AddOrUpdate<DailyTranslationScanJob>(
+        "daily-translation-scan",
+        job => job.ExecuteAsync(CancellationToken.None),
+        Cron.Daily(2, 0)); // 2am UTC daily
 }
 
 app.Run();

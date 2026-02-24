@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Pdf;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Storage;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Subtitles;
@@ -130,6 +131,9 @@ public static class ServiceCollectionExtensions
 
         // Register content deduplication service for detecting and reusing duplicate content
         services.AddScoped<IContentDeduplicationService, ContentDeduplicationService>();
+
+        // Register employee language change handler (triggers translation for new-to-tenant languages)
+        services.AddScoped<IEmployeeLanguageChangeHandler, EmployeeLanguageChangeHandler>();
 
         // Register AI slideshow generation service (Claude API for HTML slideshow from PDF)
         services.AddHttpClient<IAiSlideshowGenerationService, AiSlideshowGenerationService>(client =>

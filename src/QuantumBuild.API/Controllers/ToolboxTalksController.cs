@@ -664,6 +664,11 @@ public class ToolboxTalksController : ControllerBase
                 return BadRequest(new { error = result.ErrorMessage });
             }
 
+            // Queue missing translations check after direct content reuse
+            var tenantId = _currentUserService.TenantId;
+            BackgroundJob.Enqueue<MissingTranslationsJob>(
+                job => job.ExecuteAsync(id, tenantId, null, CancellationToken.None));
+
             return Ok(new ContentReuseResponse
             {
                 Success = true,

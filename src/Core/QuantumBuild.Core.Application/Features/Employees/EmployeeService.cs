@@ -18,6 +18,7 @@ public class EmployeeService : IEmployeeService
     private readonly IEmailService _emailService;
     private readonly ILogger<EmployeeService> _logger;
     private readonly IEnumerable<INewEmployeeTrainingAssigner> _trainingAssigners;
+    private readonly IEnumerable<IEmployeeLanguageChangeHandler> _languageChangeHandlers;
 
     private const string DefaultUserRole = "Operator";
 
@@ -28,7 +29,8 @@ public class EmployeeService : IEmployeeService
         ICurrentUserService currentUserService,
         IEmailService emailService,
         ILogger<EmployeeService> logger,
-        IEnumerable<INewEmployeeTrainingAssigner> trainingAssigners)
+        IEnumerable<INewEmployeeTrainingAssigner> trainingAssigners,
+        IEnumerable<IEmployeeLanguageChangeHandler> languageChangeHandlers)
     {
         _context = context;
         _userManager = userManager;
@@ -37,6 +39,7 @@ public class EmployeeService : IEmployeeService
         _emailService = emailService;
         _logger = logger;
         _trainingAssigners = trainingAssigners;
+        _languageChangeHandlers = languageChangeHandlers;
     }
 
     public async Task<Result<List<EmployeeDto>>> GetAllAsync()
@@ -335,6 +338,25 @@ public class EmployeeService : IEmployeeService
                 }
             }
 
+            // Handle new employee language — queue translations if language is new to tenant
+            if (!string.IsNullOrWhiteSpace(dto.PreferredLanguage))
+            {
+                foreach (var handler in _languageChangeHandlers)
+                {
+                    try
+                    {
+                        await handler.HandleLanguageChangeAsync(
+                            tenantId, employee.Id, dto.PreferredLanguage);
+                    }
+                    catch (Exception langEx)
+                    {
+                        _logger.LogWarning(langEx,
+                            "Failed to handle language change for Employee {EmployeeId} via {HandlerType}",
+                            employee.Id, handler.GetType().Name);
+                    }
+                }
+            }
+
             // Send password setup email if user was created
             if (createdUser != null && !string.IsNullOrWhiteSpace(dto.Email))
             {
@@ -563,6 +585,7 @@ public class EmployeeService : IEmployeeService
                 return Result.Fail<EmployeeDto>($"Employee code '{dto.EmployeeCode}' is already in use by an active employee.");
             }
 
+            var previousLanguage = employee.PreferredLanguage;
             var emailChanged = employee.Email != dto.Email;
 
             // Check email uniqueness if changed
@@ -637,6 +660,27 @@ public class EmployeeService : IEmployeeService
             }
 
             await _context.SaveChangesAsync();
+
+            // Handle language change — queue translations if language is new to tenant
+            var languageChanged = !string.Equals(previousLanguage, employee.PreferredLanguage, StringComparison.OrdinalIgnoreCase);
+            if (languageChanged && !string.IsNullOrWhiteSpace(employee.PreferredLanguage))
+            {
+                var tenantId = _currentUserService.TenantId;
+                foreach (var handler in _languageChangeHandlers)
+                {
+                    try
+                    {
+                        await handler.HandleLanguageChangeAsync(
+                            tenantId, employee.Id, employee.PreferredLanguage);
+                    }
+                    catch (Exception langEx)
+                    {
+                        _logger.LogWarning(langEx,
+                            "Failed to handle language change for Employee {EmployeeId} via {HandlerType}",
+                            employee.Id, handler.GetType().Name);
+                    }
+                }
+            }
 
             // Reload to get updated related entity name
             await _context.Employees
