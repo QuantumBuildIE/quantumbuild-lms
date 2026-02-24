@@ -7,7 +7,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { Languages, AlertTriangle, XCircle, Minus } from 'lucide-react';
+import { Languages, AlertTriangle, XCircle, Minus, CheckCircle2 } from 'lucide-react';
 import type { TranslationQueueStatus } from '@/types/lesson-parser';
 
 interface TranslationStatusBadgeProps {
@@ -137,6 +137,26 @@ export function TranslationStatusBadge({
         </TooltipProvider>
       );
     }
+
+    case 'Completed':
+      return (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Badge variant="secondary" className="gap-1 bg-green-100 text-green-700 hover:bg-green-100">
+                <CheckCircle2 className="h-3 w-3" />
+                Translated
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>All {translationsQueued} translation(s) completed</p>
+              <p className="text-xs text-muted-foreground">
+                Languages: {translationLanguages?.split(',').join(', ').toUpperCase() ?? 'N/A'}
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      );
 
     default:
       return <Badge variant="secondary">{status}</Badge>;

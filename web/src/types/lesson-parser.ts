@@ -1,6 +1,6 @@
 export type ParseInputType = 'Pdf' | 'Docx' | 'Url' | 'Text';
 export type ParseJobStatus = 'Processing' | 'Completed' | 'Failed';
-export type TranslationQueueStatus = 'NotRequired' | 'Queued' | 'PartialFailure' | 'Failed';
+export type TranslationQueueStatus = 'NotRequired' | 'Queued' | 'PartialFailure' | 'Failed' | 'Completed';
 
 export interface ParseJob {
   id: string;

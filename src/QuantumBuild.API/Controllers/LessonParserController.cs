@@ -12,6 +12,7 @@ using QuantumBuild.Modules.LessonParser.Application.Validators;
 using QuantumBuild.Modules.LessonParser.Domain.Entities;
 using QuantumBuild.Modules.LessonParser.Domain.Enums;
 using QuantumBuild.Modules.LessonParser.Infrastructure.Jobs;
+using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 
 namespace QuantumBuild.API.Controllers;
 
@@ -25,11 +26,17 @@ namespace QuantumBuild.API.Controllers;
 public class LessonParserController : ControllerBase
 {
     private readonly ILessonParserDbContext _dbContext;
+    private readonly IToolboxTalksDbContext _toolboxTalksDbContext;
     private readonly IDocumentExtractor _documentExtractor;
     private readonly ICurrentUserService _currentUserService;
     private readonly ILogger<LessonParserController> _logger;
 
     private const long MaxDocumentSizeBytes = 50 * 1024 * 1024; // 50MB
+
+    /// <summary>
+    /// Grace period before checking translation status — allows background jobs time to complete.
+    /// </summary>
+    private static readonly TimeSpan TranslationCheckThreshold = TimeSpan.FromMinutes(10);
 
     private static readonly HashSet<string> SupportedDocumentExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -38,11 +45,13 @@ public class LessonParserController : ControllerBase
 
     public LessonParserController(
         ILessonParserDbContext dbContext,
+        IToolboxTalksDbContext toolboxTalksDbContext,
         IDocumentExtractor documentExtractor,
         ICurrentUserService currentUserService,
         ILogger<LessonParserController> logger)
     {
         _dbContext = dbContext;
+        _toolboxTalksDbContext = toolboxTalksDbContext;
         _documentExtractor = documentExtractor;
         _currentUserService = currentUserService;
         _logger = logger;
@@ -297,27 +306,37 @@ public class LessonParserController : ControllerBase
     {
         try
         {
-            var query = _dbContext.ParseJobs
-                .OrderByDescending(j => j.CreatedAt)
-                .Select(j => new ParseJobDto
-                {
-                    Id = j.Id,
-                    InputType = j.InputType.ToString(),
-                    InputReference = j.InputReference,
-                    Status = j.Status.ToString(),
-                    GeneratedCourseId = j.GeneratedCourseId,
-                    GeneratedCourseTitle = j.GeneratedCourseTitle,
-                    TalksGenerated = j.TalksGenerated,
-                    ErrorMessage = j.ErrorMessage,
-                    TranslationStatus = j.TranslationStatus.ToString(),
-                    TranslationLanguages = j.TranslationLanguages,
-                    TranslationsQueued = j.TranslationsQueued,
-                    TranslationFailures = j.TranslationFailures,
-                    CreatedAt = j.CreatedAt,
-                    CreatedBy = j.CreatedBy
-                });
+            // Materialize the page of entities so we can resolve translation statuses
+            var entityQuery = _dbContext.ParseJobs
+                .OrderByDescending(j => j.CreatedAt);
 
-            var result = await PaginatedList<ParseJobDto>.CreateAsync(query, page, pageSize);
+            var pagedEntities = await PaginatedList<ParseJob>.CreateAsync(entityQuery, page, pageSize);
+
+            // Lazy-resolve any stale Queued translation statuses
+            await ResolveTranslationStatusesAsync(pagedEntities.Items);
+
+            // Project to DTOs
+            var dtoItems = pagedEntities.Items.Select(j => new ParseJobDto
+            {
+                Id = j.Id,
+                InputType = j.InputType.ToString(),
+                InputReference = j.InputReference,
+                Status = j.Status.ToString(),
+                GeneratedCourseId = j.GeneratedCourseId,
+                GeneratedCourseTitle = j.GeneratedCourseTitle,
+                TalksGenerated = j.TalksGenerated,
+                ErrorMessage = j.ErrorMessage,
+                TranslationStatus = j.TranslationStatus.ToString(),
+                TranslationLanguages = j.TranslationLanguages,
+                TranslationsQueued = j.TranslationsQueued,
+                TranslationFailures = j.TranslationFailures,
+                CreatedAt = j.CreatedAt,
+                CreatedBy = j.CreatedBy
+            }).ToList();
+
+            var result = new PaginatedList<ParseJobDto>(
+                dtoItems, pagedEntities.TotalCount, pagedEntities.PageNumber, pagedEntities.PageSize);
+
             return Ok(Result.Ok(result));
         }
         catch (Exception ex)
@@ -340,30 +359,33 @@ public class LessonParserController : ControllerBase
         try
         {
             var job = await _dbContext.ParseJobs
-                .Where(j => j.Id == id)
-                .Select(j => new ParseJobDto
-                {
-                    Id = j.Id,
-                    InputType = j.InputType.ToString(),
-                    InputReference = j.InputReference,
-                    Status = j.Status.ToString(),
-                    GeneratedCourseId = j.GeneratedCourseId,
-                    GeneratedCourseTitle = j.GeneratedCourseTitle,
-                    TalksGenerated = j.TalksGenerated,
-                    ErrorMessage = j.ErrorMessage,
-                    TranslationStatus = j.TranslationStatus.ToString(),
-                    TranslationLanguages = j.TranslationLanguages,
-                    TranslationsQueued = j.TranslationsQueued,
-                    TranslationFailures = j.TranslationFailures,
-                    CreatedAt = j.CreatedAt,
-                    CreatedBy = j.CreatedBy
-                })
-                .FirstOrDefaultAsync();
+                .FirstOrDefaultAsync(j => j.Id == id);
 
             if (job == null)
                 return NotFound(new { message = "Parse job not found" });
 
-            return Ok(job);
+            // Lazy-resolve stale Queued translation status
+            await ResolveTranslationStatusesAsync([job]);
+
+            var dto = new ParseJobDto
+            {
+                Id = job.Id,
+                InputType = job.InputType.ToString(),
+                InputReference = job.InputReference,
+                Status = job.Status.ToString(),
+                GeneratedCourseId = job.GeneratedCourseId,
+                GeneratedCourseTitle = job.GeneratedCourseTitle,
+                TalksGenerated = job.TalksGenerated,
+                ErrorMessage = job.ErrorMessage,
+                TranslationStatus = job.TranslationStatus.ToString(),
+                TranslationLanguages = job.TranslationLanguages,
+                TranslationsQueued = job.TranslationsQueued,
+                TranslationFailures = job.TranslationFailures,
+                CreatedAt = job.CreatedAt,
+                CreatedBy = job.CreatedBy
+            };
+
+            return Ok(dto);
         }
         catch (Exception ex)
         {
@@ -437,6 +459,89 @@ public class LessonParserController : ControllerBase
     #endregion
 
     #region Private Helpers
+
+    /// <summary>
+    /// For any ParseJob still marked as Queued, checks actual ToolboxTalkTranslation records
+    /// to determine the real translation status. Updates the entity in-place and persists
+    /// changes so future reads don't need to recompute.
+    /// </summary>
+    private async Task ResolveTranslationStatusesAsync(IReadOnlyList<ParseJob> jobs)
+    {
+        var queuedJobs = jobs.Where(j =>
+            j.TranslationStatus == TranslationQueueStatus.Queued
+            && j.GeneratedCourseId.HasValue
+            && !string.IsNullOrEmpty(j.TranslationLanguages)
+            && (DateTime.UtcNow - j.CreatedAt) > TranslationCheckThreshold
+        ).ToList();
+
+        if (queuedJobs.Count == 0)
+            return;
+
+        var dirty = false;
+
+        foreach (var job in queuedJobs)
+        {
+            try
+            {
+                // Find the talk IDs generated by this parse job via the course
+                var talkIds = await _toolboxTalksDbContext.ToolboxTalkCourseItems
+                    .IgnoreQueryFilters()
+                    .Where(ci => ci.CourseId == job.GeneratedCourseId && !ci.IsDeleted)
+                    .Select(ci => ci.ToolboxTalkId)
+                    .ToListAsync();
+
+                if (talkIds.Count == 0)
+                    continue;
+
+                var languages = job.TranslationLanguages!
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries);
+
+                if (languages.Length == 0)
+                    continue;
+
+                var expectedCount = talkIds.Count * languages.Length;
+
+                // Count actual completed translation records
+                var actualCount = await _toolboxTalksDbContext.ToolboxTalkTranslations
+                    .IgnoreQueryFilters()
+                    .Where(t => talkIds.Contains(t.ToolboxTalkId)
+                                && languages.Contains(t.LanguageCode)
+                                && !t.IsDeleted)
+                    .CountAsync();
+
+                // Determine real status
+                TranslationQueueStatus resolved;
+                if (actualCount >= expectedCount)
+                    resolved = TranslationQueueStatus.Completed;
+                else if (actualCount > 0)
+                    resolved = TranslationQueueStatus.PartialFailure;
+                else
+                    resolved = TranslationQueueStatus.Failed;
+
+                if (resolved != job.TranslationStatus)
+                {
+                    _logger.LogInformation(
+                        "ParseJob {JobId}: translation status resolved from {Old} to {New} " +
+                        "(expected={Expected}, actual={Actual})",
+                        job.Id, job.TranslationStatus, resolved, expectedCount, actualCount);
+
+                    job.TranslationStatus = resolved;
+                    dirty = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                // Non-fatal — log and continue with the stored status
+                _logger.LogWarning(ex,
+                    "Failed to resolve translation status for ParseJob {JobId}", job.Id);
+            }
+        }
+
+        if (dirty)
+        {
+            await _dbContext.SaveChangesAsync(CancellationToken.None);
+        }
+    }
 
     /// <summary>
     /// Creates a ParseJob entity, saves it, and enqueues the Hangfire background job.

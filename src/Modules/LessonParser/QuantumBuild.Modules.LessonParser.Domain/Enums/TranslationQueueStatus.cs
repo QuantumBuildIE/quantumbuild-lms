@@ -23,5 +23,10 @@ public enum TranslationQueueStatus
     /// <summary>
     /// All translations failed
     /// </summary>
-    Failed = 3
+    Failed = 3,
+
+    /// <summary>
+    /// All expected translations completed successfully
+    /// </summary>
+    Completed = 4
 }
