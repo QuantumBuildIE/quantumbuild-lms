@@ -13,7 +13,7 @@ export const MODULE_CONFIG = {
   LessonParser: {
     label: 'Lesson Parser',
     description: 'Convert existing training documents into Learnings automatically',
-    href: '/lesson-parser',
+    href: '/admin/lesson-parser',
     icon: 'FileSearch',
   },
 } as const;

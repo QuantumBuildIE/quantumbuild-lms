@@ -11,7 +11,7 @@ const adminNavItems = [
   { href: "/admin/users", label: "Users", superUserOnly: false, tenantScoped: true, permissions: ["Core.ManageUsers"] },
   { href: "/admin/toolbox-talks", label: "Learnings", superUserOnly: false, tenantScoped: true, permissions: ["Learnings.View", "Learnings.Manage", "Learnings.Schedule", "Learnings.Admin"] },
   { href: "/admin/settings", label: "Settings", superUserOnly: false, tenantScoped: true, permissions: ["Learnings.Admin", "Core.ManageUsers"] },
-  { href: "/lesson-parser", label: "Lesson Parser", superUserOnly: false, tenantScoped: true, permissions: ["LessonParser.Use"] },
+  { href: "/admin/lesson-parser", label: "Lesson Parser", superUserOnly: false, tenantScoped: true, permissions: ["LessonParser.Use"] },
   { href: "/admin/tenants", label: "Tenant Management", superUserOnly: true, tenantScoped: false },
 ];
 

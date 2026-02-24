@@ -213,7 +213,7 @@ export default function LessonParserPage() {
     <div className="space-y-8">
       {/* Page header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Lesson Parser</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Lesson Parser</h1>
         <p className="text-muted-foreground">
           Convert existing training documents into Learnings automatically
         </p>
