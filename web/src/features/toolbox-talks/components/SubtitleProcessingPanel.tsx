@@ -51,6 +51,15 @@ interface SubtitleProcessingPanelProps {
   currentVideoUrl?: string;
 }
 
+function determineVideoSourceType(url?: string): SubtitleVideoSourceType {
+  if (!url) return 'DirectUrl';
+  const lower = url.toLowerCase();
+  if (lower.includes('drive.google.com') || lower.includes('docs.google.com'))
+    return 'GoogleDrive';
+  if (lower.includes('blob.core.windows.net')) return 'AzureBlob';
+  return 'DirectUrl';
+}
+
 export function SubtitleProcessingPanel({
   toolboxTalkId,
   currentVideoUrl,
@@ -77,7 +86,7 @@ export function SubtitleProcessingPanel({
 
   const [videoUrl, setVideoUrl] = useState(currentVideoUrl || '');
   const [videoSourceType, setVideoSourceType] =
-    useState<SubtitleVideoSourceType>('GoogleDrive');
+    useState<SubtitleVideoSourceType>(() => determineVideoSourceType(currentVideoUrl));
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
   const [showAllLanguages, setShowAllLanguages] = useState(false);
 
@@ -90,12 +99,13 @@ export function SubtitleProcessingPanel({
     }
   }, [languagesData, selectedLanguages.length]);
 
-  // Update video URL if prop changes
+  // Update video URL and auto-detect source type when prop changes
   useEffect(() => {
-    if (currentVideoUrl && !videoUrl) {
+    if (currentVideoUrl) {
       setVideoUrl(currentVideoUrl);
+      setVideoSourceType(determineVideoSourceType(currentVideoUrl));
     }
-  }, [currentVideoUrl, videoUrl]);
+  }, [currentVideoUrl]);
 
   const handleStartProcessing = async () => {
     if (!videoUrl || selectedLanguages.length === 0) {

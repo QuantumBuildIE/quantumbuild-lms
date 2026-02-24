@@ -622,7 +622,7 @@ public class ContentExtractionService : IContentExtractionService
     /// <summary>
     /// Determines the video source type based on the URL.
     /// </summary>
-    private static SubtitleVideoSourceType DetermineVideoSourceType(string videoUrl)
+    internal static SubtitleVideoSourceType DetermineVideoSourceType(string videoUrl)
     {
         if (string.IsNullOrEmpty(videoUrl))
             return SubtitleVideoSourceType.DirectUrl;

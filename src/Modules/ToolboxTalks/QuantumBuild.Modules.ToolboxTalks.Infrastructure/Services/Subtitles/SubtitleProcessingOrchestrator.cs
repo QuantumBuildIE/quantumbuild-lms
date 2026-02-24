@@ -91,12 +91,18 @@ public class SubtitleProcessingOrchestrator : ISubtitleProcessingOrchestrator
         if (existingJob != null)
             throw new InvalidOperationException($"A processing job is already active for this talk. Job ID: {existingJob.Id}");
 
+        // Determine source type from the talk's VideoUrl rather than trusting the client value.
+        // Fall back to client-provided sourceType only if the talk has no VideoUrl.
+        var resolvedSourceType = !string.IsNullOrEmpty(talk.VideoUrl)
+            ? ContentExtractionService.DetermineVideoSourceType(talk.VideoUrl)
+            : sourceType;
+
         // Create the job record
         var job = new SubtitleProcessingJob
         {
             ToolboxTalkId = toolboxTalkId,
             SourceVideoUrl = videoUrl,
-            VideoSourceType = sourceType,
+            VideoSourceType = resolvedSourceType,
             Status = SubtitleProcessingStatus.Pending,
             StartedAt = DateTime.UtcNow
         };
