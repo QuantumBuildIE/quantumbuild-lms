@@ -1,9 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useAuth, useHasAnyPermission, usePermission } from "@/lib/auth/use-auth";
+import { useAuth, useHasAnyPermission } from "@/lib/auth/use-auth";
 import { useMyTrainingSummary } from "@/lib/api/toolbox-talks/use-my-toolbox-talks";
-import { getHomeRoute } from "@/lib/auth/get-home-route";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -14,7 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, User, KeyRound, ClipboardList, Shield, FileSearch } from "lucide-react";
+import { LogOut, User, KeyRound, ClipboardList, Shield } from "lucide-react";
 import Link from "next/link";
 import { TenantSwitcher } from "@/components/layout/tenant-switcher";
 
@@ -29,9 +28,8 @@ export function TopNav() {
     "Learnings.Manage",
     "Learnings.Schedule",
     "Learnings.Admin",
+    "LessonParser.Use",
   ]);
-
-  const hasLessonParser = usePermission("LessonParser.Use");
 
   const isSupervisorOnly =
     !isSuperUser &&
@@ -54,7 +52,7 @@ export function TopNav() {
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-14 items-center justify-between px-4">
-        <Link href={getHomeRoute(user)} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+        <Link href={isSuperUser ? "/admin/tenants" : "/toolbox-talks"} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
           <div className="flex items-center gap-2">
             <svg viewBox="0 0 46 46" fill="none" className="w-8 h-8">
               <circle cx="23" cy="23" r="21" fill="#4d8eff" fillOpacity="0.1" stroke="#4d8eff" strokeWidth="1.5" strokeOpacity="0.3"/>
@@ -129,14 +127,6 @@ export function TopNav() {
                   </Link>
                 </DropdownMenuItem>
               </>
-            )}
-            {hasLessonParser && !isSuperUser && (
-              <DropdownMenuItem asChild>
-                <Link href="/lesson-parser">
-                  <FileSearch className="mr-2 h-4 w-4" />
-                  <span>Lesson Parser</span>
-                </Link>
-              </DropdownMenuItem>
             )}
             {hasAdminAccess && (
               <>

@@ -15,7 +15,7 @@ export default function LessonParserLayout({
 
   useEffect(() => {
     if (user && !hasPermission) {
-      router.replace("/dashboard");
+      router.replace("/toolbox-talks");
     }
   }, [user, hasPermission, router]);
 
