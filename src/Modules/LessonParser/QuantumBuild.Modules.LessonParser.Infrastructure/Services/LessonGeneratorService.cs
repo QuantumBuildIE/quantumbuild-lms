@@ -20,6 +20,7 @@ public class LessonGeneratorService : ILessonGeneratorService
     private readonly HttpClient _httpClient;
     private readonly ClaudeSettings _claudeSettings;
     private readonly IToolboxTalksDbContext _toolboxTalksDbContext;
+    private readonly ITranslationQueueService _translationQueueService;
     private readonly ILogger<LessonGeneratorService> _logger;
 
     private static readonly HashSet<string> CommonWords = new(StringComparer.OrdinalIgnoreCase)
@@ -36,11 +37,13 @@ public class LessonGeneratorService : ILessonGeneratorService
         HttpClient httpClient,
         IOptions<ClaudeSettings> claudeSettings,
         IToolboxTalksDbContext toolboxTalksDbContext,
+        ITranslationQueueService translationQueueService,
         ILogger<LessonGeneratorService> logger)
     {
         _httpClient = httpClient;
         _claudeSettings = claudeSettings.Value;
         _toolboxTalksDbContext = toolboxTalksDbContext;
+        _translationQueueService = translationQueueService;
         _logger = logger;
     }
 
@@ -215,6 +218,47 @@ public class LessonGeneratorService : ILessonGeneratorService
         progress.Report(new LessonParseProgress
         {
             Stage = "Course created",
+            PercentComplete = 90,
+            CurrentTalk = totalTopics,
+            TotalTalks = totalTopics
+        });
+
+        // Step 4: Queue translations for generated talks
+        progress.Report(new LessonParseProgress
+        {
+            Stage = "Queuing translations...",
+            PercentComplete = 95,
+            CurrentTalk = totalTopics,
+            TotalTalks = totalTopics
+        });
+
+        var generatedTalkIds = generatedTalks.Select(t => t.Id).ToList();
+        TranslationQueueResult translationResult;
+
+        try
+        {
+            translationResult = await _translationQueueService
+                .QueueTranslationsForTalksAsync(generatedTalkIds, tenantId, course.Id, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            // Translation failure should never fail the overall parse job
+            _logger.LogError(ex,
+                "Translation queuing failed for course {CourseId}. " +
+                "Translations can be generated manually via the Learnings module.",
+                course.Id);
+
+            translationResult = new TranslationQueueResult
+            {
+                HasLanguagesToTranslate = false
+            };
+        }
+
+        progress.Report(new LessonParseProgress
+        {
+            Stage = translationResult.HasLanguagesToTranslate
+                ? $"Translations queued for {translationResult.LanguageCodes.Count} language(s)"
+                : "Complete",
             PercentComplete = 100,
             CurrentTalk = totalTopics,
             TotalTalks = totalTopics
@@ -224,7 +268,10 @@ public class LessonGeneratorService : ILessonGeneratorService
         {
             CourseId = course.Id,
             CourseTitle = course.Title,
-            TalksGenerated = generatedTalks.Count
+            TalksGenerated = generatedTalks.Count,
+            TranslationsQueued = translationResult.HasLanguagesToTranslate,
+            TranslationLanguages = translationResult.LanguageCodes,
+            TranslationJobCount = translationResult.JobsQueued
         };
     }
 

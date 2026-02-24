@@ -1,5 +1,6 @@
 export type ParseInputType = 'Pdf' | 'Docx' | 'Url' | 'Text';
 export type ParseJobStatus = 'Processing' | 'Completed' | 'Failed';
+export type TranslationQueueStatus = 'NotRequired' | 'Queued' | 'PartialFailure' | 'Failed';
 
 export interface ParseJob {
   id: string;
@@ -10,6 +11,10 @@ export interface ParseJob {
   generatedCourseTitle: string | null;
   talksGenerated: number;
   errorMessage: string | null;
+  translationStatus: TranslationQueueStatus;
+  translationLanguages: string | null;
+  translationsQueued: number;
+  translationFailures: string | null;
   createdAt: string;
   createdBy: string;
 }
@@ -25,6 +30,9 @@ export interface LessonParseResult {
   courseId: string;
   courseTitle: string;
   talksGenerated: number;
+  translationsQueued: boolean;
+  translationLanguages: string[];
+  translationJobCount: number;
 }
 
 export interface StartParseResponse {

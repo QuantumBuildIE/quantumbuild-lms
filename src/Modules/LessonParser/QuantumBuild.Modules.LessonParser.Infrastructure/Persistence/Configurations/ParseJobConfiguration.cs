@@ -49,6 +49,22 @@ public class ParseJobConfiguration : IEntityTypeConfiguration<ParseJob>
         // No max length — extracted content can be large (full document text)
         builder.Property(p => p.ExtractedContent);
 
+        builder.Property(p => p.TranslationStatus)
+            .IsRequired()
+            .HasConversion<string>()
+            .HasMaxLength(50)
+            .HasDefaultValue(TranslationQueueStatus.NotRequired);
+
+        builder.Property(p => p.TranslationLanguages)
+            .HasMaxLength(200);
+
+        builder.Property(p => p.TranslationFailures)
+            .HasMaxLength(2000);
+
+        builder.Property(p => p.TranslationsQueued)
+            .IsRequired()
+            .HasDefaultValue(0);
+
         builder.Property(p => p.TenantId)
             .IsRequired();
 

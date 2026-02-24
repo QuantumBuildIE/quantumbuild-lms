@@ -53,6 +53,9 @@ public static class LessonParserInfrastructureExtensions
                 "Mozilla/5.0 QuantumBuild-LessonParser/1.0");
         });
 
+        // Register translation queue service (dispatches translations for generated talks)
+        services.AddScoped<ITranslationQueueService, TranslationQueueService>();
+
         // Register lesson generator service (Claude AI → ToolboxTalks + Course)
         services.AddHttpClient<ILessonGeneratorService, LessonGeneratorService>(client =>
         {

@@ -122,6 +122,13 @@ public class LessonParseJob
             parseJob.GeneratedCourseId = result.CourseId;
             parseJob.GeneratedCourseTitle = result.CourseTitle;
             parseJob.TalksGenerated = result.TalksGenerated;
+            parseJob.TranslationStatus = result.TranslationsQueued
+                ? TranslationQueueStatus.Queued
+                : TranslationQueueStatus.NotRequired;
+            parseJob.TranslationLanguages = result.TranslationsQueued
+                ? string.Join(",", result.TranslationLanguages)
+                : null;
+            parseJob.TranslationsQueued = result.TranslationJobCount;
             parseJob.ExtractedContent = null; // Clear to save storage
             await _dbContext.SaveChangesAsync(CancellationToken.None);
 

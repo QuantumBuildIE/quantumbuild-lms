@@ -13,6 +13,10 @@ public record ParseJobDto
     public string? GeneratedCourseTitle { get; init; }
     public int TalksGenerated { get; init; }
     public string? ErrorMessage { get; init; }
+    public string TranslationStatus { get; init; } = string.Empty;
+    public string? TranslationLanguages { get; init; }
+    public int TranslationsQueued { get; init; }
+    public string? TranslationFailures { get; init; }
     public DateTime CreatedAt { get; init; }
     public string CreatedBy { get; init; } = string.Empty;
 }

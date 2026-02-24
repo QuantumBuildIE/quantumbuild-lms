@@ -50,4 +50,24 @@ public class ParseJob : TenantEntity
     /// Failed jobs retain this so they can be retried without re-uploading.
     /// </summary>
     public string? ExtractedContent { get; set; }
+
+    /// <summary>
+    /// Status of translation queuing after successful generation
+    /// </summary>
+    public TranslationQueueStatus TranslationStatus { get; set; } = TranslationQueueStatus.NotRequired;
+
+    /// <summary>
+    /// Comma-separated language codes that were queued for translation, e.g. "es,fr,de"
+    /// </summary>
+    public string? TranslationLanguages { get; set; }
+
+    /// <summary>
+    /// JSON array of failed translations with language and reason, populated after translation completes
+    /// </summary>
+    public string? TranslationFailures { get; set; }
+
+    /// <summary>
+    /// Total number of translation jobs enqueued (talk × language combinations)
+    /// </summary>
+    public int TranslationsQueued { get; set; }
 }

@@ -309,6 +309,10 @@ public class LessonParserController : ControllerBase
                     GeneratedCourseTitle = j.GeneratedCourseTitle,
                     TalksGenerated = j.TalksGenerated,
                     ErrorMessage = j.ErrorMessage,
+                    TranslationStatus = j.TranslationStatus.ToString(),
+                    TranslationLanguages = j.TranslationLanguages,
+                    TranslationsQueued = j.TranslationsQueued,
+                    TranslationFailures = j.TranslationFailures,
                     CreatedAt = j.CreatedAt,
                     CreatedBy = j.CreatedBy
                 });
@@ -347,6 +351,10 @@ public class LessonParserController : ControllerBase
                     GeneratedCourseTitle = j.GeneratedCourseTitle,
                     TalksGenerated = j.TalksGenerated,
                     ErrorMessage = j.ErrorMessage,
+                    TranslationStatus = j.TranslationStatus.ToString(),
+                    TranslationLanguages = j.TranslationLanguages,
+                    TranslationsQueued = j.TranslationsQueued,
+                    TranslationFailures = j.TranslationFailures,
                     CreatedAt = j.CreatedAt,
                     CreatedBy = j.CreatedBy
                 })

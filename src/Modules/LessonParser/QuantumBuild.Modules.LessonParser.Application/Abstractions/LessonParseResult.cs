@@ -8,4 +8,7 @@ public record LessonParseResult
     public Guid CourseId { get; init; }
     public string CourseTitle { get; init; } = string.Empty;
     public int TalksGenerated { get; init; }
+    public bool TranslationsQueued { get; init; }
+    public IReadOnlyList<string> TranslationLanguages { get; init; } = [];
+    public int TranslationJobCount { get; init; }
 }

@@ -19,6 +19,7 @@ import {
   FileText,
   Globe,
   Type,
+  Languages,
 } from 'lucide-react';
 import { DataTable } from '@/components/shared/data-table';
 import type { Column } from '@/components/shared/data-table';
@@ -28,6 +29,7 @@ import { useParseJobs, lessonParserKeys } from '@/features/lesson-parser/hooks/u
 import { ParseStatusBadge } from '@/features/lesson-parser/parse-status-badge';
 import { InputTypeBadge } from '@/features/lesson-parser/input-type-badge';
 import { RetryButton } from '@/features/lesson-parser/retry-button';
+import { TranslationStatusBadge } from '@/features/lesson-parser/translation-status-badge';
 import type { ParseJob } from '@/types/lesson-parser';
 
 type FormState = 'idle' | 'submitting' | 'processing' | 'completed' | 'error';
@@ -180,6 +182,21 @@ export default function LessonParserPage() {
           >
             {item.generatedCourseTitle ?? 'View Course'}
           </Link>
+        ) : (
+          '\u2014'
+        ),
+    },
+    {
+      key: 'translationStatus',
+      header: 'Translations',
+      render: (item) =>
+        item.status === 'Completed' ? (
+          <TranslationStatusBadge
+            status={item.translationStatus}
+            translationsQueued={item.translationsQueued}
+            translationLanguages={item.translationLanguages}
+            translationFailures={item.translationFailures}
+          />
         ) : (
           '\u2014'
         ),
@@ -360,11 +377,33 @@ export default function LessonParserPage() {
           <CardContent className="py-6">
             <div className="flex items-start gap-4">
               <CheckCircle className="h-8 w-8 text-green-600 mt-1 shrink-0" />
-              <div className="space-y-1 flex-1">
-                <h3 className="font-semibold text-green-900">Course Created Successfully</h3>
+              <div className="space-y-2 flex-1">
+                <h3 className="font-semibold text-green-900">
+                  Course Created Successfully
+                </h3>
                 <p className="text-green-700">
                   &ldquo;{result.courseTitle}&rdquo; &mdash; {result.talksGenerated} talks generated
                 </p>
+
+                {/* Translation notice */}
+                {result.translationsQueued && (
+                  <div className="flex items-start gap-2 mt-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                    <Languages className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+                    <div className="text-sm text-blue-800">
+                      <p className="font-medium">
+                        Translations are being generated in the background
+                      </p>
+                      <p className="mt-0.5">
+                        {result.translationJobCount} translation job(s) queued for{' '}
+                        {result.translationLanguages.join(', ').toUpperCase()}.
+                        This may take a few minutes depending on the number of
+                        languages. If any translations fail, you can retry them
+                        manually via the Learnings module.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex gap-3 mt-4">
                   <Button asChild variant="default" size="sm">
                     <Link href={`/admin/toolbox-talks/courses/${result.courseId}/edit`}>
