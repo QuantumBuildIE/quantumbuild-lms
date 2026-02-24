@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useAuth, useHasAnyPermission } from "@/lib/auth/use-auth";
+import { useAuth, useHasAnyPermission, usePermission } from "@/lib/auth/use-auth";
 import { useMyTrainingSummary } from "@/lib/api/toolbox-talks/use-my-toolbox-talks";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, User, KeyRound, ClipboardList, Shield } from "lucide-react";
+import { LogOut, User, KeyRound, ClipboardList, Shield, FileSearch } from "lucide-react";
 import Link from "next/link";
 import { TenantSwitcher } from "@/components/layout/tenant-switcher";
 
@@ -29,6 +29,8 @@ export function TopNav() {
     "Learnings.Schedule",
     "Learnings.Admin",
   ]);
+
+  const hasLessonParser = usePermission("LessonParser.Use");
 
   const isSupervisorOnly =
     !isSuperUser &&
@@ -126,6 +128,14 @@ export function TopNav() {
                   </Link>
                 </DropdownMenuItem>
               </>
+            )}
+            {hasLessonParser && !isSuperUser && (
+              <DropdownMenuItem asChild>
+                <Link href="/lesson-parser">
+                  <FileSearch className="mr-2 h-4 w-4" />
+                  <span>Lesson Parser</span>
+                </Link>
+              </DropdownMenuItem>
             )}
             {hasAdminAccess && (
               <>

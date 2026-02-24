@@ -46,6 +46,9 @@ public class ParseJobConfiguration : IEntityTypeConfiguration<ParseJob>
         builder.Property(p => p.ErrorMessage)
             .HasMaxLength(2000);
 
+        // No max length — extracted content can be large (full document text)
+        builder.Property(p => p.ExtractedContent);
+
         builder.Property(p => p.TenantId)
             .IsRequired();
 

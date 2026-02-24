@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using QuantumBuild.Modules.LessonParser.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using QuantumBuild.Modules.LessonParser.Infrastructure.Persistence;
 namespace QuantumBuild.Modules.LessonParser.Infrastructure.Migrations
 {
     [DbContext(typeof(LessonParserDbContext))]
-    partial class LessonParserDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260223214339_AddExtractedContentToParseJob")]
+    partial class AddExtractedContentToParseJob
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

@@ -20,6 +20,8 @@ using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Persistence.Seed;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Hubs;
 using QuantumBuild.Modules.LessonParser.Application;
 using QuantumBuild.Modules.LessonParser.Infrastructure;
+using QuantumBuild.Modules.LessonParser.Infrastructure.Hubs;
+using QuantumBuild.Modules.LessonParser.Infrastructure.Jobs;
 using QuantumBuild.Modules.LessonParser.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -119,6 +121,7 @@ builder.Services.AddScoped<ProcessToolboxTalkSchedulesJob>();
 builder.Services.AddScoped<SendToolboxTalkRemindersJob>();
 builder.Services.AddScoped<UpdateOverdueToolboxTalksJob>();
 builder.Services.AddScoped<ContentGenerationJob>();
+builder.Services.AddScoped<LessonParseJob>();
 
 // Add Hangfire with PostgreSQL storage
 builder.Services.AddHangfire(config => config
@@ -327,6 +330,7 @@ app.MapControllers();
 // Map SignalR hubs
 app.MapHub<SubtitleProcessingHub>("/api/hubs/subtitle-processing");
 app.MapHub<ContentGenerationHub>("/api/hubs/content-generation");
+app.MapHub<LessonParserHub>("/api/hubs/lesson-parser");
 
 // Map health check endpoint
 app.MapHealthChecks("/health");

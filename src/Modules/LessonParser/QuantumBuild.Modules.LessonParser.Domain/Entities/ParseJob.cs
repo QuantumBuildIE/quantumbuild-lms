@@ -43,4 +43,11 @@ public class ParseJob : TenantEntity
     /// Error message if the job failed
     /// </summary>
     public string? ErrorMessage { get; set; }
+
+    /// <summary>
+    /// Temporarily stores extracted text content for retry scenarios.
+    /// Cleared on successful completion to save storage.
+    /// Failed jobs retain this so they can be retried without re-uploading.
+    /// </summary>
+    public string? ExtractedContent { get; set; }
 }
