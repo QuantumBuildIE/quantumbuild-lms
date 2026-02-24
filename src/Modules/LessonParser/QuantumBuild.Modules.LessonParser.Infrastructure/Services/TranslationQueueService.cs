@@ -1,11 +1,8 @@
-using System.Text.Json;
-using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Modules.LessonParser.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Translations;
-using QuantumBuild.Modules.ToolboxTalks.Application.Commands.GenerateContentTranslations;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services.Subtitles;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
@@ -13,9 +10,10 @@ using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 namespace QuantumBuild.Modules.LessonParser.Infrastructure.Services;
 
 /// <summary>
-/// Queues content translations for generated talks by dispatching
-/// GenerateContentTranslationsCommand via MediatR — the same mechanism
-/// used by ContentGenerationJob.AutoGenerateTranslationsAsync and MissingTranslationsJob.
+/// Queues content translations for generated talks by enqueuing separate Hangfire
+/// background jobs (MissingTranslationsJob) — fire-and-forget so the Lesson Parser
+/// job completes immediately. This follows the same pattern used in
+/// ToolboxTalksController.SmartGenerate for content-reuse scenarios.
 /// Also translates the course title/description into ToolboxTalkCourseTranslation records.
 /// </summary>
 public class TranslationQueueService : ITranslationQueueService
@@ -23,7 +21,7 @@ public class TranslationQueueService : ITranslationQueueService
     private readonly ICoreDbContext _coreDbContext;
     private readonly IToolboxTalksDbContext _toolboxTalksDbContext;
     private readonly IContentTranslationService _contentTranslationService;
-    private readonly ISender _sender;
+    private readonly ITranslationJobScheduler _translationJobScheduler;
     private readonly ILanguageCodeService _languageCodeService;
     private readonly ILogger<TranslationQueueService> _logger;
 
@@ -31,14 +29,14 @@ public class TranslationQueueService : ITranslationQueueService
         ICoreDbContext coreDbContext,
         IToolboxTalksDbContext toolboxTalksDbContext,
         IContentTranslationService contentTranslationService,
-        ISender sender,
+        ITranslationJobScheduler translationJobScheduler,
         ILanguageCodeService languageCodeService,
         ILogger<TranslationQueueService> logger)
     {
         _coreDbContext = coreDbContext;
         _toolboxTalksDbContext = toolboxTalksDbContext;
         _contentTranslationService = contentTranslationService;
-        _sender = sender;
+        _translationJobScheduler = translationJobScheduler;
         _languageCodeService = languageCodeService;
         _logger = logger;
     }
@@ -84,102 +82,49 @@ public class TranslationQueueService : ITranslationQueueService
         }
 
         _logger.LogInformation(
-            "Dispatching translations for {TalkCount} talks in {LanguageCount} languages: {Languages}",
+            "Enqueuing translation jobs for {TalkCount} talks in {LanguageCount} languages: {Languages}",
             talkIdList.Count, languageNames.Count, string.Join(", ", languageNames));
 
-        // 4. For each talk, dispatch the existing GenerateContentTranslationsCommand
+        // 4. For each talk, enqueue a separate Hangfire background job (fire-and-forget).
+        //    MissingTranslationsJob will detect the required languages and dispatch
+        //    GenerateContentTranslationsCommand — the same path used by ContentGenerationJob
+        //    and ToolboxTalksController.SmartGenerate.
         var totalJobsQueued = 0;
-        var failures = new List<TranslationFailureEntry>();
 
         foreach (var talkId in talkIdList)
         {
-            try
-            {
-                var command = new GenerateContentTranslationsCommand
-                {
-                    ToolboxTalkId = talkId,
-                    TenantId = tenantId,
-                    TargetLanguages = languageNames
-                };
+            var jobId = _translationJobScheduler.EnqueueMissingTranslationsJob(talkId, tenantId);
+            totalJobsQueued++;
 
-                var result = await _sender.Send(command, cancellationToken);
-
-                if (result.Success)
-                {
-                    var successCount = result.LanguageResults.Count(r => r.Success);
-                    totalJobsQueued += successCount;
-
-                    _logger.LogInformation(
-                        "Translations for talk {TalkId}: {SuccessCount}/{TotalCount} languages succeeded",
-                        talkId, successCount, result.LanguageResults.Count);
-
-                    // Track per-language failures
-                    foreach (var langResult in result.LanguageResults.Where(r => !r.Success))
-                    {
-                        failures.Add(new TranslationFailureEntry
-                        {
-                            TalkId = talkId,
-                            Language = langResult.LanguageCode,
-                            Reason = langResult.ErrorMessage ?? "Unknown error"
-                        });
-                    }
-                }
-                else
-                {
-                    _logger.LogWarning(
-                        "Translation command failed for talk {TalkId}: {Error}",
-                        talkId, result.ErrorMessage);
-
-                    failures.Add(new TranslationFailureEntry
-                    {
-                        TalkId = talkId,
-                        Language = "*",
-                        Reason = result.ErrorMessage ?? "Command failed"
-                    });
-                }
-            }
-            catch (Exception ex)
-            {
-                // Translation failure should not prevent returning results
-                _logger.LogError(ex,
-                    "Exception dispatching translations for talk {TalkId}. " +
-                    "Translations can be generated manually via the Learnings module.",
-                    talkId);
-
-                failures.Add(new TranslationFailureEntry
-                {
-                    TalkId = talkId,
-                    Language = "*",
-                    Reason = ex.Message
-                });
-            }
+            _logger.LogInformation(
+                "Enqueued MissingTranslationsJob {JobId} for talk {TalkId}", jobId, talkId);
         }
 
         // 5. Translate course title/description if a courseId was provided
+        //    (lightweight — just title and description text, not full section/question content)
         if (courseId.HasValue)
         {
+            var courseFailures = new List<TranslationFailureEntry>();
             await TranslateCourseAsync(
-                courseId.Value, tenantId, employeeLanguageCodes, languageNames, failures, cancellationToken);
+                courseId.Value, tenantId, employeeLanguageCodes, languageNames, courseFailures, cancellationToken);
+
+            if (courseFailures.Count > 0)
+            {
+                _logger.LogWarning(
+                    "Course translation had {FailureCount} failure(s) for course {CourseId}",
+                    courseFailures.Count, courseId.Value);
+            }
         }
 
-        var expectedTotal = talkIdList.Count * employeeLanguageCodes.Count;
-        var allFailed = totalJobsQueued == 0 && failures.Count > 0;
-        var hasPartialFailures = failures.Count > 0 && !allFailed;
-
         _logger.LogInformation(
-            "Translation queue complete: {Queued}/{Expected} succeeded, {Failures} failures",
-            totalJobsQueued, expectedTotal, failures.Count);
+            "Translation queue complete: {Queued} background jobs enqueued for {Languages} language(s)",
+            totalJobsQueued, employeeLanguageCodes.Count);
 
         return new TranslationQueueResult
         {
             JobsQueued = totalJobsQueued,
             LanguageCodes = employeeLanguageCodes.AsReadOnly(),
-            HasLanguagesToTranslate = true,
-            FailuresJson = failures.Count > 0
-                ? JsonSerializer.Serialize(failures)
-                : null,
-            HasPartialFailures = hasPartialFailures,
-            AllFailed = allFailed
+            HasLanguagesToTranslate = true
         };
     }
 

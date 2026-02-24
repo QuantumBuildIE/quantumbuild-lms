@@ -78,6 +78,9 @@ public static class ServiceCollectionExtensions
             client.Timeout = TimeSpan.FromMinutes(5); // 5 minutes for content translation
         });
 
+        // Translation job scheduler (fire-and-forget Hangfire enqueue, used by cross-module callers)
+        services.AddSingleton<ITranslationJobScheduler, TranslationJobScheduler>();
+
         // Register SRT storage provider based on configuration
         var srtStorageType = configuration
             .GetSection($"{SubtitleProcessingSettings.SectionName}:SrtStorage:Type")
