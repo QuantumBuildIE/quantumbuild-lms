@@ -33,6 +33,7 @@ import { useAuth } from '@/lib/auth/use-auth';
 import { useLookupValues } from '@/hooks/use-lookups';
 import { useCompanies } from '@/lib/api/admin/use-companies';
 import { useCreateSession, useUploadSessionFile } from '@/lib/api/toolbox-talks/use-content-creation';
+import { useTenantSettings } from '@/lib/api/admin/use-tenant-settings';
 import type { WizardState } from '../CreateWizard';
 import type { InputMode } from '@/types/content-creation';
 
@@ -57,9 +58,9 @@ const INPUT_MODES: { mode: InputMode; label: string; icon: React.ElementType; de
   { mode: 'Video', label: 'Video', icon: FileVideo, description: 'Upload video or paste URL' },
 ];
 
-const PASS_THRESHOLDS = [50, 60, 70, 75, 80, 85, 90, 95];
+const DEFAULT_PASS_THRESHOLDS = [50, 60, 70, 75, 80, 85, 90, 95];
 
-const AUDIT_PURPOSES = [
+const DEFAULT_AUDIT_PURPOSES = [
   'Regulatory Compliance',
   'Internal Training',
   'Safety Certification',
@@ -87,13 +88,37 @@ export function InputConfigStep({
     useLookupValues('Language');
   const { data: companies = [], isLoading: companiesLoading } =
     useCompanies({ pageSize: 100 });
+  const { data: tenantSettings } = useTenantSettings();
+
+  // Derive thresholds and audit purposes from tenant settings, falling back to defaults
+  const passThresholds = (() => {
+    const raw = tenantSettings?.['ValidationPassThresholds'];
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return (parsed as number[]).sort((a, b) => a - b);
+      } catch { /* use defaults */ }
+    }
+    return DEFAULT_PASS_THRESHOLDS;
+  })();
+
+  const auditPurposes = (() => {
+    const raw = tenantSettings?.['ValidationAuditPurposes'];
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed as string[];
+      } catch { /* use defaults */ }
+    }
+    return DEFAULT_AUDIT_PURPOSES;
+  })();
 
   // Local state
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [customAuditPurpose, setCustomAuditPurpose] = useState('');
   const [auditPurposeMode, setAuditPurposeMode] = useState<'preset' | 'custom'>(
-    state.auditPurpose && !AUDIT_PURPOSES.includes(state.auditPurpose)
+    state.auditPurpose && !auditPurposes.includes(state.auditPurpose)
       ? 'custom'
       : 'preset'
   );
@@ -514,7 +539,7 @@ export function InputConfigStep({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {PASS_THRESHOLDS.map((t) => (
+            {passThresholds.map((t) => (
               <SelectItem key={t} value={String(t)}>
                 {t}%
               </SelectItem>
@@ -629,7 +654,7 @@ export function InputConfigStep({
                     <SelectValue placeholder="Select purpose..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {AUDIT_PURPOSES.map((p) => (
+                    {auditPurposes.map((p) => (
                       <SelectItem key={p} value={p}>
                         {p}
                       </SelectItem>

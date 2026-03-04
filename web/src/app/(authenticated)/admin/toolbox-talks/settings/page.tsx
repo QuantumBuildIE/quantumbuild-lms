@@ -1,7 +1,11 @@
 'use client';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePermission } from '@/lib/auth/use-auth';
+import { SafetyGlossarySection } from '@/features/toolbox-talks/components/settings/safety-glossary-section';
+import { PassThresholdSection } from '@/features/toolbox-talks/components/settings/pass-threshold-section';
+import { AuditPurposeSection } from '@/features/toolbox-talks/components/settings/audit-purpose-section';
 
 export default function AdminToolboxTalksSettingsPage() {
   const hasAdminPermission = usePermission('Learnings.Admin');
@@ -33,49 +37,68 @@ export default function AdminToolboxTalksSettingsPage() {
         </p>
       </div>
 
-      <div className="grid gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>General Settings</CardTitle>
-            <CardDescription>
-              Configure general learnings settings
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Settings configuration coming soon.
-            </p>
-          </CardContent>
-        </Card>
+      <Tabs defaultValue="general">
+        <TabsList>
+          <TabsTrigger value="general">General</TabsTrigger>
+          <TabsTrigger value="notifications">Notifications</TabsTrigger>
+          <TabsTrigger value="quiz">Quiz</TabsTrigger>
+          <TabsTrigger value="validation">Validation</TabsTrigger>
+        </TabsList>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Notification Settings</CardTitle>
-            <CardDescription>
-              Configure reminder and notification preferences
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Notification settings coming soon.
-            </p>
-          </CardContent>
-        </Card>
+        <TabsContent value="general" className="space-y-6 pt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>General Settings</CardTitle>
+              <CardDescription>
+                Configure general learnings settings
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                Settings configuration coming soon.
+              </p>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Quiz Settings</CardTitle>
-            <CardDescription>
-              Configure default quiz and assessment settings
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Quiz settings coming soon.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+        <TabsContent value="notifications" className="space-y-6 pt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Notification Settings</CardTitle>
+              <CardDescription>
+                Configure reminder and notification preferences
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                Notification settings coming soon.
+              </p>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="quiz" className="space-y-6 pt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Quiz Settings</CardTitle>
+              <CardDescription>
+                Configure default quiz and assessment settings
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                Quiz settings coming soon.
+              </p>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="validation" className="space-y-6 pt-4">
+          <SafetyGlossarySection />
+          <PassThresholdSection />
+          <AuditPurposeSection />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

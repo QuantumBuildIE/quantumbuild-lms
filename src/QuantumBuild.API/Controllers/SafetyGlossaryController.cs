@@ -156,7 +156,49 @@ public class SafetyGlossaryController : ControllerBase
             };
 
             _dbContext.SafetyGlossaries.Add(glossary);
+
+            // If a system default sector exists with the same key, copy all its terms
+            var systemDefault = await _dbContext.SafetyGlossaries
+                .Include(g => g.Terms)
+                .FirstOrDefaultAsync(g => g.SectorKey == request.SectorKey
+                    && g.TenantId == null && g.IsActive,
+                    cancellationToken);
+
+            if (systemDefault != null && systemDefault.Terms.Any())
+            {
+                foreach (var sourceTerm in systemDefault.Terms)
+                {
+                    _dbContext.SafetyGlossaryTerms.Add(new SafetyGlossaryTerm
+                    {
+                        Id = Guid.NewGuid(),
+                        GlossaryId = glossary.Id,
+                        EnglishTerm = sourceTerm.EnglishTerm,
+                        Category = sourceTerm.Category,
+                        IsCritical = sourceTerm.IsCritical,
+                        Translations = sourceTerm.Translations
+                    });
+                }
+
+                _logger.LogInformation(
+                    "Copied {Count} terms from system default sector '{Key}' to tenant override",
+                    systemDefault.Terms.Count, request.SectorKey);
+            }
+
             await _dbContext.SaveChangesAsync(cancellationToken);
+
+            // Build response with copied terms
+            var terms = await _dbContext.SafetyGlossaryTerms
+                .Where(t => t.GlossaryId == glossary.Id)
+                .OrderBy(t => t.EnglishTerm)
+                .Select(t => new GlossaryTermDto
+                {
+                    Id = t.Id,
+                    EnglishTerm = t.EnglishTerm,
+                    Category = t.Category,
+                    IsCritical = t.IsCritical,
+                    Translations = t.Translations
+                })
+                .ToListAsync(cancellationToken);
 
             var dto = new GlossarySectorDetailDto
             {
@@ -165,7 +207,7 @@ public class SafetyGlossaryController : ControllerBase
                 SectorName = glossary.SectorName,
                 SectorIcon = glossary.SectorIcon,
                 IsSystemDefault = false,
-                Terms = new List<GlossaryTermDto>()
+                Terms = terms
             };
 
             return CreatedAtAction(nameof(GetSectorByKey), new { key = glossary.SectorKey }, dto);
