@@ -11,6 +11,10 @@ import {
   publishSession,
   abandonSession,
   getValidationRun,
+  getValidationRuns,
+  deleteValidationRun,
+  downloadValidationReport,
+  generateValidationReport,
   acceptSection,
   rejectSection,
   editSection,
@@ -45,6 +49,8 @@ import type {
 export const contentCreationKeys = {
   all: ['content-creation'] as const,
   session: (id: string) => [...contentCreationKeys.all, 'session', id] as const,
+  validationRuns: (talkId: string) =>
+    [...contentCreationKeys.all, 'validation-runs', talkId] as const,
   validationRun: (talkId: string, runId: string) =>
     [...contentCreationKeys.all, 'validation', talkId, runId] as const,
   quizData: (sessionId: string) =>
@@ -245,6 +251,18 @@ export function useAbandonSession() {
 }
 
 /**
+ * Fetch all validation runs for a talk
+ */
+export function useValidationRuns(talkId: string | null) {
+  return useQuery({
+    queryKey: contentCreationKeys.validationRuns(talkId ?? ''),
+    queryFn: () => getValidationRuns(talkId!),
+    enabled: !!talkId,
+    staleTime: 30 * 1000,
+  });
+}
+
+/**
  * Fetch validation run details
  */
 export function useValidationRun(
@@ -256,6 +274,60 @@ export function useValidationRun(
     queryFn: () => getValidationRun(talkId!, runId!),
     enabled: !!talkId && !!runId,
     staleTime: 10 * 1000,
+  });
+}
+
+/**
+ * Delete a validation run
+ */
+export function useDeleteValidationRun() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ talkId, runId }: { talkId: string; runId: string }) =>
+      deleteValidationRun(talkId, runId),
+    onSuccess: (_, { talkId }) => {
+      queryClient.invalidateQueries({
+        queryKey: contentCreationKeys.validationRuns(talkId),
+      });
+    },
+  });
+}
+
+/**
+ * Download a validation report PDF
+ */
+export function useDownloadValidationReport() {
+  return useMutation({
+    mutationFn: ({ talkId, runId }: { talkId: string; runId: string }) =>
+      downloadValidationReport(talkId, runId),
+    onSuccess: (blob, { runId }) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ValidationReport-${runId.substring(0, 8)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    },
+  });
+}
+
+/**
+ * Generate a validation report for a completed run
+ */
+export function useGenerateValidationReport() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ talkId, runId }: { talkId: string; runId: string }) =>
+      generateValidationReport(talkId, runId),
+    onSuccess: (_, { talkId }) => {
+      queryClient.invalidateQueries({
+        queryKey: contentCreationKeys.validationRuns(talkId),
+      });
+    },
   });
 }
 

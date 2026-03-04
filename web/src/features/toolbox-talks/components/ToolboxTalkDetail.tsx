@@ -28,8 +28,10 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DeleteConfirmationDialog } from '@/components/shared/delete-confirmation-dialog';
 import { PreviewModal } from './PreviewModal';
+import { ValidationHistoryTab } from './ValidationHistoryTab';
 import { useToolboxTalk, useDeleteToolboxTalk } from '@/lib/api/toolbox-talks';
 import { usePermission } from '@/lib/auth/use-auth';
 import type { ToolboxTalk } from '@/types/toolbox-talks';
@@ -212,212 +214,224 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Talk Details */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Talk Details</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Frequency</label>
-                <p className="mt-1">{talk.frequencyDisplay}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Sections</label>
-                <p className="mt-1">{talk.sections.length}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Video</label>
-                <div className="mt-1 flex items-center gap-2">
-                  {talk.videoSource !== 'None' ? (
+      {/* Tabs: Overview / Validation */}
+      <Tabs defaultValue="overview">
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="validation">Validation</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-6 mt-4">
+          <div className="grid gap-6 lg:grid-cols-3">
+            {/* Talk Details */}
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle>Talk Details</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Frequency</label>
+                    <p className="mt-1">{talk.frequencyDisplay}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Sections</label>
+                    <p className="mt-1">{talk.sections.length}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Video</label>
+                    <div className="mt-1 flex items-center gap-2">
+                      {talk.videoSource !== 'None' ? (
+                        <>
+                          <VideoIcon className="h-4 w-4 text-muted-foreground" />
+                          <span>{talk.videoSourceDisplay}</span>
+                          {talk.videoUrl && (
+                            <a
+                              href={talk.videoUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary hover:underline"
+                            >
+                              <ExternalLinkIcon className="h-4 w-4" />
+                            </a>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-muted-foreground">No video</span>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Minimum Watch %</label>
+                    <p className="mt-1">
+                      {talk.videoSource !== 'None' ? `${talk.minimumVideoWatchPercent}%` : '-'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Quiz Required</label>
+                    <p className="mt-1">{talk.requiresQuiz ? 'Yes' : 'No'}</p>
+                  </div>
+                  {talk.requiresQuiz && (
                     <>
-                      <VideoIcon className="h-4 w-4 text-muted-foreground" />
-                      <span>{talk.videoSourceDisplay}</span>
-                      {talk.videoUrl && (
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Passing Score</label>
+                        <p className="mt-1">{talk.passingScore}%</p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Questions</label>
+                        <p className="mt-1">{talk.questions.length}</p>
+                      </div>
+                    </>
+                  )}
+                  {talk.attachmentUrl && (
+                    <div className="sm:col-span-2">
+                      <label className="text-sm font-medium text-muted-foreground">Attachment</label>
+                      <div className="mt-1">
                         <a
-                          href={talk.videoUrl}
+                          href={talk.attachmentUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-primary hover:underline"
+                          className="inline-flex items-center gap-2 text-primary hover:underline"
                         >
-                          <ExternalLinkIcon className="h-4 w-4" />
+                          <FileTextIcon className="h-4 w-4" />
+                          Download Attachment
+                          <ExternalLinkIcon className="h-3 w-3" />
                         </a>
-                      )}
-                    </>
-                  ) : (
-                    <span className="text-muted-foreground">No video</span>
+                      </div>
+                    </div>
                   )}
                 </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Minimum Watch %</label>
-                <p className="mt-1">
-                  {talk.videoSource !== 'None' ? `${talk.minimumVideoWatchPercent}%` : '-'}
+              </CardContent>
+            </Card>
+
+            {/* Recent Completions placeholder */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Completions</CardTitle>
+                <CardDescription>Latest employees to complete this talk</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  View completions in the Assignments tab
                 </p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Quiz Required</label>
-                <p className="mt-1">{talk.requiresQuiz ? 'Yes' : 'No'}</p>
-              </div>
-              {talk.requiresQuiz && (
-                <>
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Passing Score</label>
-                    <p className="mt-1">{talk.passingScore}%</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Questions</label>
-                    <p className="mt-1">{talk.questions.length}</p>
-                  </div>
-                </>
-              )}
-              {talk.attachmentUrl && (
-                <div className="sm:col-span-2">
-                  <label className="text-sm font-medium text-muted-foreground">Attachment</label>
-                  <div className="mt-1">
-                    <a
-                      href={talk.attachmentUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 text-primary hover:underline"
-                    >
-                      <FileTextIcon className="h-4 w-4" />
-                      Download Attachment
-                      <ExternalLinkIcon className="h-3 w-3" />
-                    </a>
-                  </div>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+          </div>
 
-        {/* Recent Completions placeholder */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Completions</CardTitle>
-            <CardDescription>Latest employees to complete this talk</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {/* This would be populated from the dashboard API or a separate endpoint */}
-            <p className="text-sm text-muted-foreground text-center py-8">
-              View completions in the Assignments tab
+          {/* Translation note */}
+          {(talk.videoSource !== 'None' || talk.sections.length > 0 || talk.questions.length > 0) && (
+            <p className="text-sm text-muted-foreground">
+              To generate translations or subtitles, use the{' '}
+              <Link href={`${basePath}/${talk.id}/edit`} className="underline text-primary hover:text-primary/80">
+                Edit page
+              </Link>.
             </p>
-          </CardContent>
-        </Card>
-      </div>
+          )}
 
-      {/* Translation note */}
-      {(talk.videoSource !== 'None' || talk.sections.length > 0 || talk.questions.length > 0) && (
-        <p className="text-sm text-muted-foreground">
-          To generate translations or subtitles, use the{' '}
-          <Link href={`${basePath}/${talk.id}/edit`} className="underline text-primary hover:text-primary/80">
-            Edit page
-          </Link>.
-        </p>
-      )}
-
-      {/* Sections Preview */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileTextIcon className="h-5 w-5" />
-            Sections ({talk.sections.length})
-          </CardTitle>
-          <CardDescription>Content sections for this learning</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Accordion type="multiple" className="w-full">
-            {talk.sections.map((section, index) => (
-              <AccordionItem key={section.id} value={section.id}>
-                <AccordionTrigger className="hover:no-underline">
-                  <div className="flex items-center gap-3 text-left">
-                    <Badge variant="outline" className="shrink-0">
-                      {section.sectionNumber}
-                    </Badge>
-                    <span className="font-medium">{section.title}</span>
-                    {section.requiresAcknowledgment && (
-                      <Badge variant="secondary" className="text-xs">
-                        Acknowledgment Required
-                      </Badge>
-                    )}
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent>
-                  <div className="rounded-lg bg-muted/50 p-4 mt-2">
-                    <div className="prose prose-sm max-w-none dark:prose-invert">
-                      {/* Simple text display - could be enhanced with markdown rendering */}
-                      <p className="whitespace-pre-wrap">{section.content}</p>
-                    </div>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
-        </CardContent>
-      </Card>
-
-      {/* Questions Preview */}
-      {talk.requiresQuiz && talk.questions.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <HelpCircleIcon className="h-5 w-5" />
-              Quiz Questions ({talk.questions.length})
-            </CardTitle>
-            <CardDescription>
-              Passing score: {talk.passingScore}%
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {talk.questions.map((question) => (
-                <div key={question.id} className="rounded-lg border p-4">
-                  <div className="flex items-start gap-3">
-                    <Badge variant="outline" className="shrink-0">
-                      Q{question.questionNumber}
-                    </Badge>
-                    <div className="flex-1 space-y-2">
-                      <p className="font-medium">{question.questionText}</p>
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                        <span>{question.questionTypeDisplay}</span>
-                        <span>{question.points} point{question.points !== 1 ? 's' : ''}</span>
+          {/* Sections Preview */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileTextIcon className="h-5 w-5" />
+                Sections ({talk.sections.length})
+              </CardTitle>
+              <CardDescription>Content sections for this learning</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Accordion type="multiple" className="w-full">
+                {talk.sections.map((section) => (
+                  <AccordionItem key={section.id} value={section.id}>
+                    <AccordionTrigger className="hover:no-underline">
+                      <div className="flex items-center gap-3 text-left">
+                        <Badge variant="outline" className="shrink-0">
+                          {section.sectionNumber}
+                        </Badge>
+                        <span className="font-medium">{section.title}</span>
+                        {section.requiresAcknowledgment && (
+                          <Badge variant="secondary" className="text-xs">
+                            Acknowledgment Required
+                          </Badge>
+                        )}
                       </div>
-                      {question.options && question.options.length > 0 && (
-                        <div className="mt-2 space-y-1">
-                          {question.options.map((option, idx) => (
-                            <div
-                              key={idx}
-                              className={cn(
-                                'flex items-center gap-2 text-sm',
-                                option === question.correctAnswer && 'text-green-600 font-medium'
-                              )}
-                            >
-                              <span className="w-6">{String.fromCharCode(65 + idx)}.</span>
-                              <span>{option}</span>
-                              {option === question.correctAnswer && (
-                                <CheckCircle2Icon className="h-4 w-4" />
-                              )}
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="rounded-lg bg-muted/50 p-4 mt-2">
+                        <div className="prose prose-sm max-w-none dark:prose-invert">
+                          <p className="whitespace-pre-wrap">{section.content}</p>
+                        </div>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            </CardContent>
+          </Card>
+
+          {/* Questions Preview */}
+          {talk.requiresQuiz && talk.questions.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <HelpCircleIcon className="h-5 w-5" />
+                  Quiz Questions ({talk.questions.length})
+                </CardTitle>
+                <CardDescription>
+                  Passing score: {talk.passingScore}%
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {talk.questions.map((question) => (
+                    <div key={question.id} className="rounded-lg border p-4">
+                      <div className="flex items-start gap-3">
+                        <Badge variant="outline" className="shrink-0">
+                          Q{question.questionNumber}
+                        </Badge>
+                        <div className="flex-1 space-y-2">
+                          <p className="font-medium">{question.questionText}</p>
+                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                            <span>{question.questionTypeDisplay}</span>
+                            <span>{question.points} point{question.points !== 1 ? 's' : ''}</span>
+                          </div>
+                          {question.options && question.options.length > 0 && (
+                            <div className="mt-2 space-y-1">
+                              {question.options.map((option, idx) => (
+                                <div
+                                  key={idx}
+                                  className={cn(
+                                    'flex items-center gap-2 text-sm',
+                                    option === question.correctAnswer && 'text-green-600 font-medium'
+                                  )}
+                                >
+                                  <span className="w-6">{String.fromCharCode(65 + idx)}.</span>
+                                  <span>{option}</span>
+                                  {option === question.correctAnswer && (
+                                    <CheckCircle2Icon className="h-4 w-4" />
+                                  )}
+                                </div>
+                              ))}
                             </div>
-                          ))}
+                          )}
+                          {question.questionType === 'ShortAnswer' && (
+                            <div className="mt-2 text-sm">
+                              <span className="text-muted-foreground">Expected answer: </span>
+                              <span className="font-medium text-green-600">{question.correctAnswer}</span>
+                            </div>
+                          )}
                         </div>
-                      )}
-                      {question.questionType === 'ShortAnswer' && (
-                        <div className="mt-2 text-sm">
-                          <span className="text-muted-foreground">Expected answer: </span>
-                          <span className="font-medium text-green-600">{question.correctAnswer}</span>
-                        </div>
-                      )}
+                      </div>
                     </div>
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        <TabsContent value="validation" className="mt-4">
+          <ValidationHistoryTab talkId={talkId} basePath={basePath} />
+        </TabsContent>
+      </Tabs>
 
       {/* Delete confirmation dialog */}
       <DeleteConfirmationDialog

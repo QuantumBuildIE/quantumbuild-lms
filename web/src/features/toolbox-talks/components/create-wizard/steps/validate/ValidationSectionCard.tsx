@@ -45,6 +45,8 @@ interface ValidationSectionCardProps {
   onRetry: () => void;
   isDecisionPending: boolean;
   defaultExpanded?: boolean;
+  /** When true, hides Accept/Reject/Edit/Retry action buttons */
+  readOnly?: boolean;
 }
 
 // ============================================
@@ -110,6 +112,7 @@ export function ValidationSectionCard({
   onRetry,
   isDecisionPending,
   defaultExpanded = false,
+  readOnly = false,
 }: ValidationSectionCardProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const [isEditing, setIsEditing] = useState(false);
@@ -448,7 +451,7 @@ export function ValidationSectionCard({
         )}
 
         {/* Action buttons */}
-        {!isEditing && (
+        {!readOnly && !isEditing && (
           <div className="flex gap-2 border-t pt-3">
             <Button
               size="sm"

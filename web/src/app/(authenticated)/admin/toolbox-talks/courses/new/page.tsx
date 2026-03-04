@@ -1,7 +1,5 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-import { CourseForm } from '@/features/toolbox-talks/components/CourseForm';
-
-export default function NewCoursePage() {
-  return <CourseForm />;
+export default function LegacyNewCoursePage() {
+  redirect('/admin/toolbox-talks/create');
 }

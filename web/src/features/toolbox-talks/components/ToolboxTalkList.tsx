@@ -352,7 +352,7 @@ export function ToolboxTalkList({ onSchedule, basePath = '/admin/toolbox-talks' 
 
         {/* Create button */}
         {canManage && (
-          <Button onClick={() => router.push(`${basePath}/talks/new`)}>
+          <Button onClick={() => router.push(`${basePath}/create`)}>
             <PlusIcon className="mr-2 h-4 w-4" />
             Create New
           </Button>

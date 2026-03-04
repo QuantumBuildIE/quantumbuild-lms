@@ -268,6 +268,44 @@ export async function getValidationRuns(
 }
 
 /**
+ * Delete (soft) a validation run
+ */
+export async function deleteValidationRun(
+  talkId: string,
+  runId: string
+): Promise<void> {
+  await apiClient.delete(
+    `/toolbox-talks/${talkId}/validation/runs/${runId}`
+  );
+}
+
+/**
+ * Download audit report for a validation run (returns blob)
+ */
+export async function downloadValidationReport(
+  talkId: string,
+  runId: string
+): Promise<Blob> {
+  const response = await apiClient.get(
+    `/toolbox-talks/${talkId}/validation/runs/${runId}/report`,
+    { responseType: 'blob' }
+  );
+  return response.data;
+}
+
+/**
+ * Trigger report generation for a validation run that has no report yet
+ */
+export async function generateValidationReport(
+  talkId: string,
+  runId: string
+): Promise<void> {
+  await apiClient.post(
+    `/toolbox-talks/${talkId}/validation/runs/${runId}/report/generate`
+  );
+}
+
+/**
  * Accept a section translation
  */
 export async function acceptSection(

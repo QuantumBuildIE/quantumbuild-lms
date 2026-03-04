@@ -254,9 +254,9 @@ export function CourseList() {
         </div>
 
         {canManage && (
-          <Button onClick={() => router.push('/admin/toolbox-talks/courses/new')}>
+          <Button onClick={() => router.push('/admin/toolbox-talks/create')}>
             <PlusIcon className="mr-2 h-4 w-4" />
-            Create Course
+            Create New
           </Button>
         )}
       </div>
