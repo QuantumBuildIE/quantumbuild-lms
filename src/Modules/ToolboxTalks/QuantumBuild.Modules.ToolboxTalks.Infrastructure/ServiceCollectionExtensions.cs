@@ -15,6 +15,8 @@ using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Storage;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Subtitles;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Slideshow;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Translations;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Validation;
+using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Validation;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure;
 
@@ -147,10 +149,58 @@ public static class ServiceCollectionExtensions
             client.Timeout = TimeSpan.FromSeconds(30); // 30 seconds for PDF download
         });
 
+        // Register translation validation configuration
+        services.Configure<TranslationValidationSettings>(
+            configuration.GetSection(TranslationValidationSettings.SectionName));
+
+        // Register translation validation back-translation providers
+        // DeepL: direct REST API, typically fastest for European languages
+        services.AddHttpClient<IDeepLTranslationService, DeepLTranslationService>(client =>
+        {
+            client.Timeout = TimeSpan.FromMinutes(2); // 2 minutes for back-translation
+        });
+        // Gemini: Google AI, good for diverse language pairs
+        services.AddHttpClient<IGeminiTranslationService, GeminiTranslationService>(client =>
+        {
+            client.Timeout = TimeSpan.FromMinutes(2); // 2 minutes for back-translation
+        });
+        // DeepSeek: OpenAI-compatible API, configurable base URL
+        services.AddHttpClient<IDeepSeekTranslationService, DeepSeekTranslationService>(client =>
+        {
+            client.Timeout = TimeSpan.FromMinutes(2); // 2 minutes for back-translation
+        });
+
+        // Register translation validation scoring and diff services (pure logic, no HTTP)
+        services.AddSingleton<ILexicalScoringService, LexicalScoringService>();
+        services.AddSingleton<IWordDiffService, WordDiffService>();
+
+        // Register dialect detection service (uses Claude Haiku API)
+        services.AddHttpClient<IDialectDetectionService, DialectDetectionService>(client =>
+        {
+            client.Timeout = TimeSpan.FromMinutes(1); // 1 minute for dialect detection
+        });
+
+        // Register safety classification and glossary verification services (scoped — cache per request)
+        services.AddScoped<ISafetyClassificationService, SafetyClassificationService>();
+        services.AddScoped<IGlossaryTermVerificationService, GlossaryTermVerificationService>();
+
+        // Register Claude Haiku back-translation service (Provider A in consensus engine)
+        services.AddHttpClient<IClaudeHaikuBackTranslationService, ClaudeHaikuBackTranslationService>(client =>
+        {
+            client.Timeout = TimeSpan.FromMinutes(2); // 2 minutes for back-translation
+        });
+
+        // Register consensus engine (multi-round back-translation scoring)
+        services.AddScoped<IConsensusEngine, ConsensusEngine>();
+
+        // Register translation validation orchestrator (single-section validation pipeline)
+        services.AddScoped<ITranslationValidationService, TranslationValidationService>();
+
         // Note: SignalR hubs are registered in Program.cs with app.MapHub<>()
         //   - SubtitleProcessingHub: /api/hubs/subtitle-processing
         //   - ContentGenerationHub: /api/hubs/content-generation
-        // Note: Hangfire background jobs (ContentGenerationJob, etc.) are registered in Program.cs
+        //   - TranslationValidationHub: /api/hubs/translation-validation
+        // Note: Hangfire background jobs (ContentGenerationJob, TranslationValidationJob, etc.) are registered in Program.cs
 
         return services;
     }

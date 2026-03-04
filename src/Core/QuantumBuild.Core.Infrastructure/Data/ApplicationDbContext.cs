@@ -87,6 +87,10 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
     public DbSet<ToolboxTalkSlideshowTranslation> ToolboxTalkSlideshowTranslations => Set<ToolboxTalkSlideshowTranslation>();
     public DbSet<SubtitleProcessingJob> SubtitleProcessingJobs => Set<SubtitleProcessingJob>();
     public DbSet<SubtitleTranslation> SubtitleTranslations => Set<SubtitleTranslation>();
+    public DbSet<TranslationValidationRun> TranslationValidationRuns => Set<TranslationValidationRun>();
+    public DbSet<TranslationValidationResult> TranslationValidationResults => Set<TranslationValidationResult>();
+    public DbSet<SafetyGlossary> SafetyGlossaries => Set<SafetyGlossary>();
+    public DbSet<SafetyGlossaryTerm> SafetyGlossaryTerms => Set<SafetyGlossaryTerm>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -223,6 +227,10 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.ApplyConfiguration(new ToolboxTalkSlideshowTranslationConfiguration());
         modelBuilder.ApplyConfiguration(new SubtitleProcessingJobConfiguration());
         modelBuilder.ApplyConfiguration(new SubtitleTranslationConfiguration());
+        modelBuilder.ApplyConfiguration(new TranslationValidationRunConfiguration());
+        modelBuilder.ApplyConfiguration(new TranslationValidationResultConfiguration());
+        modelBuilder.ApplyConfiguration(new SafetyGlossaryConfiguration());
+        modelBuilder.ApplyConfiguration(new SafetyGlossaryTermConfiguration());
 
         // Apply global query filters - Core entities
         // BypassTenantFilter allows SuperUser to see all tenants' data when no tenant is selected
@@ -234,10 +242,10 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.Entity<TenantModule>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
 
         // Note: Toolbox Talks query filters are defined in entity configurations
-        // TenantEntity-based: ToolboxTalk, ToolboxTalkCourse, ToolboxTalkSchedule, ScheduledTalk, ToolboxTalkTranslation, ToolboxTalkVideoTranslation, ToolboxTalkCertificate, SubtitleProcessingJob, ToolboxTalkSlide
-        // BaseEntity-based (not tenant-scoped): ToolboxTalkSlideshowTranslation
+        // TenantEntity-based: ToolboxTalk, ToolboxTalkCourse, ToolboxTalkSchedule, ScheduledTalk, ToolboxTalkTranslation, ToolboxTalkVideoTranslation, ToolboxTalkCertificate, SubtitleProcessingJob, ToolboxTalkSlide, TranslationValidationRun
+        // BaseEntity-based (not tenant-scoped): ToolboxTalkSlideshowTranslation, SafetyGlossary, SafetyGlossaryTerm
         // BaseEntity-based (not tenant-scoped): ToolboxTalkSection, ToolboxTalkQuestion, ToolboxTalkCourseItem, ToolboxTalkCourseTranslation,
-        //   ToolboxTalkScheduleAssignment, ScheduledTalkSectionProgress, ScheduledTalkQuizAttempt, ScheduledTalkCompletion, ToolboxTalkSettings, SubtitleTranslation, ToolboxTalkSlideTranslation
+        //   ToolboxTalkScheduleAssignment, ScheduledTalkSectionProgress, ScheduledTalkQuizAttempt, ScheduledTalkCompletion, ToolboxTalkSettings, SubtitleTranslation, ToolboxTalkSlideTranslation, TranslationValidationResult
 
         // Apply query filters for Lookup entities
         modelBuilder.Entity<LookupCategory>().HasQueryFilter(e => !e.IsDeleted);

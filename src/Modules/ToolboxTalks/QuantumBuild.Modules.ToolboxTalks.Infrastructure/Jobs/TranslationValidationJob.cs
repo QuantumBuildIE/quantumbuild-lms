@@ -1,0 +1,527 @@
+using System.Diagnostics;
+using System.Text.Json;
+using Hangfire;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Validation;
+using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
+using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Hubs;
+
+namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
+
+/// <summary>
+/// Hangfire background job that orchestrates a full translation validation run.
+/// Loads the run, iterates through each section, calls ITranslationValidationService,
+/// reports progress via SignalR, and updates the run with aggregate results.
+/// </summary>
+public class TranslationValidationJob
+{
+    private readonly ITranslationValidationService _validationService;
+    private readonly IToolboxTalksDbContext _dbContext;
+    private readonly IHubContext<TranslationValidationHub> _hubContext;
+    private readonly ILogger<TranslationValidationJob> _logger;
+
+    public TranslationValidationJob(
+        ITranslationValidationService validationService,
+        IToolboxTalksDbContext dbContext,
+        IHubContext<TranslationValidationHub> hubContext,
+        ILogger<TranslationValidationJob> logger)
+    {
+        _validationService = validationService;
+        _dbContext = dbContext;
+        _hubContext = hubContext;
+        _logger = logger;
+    }
+
+    /// <summary>
+    /// Executes the translation validation job for a given run.
+    /// </summary>
+    /// <param name="validationRunId">The validation run to process</param>
+    /// <param name="tenantId">Tenant ID (passed explicitly since Hangfire runs outside HTTP context)</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    [AutomaticRetry(Attempts = 1)]
+    [Queue("content-generation")]
+    public async Task ExecuteAsync(
+        Guid validationRunId,
+        Guid tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        var stopwatch = Stopwatch.StartNew();
+
+        _logger.LogInformation(
+            "========== TRANSLATION VALIDATION JOB STARTED ==========\n" +
+            "ValidationRunId: {RunId}\n" +
+            "TenantId: {TenantId}",
+            validationRunId, tenantId);
+
+        try
+        {
+            // Load the validation run
+            var run = await _dbContext.TranslationValidationRuns
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(r => r.Id == validationRunId && r.TenantId == tenantId && !r.IsDeleted,
+                    cancellationToken);
+
+            if (run == null)
+            {
+                _logger.LogError(
+                    "Validation run {RunId} not found for tenant {TenantId}",
+                    validationRunId, tenantId);
+                return;
+            }
+
+            // Mark as running
+            run.Status = ValidationRunStatus.Running;
+            run.StartedAt = DateTime.UtcNow;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            await SendProgressAsync(validationRunId, "Starting", 0, "Preparing validation run...");
+
+            // Load sections to validate
+            var sections = await LoadSectionsAsync(run, tenantId, cancellationToken);
+
+            if (sections.Count == 0)
+            {
+                _logger.LogWarning(
+                    "No sections to validate for run {RunId}. Marking as completed.",
+                    validationRunId);
+
+                run.Status = ValidationRunStatus.Completed;
+                run.CompletedAt = DateTime.UtcNow;
+                run.TotalSections = 0;
+                await _dbContext.SaveChangesAsync(cancellationToken);
+
+                await SendCompletionAsync(validationRunId, true, "No sections to validate");
+                return;
+            }
+
+            _logger.LogInformation(
+                "Loaded {Count} section(s) to validate for run {RunId}",
+                sections.Count, validationRunId);
+
+            run.TotalSections = sections.Count;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            // Validate each section
+            var results = new List<Domain.Entities.TranslationValidationResult>();
+
+            for (int i = 0; i < sections.Count; i++)
+            {
+                var section = sections[i];
+                var percentComplete = (int)((double)(i + 1) / sections.Count * 90) + 5; // 5-95%
+
+                await SendProgressAsync(validationRunId,
+                    "Validating",
+                    percentComplete,
+                    $"Validating section {i + 1} of {sections.Count}: {section.Title}...");
+
+                try
+                {
+                    var result = await _validationService.ValidateSectionAsync(
+                        validationRunId,
+                        section.Index,
+                        section.Title,
+                        section.OriginalText,
+                        section.TranslatedText,
+                        run.SourceLanguage,
+                        run.LanguageCode,
+                        run.SectorKey,
+                        run.PassThreshold,
+                        cancellationToken);
+
+                    results.Add(result);
+
+                    await SendSectionCompletedAsync(validationRunId, result, percentComplete);
+
+                    _logger.LogInformation(
+                        "Section {Index}/{Total} '{Title}' validated: {Outcome} (Score: {Score})",
+                        i + 1, sections.Count, section.Title,
+                        result.Outcome, result.FinalScore);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex,
+                        "Failed to validate section {Index} '{Title}' in run {RunId}",
+                        i, section.Title, validationRunId);
+
+                    // Create a failed result so the run can still complete
+                    var failedResult = new Domain.Entities.TranslationValidationResult
+                    {
+                        ValidationRunId = validationRunId,
+                        SectionIndex = section.Index,
+                        SectionTitle = section.Title,
+                        OriginalText = section.OriginalText,
+                        TranslatedText = section.TranslatedText,
+                        Outcome = ValidationOutcome.Fail,
+                        FinalScore = 0,
+                        RoundsUsed = 0,
+                        EffectiveThreshold = run.PassThreshold
+                    };
+
+                    _dbContext.TranslationValidationResults.Add(failedResult);
+                    await _dbContext.SaveChangesAsync(cancellationToken);
+                    results.Add(failedResult);
+                }
+            }
+
+            // Calculate aggregate results
+            await SendProgressAsync(validationRunId, "Finalizing", 95, "Calculating aggregate results...");
+
+            run.PassedSections = results.Count(r => r.Outcome == ValidationOutcome.Pass);
+            run.ReviewSections = results.Count(r => r.Outcome == ValidationOutcome.Review);
+            run.FailedSections = results.Count(r => r.Outcome == ValidationOutcome.Fail);
+            run.OverallScore = results.Count > 0
+                ? (int)Math.Round(results.Average(r => (double)r.FinalScore))
+                : 0;
+            run.OverallOutcome = DetermineOverallOutcome(run);
+            run.SafetyVerdict = DetermineSafetyVerdict(results);
+            run.Status = ValidationRunStatus.Completed;
+            run.CompletedAt = DateTime.UtcNow;
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            stopwatch.Stop();
+
+            _logger.LogInformation(
+                "========== TRANSLATION VALIDATION JOB COMPLETED ==========\n" +
+                "ValidationRunId: {RunId}\n" +
+                "Duration: {Duration}ms ({DurationSeconds:F1}s)\n" +
+                "TotalSections: {Total}\n" +
+                "Passed: {Passed}, Review: {Review}, Failed: {Failed}\n" +
+                "OverallScore: {Score}, OverallOutcome: {Outcome}\n" +
+                "SafetyVerdict: {Safety}",
+                validationRunId,
+                stopwatch.ElapsedMilliseconds,
+                stopwatch.ElapsedMilliseconds / 1000.0,
+                run.TotalSections,
+                run.PassedSections, run.ReviewSections, run.FailedSections,
+                run.OverallScore, run.OverallOutcome,
+                run.SafetyVerdict);
+
+            await SendCompletionAsync(validationRunId, true,
+                $"Validation complete: {run.PassedSections}/{run.TotalSections} passed, " +
+                $"score {run.OverallScore}%");
+        }
+        catch (OperationCanceledException)
+        {
+            stopwatch.Stop();
+            _logger.LogWarning(
+                "========== TRANSLATION VALIDATION JOB CANCELLED ==========\n" +
+                "ValidationRunId: {RunId}\n" +
+                "Duration before cancellation: {Duration}ms",
+                validationRunId, stopwatch.ElapsedMilliseconds);
+
+            await UpdateRunStatusAsync(validationRunId, tenantId, ValidationRunStatus.Cancelled);
+            await SendCompletionAsync(validationRunId, false, "Validation was cancelled");
+
+            throw;
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            _logger.LogError(ex,
+                "========== TRANSLATION VALIDATION JOB EXCEPTION ==========\n" +
+                "ValidationRunId: {RunId}\n" +
+                "Duration before error: {Duration}ms\n" +
+                "Exception: {ExType}: {Message}",
+                validationRunId,
+                stopwatch.ElapsedMilliseconds,
+                ex.GetType().FullName,
+                ex.Message);
+
+            await UpdateRunStatusAsync(validationRunId, tenantId, ValidationRunStatus.Failed);
+            await SendCompletionAsync(validationRunId, false,
+                "Validation failed due to an unexpected error");
+
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Loads the original sections and their translated counterparts for validation.
+    /// </summary>
+    private async Task<List<SectionPair>> LoadSectionsAsync(
+        Domain.Entities.TranslationValidationRun run,
+        Guid tenantId,
+        CancellationToken cancellationToken)
+    {
+        if (run.ToolboxTalkId == null)
+        {
+            _logger.LogWarning("Validation run {RunId} has no ToolboxTalkId — course validation not yet supported",
+                run.Id);
+            return [];
+        }
+
+        // Load original sections
+        var originalSections = await _dbContext.ToolboxTalkSections
+            .IgnoreQueryFilters()
+            .Where(s => s.ToolboxTalkId == run.ToolboxTalkId && !s.IsDeleted)
+            .OrderBy(s => s.SectionNumber)
+            .Select(s => new { s.Id, s.SectionNumber, s.Title, s.Content })
+            .ToListAsync(cancellationToken);
+
+        if (originalSections.Count == 0)
+            return [];
+
+        // Load the translation for the target language
+        var translation = await _dbContext.ToolboxTalkTranslations
+            .IgnoreQueryFilters()
+            .Where(t => t.ToolboxTalkId == run.ToolboxTalkId
+                && t.TenantId == tenantId
+                && t.LanguageCode == run.LanguageCode
+                && !t.IsDeleted)
+            .Select(t => t.TranslatedSections)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(translation))
+        {
+            _logger.LogWarning(
+                "No translation found for ToolboxTalk {TalkId}, Language {Lang}",
+                run.ToolboxTalkId, run.LanguageCode);
+            return [];
+        }
+
+        // Parse translated sections JSON: [{SectionId, Title, Content}]
+        var translatedSections = new Dictionary<Guid, TranslatedSectionJson>();
+        try
+        {
+            using var doc = JsonDocument.Parse(translation);
+            foreach (var element in doc.RootElement.EnumerateArray())
+            {
+                if (element.TryGetProperty("SectionId", out var sectionIdProp)
+                    && sectionIdProp.TryGetGuid(out var sectionId))
+                {
+                    var title = element.TryGetProperty("Title", out var titleProp)
+                        ? titleProp.GetString() ?? string.Empty
+                        : string.Empty;
+                    var content = element.TryGetProperty("Content", out var contentProp)
+                        ? contentProp.GetString() ?? string.Empty
+                        : string.Empty;
+
+                    translatedSections[sectionId] = new TranslatedSectionJson(title, content);
+                }
+            }
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex,
+                "Failed to parse TranslatedSections JSON for ToolboxTalk {TalkId}, Language {Lang}",
+                run.ToolboxTalkId, run.LanguageCode);
+            return [];
+        }
+
+        // Pair original and translated sections
+        var pairs = new List<SectionPair>();
+        for (int i = 0; i < originalSections.Count; i++)
+        {
+            var orig = originalSections[i];
+            if (translatedSections.TryGetValue(orig.Id, out var translated))
+            {
+                // Strip HTML tags for text comparison
+                var originalText = StripHtml(orig.Content);
+                var translatedText = StripHtml(translated.Content);
+
+                if (!string.IsNullOrWhiteSpace(originalText) && !string.IsNullOrWhiteSpace(translatedText))
+                {
+                    pairs.Add(new SectionPair(i, orig.Title, originalText, translatedText));
+                }
+            }
+            else
+            {
+                _logger.LogDebug(
+                    "No translated content found for section {SectionId} '{Title}' — skipping",
+                    orig.Id, orig.Title);
+            }
+        }
+
+        return pairs;
+    }
+
+    /// <summary>
+    /// Determines the overall outcome for the run based on section results.
+    /// </summary>
+    private static ValidationOutcome DetermineOverallOutcome(Domain.Entities.TranslationValidationRun run)
+    {
+        if (run.FailedSections > 0)
+            return ValidationOutcome.Fail;
+
+        if (run.ReviewSections > 0)
+            return ValidationOutcome.Review;
+
+        return ValidationOutcome.Pass;
+    }
+
+    /// <summary>
+    /// Determines the safety verdict based on safety-critical section results.
+    /// </summary>
+    private static ValidationOutcome? DetermineSafetyVerdict(
+        List<Domain.Entities.TranslationValidationResult> results)
+    {
+        var safetyCriticalResults = results.Where(r => r.IsSafetyCritical).ToList();
+        if (safetyCriticalResults.Count == 0)
+            return null; // No safety-critical sections
+
+        if (safetyCriticalResults.Any(r => r.Outcome == ValidationOutcome.Fail))
+            return ValidationOutcome.Fail;
+
+        if (safetyCriticalResults.Any(r => r.Outcome == ValidationOutcome.Review))
+            return ValidationOutcome.Review;
+
+        return ValidationOutcome.Pass;
+    }
+
+    /// <summary>
+    /// Updates the run status in the database (for error/cancellation paths).
+    /// </summary>
+    private async Task UpdateRunStatusAsync(Guid validationRunId, Guid tenantId, ValidationRunStatus status)
+    {
+        try
+        {
+            var run = await _dbContext.TranslationValidationRuns
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(r => r.Id == validationRunId && r.TenantId == tenantId && !r.IsDeleted);
+
+            if (run != null)
+            {
+                run.Status = status;
+                run.CompletedAt = DateTime.UtcNow;
+                await _dbContext.SaveChangesAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Failed to update run {RunId} status to {Status}",
+                validationRunId, status);
+        }
+    }
+
+    /// <summary>
+    /// Sends a progress update via SignalR.
+    /// </summary>
+    private async Task SendProgressAsync(Guid validationRunId, string stage, int percentComplete, string message)
+    {
+        try
+        {
+            var payload = new
+            {
+                validationRunId,
+                stage,
+                percentComplete,
+                message
+            };
+
+            await _hubContext.Clients.Group($"validation-{validationRunId}")
+                .SendAsync("ValidationProgress", payload);
+
+            _logger.LogDebug(
+                "Progress update sent for run {RunId}: {Stage} - {Percent}%",
+                validationRunId, stage, percentComplete);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Failed to send progress update for run {RunId}",
+                validationRunId);
+        }
+    }
+
+    /// <summary>
+    /// Sends a section-completed notification via SignalR with the section result details.
+    /// </summary>
+    private async Task SendSectionCompletedAsync(
+        Guid validationRunId,
+        Domain.Entities.TranslationValidationResult result,
+        int percentComplete)
+    {
+        try
+        {
+            var payload = new
+            {
+                validationRunId,
+                sectionIndex = result.SectionIndex,
+                outcome = result.Outcome.ToString(),
+                finalScore = result.FinalScore,
+                isSafetyCritical = result.IsSafetyCritical,
+                glossaryMismatches = result.GlossaryMismatches,
+                percentComplete
+            };
+
+            await _hubContext.Clients.Group($"validation-{validationRunId}")
+                .SendAsync("SectionCompleted", payload);
+
+            _logger.LogDebug(
+                "SectionCompleted sent for run {RunId}: Section {Index}, Outcome={Outcome}, Score={Score}",
+                validationRunId, result.SectionIndex, result.Outcome, result.FinalScore);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Failed to send SectionCompleted for run {RunId}, section {Index}",
+                validationRunId, result.SectionIndex);
+        }
+    }
+
+    /// <summary>
+    /// Sends a completion notification via SignalR.
+    /// </summary>
+    private async Task SendCompletionAsync(Guid validationRunId, bool success, string message)
+    {
+        try
+        {
+            var payload = new
+            {
+                validationRunId,
+                success,
+                message
+            };
+
+            await _hubContext.Clients.Group($"validation-{validationRunId}")
+                .SendAsync("ValidationComplete", payload);
+
+            _logger.LogDebug(
+                "Completion notification sent for run {RunId}: Success={Success}",
+                validationRunId, success);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Failed to send completion notification for run {RunId}",
+                validationRunId);
+        }
+    }
+
+    /// <summary>
+    /// Strips HTML tags from content for text-level comparison.
+    /// </summary>
+    private static string StripHtml(string html)
+    {
+        if (string.IsNullOrWhiteSpace(html))
+            return string.Empty;
+
+        // Remove HTML tags
+        var text = System.Text.RegularExpressions.Regex.Replace(html, "<[^>]+>", " ");
+        // Decode common HTML entities
+        text = text.Replace("&amp;", "&")
+                   .Replace("&lt;", "<")
+                   .Replace("&gt;", ">")
+                   .Replace("&quot;", "\"")
+                   .Replace("&#39;", "'")
+                   .Replace("&nbsp;", " ");
+        // Collapse whitespace
+        text = System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ").Trim();
+        return text;
+    }
+
+    /// <summary>
+    /// Represents a paired original/translated section for validation.
+    /// </summary>
+    private sealed record SectionPair(int Index, string Title, string OriginalText, string TranslatedText);
+
+    /// <summary>
+    /// Parsed translated section from the JSON array.
+    /// </summary>
+    private sealed record TranslatedSectionJson(string Title, string Content);
+}

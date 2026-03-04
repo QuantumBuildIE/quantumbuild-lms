@@ -21,3 +21,10 @@ Learning Management System for workplace safety training and compliance.
 
 ## Getting Started
 [To be documented]
+
+## REPO
+origin - UncleMarvo GitHub
+company - QuantumBuild GitHub
+
+main (branch) - pre-translation-validator changes
+transval  (branch) - translation-validator changes

@@ -39,5 +39,13 @@ public interface IToolboxTalksDbContext
     DbSet<SubtitleProcessingJob> SubtitleProcessingJobs { get; }
     DbSet<SubtitleTranslation> SubtitleTranslations { get; }
 
+    // Translation validation entities
+    DbSet<TranslationValidationRun> TranslationValidationRuns { get; }
+    DbSet<TranslationValidationResult> TranslationValidationResults { get; }
+
+    // Safety glossary entities
+    DbSet<SafetyGlossary> SafetyGlossaries { get; }
+    DbSet<SafetyGlossaryTerm> SafetyGlossaryTerms { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

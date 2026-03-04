@@ -121,6 +121,7 @@ builder.Services.AddScoped<ProcessToolboxTalkSchedulesJob>();
 builder.Services.AddScoped<SendToolboxTalkRemindersJob>();
 builder.Services.AddScoped<UpdateOverdueToolboxTalksJob>();
 builder.Services.AddScoped<ContentGenerationJob>();
+builder.Services.AddScoped<TranslationValidationJob>();
 builder.Services.AddScoped<DailyTranslationScanJob>();
 builder.Services.AddScoped<LessonParseJob>();
 
@@ -331,6 +332,7 @@ app.MapControllers();
 // Map SignalR hubs
 app.MapHub<SubtitleProcessingHub>("/api/hubs/subtitle-processing");
 app.MapHub<ContentGenerationHub>("/api/hubs/content-generation");
+app.MapHub<TranslationValidationHub>("/api/hubs/translation-validation");
 app.MapHub<LessonParserHub>("/api/hubs/lesson-parser");
 
 // Map health check endpoint
@@ -393,6 +395,7 @@ static async Task SeedToolboxTalksDataAsync(IServiceProvider serviceProvider)
     {
         var context = services.GetRequiredService<DbContext>();
         await ToolboxTalksSeedData.SeedAsync(context, logger);
+        await SafetyGlossarySeedData.SeedAsync(context, logger);
         logger.LogInformation("Learnings module seeding completed");
     }
     catch (Exception ex)
