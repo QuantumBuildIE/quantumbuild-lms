@@ -91,6 +91,7 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
     public DbSet<TranslationValidationResult> TranslationValidationResults => Set<TranslationValidationResult>();
     public DbSet<SafetyGlossary> SafetyGlossaries => Set<SafetyGlossary>();
     public DbSet<SafetyGlossaryTerm> SafetyGlossaryTerms => Set<SafetyGlossaryTerm>();
+    public DbSet<ContentCreationSession> ContentCreationSessions => Set<ContentCreationSession>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -231,6 +232,7 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.ApplyConfiguration(new TranslationValidationResultConfiguration());
         modelBuilder.ApplyConfiguration(new SafetyGlossaryConfiguration());
         modelBuilder.ApplyConfiguration(new SafetyGlossaryTermConfiguration());
+        modelBuilder.ApplyConfiguration(new ContentCreationSessionConfiguration());
 
         // Apply global query filters - Core entities
         // BypassTenantFilter allows SuperUser to see all tenants' data when no tenant is selected
@@ -242,7 +244,7 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.Entity<TenantModule>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
 
         // Note: Toolbox Talks query filters are defined in entity configurations
-        // TenantEntity-based: ToolboxTalk, ToolboxTalkCourse, ToolboxTalkSchedule, ScheduledTalk, ToolboxTalkTranslation, ToolboxTalkVideoTranslation, ToolboxTalkCertificate, SubtitleProcessingJob, ToolboxTalkSlide, TranslationValidationRun
+        // TenantEntity-based: ToolboxTalk, ToolboxTalkCourse, ToolboxTalkSchedule, ScheduledTalk, ToolboxTalkTranslation, ToolboxTalkVideoTranslation, ToolboxTalkCertificate, SubtitleProcessingJob, ToolboxTalkSlide, TranslationValidationRun, ContentCreationSession
         // BaseEntity-based (not tenant-scoped): ToolboxTalkSlideshowTranslation, SafetyGlossary, SafetyGlossaryTerm
         // BaseEntity-based (not tenant-scoped): ToolboxTalkSection, ToolboxTalkQuestion, ToolboxTalkCourseItem, ToolboxTalkCourseTranslation,
         //   ToolboxTalkScheduleAssignment, ScheduledTalkSectionProgress, ScheduledTalkQuizAttempt, ScheduledTalkCompletion, ToolboxTalkSettings, SubtitleTranslation, ToolboxTalkSlideTranslation, TranslationValidationResult

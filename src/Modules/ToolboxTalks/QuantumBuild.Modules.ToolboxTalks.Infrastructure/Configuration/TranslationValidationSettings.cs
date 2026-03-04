@@ -50,6 +50,12 @@ public class TranslationValidationSettings
     /// Default: Sequential
     /// </summary>
     public string ProcessingMode { get; set; } = "Sequential";
+
+    /// <summary>
+    /// Number of hours before a content creation session expires.
+    /// Default: 24
+    /// </summary>
+    public int SessionExpiryHours { get; set; } = 24;
 }
 
 /// <summary>

@@ -133,6 +133,33 @@ public class FakeR2StorageService : IR2StorageService
         return Task.CompletedTask;
     }
 
+    public Task<R2UploadResult> UploadSessionFileAsync(
+        Guid tenantId,
+        Guid sessionId,
+        Stream content,
+        string originalFileName,
+        string contentType,
+        CancellationToken cancellationToken = default)
+    {
+        var key = $"{tenantId}/sessions/{sessionId}/{originalFileName}";
+        var bytes = ReadStream(content);
+        _files[key] = bytes;
+        return Task.FromResult(R2UploadResult.SuccessResult(
+            $"https://fake-r2.test/{key}", key, bytes.Length, contentType));
+    }
+
+    public Task DeleteSessionFilesAsync(
+        Guid tenantId,
+        Guid sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        var prefix = $"{tenantId}/sessions/{sessionId}/";
+        var keysToRemove = _files.Keys.Where(k => k.StartsWith(prefix)).ToList();
+        foreach (var key in keysToRemove)
+            _files.Remove(key);
+        return Task.CompletedTask;
+    }
+
     public string GeneratePublicUrl(Guid tenantId, string folder, string fileName)
     {
         return $"https://fake-r2.test/{tenantId}/{folder}/{fileName}";

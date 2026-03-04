@@ -444,6 +444,94 @@ public class R2StorageService : IR2StorageService, IDisposable
 
     #endregion
 
+    #region Session Files
+
+    private const string SessionsFolder = "sessions";
+
+    public async Task<R2UploadResult> UploadSessionFileAsync(
+        Guid tenantId,
+        Guid sessionId,
+        Stream content,
+        string originalFileName,
+        string contentType,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var fileName = $"{sessionId}/{originalFileName}";
+            var key = BuildKey(tenantId, SessionsFolder, fileName);
+
+            _logger.LogInformation("Uploading session file to R2: {Key}", key);
+
+            var request = new PutObjectRequest
+            {
+                BucketName = _settings.BucketName,
+                Key = key,
+                InputStream = content,
+                ContentType = contentType,
+                DisablePayloadSigning = true,
+                UseChunkEncoding = false
+            };
+
+            await _s3Client.PutObjectAsync(request, cancellationToken);
+
+            var publicUrl = $"{_settings.PublicUrl.TrimEnd('/')}/{Uri.EscapeDataString(key).Replace("%2F", "/")}";
+
+            _logger.LogInformation("Successfully uploaded session file: {Url}", publicUrl);
+
+            return R2UploadResult.SuccessResult(publicUrl, key, content.Length, contentType);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to upload session file for session {SessionId}", sessionId);
+            return R2UploadResult.FailureResult($"Session file upload failed: {ex.Message}");
+        }
+    }
+
+    public async Task DeleteSessionFilesAsync(
+        Guid tenantId,
+        Guid sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var prefix = $"{tenantId}/{SessionsFolder}/{sessionId}/";
+
+            _logger.LogInformation("Deleting session files with prefix {Prefix}", prefix);
+
+            var listRequest = new ListObjectsV2Request
+            {
+                BucketName = _settings.BucketName,
+                Prefix = prefix
+            };
+
+            var response = await _s3Client.ListObjectsV2Async(listRequest, cancellationToken);
+
+            var keysToDelete = response.S3Objects
+                .Select(obj => new KeyVersion { Key = obj.Key })
+                .ToList();
+
+            if (keysToDelete.Count > 0)
+            {
+                var deleteRequest = new DeleteObjectsRequest
+                {
+                    BucketName = _settings.BucketName,
+                    Objects = keysToDelete
+                };
+
+                await _s3Client.DeleteObjectsAsync(deleteRequest, cancellationToken);
+                _logger.LogInformation("Deleted {Count} session file(s) for session {SessionId}",
+                    keysToDelete.Count, sessionId);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete session files for session {SessionId}", sessionId);
+        }
+    }
+
+    #endregion
+
     #region Utilities
 
     public string GeneratePublicUrl(Guid tenantId, string folder, string fileName)

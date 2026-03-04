@@ -16,7 +16,9 @@ using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Subtitles;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Slideshow;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Translations;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Validation;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.ContentCreation;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Validation;
+using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.ContentCreation;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure;
 
@@ -195,6 +197,13 @@ public static class ServiceCollectionExtensions
 
         // Register translation validation orchestrator (single-section validation pipeline)
         services.AddScoped<ITranslationValidationService, TranslationValidationService>();
+
+        // Register content creation session services (Phase 7 — creation wizard pipeline)
+        services.AddHttpClient<IContentParserService, ContentParserService>(client =>
+        {
+            client.Timeout = TimeSpan.FromMinutes(3); // 3 minutes for content parsing
+        });
+        services.AddScoped<IContentCreationSessionService, ContentCreationSessionService>();
 
         // Note: SignalR hubs are registered in Program.cs with app.MapHub<>()
         //   - SubtitleProcessingHub: /api/hubs/subtitle-processing

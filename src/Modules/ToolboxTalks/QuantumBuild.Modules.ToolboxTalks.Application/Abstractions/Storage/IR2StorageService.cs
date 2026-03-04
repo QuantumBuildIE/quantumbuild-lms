@@ -92,6 +92,26 @@ public interface IR2StorageService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Uploads a session file (PDF, video, or document) to R2 storage.
+    /// Path: {tenantId}/sessions/{sessionId}/{originalFileName}
+    /// </summary>
+    Task<R2UploadResult> UploadSessionFileAsync(
+        Guid tenantId,
+        Guid sessionId,
+        Stream content,
+        string originalFileName,
+        string contentType,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes all files associated with a content creation session.
+    /// </summary>
+    Task DeleteSessionFilesAsync(
+        Guid tenantId,
+        Guid sessionId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Generates the public URL for a file in the R2 bucket.
     /// </summary>
     string GeneratePublicUrl(Guid tenantId, string folder, string fileName);

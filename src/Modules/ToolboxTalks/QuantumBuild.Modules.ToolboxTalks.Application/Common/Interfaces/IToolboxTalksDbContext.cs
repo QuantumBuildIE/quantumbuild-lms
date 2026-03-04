@@ -47,5 +47,8 @@ public interface IToolboxTalksDbContext
     DbSet<SafetyGlossary> SafetyGlossaries { get; }
     DbSet<SafetyGlossaryTerm> SafetyGlossaryTerms { get; }
 
+    // Content creation session entities
+    DbSet<ContentCreationSession> ContentCreationSessions { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
