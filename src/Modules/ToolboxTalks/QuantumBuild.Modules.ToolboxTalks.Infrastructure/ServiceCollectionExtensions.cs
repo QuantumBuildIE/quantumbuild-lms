@@ -198,6 +198,9 @@ public static class ServiceCollectionExtensions
         // Register translation validation orchestrator (single-section validation pipeline)
         services.AddScoped<ITranslationValidationService, TranslationValidationService>();
 
+        // Register validation report PDF generation service
+        services.AddScoped<IValidationReportService, ValidationReportService>();
+
         // Register content creation session services (Phase 7 — creation wizard pipeline)
         services.AddHttpClient<IContentParserService, ContentParserService>(client =>
         {

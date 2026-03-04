@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Core.Application.Models;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Storage;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
@@ -22,15 +23,18 @@ public class TranslationValidationController : ControllerBase
 {
     private readonly IToolboxTalksDbContext _dbContext;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IR2StorageService _r2StorageService;
     private readonly ILogger<TranslationValidationController> _logger;
 
     public TranslationValidationController(
         IToolboxTalksDbContext dbContext,
         ICurrentUserService currentUserService,
+        IR2StorageService r2StorageService,
         ILogger<TranslationValidationController> logger)
     {
         _dbContext = dbContext;
         _currentUserService = currentUserService;
+        _r2StorageService = r2StorageService;
         _logger = logger;
     }
 
@@ -381,7 +385,15 @@ public class TranslationValidationController : ControllerBase
             if (string.IsNullOrEmpty(run.AuditReportUrl))
                 return NotFound(new { message = "Audit report has not been generated yet" });
 
-            return Ok(new { reportUrl = run.AuditReportUrl });
+            // Download the PDF from R2 using the known key pattern
+            var storagePath = $"{tenantId}/validation-reports/{runId}.pdf";
+            var fileBytes = await _r2StorageService.DownloadFileAsync(storagePath, cancellationToken);
+
+            if (fileBytes == null)
+                return NotFound(new { message = "Report file not found in storage" });
+
+            var fileName = $"ValidationReport-{run.DocumentRef ?? runId.ToString("N")[..8]}.pdf";
+            return File(fileBytes, "application/pdf", fileName);
         }
         catch (Exception ex)
         {

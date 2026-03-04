@@ -53,6 +53,16 @@ public interface IR2StorageService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Uploads a validation report PDF to R2 storage.
+    /// Path: {tenantId}/validation-reports/{runId}.pdf
+    /// </summary>
+    Task<R2UploadResult> UploadValidationReportAsync(
+        Guid tenantId,
+        Guid validationRunId,
+        Stream content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Uploads a slide image (PNG) to R2 storage at the given storage path.
     /// Path: {tenantId}/slides/{toolboxTalkId}/{pageNumber}.png
     /// </summary>

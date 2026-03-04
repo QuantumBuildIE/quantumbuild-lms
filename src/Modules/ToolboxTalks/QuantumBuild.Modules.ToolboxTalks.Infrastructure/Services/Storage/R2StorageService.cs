@@ -23,6 +23,7 @@ public class R2StorageService : IR2StorageService, IDisposable
     private const string PdfsFolder = "pdfs";
     private const string SubsFolder = "subs";
     private const string CertificatesFolder = "certificates";
+    private const string ValidationReportsFolder = "validation-reports";
 
     public R2StorageService(
         IOptions<R2StorageSettings> settings,
@@ -245,6 +246,48 @@ public class R2StorageService : IR2StorageService, IDisposable
         {
             _logger.LogError(ex, "Failed to upload certificate {CertificateNumber}", certificateNumber);
             return R2UploadResult.FailureResult($"Certificate upload failed: {ex.Message}");
+        }
+    }
+
+    #endregion
+
+    #region Validation Reports
+
+    public async Task<R2UploadResult> UploadValidationReportAsync(
+        Guid tenantId,
+        Guid validationRunId,
+        Stream content,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var fileName = $"{validationRunId}.pdf";
+            var key = BuildKey(tenantId, ValidationReportsFolder, fileName);
+
+            _logger.LogInformation("Uploading validation report to R2: {Key}", key);
+
+            var request = new PutObjectRequest
+            {
+                BucketName = _settings.BucketName,
+                Key = key,
+                InputStream = content,
+                ContentType = "application/pdf",
+                DisablePayloadSigning = true,
+                UseChunkEncoding = false
+            };
+
+            await _s3Client.PutObjectAsync(request, cancellationToken);
+
+            var publicUrl = GeneratePublicUrl(tenantId, ValidationReportsFolder, fileName);
+
+            _logger.LogInformation("Successfully uploaded validation report: {Url}", publicUrl);
+
+            return R2UploadResult.SuccessResult(publicUrl, key, content.Length, "application/pdf");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to upload validation report for run {RunId}", validationRunId);
+            return R2UploadResult.FailureResult($"Validation report upload failed: {ex.Message}");
         }
     }
 
