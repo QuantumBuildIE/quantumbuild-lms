@@ -50,6 +50,13 @@ public class ContentCreationSession : TenantEntity
     // Validation run tracking — JSON array of run IDs created for this session
     public string? ValidationRunIds { get; set; }
 
+    // Quiz — JSON arrays of generated/edited questions and quiz settings
+    public string? QuestionsJson { get; set; }
+    public string? QuizSettingsJson { get; set; }
+
+    // Settings — JSON object of publish/behaviour settings (title, category, refresher, etc.)
+    public string? SettingsJson { get; set; }
+
     // Navigation
     public ToolboxTalk? OutputTalk { get; set; }
     public ToolboxTalkCourse? OutputCourse { get; set; }

@@ -91,6 +91,17 @@ public class ContentCreationSessionConfiguration : IEntityTypeConfiguration<Cont
         builder.Property(s => s.ValidationRunIds)
             .HasColumnType("text");
 
+        // Quiz
+        builder.Property(s => s.QuestionsJson)
+            .HasColumnType("text");
+
+        builder.Property(s => s.QuizSettingsJson)
+            .HasColumnType("text");
+
+        // Settings
+        builder.Property(s => s.SettingsJson)
+            .HasColumnType("text");
+
         // Tenant
         builder.Property(s => s.TenantId)
             .IsRequired();

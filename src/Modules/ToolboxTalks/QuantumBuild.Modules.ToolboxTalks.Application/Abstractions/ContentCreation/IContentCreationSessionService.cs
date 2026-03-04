@@ -51,6 +51,46 @@ public interface IContentCreationSessionService
         PublishRequest request,
         Guid tenantId,
         CancellationToken cancellationToken = default);
+
+    Task<ContentCreationSessionDto> GenerateQuizAsync(
+        Guid sessionId,
+        Guid tenantId,
+        int minimumQuestionsPerSection = 2,
+        CancellationToken cancellationToken = default);
+
+    Task<SessionQuizDataDto> GetQuizDataAsync(
+        Guid sessionId,
+        Guid tenantId,
+        CancellationToken cancellationToken = default);
+
+    Task<ContentCreationSessionDto> UpdateQuestionsAsync(
+        Guid sessionId,
+        UpdateSessionQuestionsRequest request,
+        Guid tenantId,
+        CancellationToken cancellationToken = default);
+
+    Task<ContentCreationSessionDto> UpdateQuizSettingsAsync(
+        Guid sessionId,
+        SessionQuizSettingsDto settings,
+        Guid tenantId,
+        CancellationToken cancellationToken = default);
+
+    Task<SessionSettingsDto> GetSettingsAsync(
+        Guid sessionId,
+        Guid tenantId,
+        CancellationToken cancellationToken = default);
+
+    Task<ContentCreationSessionDto> UpdateSettingsAsync(
+        Guid sessionId,
+        SessionSettingsDto settings,
+        Guid tenantId,
+        CancellationToken cancellationToken = default);
+
+    Task<ContentCreationSessionDto> UploadCoverImageAsync(
+        Guid sessionId,
+        IFormFile file,
+        Guid tenantId,
+        CancellationToken cancellationToken = default);
 }
 
 #region DTOs
@@ -122,8 +162,43 @@ public record ContentCreationSessionDto
     public string? AuditPurpose { get; init; }
     public DateTime ExpiresAt { get; init; }
     public string? ValidationRunIds { get; init; }
+    public string? QuestionsJson { get; init; }
+    public string? QuizSettingsJson { get; init; }
+    public string? SettingsJson { get; init; }
     public DateTime CreatedAt { get; init; }
     public DateTime? UpdatedAt { get; init; }
+}
+
+public record SessionQuizQuestionDto
+{
+    public string Id { get; init; } = string.Empty;
+    public int SectionIndex { get; init; }
+    public string QuestionText { get; init; } = string.Empty;
+    public string QuestionType { get; init; } = "MultipleChoice"; // MultipleChoice, TrueFalse, ShortAnswer
+    public List<string> Options { get; init; } = new();
+    public int CorrectAnswerIndex { get; init; }
+    public int Points { get; init; } = 1;
+    public bool IsAiGenerated { get; init; }
+}
+
+public record SessionQuizSettingsDto
+{
+    public bool RequireQuiz { get; init; } = true;
+    public int PassingScore { get; init; } = 80;
+    public bool ShuffleQuestions { get; init; }
+    public bool ShuffleOptions { get; init; }
+    public bool AllowRetry { get; init; } = true;
+}
+
+public record SessionQuizDataDto
+{
+    public List<SessionQuizQuestionDto> Questions { get; init; } = new();
+    public SessionQuizSettingsDto Settings { get; init; } = new();
+}
+
+public record UpdateSessionQuestionsRequest
+{
+    public List<SessionQuizQuestionDto> Questions { get; init; } = new();
 }
 
 public record PublishResult(
@@ -131,5 +206,19 @@ public record PublishResult(
     Guid? OutputId,
     OutputType? OutputType,
     string? ErrorMessage = null);
+
+public record SessionSettingsDto
+{
+    public string Title { get; init; } = string.Empty;
+    public string Description { get; init; } = string.Empty;
+    public string? CoverImageUrl { get; init; }
+    public string? Category { get; init; }
+    public string RefresherFrequency { get; init; } = "Once"; // Once, Monthly, Quarterly, Annually
+    public bool IsActiveOnPublish { get; init; } = true;
+    public bool GenerateCertificate { get; init; } = true;
+    public int MinimumWatchPercent { get; init; } = 90;
+    public bool AutoAssign { get; init; }
+    public int AutoAssignDueDays { get; init; } = 14;
+}
 
 #endregion

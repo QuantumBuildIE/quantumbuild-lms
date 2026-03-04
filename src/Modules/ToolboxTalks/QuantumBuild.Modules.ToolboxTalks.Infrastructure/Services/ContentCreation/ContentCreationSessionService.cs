@@ -9,6 +9,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Storage;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
+using QuantumBuild.Modules.ToolboxTalks.Application.Services;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 
@@ -22,6 +23,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
     private readonly IToolboxTalksDbContext _dbContext;
     private readonly IContentParserService _parserService;
     private readonly IR2StorageService _storageService;
+    private readonly IAiQuizGenerationService _aiQuizService;
     private readonly TranslationValidationSettings _validationSettings;
     private readonly ILogger<ContentCreationSessionService> _logger;
 
@@ -34,12 +36,14 @@ public class ContentCreationSessionService : IContentCreationSessionService
         IToolboxTalksDbContext dbContext,
         IContentParserService parserService,
         IR2StorageService storageService,
+        IAiQuizGenerationService aiQuizService,
         IOptions<TranslationValidationSettings> validationSettings,
         ILogger<ContentCreationSessionService> logger)
     {
         _dbContext = dbContext;
         _parserService = parserService;
         _storageService = storageService;
+        _aiQuizService = aiQuizService;
         _validationSettings = validationSettings.Value;
         _logger = logger;
     }
@@ -364,6 +368,263 @@ public class ContentCreationSessionService : IContentCreationSessionService
         }
     }
 
+    public async Task<ContentCreationSessionDto> GenerateQuizAsync(
+        Guid sessionId,
+        Guid tenantId,
+        int minimumQuestionsPerSection = 2,
+        CancellationToken cancellationToken = default)
+    {
+        var session = await GetSessionEntityAsync(sessionId, tenantId, cancellationToken);
+
+        if (session.Status != ContentCreationSessionStatus.Validated &&
+            session.Status != ContentCreationSessionStatus.Parsed &&
+            session.Status != ContentCreationSessionStatus.QuizGenerated)
+            throw new InvalidOperationException("Quiz can only be generated from Parsed, Validated, or QuizGenerated status");
+
+        if (string.IsNullOrWhiteSpace(session.ParsedSectionsJson))
+            throw new InvalidOperationException("No parsed sections available for quiz generation");
+
+        var sections = JsonSerializer.Deserialize<List<ParsedSection>>(session.ParsedSectionsJson) ?? new();
+        if (sections.Count == 0)
+            throw new InvalidOperationException("No sections found");
+
+        session.Status = ContentCreationSessionStatus.GeneratingQuiz;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            var allQuestions = new List<SessionQuizQuestionDto>();
+            var questionId = 0;
+
+            // Generate questions per section for natural grouping
+            for (var i = 0; i < sections.Count; i++)
+            {
+                var section = sections[i];
+                var sectionContent = $"Section: {section.Title}\n\n{section.Content}";
+
+                var result = await _aiQuizService.GenerateQuizAsync(
+                    sessionId,
+                    sectionContent,
+                    videoFinalPortionContent: null,
+                    hasVideoContent: session.InputMode == Domain.Enums.InputMode.Video,
+                    hasPdfContent: session.InputMode == Domain.Enums.InputMode.Pdf,
+                    minimumQuestions: minimumQuestionsPerSection,
+                    cancellationToken);
+
+                if (result.Success && result.Questions.Count > 0)
+                {
+                    foreach (var q in result.Questions)
+                    {
+                        allQuestions.Add(new SessionQuizQuestionDto
+                        {
+                            Id = Guid.NewGuid().ToString(),
+                            SectionIndex = i,
+                            QuestionText = q.QuestionText,
+                            QuestionType = "MultipleChoice",
+                            Options = q.Options,
+                            CorrectAnswerIndex = q.CorrectAnswerIndex,
+                            Points = 1,
+                            IsAiGenerated = true
+                        });
+                        questionId++;
+                    }
+                }
+                else
+                {
+                    _logger.LogWarning(
+                        "[ContentCreationSession] Quiz generation produced no questions for section {Index} of session {SessionId}",
+                        i, sessionId);
+                }
+            }
+
+            session.QuestionsJson = JsonSerializer.Serialize(allQuestions);
+
+            // Initialize default quiz settings if not already set
+            if (string.IsNullOrWhiteSpace(session.QuizSettingsJson))
+            {
+                var defaultSettings = new SessionQuizSettingsDto
+                {
+                    RequireQuiz = true,
+                    PassingScore = 80,
+                    ShuffleQuestions = false,
+                    ShuffleOptions = false,
+                    AllowRetry = true
+                };
+                session.QuizSettingsJson = JsonSerializer.Serialize(defaultSettings);
+            }
+
+            session.Status = ContentCreationSessionStatus.QuizGenerated;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation(
+                "[ContentCreationSession] Generated {Count} quiz questions for session {SessionId}",
+                allQuestions.Count, sessionId);
+
+            return MapToDto(session);
+        }
+        catch (Exception ex)
+        {
+            session.Status = ContentCreationSessionStatus.Failed;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            _logger.LogError(ex, "[ContentCreationSession] Quiz generation failed for session {SessionId}", sessionId);
+            throw;
+        }
+    }
+
+    public async Task<SessionQuizDataDto> GetQuizDataAsync(
+        Guid sessionId,
+        Guid tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        var session = await GetSessionEntityAsync(sessionId, tenantId, cancellationToken);
+
+        var questions = !string.IsNullOrWhiteSpace(session.QuestionsJson)
+            ? JsonSerializer.Deserialize<List<SessionQuizQuestionDto>>(session.QuestionsJson) ?? new()
+            : new List<SessionQuizQuestionDto>();
+
+        var settings = !string.IsNullOrWhiteSpace(session.QuizSettingsJson)
+            ? JsonSerializer.Deserialize<SessionQuizSettingsDto>(session.QuizSettingsJson) ?? new()
+            : new SessionQuizSettingsDto();
+
+        return new SessionQuizDataDto
+        {
+            Questions = questions,
+            Settings = settings
+        };
+    }
+
+    public async Task<ContentCreationSessionDto> UpdateQuestionsAsync(
+        Guid sessionId,
+        UpdateSessionQuestionsRequest request,
+        Guid tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        var session = await GetSessionEntityAsync(sessionId, tenantId, cancellationToken);
+
+        if (session.Status != ContentCreationSessionStatus.QuizGenerated &&
+            session.Status != ContentCreationSessionStatus.Validated &&
+            session.Status != ContentCreationSessionStatus.Parsed)
+            throw new InvalidOperationException("Questions can only be updated in QuizGenerated, Validated, or Parsed status");
+
+        session.QuestionsJson = JsonSerializer.Serialize(request.Questions);
+
+        // If questions are being set for the first time (no prior generation), move to QuizGenerated
+        if (session.Status != ContentCreationSessionStatus.QuizGenerated)
+            session.Status = ContentCreationSessionStatus.QuizGenerated;
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "[ContentCreationSession] Updated {Count} questions for session {SessionId}",
+            request.Questions.Count, sessionId);
+
+        return MapToDto(session);
+    }
+
+    public async Task<ContentCreationSessionDto> UpdateQuizSettingsAsync(
+        Guid sessionId,
+        SessionQuizSettingsDto settings,
+        Guid tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        var session = await GetSessionEntityAsync(sessionId, tenantId, cancellationToken);
+
+        session.QuizSettingsJson = JsonSerializer.Serialize(settings);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "[ContentCreationSession] Updated quiz settings for session {SessionId}", sessionId);
+
+        return MapToDto(session);
+    }
+
+    public async Task<SessionSettingsDto> GetSettingsAsync(
+        Guid sessionId,
+        Guid tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        var session = await GetSessionEntityAsync(sessionId, tenantId, cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(session.SettingsJson))
+            return JsonSerializer.Deserialize<SessionSettingsDto>(session.SettingsJson) ?? new();
+
+        // Build defaults from parsed content
+        var suggestedTitle = string.Empty;
+        if (!string.IsNullOrWhiteSpace(session.ParsedSectionsJson))
+        {
+            try
+            {
+                var sections = JsonSerializer.Deserialize<List<ParsedSection>>(session.ParsedSectionsJson);
+                if (sections?.Count > 0)
+                    suggestedTitle = sections[0].Title;
+            }
+            catch { /* ignore parse errors */ }
+        }
+
+        // Fall back to source file name (strip extension)
+        if (string.IsNullOrWhiteSpace(suggestedTitle) && !string.IsNullOrWhiteSpace(session.SourceFileName))
+            suggestedTitle = Path.GetFileNameWithoutExtension(session.SourceFileName);
+
+        return new SessionSettingsDto { Title = suggestedTitle ?? string.Empty };
+    }
+
+    public async Task<ContentCreationSessionDto> UpdateSettingsAsync(
+        Guid sessionId,
+        SessionSettingsDto settings,
+        Guid tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        var session = await GetSessionEntityAsync(sessionId, tenantId, cancellationToken);
+
+        session.SettingsJson = JsonSerializer.Serialize(settings);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "[ContentCreationSession] Updated settings for session {SessionId}", sessionId);
+
+        return MapToDto(session);
+    }
+
+    public async Task<ContentCreationSessionDto> UploadCoverImageAsync(
+        Guid sessionId,
+        IFormFile file,
+        Guid tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        var session = await GetSessionEntityAsync(sessionId, tenantId, cancellationToken);
+
+        if (file == null || file.Length == 0)
+            throw new InvalidOperationException("No file provided");
+
+        if (file.Length > 5 * 1024 * 1024) // 5MB
+            throw new InvalidOperationException("Cover image must be under 5MB");
+
+        var extension = Path.GetExtension(file.FileName).TrimStart('.').ToLower();
+        if (extension != "png" && extension != "jpg" && extension != "jpeg")
+            throw new InvalidOperationException("Cover image must be PNG or JPG");
+
+        await using var stream = file.OpenReadStream();
+        var result = await _storageService.UploadSessionFileAsync(
+            tenantId, sessionId, stream, $"cover.{extension}", file.ContentType, cancellationToken);
+
+        if (!result.Success)
+            throw new InvalidOperationException($"Cover image upload failed: {result.ErrorMessage}");
+
+        // Update settings with the new cover image URL
+        var settings = !string.IsNullOrWhiteSpace(session.SettingsJson)
+            ? JsonSerializer.Deserialize<SessionSettingsDto>(session.SettingsJson) ?? new()
+            : new SessionSettingsDto();
+
+        settings = settings with { CoverImageUrl = result.PublicUrl };
+        session.SettingsJson = JsonSerializer.Serialize(settings);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "[ContentCreationSession] Cover image uploaded for session {SessionId}", sessionId);
+
+        return MapToDto(session);
+    }
+
     #region Private Helpers
 
     private async Task<ContentCreationSession> GetSessionEntityAsync(
@@ -589,6 +850,9 @@ public class ContentCreationSessionService : IContentCreationSessionService
             AuditPurpose = session.AuditPurpose,
             ExpiresAt = session.ExpiresAt,
             ValidationRunIds = session.ValidationRunIds,
+            QuestionsJson = session.QuestionsJson,
+            QuizSettingsJson = session.QuizSettingsJson,
+            SettingsJson = session.SettingsJson,
             CreatedAt = session.CreatedAt,
             UpdatedAt = session.UpdatedAt
         };

@@ -1,0 +1,475 @@
+'use client';
+
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  createSession,
+  getSession,
+  uploadSessionFile,
+  parseSessionContent,
+  updateSessionSections,
+  startTranslateValidate,
+  publishSession,
+  abandonSession,
+  getValidationRun,
+  acceptSection,
+  rejectSection,
+  editSection,
+  retrySection,
+  getSessionValidationRun,
+  acceptSessionSection,
+  rejectSessionSection,
+  editSessionSection,
+  retrySessionSection,
+  generateSessionQuiz,
+  getSessionQuizData,
+  updateSessionQuestions,
+  updateSessionQuizSettings,
+  getSessionSettings,
+  updateSessionSettings,
+  uploadSessionCoverImage,
+} from './content-creation';
+import type {
+  CreateSessionRequest,
+  UpdateSectionsRequest,
+  StartTranslateValidateRequest,
+  PublishRequest,
+  QuizQuestion,
+  QuizSettings,
+  ContentCreationSettings,
+} from '@/types/content-creation';
+
+// ============================================
+// Query Keys
+// ============================================
+
+export const contentCreationKeys = {
+  all: ['content-creation'] as const,
+  session: (id: string) => [...contentCreationKeys.all, 'session', id] as const,
+  validationRun: (talkId: string, runId: string) =>
+    [...contentCreationKeys.all, 'validation', talkId, runId] as const,
+  quizData: (sessionId: string) =>
+    [...contentCreationKeys.all, 'quiz', sessionId] as const,
+  settingsData: (sessionId: string) =>
+    [...contentCreationKeys.all, 'settings', sessionId] as const,
+};
+
+// ============================================
+// Session Hooks
+// ============================================
+
+/**
+ * Fetch and cache session state
+ */
+export function useCreationSession(sessionId: string | null) {
+  return useQuery({
+    queryKey: contentCreationKeys.session(sessionId ?? ''),
+    queryFn: () => getSession(sessionId!),
+    enabled: !!sessionId,
+    staleTime: 30 * 1000, // 30 seconds
+  });
+}
+
+/**
+ * Create a new content creation session
+ */
+export function useCreateSession() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (request: CreateSessionRequest) => createSession(request),
+    onSuccess: (session) => {
+      queryClient.setQueryData(
+        contentCreationKeys.session(session.id),
+        session
+      );
+    },
+  });
+}
+
+/**
+ * Upload file to session
+ */
+export function useUploadSessionFile() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      sessionId,
+      file,
+      onProgress,
+    }: {
+      sessionId: string;
+      file: File;
+      onProgress?: (percent: number) => void;
+    }) => uploadSessionFile(sessionId, file, onProgress),
+    onSuccess: (session) => {
+      queryClient.setQueryData(
+        contentCreationKeys.session(session.id),
+        session
+      );
+    },
+  });
+}
+
+/**
+ * Parse content from session source
+ */
+export function useParseContent() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (sessionId: string) => parseSessionContent(sessionId),
+    onSuccess: (session) => {
+      queryClient.setQueryData(
+        contentCreationKeys.session(session.id),
+        session
+      );
+    },
+  });
+}
+
+/**
+ * Update sections and output type
+ */
+export function useUpdateSections() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      sessionId,
+      request,
+    }: {
+      sessionId: string;
+      request: UpdateSectionsRequest;
+    }) => updateSessionSections(sessionId, request),
+    onSuccess: (session) => {
+      queryClient.setQueryData(
+        contentCreationKeys.session(session.id),
+        session
+      );
+    },
+  });
+}
+
+/**
+ * Start translation & validation
+ */
+export function useStartValidation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      sessionId,
+      request,
+    }: {
+      sessionId: string;
+      request: StartTranslateValidateRequest;
+    }) => startTranslateValidate(sessionId, request),
+    onSuccess: (session) => {
+      queryClient.setQueryData(
+        contentCreationKeys.session(session.id),
+        session
+      );
+    },
+  });
+}
+
+/**
+ * Accept/Reject/Edit section decisions
+ */
+export function useSectionDecision() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      talkId,
+      runId,
+      sectionIndex,
+      action,
+      editedTranslation,
+    }: {
+      talkId: string;
+      runId: string;
+      sectionIndex: number;
+      action: 'accept' | 'reject' | 'edit' | 'retry';
+      editedTranslation?: string;
+    }) => {
+      switch (action) {
+        case 'accept':
+          return acceptSection(talkId, runId, sectionIndex);
+        case 'reject':
+          return rejectSection(talkId, runId, sectionIndex);
+        case 'edit':
+          return editSection(talkId, runId, sectionIndex, editedTranslation!);
+        case 'retry':
+          return retrySection(talkId, runId, sectionIndex);
+      }
+    },
+    onSuccess: (_, { talkId, runId }) => {
+      queryClient.invalidateQueries({
+        queryKey: contentCreationKeys.validationRun(talkId, runId),
+      });
+    },
+  });
+}
+
+/**
+ * Publish session
+ */
+export function usePublish() {
+  return useMutation({
+    mutationFn: ({
+      sessionId,
+      request,
+    }: {
+      sessionId: string;
+      request: PublishRequest;
+    }) => publishSession(sessionId, request),
+  });
+}
+
+/**
+ * Abandon session
+ */
+export function useAbandonSession() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (sessionId: string) => abandonSession(sessionId),
+    onSuccess: (_, sessionId) => {
+      queryClient.removeQueries({
+        queryKey: contentCreationKeys.session(sessionId),
+      });
+    },
+  });
+}
+
+/**
+ * Fetch validation run details
+ */
+export function useValidationRun(
+  talkId: string | null,
+  runId: string | null
+) {
+  return useQuery({
+    queryKey: contentCreationKeys.validationRun(talkId ?? '', runId ?? ''),
+    queryFn: () => getValidationRun(talkId!, runId!),
+    enabled: !!talkId && !!runId,
+    staleTime: 10 * 1000,
+  });
+}
+
+/**
+ * Fetch validation run details via session context (creation wizard)
+ */
+export function useSessionValidationRun(
+  sessionId: string | null,
+  runId: string | null
+) {
+  return useQuery({
+    queryKey: contentCreationKeys.validationRun(sessionId ?? '', runId ?? ''),
+    queryFn: () => getSessionValidationRun(sessionId!, runId!),
+    enabled: !!sessionId && !!runId,
+    staleTime: 10 * 1000,
+  });
+}
+
+/**
+ * Section decisions via session context (creation wizard)
+ */
+export function useSessionSectionDecision() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      sessionId,
+      runId,
+      sectionIndex,
+      action,
+      editedTranslation,
+    }: {
+      sessionId: string;
+      runId: string;
+      sectionIndex: number;
+      action: 'accept' | 'reject' | 'edit' | 'retry';
+      editedTranslation?: string;
+    }) => {
+      switch (action) {
+        case 'accept':
+          return acceptSessionSection(sessionId, runId, sectionIndex);
+        case 'reject':
+          return rejectSessionSection(sessionId, runId, sectionIndex);
+        case 'edit':
+          return editSessionSection(
+            sessionId,
+            runId,
+            sectionIndex,
+            editedTranslation!
+          );
+        case 'retry':
+          return retrySessionSection(sessionId, runId, sectionIndex);
+      }
+    },
+    onSuccess: (_, { sessionId, runId }) => {
+      queryClient.invalidateQueries({
+        queryKey: contentCreationKeys.validationRun(sessionId, runId),
+      });
+    },
+  });
+}
+
+// ============================================
+// Quiz Hooks
+// ============================================
+
+/**
+ * Fetch quiz data (questions + settings) for a session
+ */
+export function useSessionQuizData(sessionId: string | null) {
+  return useQuery({
+    queryKey: contentCreationKeys.quizData(sessionId ?? ''),
+    queryFn: () => getSessionQuizData(sessionId!),
+    enabled: !!sessionId,
+    staleTime: 30 * 1000,
+  });
+}
+
+/**
+ * Generate quiz questions from session content
+ */
+export function useGenerateQuiz() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (sessionId: string) => generateSessionQuiz(sessionId),
+    onSuccess: (session) => {
+      queryClient.setQueryData(
+        contentCreationKeys.session(session.id),
+        session
+      );
+      queryClient.invalidateQueries({
+        queryKey: contentCreationKeys.quizData(session.id),
+      });
+    },
+  });
+}
+
+/**
+ * Update quiz questions for a session
+ */
+export function useUpdateSessionQuestions() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      sessionId,
+      questions,
+    }: {
+      sessionId: string;
+      questions: QuizQuestion[];
+    }) => updateSessionQuestions(sessionId, questions),
+    onSuccess: (session) => {
+      queryClient.setQueryData(
+        contentCreationKeys.session(session.id),
+        session
+      );
+      queryClient.invalidateQueries({
+        queryKey: contentCreationKeys.quizData(session.id),
+      });
+    },
+  });
+}
+
+/**
+ * Update quiz settings for a session
+ */
+export function useUpdateSessionQuizSettings() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      sessionId,
+      settings,
+    }: {
+      sessionId: string;
+      settings: QuizSettings;
+    }) => updateSessionQuizSettings(sessionId, settings),
+    onSuccess: (session) => {
+      queryClient.setQueryData(
+        contentCreationKeys.session(session.id),
+        session
+      );
+      queryClient.invalidateQueries({
+        queryKey: contentCreationKeys.quizData(session.id),
+      });
+    },
+  });
+}
+
+// ============================================
+// Settings Hooks
+// ============================================
+
+/**
+ * Fetch session settings (title, category, behaviour)
+ */
+export function useSessionSettings(sessionId: string | null) {
+  return useQuery({
+    queryKey: contentCreationKeys.settingsData(sessionId ?? ''),
+    queryFn: () => getSessionSettings(sessionId!),
+    enabled: !!sessionId,
+    staleTime: 30 * 1000,
+  });
+}
+
+/**
+ * Update session settings
+ */
+export function useUpdateSessionSettings() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      sessionId,
+      settings,
+    }: {
+      sessionId: string;
+      settings: ContentCreationSettings;
+    }) => updateSessionSettings(sessionId, settings),
+    onSuccess: (session) => {
+      queryClient.setQueryData(
+        contentCreationKeys.session(session.id),
+        session
+      );
+      queryClient.invalidateQueries({
+        queryKey: contentCreationKeys.settingsData(session.id),
+      });
+    },
+  });
+}
+
+/**
+ * Upload cover image for session
+ */
+export function useUploadCoverImage() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      sessionId,
+      file,
+    }: {
+      sessionId: string;
+      file: File;
+    }) => uploadSessionCoverImage(sessionId, file),
+    onSuccess: (session) => {
+      queryClient.setQueryData(
+        contentCreationKeys.session(session.id),
+        session
+      );
+      queryClient.invalidateQueries({
+        queryKey: contentCreationKeys.settingsData(session.id),
+      });
+    },
+  });
+}

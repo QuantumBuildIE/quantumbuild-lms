@@ -8,6 +8,7 @@ export * from './subtitle-processing';
 export * from './courses';
 export * from './course-assignments';
 export * from './certificates';
+export * from './content-creation';
 
 // Re-export all hooks
 export * from './use-toolbox-talks';
@@ -20,6 +21,7 @@ export * from './use-video-subtitles';
 export * from './use-courses';
 export * from './use-course-assignments';
 export * from './use-certificates';
+export * from './use-content-creation';
 
 // Re-export types for convenience
 export type { PaginatedResponse } from './toolbox-talks';

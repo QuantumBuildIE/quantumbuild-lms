@@ -263,6 +263,230 @@ public class ContentCreationController : ControllerBase
     }
 
     /// <summary>
+    /// Generate quiz questions from session content using AI
+    /// </summary>
+    [HttpPost("session/{id:guid}/generate-quiz")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(typeof(ContentCreationSessionDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GenerateQuiz(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var tenantId = _currentUserService.TenantId;
+            var session = await _sessionService.GenerateQuizAsync(id, tenantId, cancellationToken: cancellationToken);
+            return Ok(session);
+        }
+        catch (InvalidOperationException ex) when (ex.Message == "Session not found")
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(Result.Fail(ex.Message));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating quiz for session {SessionId}", id);
+            return StatusCode(500, Result.Fail("Error generating quiz"));
+        }
+    }
+
+    /// <summary>
+    /// Get quiz questions and settings for a session
+    /// </summary>
+    [HttpGet("session/{id:guid}/quiz")]
+    [ProducesResponseType(typeof(SessionQuizDataDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetQuizData(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var tenantId = _currentUserService.TenantId;
+            var quizData = await _sessionService.GetQuizDataAsync(id, tenantId, cancellationToken);
+            return Ok(quizData);
+        }
+        catch (InvalidOperationException ex) when (ex.Message == "Session not found")
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving quiz data for session {SessionId}", id);
+            return StatusCode(500, Result.Fail("Error retrieving quiz data"));
+        }
+    }
+
+    /// <summary>
+    /// Update quiz questions for a session
+    /// </summary>
+    [HttpPut("session/{id:guid}/questions")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(typeof(ContentCreationSessionDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateQuestions(
+        Guid id,
+        [FromBody] UpdateSessionQuestionsRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var tenantId = _currentUserService.TenantId;
+            var session = await _sessionService.UpdateQuestionsAsync(id, request, tenantId, cancellationToken);
+            return Ok(session);
+        }
+        catch (InvalidOperationException ex) when (ex.Message == "Session not found")
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(Result.Fail(ex.Message));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating questions for session {SessionId}", id);
+            return StatusCode(500, Result.Fail("Error updating questions"));
+        }
+    }
+
+    /// <summary>
+    /// Update quiz settings for a session
+    /// </summary>
+    [HttpPut("session/{id:guid}/quiz-settings")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(typeof(ContentCreationSessionDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateQuizSettings(
+        Guid id,
+        [FromBody] SessionQuizSettingsDto settings,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var tenantId = _currentUserService.TenantId;
+            var session = await _sessionService.UpdateQuizSettingsAsync(id, settings, tenantId, cancellationToken);
+            return Ok(session);
+        }
+        catch (InvalidOperationException ex) when (ex.Message == "Session not found")
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(Result.Fail(ex.Message));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating quiz settings for session {SessionId}", id);
+            return StatusCode(500, Result.Fail("Error updating quiz settings"));
+        }
+    }
+
+    /// <summary>
+    /// Get session settings (title, category, behaviour)
+    /// </summary>
+    [HttpGet("session/{id:guid}/settings")]
+    [ProducesResponseType(typeof(SessionSettingsDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetSettings(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var tenantId = _currentUserService.TenantId;
+            var settings = await _sessionService.GetSettingsAsync(id, tenantId, cancellationToken);
+            return Ok(settings);
+        }
+        catch (InvalidOperationException ex) when (ex.Message == "Session not found")
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving settings for session {SessionId}", id);
+            return StatusCode(500, Result.Fail("Error retrieving settings"));
+        }
+    }
+
+    /// <summary>
+    /// Update session settings (title, category, behaviour)
+    /// </summary>
+    [HttpPut("session/{id:guid}/settings")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(typeof(ContentCreationSessionDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateSettings(
+        Guid id,
+        [FromBody] SessionSettingsDto settings,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var tenantId = _currentUserService.TenantId;
+            var session = await _sessionService.UpdateSettingsAsync(id, settings, tenantId, cancellationToken);
+            return Ok(session);
+        }
+        catch (InvalidOperationException ex) when (ex.Message == "Session not found")
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(Result.Fail(ex.Message));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating settings for session {SessionId}", id);
+            return StatusCode(500, Result.Fail("Error updating settings"));
+        }
+    }
+
+    /// <summary>
+    /// Upload cover image for session
+    /// </summary>
+    [HttpPost("session/{id:guid}/cover-image")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [RequestSizeLimit(5242880)] // 5MB
+    [ProducesResponseType(typeof(ContentCreationSessionDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UploadCoverImage(
+        Guid id,
+        IFormFile file,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var tenantId = _currentUserService.TenantId;
+            var session = await _sessionService.UploadCoverImageAsync(id, file, tenantId, cancellationToken);
+            return Ok(session);
+        }
+        catch (InvalidOperationException ex) when (ex.Message == "Session not found")
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(Result.Fail(ex.Message));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error uploading cover image for session {SessionId}", id);
+            return StatusCode(500, Result.Fail("Error uploading cover image"));
+        }
+    }
+
+    /// <summary>
     /// Abandon and clean up a session
     /// </summary>
     [HttpDelete("session/{id:guid}")]
