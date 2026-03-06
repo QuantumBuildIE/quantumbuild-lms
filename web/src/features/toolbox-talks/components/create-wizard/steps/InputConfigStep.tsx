@@ -505,51 +505,51 @@ export function InputConfigStep({
         </div>
       )}
 
-      {/* Target Languages */}
-      <div>
-        <Label className="mb-2 block text-sm font-medium">
-          Target Languages
-        </Label>
-        <MultiSelectCombobox
-          options={languageOptions}
-          selectedValues={state.targetLanguageCodes}
-          onValuesChange={(values) =>
-            updateState({ targetLanguageCodes: values })
-          }
-          placeholder="Select target languages..."
-          searchPlaceholder="Search languages..."
-          isLoading={languagesLoading}
-          showSelectAll
-          listClassName="grid md:grid-cols-2 lg:grid-cols-3"
-        />
-        <p className="mt-1 text-xs text-muted-foreground">
-          Content will be translated and validated for each selected language
-        </p>
-      </div>
-
-      {/* Pass Threshold */}
-      <div>
-        <Label className="mb-2 block text-sm font-medium">
-          Pass Threshold
-        </Label>
-        <Select
-          value={String(state.passThreshold)}
-          onValueChange={(v) => updateState({ passThreshold: Number(v) })}
-        >
-          <SelectTrigger className="w-40">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {passThresholds.map((t) => (
-              <SelectItem key={t} value={String(t)}>
-                {t}%
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Minimum translation validation score to pass
-        </p>
+      {/* Target Languages + Pass Threshold */}
+      <div className="flex items-start gap-4">
+        <div className="flex-1 min-w-0">
+          <Label className="mb-2 block text-sm font-medium">
+            Target Languages
+          </Label>
+          <MultiSelectCombobox
+            options={languageOptions}
+            selectedValues={state.targetLanguageCodes}
+            onValuesChange={(values) =>
+              updateState({ targetLanguageCodes: values })
+            }
+            placeholder="Select target languages..."
+            searchPlaceholder="Search languages..."
+            isLoading={languagesLoading}
+            showSelectAll
+            listClassName="[&_[cmdk-group-items]]:grid [&_[cmdk-group-items]]:md:grid-cols-2 [&_[cmdk-group-items]]:lg:grid-cols-3"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Content will be translated and validated for each selected language
+          </p>
+        </div>
+        <div className="w-36 shrink-0">
+          <Label className="mb-2 block text-sm font-medium">
+            Pass Threshold
+          </Label>
+          <Select
+            value={String(state.passThreshold)}
+            onValueChange={(v) => updateState({ passThreshold: Number(v) })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {passThresholds.map((t) => (
+                <SelectItem key={t} value={String(t)}>
+                  {t}%
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Min score to pass
+          </p>
+        </div>
       </div>
 
       {/* Audit Metadata */}
