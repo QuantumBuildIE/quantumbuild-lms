@@ -43,6 +43,7 @@ interface MultiSelectComboboxProps {
   isLoading?: boolean;
   maxDisplayItems?: number;
   className?: string;
+  listClassName?: string;
   renderOption?: (option: MultiSelectOption) => React.ReactNode;
   showSelectAll?: boolean;
   renderTriggerContent?: (selectedOptions: MultiSelectOption[]) => React.ReactNode;
@@ -60,6 +61,7 @@ export function MultiSelectCombobox({
   isLoading = false,
   maxDisplayItems = 3,
   className,
+  listClassName,
   renderOption,
   showSelectAll = false,
   renderTriggerContent,
@@ -267,7 +269,7 @@ export function MultiSelectCombobox({
                     );
                   })
                 ) : (
-                  <CommandGroup>
+                  <CommandGroup className={listClassName}>
                     {filteredOptions.map(renderItem)}
                   </CommandGroup>
                 )}

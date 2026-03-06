@@ -520,6 +520,7 @@ export function InputConfigStep({
           searchPlaceholder="Search languages..."
           isLoading={languagesLoading}
           showSelectAll
+          listClassName="grid md:grid-cols-2 lg:grid-cols-3"
         />
         <p className="mt-1 text-xs text-muted-foreground">
           Content will be translated and validated for each selected language
