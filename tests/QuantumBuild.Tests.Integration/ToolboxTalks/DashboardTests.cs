@@ -79,8 +79,15 @@ public class DashboardTests : IntegrationTestBase
     [Fact]
     public async Task GetDashboard_WithoutPermission_Returns403()
     {
-        // Act - Finance user doesn't have ToolboxTalks.View permission
-        var response = await FinanceClient.GetAsync("/api/toolbox-talks/dashboard");
+        // Arrange - Create a client with no Learnings permissions
+        using var noPermClient = Factory.CreateAuthenticatedClient(
+            userId: Guid.NewGuid(),
+            email: "noperm@test.com",
+            roles: new[] { "Custom" },
+            permissions: new[] { "Core.ManageSites" }); // Has a permission, just not Learnings.View
+
+        // Act
+        var response = await noPermClient.GetAsync("/api/toolbox-talks/dashboard");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);

@@ -426,4 +426,55 @@ public static class TestTenantConstants
             public static readonly Guid CancelledTalk = Guid.Parse("AAAAAAAA-0017-0001-0001-000000000005");
         }
     }
+
+    // ==================== TRANSLATION VALIDATION ====================
+    public static class TranslationValidation
+    {
+        // Validation runs
+        public static readonly Guid CompletedRun = Guid.Parse("AAAAAAAA-0018-0001-0001-000000000001");
+        public static readonly Guid RunWithReviewSection = Guid.Parse("AAAAAAAA-0018-0001-0001-000000000002");
+
+        // Validation results
+        public static readonly Guid PassedResult = Guid.Parse("AAAAAAAA-0018-0002-0001-000000000001");
+        public static readonly Guid ReviewResult = Guid.Parse("AAAAAAAA-0018-0002-0001-000000000002");
+
+        // Safety glossary — system default (TenantId = null)
+        public static readonly Guid SystemGlossary = Guid.Parse("AAAAAAAA-0019-0001-0001-000000000001");
+        public const string SystemGlossarySectorKey = "construction";
+        public const string SystemGlossarySectorName = "Construction";
+
+        // Safety glossary — tenant override
+        public static readonly Guid TenantGlossary = Guid.Parse("AAAAAAAA-0019-0001-0001-000000000002");
+        public const string TenantGlossarySectorKey = "manufacturing";
+        public const string TenantGlossarySectorName = "Manufacturing";
+
+        // Glossary terms
+        public static readonly Guid SystemTerm_PPE = Guid.Parse("AAAAAAAA-0019-0002-0001-000000000001");
+        public static readonly Guid SystemTerm_Harness = Guid.Parse("AAAAAAAA-0019-0002-0001-000000000002");
+        public static readonly Guid TenantTerm_LOTO = Guid.Parse("AAAAAAAA-0019-0002-0001-000000000003");
+
+        // Content creation sessions
+        public static readonly Guid ActiveSession = Guid.Parse("AAAAAAAA-001A-0001-0001-000000000001");
+        public static readonly Guid ExpiredSession = Guid.Parse("AAAAAAAA-001A-0001-0001-000000000002");
+    }
+
+    // ==================== SECOND TENANT (for isolation tests) ====================
+    public static class TenantB
+    {
+        public static readonly Guid TenantId = Guid.Parse("BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB");
+        public const string TenantName = "Second Test Tenant";
+        public const string TenantCode = "TST2";
+
+        public static class Users
+        {
+            public static class Admin
+            {
+                public static readonly Guid Id = Guid.Parse("BBBBBBBB-0001-0001-0001-000000000001");
+                public const string Email = "admin@test2.quantumbuild.ie";
+                public const string Password = "TestAdmin2_123!";
+                public const string FirstName = "Test2";
+                public const string LastName = "Admin";
+            }
+        }
+    }
 }

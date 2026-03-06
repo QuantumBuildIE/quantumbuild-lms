@@ -236,7 +236,11 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
                 "Permissions",
                 "RolePermissions",
                 // Tenant data is seeded by DataSeeder and TestTenantSeeder
-                "Tenants"
+                "Tenants",
+                // Lookup tables - seeded by DataSeeder on startup (languages, categories, etc.)
+                "LookupCategories",
+                "LookupValues",
+                "TenantLookupValues"
             }
         });
         await npgsqlConnection.CloseAsync();
@@ -325,12 +329,20 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
     /// </summary>
     public HttpClient CreateAuthenticatedClient(Guid userId, string email, IEnumerable<string> roles, IEnumerable<string> permissions)
     {
+        return CreateAuthenticatedClient(userId, email, TestTenantConstants.TenantId, roles, permissions);
+    }
+
+    /// <summary>
+    /// Creates an HTTP client authenticated with the specified user ID, tenant, and permissions.
+    /// </summary>
+    public HttpClient CreateAuthenticatedClient(Guid userId, string email, Guid tenantId, IEnumerable<string> roles, IEnumerable<string> permissions)
+    {
         var client = CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false
         });
 
-        var token = GenerateTestToken(userId, email, TestTenantConstants.TenantId, roles, permissions);
+        var token = GenerateTestToken(userId, email, tenantId, roles, permissions);
         client.DefaultRequestHeaders.Authorization =
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
@@ -360,7 +372,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
                 TestTenantConstants.Users.SiteManager.LastName,
                 new[] { "SiteManager" },
                 new[] {
-                    "ToolboxTalks.View", "ToolboxTalks.Edit", "ToolboxTalks.Schedule"
+                    "Learnings.View", "Learnings.Manage", "Learnings.Schedule"
                 },
                 (Guid?)TestTenantConstants.Employees.ManagerEmployee // Link to manager employee
             ),
@@ -369,9 +381,9 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
                 TestTenantConstants.Users.Warehouse.Email,
                 TestTenantConstants.Users.Warehouse.FirstName,
                 TestTenantConstants.Users.Warehouse.LastName,
-                new[] { "Warehouse" },
+                new[] { "WarehouseStaff" },
                 new[] {
-                    "ToolboxTalks.View"
+                    "Learnings.View"
                 },
                 (Guid?)null
             ),
@@ -382,7 +394,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
                 TestTenantConstants.Users.Operator.LastName,
                 new[] { "Operator" },
                 new[] {
-                    "ToolboxTalks.View"
+                    "Learnings.View"
                 },
                 (Guid?)TestTenantConstants.Employees.OperatorEmployee // Link to operator employee
             ),
@@ -393,7 +405,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
                 TestTenantConstants.Users.Finance.LastName,
                 new[] { "Finance" },
                 new[] {
-                    "ToolboxTalks.View"
+                    "Learnings.View"
                 },
                 (Guid?)null
             ),

@@ -39,18 +39,6 @@ export const TEST_TENANT = {
     marmaladeLane: { name: 'Marmalade Lane', location: 'Galway' },
   },
 
-  categories: {
-    buildingMaterials: 'Building Materials',
-    electrical: 'Electrical',
-    plumbing: 'Plumbing',
-    safetyEquipment: 'Safety Equipment',
-    tools: 'Tools',
-    fixingsFasteners: 'Fixings & Fasteners',
-  },
-
-  stockLocations: {
-    mainWarehouse: 'Main Warehouse',
-  },
 };
 
 /**
@@ -75,28 +63,6 @@ export const API_ENDPOINTS = {
     login: '/api/auth/login',
     me: '/api/auth/me',
     refresh: '/api/auth/refresh-token',
-  },
-  stock: {
-    products: '/api/products',
-    categories: '/api/categories',
-    orders: '/api/stock-orders',
-    purchaseOrders: '/api/purchase-orders',
-    goodsReceipts: '/api/goods-receipts',
-    stockLevels: '/api/stock-levels',
-    stocktakes: '/api/stocktakes',
-    transactions: '/api/stock-transactions',
-  },
-  proposals: {
-    proposals: '/api/proposals',
-    productKits: '/api/product-kits',
-    reports: '/api/proposals/reports',
-  },
-  siteAttendance: {
-    events: '/api/site-attendance/events',
-    summaries: '/api/site-attendance/summaries',
-    dashboard: '/api/site-attendance/dashboard',
-    settings: '/api/site-attendance/settings',
-    bankHolidays: '/api/site-attendance/bank-holidays',
   },
   toolboxTalks: {
     talks: '/api/toolbox-talks',

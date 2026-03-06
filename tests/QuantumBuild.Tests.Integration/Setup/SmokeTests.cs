@@ -106,7 +106,7 @@ public class SmokeTests : IntegrationTestBase
             userId: Guid.NewGuid(),
             email: "custom@test.com",
             roles: new[] { "Custom" },
-            permissions: new[] { "ToolboxTalks.View" }
+            permissions: new[] { "Learnings.View" }
         );
 
         // Act - Should be able to view toolbox talks

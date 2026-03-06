@@ -209,144 +209,6 @@ public class AuthorizationTests : IntegrationTestBase
 
     #endregion
 
-    #region StockManagement Permission Tests
-
-    [Fact]
-    public async Task GetProducts_AsWarehouse_ReturnsOk()
-    {
-        // Warehouse has StockManagement.View permission
-        // Act
-        var response = await WarehouseClient.GetAsync("/api/products");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-    }
-
-    [Fact]
-    public async Task GetProducts_AsFinance_ReturnsOk()
-    {
-        // Finance has StockManagement.View permission
-        // Act
-        var response = await FinanceClient.GetAsync("/api/products");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-    }
-
-    [Fact]
-    public async Task CreateProduct_AsWarehouse_ReturnsCreated()
-    {
-        // Warehouse has StockManagement.ManageProducts permission
-        // Arrange - First get a category ID
-        var categoriesResponse = await WarehouseClient.GetAsync("/api/categories/all");
-        Guid? categoryId = null;
-
-        if (categoriesResponse.StatusCode == HttpStatusCode.OK)
-        {
-            var content = await categoriesResponse.Content.ReadAsStringAsync();
-            // Try to extract a category ID from the response
-            if (content.Contains("\"id\""))
-            {
-                try
-                {
-                    var categoriesResult = await categoriesResponse.Content.ReadFromJsonAsync<CategoryResultWrapper>();
-                    categoryId = categoriesResult?.Data?.FirstOrDefault()?.Id;
-                }
-                catch
-                {
-                    // If deserialization fails, use a fallback
-                }
-            }
-        }
-
-        var command = new
-        {
-            ProductCode = $"PROD-{Guid.NewGuid():N}".Substring(0, 10),
-            ProductName = "Test Product",
-            CategoryId = categoryId ?? Guid.NewGuid(),
-            UnitType = "Each",
-            BaseRate = 10.0m,
-            ReorderLevel = 5,
-            ReorderQuantity = 10,
-            LeadTimeDays = 3,
-            IsActive = true
-        };
-
-        // Act
-        var response = await WarehouseClient.PostAsJsonAsync("/api/products", command);
-
-        // Assert - Could be Created if valid or BadRequest if category doesn't exist
-        response.StatusCode.Should().BeOneOf(HttpStatusCode.Created, HttpStatusCode.BadRequest);
-    }
-
-    [Fact]
-    public async Task CreateProduct_AsFinance_Returns403()
-    {
-        // Finance only has View permission, not ManageProducts
-        // Arrange
-        var command = new
-        {
-            ProductCode = $"PROD-{Guid.NewGuid():N}".Substring(0, 10),
-            ProductName = "Test Product",
-            CategoryId = Guid.NewGuid(),
-            UnitType = "Each",
-            BaseRate = 10.0m,
-            ReorderLevel = 5,
-            ReorderQuantity = 10,
-            LeadTimeDays = 3,
-            IsActive = true
-        };
-
-        // Act
-        var response = await FinanceClient.PostAsJsonAsync("/api/products", command);
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-    }
-
-    #endregion
-
-    #region StockManagement.ViewCostings Permission Tests
-
-    [Fact]
-    public async Task GetStockValuationReport_AsFinance_ReturnsOk()
-    {
-        // Finance has StockManagement.ViewCostings permission
-        // Act
-        var response = await FinanceClient.GetAsync("/api/stock/reports/valuation");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-    }
-
-    [Fact]
-    public async Task GetStockValuationReport_AsOperator_Returns403()
-    {
-        // Operator doesn't have ViewCostings permission
-        // Act
-        var response = await OperatorClient.GetAsync("/api/stock/reports/valuation");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-    }
-
-    #endregion
-
-    #region SiteAttendance Permission Tests
-
-    [Fact]
-    public async Task GetAttendanceDashboard_AsSiteManager_ReturnsOk()
-    {
-        // SiteManager has SiteAttendance.View permission
-        // Act
-        var response = await SiteManagerClient.GetAsync("/api/site-attendance/dashboard/kpis");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-    }
-
-    #endregion
-
     #region Cross-Module Permission Tests
 
     [Fact]
@@ -355,25 +217,6 @@ public class AuthorizationTests : IntegrationTestBase
         // Warehouse has stock permissions but not user management
         // Act
         var response = await WarehouseClient.GetAsync("/api/users");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-    }
-
-    [Fact]
-    public async Task Finance_CannotManageStock()
-    {
-        // Finance can view but not manage stock
-        // Arrange
-        var command = new
-        {
-            Sku = $"PROD-{Guid.NewGuid():N}".Substring(0, 10),
-            Name = "Test Product",
-            IsActive = true
-        };
-
-        // Act
-        var response = await FinanceClient.PostAsJsonAsync("/api/products", command);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
@@ -389,14 +232,12 @@ public class AuthorizationTests : IntegrationTestBase
         var employeesResponse = await AdminClient.GetAsync("/api/employees");
         var sitesResponse = await AdminClient.GetAsync("/api/sites");
         var companiesResponse = await AdminClient.GetAsync("/api/companies");
-        var productsResponse = await AdminClient.GetAsync("/api/products");
 
         // Assert - All should return OK
         usersResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         employeesResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         sitesResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         companiesResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        productsResponse.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     #endregion
@@ -460,27 +301,6 @@ public class AuthorizationTests : IntegrationTestBase
     #endregion
 
     #region Response DTOs
-
-    private record ResultWrapper<T>(
-        bool Success,
-        T? Data,
-        string? Message,
-        List<string>? Errors
-    );
-
-    private record CategoryDto(
-        Guid Id,
-        string CategoryCode,
-        string CategoryName,
-        string? Description,
-        bool IsActive
-    );
-
-    private record CategoryResultWrapper(
-        bool Success,
-        List<CategoryDto>? Data,
-        string? Message
-    );
 
     #endregion
 }

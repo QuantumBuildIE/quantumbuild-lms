@@ -51,19 +51,6 @@ public class TenantIsolationTests : IntegrationTestBase
         result!.Success.Should().BeTrue();
     }
 
-    [Fact]
-    public async Task GetProducts_OnlyReturnsCurrentTenantData()
-    {
-        // Act
-        var response = await AdminClient.GetAsync("/api/products");
-        var result = await response.Content.ReadFromJsonAsync<ResultWrapper<PaginatedResult<ProductDto>>>();
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-        result.Should().NotBeNull();
-        result!.Success.Should().BeTrue();
-    }
-
     #endregion
 
     #region GetById Isolation Tests
@@ -416,18 +403,6 @@ public class TenantIsolationTests : IntegrationTestBase
         bool IsActive,
         string? Notes,
         int ContactCount
-    );
-
-    private record ProductDto(
-        Guid Id,
-        string Sku,
-        string Name,
-        string? Description,
-        Guid? CategoryId,
-        string? CategoryName,
-        decimal? CostPrice,
-        decimal? SellPrice,
-        bool IsActive
     );
 
     #endregion

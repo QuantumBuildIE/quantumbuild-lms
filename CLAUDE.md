@@ -9,7 +9,7 @@ A multi-tenant Learning Management System for workplace safety training and comp
 ### Business Context
 - **Primary Use:** Toolbox Talks — video-based safety training with quizzes, certificates, and compliance tracking
 - **Scale:** Multi-language support, AI-generated content, subtitle processing, course management
-- **Key Workflows:** Talk creation (manual + AI-generated), scheduling & assignment, employee completion with signature, quiz assessment, certificate generation, refresher scheduling
+- **Key Workflows:** Talk creation (manual + AI-generated), scheduling & assignment, employee completion with signature, quiz assessment, certificate generation, refresher scheduling, translation validation (TransVal)
 
 ### Currently Implemented
 - **Toolbox Talks Module** — Full training lifecycle: content creation, AI generation, scheduling, assignment, completion, certificates, courses, reports
@@ -20,7 +20,8 @@ A multi-tenant Learning Management System for workplace safety training and comp
 - **Subtitle Processing** — Video transcription (ElevenLabs) + translation (Claude API) to SRT files
 - **Content Translation** — AI-powered translation of sections, quizzes, slideshows, email templates
 - **Certificate Generation** — PDF certificates for talk and course completions
-- **Background Jobs** — Hangfire for scheduling, reminders, overdue tracking, content generation
+- **Translation Validation (TransVal)** — Multi-round back-translation consensus engine with safety classification, glossary verification, reviewer workflow, and audit PDF reports
+- **Background Jobs** — Hangfire for scheduling, reminders, overdue tracking, content generation, translation validation
 
 ---
 
@@ -36,9 +37,9 @@ A multi-tenant Learning Management System for workplace safety training and comp
 | FluentValidation | Latest | Request validation |
 | Hangfire | Latest | Background job processing |
 | SignalR | Latest | Real-time progress updates |
-| QuestPDF | Latest | Certificate PDF generation |
+| QuestPDF | Latest | Certificate & validation report PDF generation |
 | ClosedXML | 0.105.0 | Excel export (Skills Matrix) |
-| Cloudflare R2 | — | File storage (videos, PDFs, subtitles, certificates) |
+| Cloudflare R2 | — | File storage (videos, PDFs, subtitles, certificates, validation reports) |
 
 ### Frontend
 | Technology | Version | Purpose |
@@ -83,10 +84,10 @@ quantumbuild-lms/
 │   ├── Modules/
 │   │   └── ToolboxTalks/                        # Toolbox Talks Module
 │   │       ├── QuantumBuild.Modules.ToolboxTalks.Domain/
-│   │       │   ├── Entities/                    # 22 entities
-│   │       │   └── Enums/                       # 13 enums
+│   │       │   ├── Entities/                    # 26 entities (includes TransVal)
+│   │       │   └── Enums/                       # 16 enums (includes TransVal)
 │   │       ├── QuantumBuild.Modules.ToolboxTalks.Application/
-│   │       │   ├── Abstractions/                # Pdf, Storage, Subtitles, Translations interfaces
+│   │       │   ├── Abstractions/                # Pdf, Storage, Subtitles, Translations, Validation interfaces
 │   │       │   ├── Commands/                    # CQRS commands (17 command handlers)
 │   │       │   ├── Queries/                     # CQRS queries (12 query handlers)
 │   │       │   ├── Features/                    # Certificates, CourseAssignments, Courses
@@ -95,10 +96,10 @@ quantumbuild-lms/
 │   │       │   └── Common/Interfaces/           # IToolboxTalksDbContext
 │   │       └── QuantumBuild.Modules.ToolboxTalks.Infrastructure/
 │   │           ├── Configuration/               # R2StorageSettings, SubtitleProcessingSettings
-│   │           ├── Hubs/                        # SignalR hubs (ContentGeneration, SubtitleProcessing)
-│   │           ├── Jobs/                        # Hangfire background jobs (6 jobs)
+│   │           ├── Hubs/                        # SignalR hubs (ContentGeneration, SubtitleProcessing, TranslationValidation)
+│   │           ├── Jobs/                        # Hangfire background jobs (9 jobs)
 │   │           ├── Persistence/                 # DbContext, Entity Configurations, Seed Data
-│   │           └── Services/                    # AI, Pdf, Storage, Subtitles, Translations
+│   │           └── Services/                    # AI, Pdf, Storage, Subtitles, Translations, Validation
 │   │
 │   └── QuantumBuild.API/                        # Single API entry point
 │       ├── Controllers/                         # 15 API controllers
@@ -348,6 +349,32 @@ quantumbuild-lms/
 | DELETE | `/pdf` | Delete PDF | ToolboxTalks.Edit |
 | DELETE | `/files` | Delete all files | ToolboxTalks.Edit |
 
+#### Translation Validation (`/api/toolbox-talks/{talkId}/validation`)
+| Method | Endpoint | Description | Permission |
+|--------|----------|-------------|------------|
+| POST | `/validate` | Start new validation run | ToolboxTalks.Admin |
+| GET | `/runs` | List validation runs (paginated) | ToolboxTalks.View |
+| GET | `/runs/{runId}` | Get run with all results | ToolboxTalks.View |
+| PUT | `/runs/{runId}/sections/{idx}/accept` | Reviewer accepts section | ToolboxTalks.Admin |
+| PUT | `/runs/{runId}/sections/{idx}/reject` | Reviewer rejects section | ToolboxTalks.Admin |
+| PUT | `/runs/{runId}/sections/{idx}/edit` | Reviewer edits & re-validates | ToolboxTalks.Admin |
+| POST | `/runs/{runId}/sections/{idx}/retry` | Retry section validation | ToolboxTalks.Admin |
+| GET | `/runs/{runId}/report` | Download audit report PDF | ToolboxTalks.View |
+| POST | `/runs/{runId}/report/generate` | Generate audit report PDF | ToolboxTalks.Admin |
+| DELETE | `/runs/{runId}` | Soft-delete validation run | ToolboxTalks.Admin |
+
+#### Safety Glossary (`/api/toolbox-talks/glossaries`)
+| Method | Endpoint | Description | Permission |
+|--------|----------|-------------|------------|
+| GET | `/` | List glossaries (system defaults + tenant overrides) | ToolboxTalks.View |
+| GET | `/{id}` | Get glossary with terms | ToolboxTalks.View |
+| POST | `/` | Create tenant glossary | ToolboxTalks.Admin |
+| PUT | `/{id}` | Update glossary | ToolboxTalks.Admin |
+| DELETE | `/{id}` | Delete glossary (tenant only) | ToolboxTalks.Admin |
+| POST | `/{id}/terms` | Add term to glossary | ToolboxTalks.Admin |
+| PUT | `/{id}/terms/{termId}` | Update glossary term | ToolboxTalks.Admin |
+| DELETE | `/{id}/terms/{termId}` | Delete glossary term | ToolboxTalks.Admin |
+
 ---
 
 ## Frontend Pages
@@ -396,7 +423,9 @@ quantumbuild-lms/
 | `/admin/toolbox-talks/reports/overdue` | Overdue assignments |
 | `/admin/toolbox-talks/reports/skills-matrix` | Skills Matrix (Admin view — all employees × learnings) |
 | `/admin/toolbox-talks/certificates` | Certificate management |
-| `/admin/toolbox-talks/settings` | Module settings |
+| `/admin/toolbox-talks/settings` | Module settings (includes glossary management, threshold config) |
+| `/admin/toolbox-talks/talks/[id]/validation` | Validation history tab (list of runs for a talk) |
+| `/admin/toolbox-talks/talks/[id]/validation/[runId]` | Validation run detail (section results, reviewer decisions, report download) |
 
 #### Admin — Core (`/admin/*`)
 | Path | Description |
@@ -546,6 +575,34 @@ Course Created → Course Items Added (ordered talks) → Course Assigned to Emp
 - On completion, system schedules a refresher ScheduledTalk/CourseAssignment
 - Reminders sent at 2 weeks and 1 week before due date
 
+### Translation Validation (TransVal) Workflow
+```
+Start Validation → Back-translate sections (multi-provider consensus) → Score & classify → Generate results → Audit report
+```
+
+**Validation Process per Section:**
+1. **Safety classification** — Scan for glossary terms + regex patterns (prohibition, emergency, hazard)
+2. **Threshold adjustment** — Bump pass threshold by `SafetyCriticalBump` (default +10) for safety-critical sections
+3. **Multi-round consensus engine:**
+   - Round 1: Claude Haiku + DeepL back-translate → lexical scoring → check agreement (≤10pt tolerance)
+   - Round 2 (if inconclusive): Add Google Gemini → recalculate average
+   - Round 3 (if still inconclusive): Add DeepSeek → final determination
+4. **Glossary verification** — Check expected translations are present; downgrade to Review if mismatches found
+5. **Outcome:** Pass (≥ threshold), Review (≥ threshold-15), or Fail
+
+**Reviewer Workflow:**
+- Reviewers can Accept, Reject, or Edit each section result
+- Edited sections trigger automatic re-validation
+- Full audit trail with reviewer name, decision time, metadata
+
+**Audit Report:**
+- Professional PDF generated with QuestPDF
+- Cover page, executive summary, per-section details with colour-coded outcomes
+- Uploaded to R2 storage, URL stored on the validation run
+
+**Real-time Progress:**
+- SignalR `TranslationValidationHub` sends progress updates, section completions, and run completion events
+
 ### Subtitle Processing Flow
 ```
 Start Processing → Transcribing (ElevenLabs) → Translating (Claude API) → Uploading (R2) → Completed
@@ -567,7 +624,7 @@ Progress updates sent via SignalR hub in real-time.
 
 ---
 
-## Toolbox Talks Module Entities (22 Total)
+## Toolbox Talks Module Entities (26 Total)
 
 ### Content
 1. **ToolboxTalk** — Core entity: code (unique per tenant, max 20 chars, auto-generated from title initials), title, description, category, video, PDF, sections, questions, quiz settings, certificate/refresher options, AI generation state, translations
@@ -605,7 +662,13 @@ Progress updates sent via SignalR hub in real-time.
 ### Settings
 22. **ToolboxTalkSettings** — Tenant-level config (due days, reminders, passing score, translation settings)
 
-### Enums (13 Total)
+### Translation Validation (TransVal)
+23. **TranslationValidationRun** — Top-level validation session: talk/course reference, language, sector, pass threshold, overall score/outcome/safety verdict, audit metadata (reviewer name/org/role, document ref, client name, audit purpose), report URL
+24. **TranslationValidationResult** — Per-section result: original/translated text, back-translations A-D, scores A-D, final score, rounds used, outcome, safety classification, glossary mismatches, reviewer decision (Pending/Accepted/Rejected/Edited), edited translation
+25. **SafetyGlossary** — Sector-based safety glossary (TenantId nullable: null = system default, Guid = tenant override), sector key/name/icon
+26. **SafetyGlossaryTerm** — Individual term: English term, category, isCritical flag, translations JSON (language code → translated term)
+
+### Enums (16 Total)
 - **CertificateType** — Talk, Course
 - **ContentSource** — Manual, Video, Pdf, Both
 - **CourseAssignmentStatus** — Assigned, InProgress, Completed, Overdue
@@ -619,6 +682,9 @@ Progress updates sent via SignalR hub in real-time.
 - **ToolboxTalkStatus** — Draft, Processing, ReadyForReview, Published
 - **VideoSource** — None, YouTube, GoogleDrive, Vimeo, DirectUrl
 - **VideoTranslationStatus** — Pending, Processing, Completed, Failed, ManualRequired
+- **ValidationRunStatus** — Pending, Running, Completed, Failed, Cancelled
+- **ValidationOutcome** — Pass, Review, Fail
+- **ReviewerDecision** — Pending, Accepted, Rejected, Edited
 
 ---
 
@@ -633,12 +699,15 @@ Progress updates sent via SignalR hub in real-time.
 | SendRefresherRemindersJob | Daily | Send reminders for upcoming refresher due dates |
 | SendToolboxTalkRemindersJob | Daily | Send reminders for overdue/pending talks |
 | UpdateOverdueToolboxTalksJob | Daily | Mark past-due assignments as Overdue |
+| TranslationValidationJob | On-demand | Multi-round back-translation consensus validation per section (SignalR progress) |
+| ValidationReportJob | On-demand | Generate audit report PDF (QuestPDF) and upload to R2 |
+| ExpiredSessionCleanupJob | Daily | Clean up expired validation sessions |
 
 ---
 
 ## Cloudflare R2 Storage
 
-Used for storing videos, PDFs, subtitle files, and certificate PDFs.
+Used for storing videos, PDFs, subtitle files, certificate PDFs, and validation report PDFs.
 
 **Configuration (environment variables):**
 ```
@@ -829,6 +898,63 @@ Employee × learning grid showing training status per combination. Role-scoped v
 
 ---
 
+## Translation Validation (TransVal)
+
+### Overview
+Multi-round back-translation consensus engine that validates AI-generated translations for accuracy and safety compliance. Produces formal audit reports for compliance purposes.
+
+### Backend Services
+| Service | Purpose |
+|---------|---------|
+| **LexicalScoringService** | Token-overlap similarity scoring (0-100) between original and back-translated text |
+| **WordDiffService** | LCS-based word-level diff with Insert/Delete/Equal operations and similarity percentage |
+| **ConsensusEngine** | Escalating multi-round back-translation: Round 1 (Haiku + DeepL), Round 2 (+Gemini), Round 3 (+DeepSeek) |
+| **SafetyClassificationService** | Glossary term detection + regex patterns (prohibition, emergency, hazard) for safety-critical content |
+| **GlossaryTermVerificationService** | Verifies expected glossary translations are present in translated text |
+| **TranslationValidationService** | Orchestrator: safety classify → bump threshold → consensus → glossary verify → persist result |
+| **ValidationReportService** | QuestPDF-based audit report: cover page, executive summary, per-section details, colour-coded outcomes |
+
+### Configuration (`TranslationValidation` settings section)
+```json
+{
+  "DeepL": { "ApiKey": "...", "BaseUrl": "https://api-free.deepl.com/v2" },
+  "Gemini": { "ApiKey": "...", "Model": "gemini-2.0-flash", "BaseUrl": "..." },
+  "DeepSeek": { "ApiKey": "...", "Model": "deepseek-chat", "BaseUrl": "..." },
+  "DefaultThreshold": 75,
+  "SafetyCriticalBump": 10,
+  "MaxRounds": 3,
+  "SessionExpiryHours": 24
+}
+```
+
+### SignalR Hub
+**Route:** `/api/hubs/translation-validation`
+- `ValidationProgress` — Progress update: stage, percentComplete, message
+- `SectionCompleted` — Section result: index, outcome, score, isSafetyCritical
+- `ValidationComplete` — Run completion: success, message
+
+### Frontend
+- **Validation history tab** on talk detail page — lists all runs with status, score, outcome
+- **Run detail page** — section-by-section results with back-translations, scores, reviewer decision UI
+- **6-step creation wizard** — configures language, sector, threshold, audit metadata before starting validation
+- **Real-time progress panel** — SignalR-powered progress display during validation via `useValidationHub` hook
+- **Settings UI** — glossary management (CRUD terms per sector), threshold configuration, audit purpose defaults
+
+### Unit Tests
+| Test Class | Coverage |
+|------------|----------|
+| **LexicalScoringServiceTests** | Identical strings, partial overlap, empty strings, case insensitivity, punctuation stripping |
+| **WordDiffServiceTests** | LCS algorithm, Insert/Delete/Equal operations, similarity percentage |
+| **ConsensusEngineTests** | Round 1-3 escalation, threshold pass/review/fail, agreement tolerance |
+| **SafetyClassificationServiceTests** | Glossary detection, regex patterns (prohibition, emergency, hazard), critical term extraction |
+
+### Integration Tests
+| Test Class | Coverage |
+|------------|----------|
+| **TranslationValidationTests** | Multi-tenant isolation, glossary CRUD, system default protection, validation run lifecycle, report generation, reviewer decisions |
+
+---
+
 ## Notes for Claude Code
 
 1. **Multi-tenancy is critical** — every query filters by TenantId
@@ -836,7 +962,7 @@ Employee × learning grid showing training status per combination. Role-scoped v
 3. **Audit fields are automatic** — SaveChanges override handles CreatedAt/UpdatedAt
 4. **Permission-based auth** — use `[Authorize(Policy = "Permission.Name")]`
 5. **CQRS in ToolboxTalks** — Commands for writes, Queries for reads
-6. **SignalR for real-time** — Content generation and subtitle processing progress
+6. **SignalR for real-time** — Content generation, subtitle processing, and translation validation progress
 7. **Follow established patterns** — check existing code before creating new
 8. **Translation is JSON-based** — Sections and questions stored as JSON arrays in translation entities
 9. **File deduplication** — SHA-256 hashes used to detect duplicate PDF/video uploads across talks
@@ -847,8 +973,12 @@ Employee × learning grid showing training status per combination. Role-scoped v
 14. **ICurrentUserService.EmployeeId** — Available from JWT `employee_id` claim; used for supervisor scoping and operator self-service
 15. **ToolboxTalk Code field** — Auto-generated from title initials + numeric suffix; unique per tenant (`IX_ToolboxTalks_TenantId_Code`); propagated to all DTOs throughout the system
 16. **Skills Matrix** — Employee × learning grid with 5 cell statuses; role-scoped; derives data from ScheduledTalks; Excel export via ClosedXML
+17. **Translation Validation (TransVal)** — Multi-round back-translation consensus with up to 4 providers (Claude Haiku, DeepL, Gemini, DeepSeek); safety classification via glossary + regex patterns; configurable thresholds with safety-critical bump; reviewer accept/reject/edit workflow; audit PDF reports
+18. **SafetyGlossary scoping** — System defaults (TenantId = null) vs tenant-specific overrides; sector-based (construction, mining, manufacturing, etc.)
+19. **TransVal uses direct services** — Not CQRS; uses ITranslationValidationService, ILexicalScoringService, IConsensusEngine, ISafetyClassificationService, IGlossaryTermVerificationService
+20. **TransVal configuration** — `TranslationValidation` settings section: DeepL/Gemini/DeepSeek API keys, DefaultThreshold (75), SafetyCriticalBump (10), MaxRounds (3), SessionExpiryHours (24)
 
 ---
 
-*Last Updated: February 20, 2026*
+*Last Updated: March 5, 2026*
 *Architecture: Modular Monolith with Clean Architecture*

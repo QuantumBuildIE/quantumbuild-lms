@@ -39,4 +39,68 @@ public class LexicalScoringServiceTests
 
         score.Should().Be(100.0);
     }
+
+    [Fact]
+    public void Score_SingleMatchingToken_Returns100()
+    {
+        var score = _sut.Score("PPE", "PPE");
+
+        score.Should().Be(100.0);
+    }
+
+    [Fact]
+    public void Score_NoMatchingTokens_Returns0()
+    {
+        var score = _sut.Score("alpha beta", "gamma delta");
+
+        score.Should().Be(0.0);
+    }
+
+    [Fact]
+    public void Score_OneEmpty_OneNonEmpty_Returns0()
+    {
+        var score = _sut.Score("", "hello world");
+
+        score.Should().Be(0.0);
+    }
+
+    [Fact]
+    public void Score_OneNonEmpty_OneEmpty_Returns0()
+    {
+        var score = _sut.Score("hello world", "");
+
+        score.Should().Be(0.0);
+    }
+
+    [Fact]
+    public void Score_WhitespaceOnlyStrings_Returns100()
+    {
+        var score = _sut.Score("   ", "   ");
+
+        score.Should().Be(100.0);
+    }
+
+    [Fact]
+    public void Score_WhitespaceOnly_VsNonEmpty_Returns0()
+    {
+        var score = _sut.Score("   ", "hello");
+
+        score.Should().Be(0.0);
+    }
+
+    [Fact]
+    public void Score_CaseInsensitive_PPE_LowerCase_Matches()
+    {
+        var score = _sut.Score("PPE", "ppe");
+
+        score.Should().Be(100.0);
+    }
+
+    [Fact]
+    public void Score_CaseInsensitive_MixedCase_Matches()
+    {
+        var score = _sut.Score("Wear PPE Always", "wear ppe always");
+
+        score.Should().Be(100.0);
+    }
 }

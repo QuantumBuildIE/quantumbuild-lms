@@ -43,6 +43,7 @@ public class TestTenantSeeder
     {
         await SeedCoreAsync();
         await SeedToolboxTalksAsync();
+        await SeedTranslationValidationAsync();
         await _context.SaveChangesAsync();
 
         _logger.LogInformation("Test tenant seeding completed successfully");
@@ -77,6 +78,18 @@ public class TestTenantSeeder
         await ExecuteDeleteAsync("ToolboxTalkSections", "\"ToolboxTalkId\" IN (SELECT \"Id\" FROM \"ToolboxTalks\" WHERE \"TenantId\" = {0})", tenantId);
         await ExecuteDeleteAsync("ToolboxTalks", "\"TenantId\" = {0}", tenantId);
         await ExecuteDeleteAsync("ToolboxTalkSettings", "\"TenantId\" = {0}", tenantId);
+
+        // Translation validation module
+        await ExecuteDeleteAsync("TranslationValidationResults", "\"ValidationRunId\" IN (SELECT \"Id\" FROM \"TranslationValidationRuns\" WHERE \"TenantId\" = {0})", tenantId);
+        await ExecuteDeleteAsync("TranslationValidationRuns", "\"TenantId\" = {0}", tenantId);
+        await ExecuteDeleteAsync("SafetyGlossaryTerms", "\"GlossaryId\" IN (SELECT \"Id\" FROM \"SafetyGlossaries\" WHERE \"TenantId\" = {0})", tenantId);
+        await ExecuteDeleteAsync("SafetyGlossaries", "\"TenantId\" = {0}", tenantId);
+        await ExecuteDeleteAsync("ContentCreationSessions", "\"TenantId\" = {0}", tenantId);
+
+        // Also clean up Tenant B for isolation tests
+        var tenantBId = TestTenantConstants.TenantB.TenantId;
+        await ExecuteDeleteAsync("TranslationValidationResults", "\"ValidationRunId\" IN (SELECT \"Id\" FROM \"TranslationValidationRuns\" WHERE \"TenantId\" = {0})", tenantBId);
+        await ExecuteDeleteAsync("TranslationValidationRuns", "\"TenantId\" = {0}", tenantBId);
 
         // Core module (must be last due to foreign keys)
         await ExecuteDeleteAsync("Contacts", "\"TenantId\" = {0}", tenantId);
@@ -637,6 +650,7 @@ public class TestTenantSeeder
         {
             Id = TestTenantConstants.ToolboxTalks.Talks.BasicTalk,
             TenantId = TestTenantConstants.TenantId,
+            Code = "TEST-001",
             Title = TestTenantConstants.ToolboxTalks.Talks.BasicTalkTitle,
             Description = "A basic safety talk covering fundamental workplace safety principles.",
             Frequency = ToolboxTalkFrequency.Once,
@@ -700,6 +714,7 @@ public class TestTenantSeeder
         {
             Id = TestTenantConstants.ToolboxTalks.Talks.TalkWithQuiz,
             TenantId = TestTenantConstants.TenantId,
+            Code = "TEST-002",
             Title = TestTenantConstants.ToolboxTalks.Talks.TalkWithQuizTitle,
             Description = "A comprehensive safety talk with quiz assessment to verify understanding.",
             Frequency = ToolboxTalkFrequency.Monthly,
@@ -820,6 +835,7 @@ public class TestTenantSeeder
         {
             Id = TestTenantConstants.ToolboxTalks.Talks.TalkWithVideo,
             TenantId = TestTenantConstants.TenantId,
+            Code = "TEST-003",
             Title = TestTenantConstants.ToolboxTalks.Talks.TalkWithVideoTitle,
             Description = "A video-based safety talk with supplementary reading material.",
             Frequency = ToolboxTalkFrequency.Annually,
@@ -1093,6 +1109,295 @@ public class TestTenantSeeder
         await completions.AddAsync(completion);
         await _context.SaveChangesAsync();
         _logger.LogInformation("Created completion record for completed talk");
+    }
+
+    #endregion
+
+    #region Translation Validation Seeding
+
+    private async Task SeedTranslationValidationAsync()
+    {
+        await SeedSafetyGlossariesAsync();
+        await SeedValidationRunsAsync();
+        await SeedContentCreationSessionsAsync();
+    }
+
+    private async Task SeedSafetyGlossariesAsync()
+    {
+        var glossaries = _context.Set<SafetyGlossary>();
+        var terms = _context.Set<SafetyGlossaryTerm>();
+
+        // Check if test glossaries already seeded (by checking for tenant glossary which is unique to test seeder)
+        if (await glossaries.IgnoreQueryFilters().AnyAsync(g => g.Id == TestTenantConstants.TranslationValidation.TenantGlossary))
+        {
+            _logger.LogInformation("Safety glossaries already exist, skipping seeding");
+            return;
+        }
+
+        // Find the existing system default "construction" glossary (seeded by DataSeeder's SafetyGlossarySeedData).
+        // We reuse it rather than creating a duplicate that would violate the unique index on (TenantId, SectorKey).
+        var existingSystemGlossary = await glossaries.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(g => g.TenantId == null
+                && g.SectorKey == TestTenantConstants.TranslationValidation.SystemGlossarySectorKey);
+
+        Guid systemGlossaryId;
+        if (existingSystemGlossary != null)
+        {
+            systemGlossaryId = existingSystemGlossary.Id;
+            _logger.LogInformation("Using existing system glossary '{SectorKey}' (Id: {Id})",
+                existingSystemGlossary.SectorKey, existingSystemGlossary.Id);
+
+            // Add "Harness" term if not already present (DataSeeder doesn't seed it)
+            var hasHarness = await terms.IgnoreQueryFilters()
+                .AnyAsync(t => t.GlossaryId == systemGlossaryId && t.EnglishTerm == "Harness");
+            if (!hasHarness)
+            {
+                await terms.AddAsync(new SafetyGlossaryTerm
+                {
+                    Id = TestTenantConstants.TranslationValidation.SystemTerm_Harness,
+                    GlossaryId = systemGlossaryId,
+                    EnglishTerm = "Harness",
+                    Category = "Equipment",
+                    IsCritical = true,
+                    Translations = """{"pl":"uprząż","ro":"ham","es":"arnés"}""",
+                    CreatedAt = DateTime.UtcNow.AddDays(-30),
+                    CreatedBy = "system-seeder"
+                });
+            }
+        }
+        else
+        {
+            // No system glossary exists yet — create one (unlikely in integration tests but handles edge case)
+            var systemGlossary = new SafetyGlossary
+            {
+                Id = TestTenantConstants.TranslationValidation.SystemGlossary,
+                TenantId = null,
+                SectorKey = TestTenantConstants.TranslationValidation.SystemGlossarySectorKey,
+                SectorName = TestTenantConstants.TranslationValidation.SystemGlossarySectorName,
+                SectorIcon = "hard-hat",
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow.AddDays(-30),
+                CreatedBy = "system-seeder"
+            };
+            await glossaries.AddAsync(systemGlossary);
+            systemGlossaryId = systemGlossary.Id;
+
+            // Add both terms since no DataSeeder ran
+            await terms.AddAsync(new SafetyGlossaryTerm
+            {
+                Id = TestTenantConstants.TranslationValidation.SystemTerm_PPE,
+                GlossaryId = systemGlossaryId,
+                EnglishTerm = "PPE",
+                Category = "Equipment",
+                IsCritical = true,
+                Translations = """{"pl":"ŚOI","ro":"EIP","es":"EPP"}""",
+                CreatedAt = DateTime.UtcNow.AddDays(-30),
+                CreatedBy = "system-seeder"
+            });
+
+            await terms.AddAsync(new SafetyGlossaryTerm
+            {
+                Id = TestTenantConstants.TranslationValidation.SystemTerm_Harness,
+                GlossaryId = systemGlossaryId,
+                EnglishTerm = "Harness",
+                Category = "Equipment",
+                IsCritical = true,
+                Translations = """{"pl":"uprząż","ro":"ham","es":"arnés"}""",
+                CreatedAt = DateTime.UtcNow.AddDays(-30),
+                CreatedBy = "system-seeder"
+            });
+        }
+
+        // Tenant-specific glossary
+        var tenantGlossary = new SafetyGlossary
+        {
+            Id = TestTenantConstants.TranslationValidation.TenantGlossary,
+            TenantId = TestTenantConstants.TenantId,
+            SectorKey = TestTenantConstants.TranslationValidation.TenantGlossarySectorKey,
+            SectorName = TestTenantConstants.TranslationValidation.TenantGlossarySectorName,
+            SectorIcon = "factory",
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow.AddDays(-20),
+            CreatedBy = "test-seeder"
+        };
+        await glossaries.AddAsync(tenantGlossary);
+
+        await terms.AddAsync(new SafetyGlossaryTerm
+        {
+            Id = TestTenantConstants.TranslationValidation.TenantTerm_LOTO,
+            GlossaryId = tenantGlossary.Id,
+            EnglishTerm = "LOTO",
+            Category = "Procedure",
+            IsCritical = true,
+            Translations = """{"pl":"LOTO","ro":"LOTO"}""",
+            CreatedAt = DateTime.UtcNow.AddDays(-20),
+            CreatedBy = "test-seeder"
+        });
+
+        await _context.SaveChangesAsync();
+        _logger.LogInformation("Seeded safety glossaries and terms");
+    }
+
+    private async Task SeedValidationRunsAsync()
+    {
+        var runs = _context.Set<TranslationValidationRun>();
+
+        if (await runs.IgnoreQueryFilters().AnyAsync(r => r.Id == TestTenantConstants.TranslationValidation.CompletedRun))
+        {
+            _logger.LogInformation("Validation runs already exist, skipping seeding");
+            return;
+        }
+
+        var talkId = TestTenantConstants.ToolboxTalks.Talks.BasicTalk;
+
+        // Completed validation run with a passed section
+        var completedRun = new TranslationValidationRun
+        {
+            Id = TestTenantConstants.TranslationValidation.CompletedRun,
+            TenantId = TestTenantConstants.TenantId,
+            ToolboxTalkId = talkId,
+            LanguageCode = "pl",
+            SectorKey = "construction",
+            PassThreshold = 75,
+            SourceLanguage = "en",
+            OverallScore = 88,
+            OverallOutcome = ValidationOutcome.Pass,
+            TotalSections = 1,
+            PassedSections = 1,
+            ReviewSections = 0,
+            FailedSections = 0,
+            Status = ValidationRunStatus.Completed,
+            StartedAt = DateTime.UtcNow.AddHours(-1),
+            CompletedAt = DateTime.UtcNow.AddMinutes(-30),
+            ReviewerName = "Test Reviewer",
+            ReviewerOrg = "Test Org",
+            DocumentRef = "TV-TEST-001",
+            CreatedAt = DateTime.UtcNow.AddHours(-1),
+            CreatedBy = "test-seeder"
+        };
+        await runs.AddAsync(completedRun);
+
+        // Run with a Review section (for reviewer decision tests)
+        var reviewRun = new TranslationValidationRun
+        {
+            Id = TestTenantConstants.TranslationValidation.RunWithReviewSection,
+            TenantId = TestTenantConstants.TenantId,
+            ToolboxTalkId = talkId,
+            LanguageCode = "pl",
+            SectorKey = "construction",
+            PassThreshold = 75,
+            SourceLanguage = "en",
+            OverallScore = 70,
+            OverallOutcome = ValidationOutcome.Review,
+            TotalSections = 2,
+            PassedSections = 1,
+            ReviewSections = 1,
+            FailedSections = 0,
+            Status = ValidationRunStatus.Completed,
+            StartedAt = DateTime.UtcNow.AddHours(-2),
+            CompletedAt = DateTime.UtcNow.AddHours(-1),
+            ReviewerName = "Test Reviewer",
+            DocumentRef = "TV-TEST-002",
+            CreatedAt = DateTime.UtcNow.AddHours(-2),
+            CreatedBy = "test-seeder"
+        };
+        await runs.AddAsync(reviewRun);
+
+        // Seed validation results
+        var results = _context.Set<TranslationValidationResult>();
+
+        await results.AddAsync(new TranslationValidationResult
+        {
+            Id = TestTenantConstants.TranslationValidation.PassedResult,
+            ValidationRunId = completedRun.Id,
+            SectionIndex = 0,
+            SectionTitle = "Introduction",
+            OriginalText = "Always wear PPE on site",
+            TranslatedText = "Zawsze noś ŚOI na budowie",
+            BackTranslationA = "Always wear PPE on site",
+            BackTranslationB = "Always wear PPE on the construction site",
+            ScoreA = 90,
+            ScoreB = 85,
+            FinalScore = 88,
+            RoundsUsed = 1,
+            Outcome = ValidationOutcome.Pass,
+            EngineOutcome = ValidationOutcome.Pass,
+            IsSafetyCritical = true,
+            CriticalTerms = "PPE",
+            EffectiveThreshold = 85,
+            ReviewerDecision = ReviewerDecision.Pending,
+            CreatedAt = DateTime.UtcNow.AddHours(-1),
+            CreatedBy = "test-seeder"
+        });
+
+        await results.AddAsync(new TranslationValidationResult
+        {
+            Id = TestTenantConstants.TranslationValidation.ReviewResult,
+            ValidationRunId = reviewRun.Id,
+            SectionIndex = 1,
+            SectionTitle = "Safety Procedures",
+            OriginalText = "Do not operate heavy machinery without training",
+            TranslatedText = "Nie obsługuj ciężkich maszyn bez szkolenia",
+            BackTranslationA = "Do not use heavy machines without training",
+            BackTranslationB = "Don't work with heavy equipment without courses",
+            ScoreA = 72,
+            ScoreB = 65,
+            FinalScore = 69,
+            RoundsUsed = 3,
+            Outcome = ValidationOutcome.Review,
+            EngineOutcome = ValidationOutcome.Review,
+            IsSafetyCritical = true,
+            CriticalTerms = "[prohibition] Do not",
+            EffectiveThreshold = 85,
+            ReviewerDecision = ReviewerDecision.Pending,
+            CreatedAt = DateTime.UtcNow.AddHours(-2),
+            CreatedBy = "test-seeder"
+        });
+
+        await _context.SaveChangesAsync();
+        _logger.LogInformation("Seeded {Count} validation runs with results", 2);
+    }
+
+    private async Task SeedContentCreationSessionsAsync()
+    {
+        var sessions = _context.Set<ContentCreationSession>();
+
+        if (await sessions.IgnoreQueryFilters().AnyAsync(s => s.Id == TestTenantConstants.TranslationValidation.ActiveSession))
+        {
+            _logger.LogInformation("Content creation sessions already exist, skipping seeding");
+            return;
+        }
+
+        // Active session (not expired)
+        await sessions.AddAsync(new ContentCreationSession
+        {
+            Id = TestTenantConstants.TranslationValidation.ActiveSession,
+            TenantId = TestTenantConstants.TenantId,
+            InputMode = InputMode.Text,
+            Status = ContentCreationSessionStatus.Parsed,
+            SourceText = "Test section content about safety",
+            ParsedSectionsJson = """[{"title":"Section 1","content":"Test content about safety"}]""",
+            ExpiresAt = DateTime.UtcNow.AddHours(12),
+            CreatedAt = DateTime.UtcNow.AddHours(-1),
+            CreatedBy = "test-seeder"
+        });
+
+        // Expired session (for cleanup job and expiry tests)
+        await sessions.AddAsync(new ContentCreationSession
+        {
+            Id = TestTenantConstants.TranslationValidation.ExpiredSession,
+            TenantId = TestTenantConstants.TenantId,
+            InputMode = InputMode.Text,
+            Status = ContentCreationSessionStatus.Parsed,
+            SourceText = "Expired session content",
+            ParsedSectionsJson = """[{"title":"Section 1","content":"Expired content"}]""",
+            ExpiresAt = DateTime.UtcNow.AddHours(-6),
+            CreatedAt = DateTime.UtcNow.AddDays(-2),
+            CreatedBy = "test-seeder"
+        });
+
+        await _context.SaveChangesAsync();
+        _logger.LogInformation("Seeded {Count} content creation sessions", 2);
     }
 
     #endregion

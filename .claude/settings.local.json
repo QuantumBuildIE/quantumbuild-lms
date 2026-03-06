@@ -77,7 +77,17 @@
       "Bash(npx eslint:*)",
       "Bash(git check-ignore:*)",
       "Bash(git status:*)",
-      "Bash(/dev/null -o -name \"*Float*\")"
+      "Bash(/dev/null -o -name \"*Float*\")",
+      "Bash(pwsh -Command '$r = Invoke-WebRequest -Uri \"\"http://localhost:5222/api/auth/login\"\" -Method POST -Headers @{\"\"Content-Type\"\"=\"\"application/json\"\"} -Body \"\"{`\"\"email`\"\":`\"\"superuser@certifiediq.ai`\"\",`\"\"password`\"\":`\"\"SuperUser123!`\"\"}\"\" -SkipHttpErrorCheck; \"\"Status: $\\($r.StatusCode\\)\"\"; [System.Text.Encoding]::UTF8.GetString\\($r.Content\\)')",
+      "Bash(pwsh -Command '$body = @{email=\"\"superuser@certifiediq.ai\"\";password=\"\"SuperUser123!\"\"} | ConvertTo-Json; $r = Invoke-WebRequest -Uri \"\"http://localhost:5222/api/auth/login\"\" -Method POST -Headers @{\"\"Content-Type\"\"=\"\"application/json\"\"} -Body $body -SkipHttpErrorCheck; \"\"Status: $\\($r.StatusCode\\)\"\"; \"\"ContentType: $\\($r.Content.GetType\\(\\).FullName\\)\"\"; if \\($r.Content -is [byte[]]\\) { [System.Text.Encoding]::UTF8.GetString\\($r.Content\\) } else { $r.Content }')",
+      "Bash(pwsh -Command '$body = @{email=\"\"admin@quantumbuild.ai\"\";password=\"\"Admin123!\"\"} | ConvertTo-Json; $r = Invoke-WebRequest -Uri \"\"http://localhost:5222/api/auth/login\"\" -Method POST -Headers @{\"\"Content-Type\"\"=\"\"application/json\"\"} -Body $body -SkipHttpErrorCheck; \"\"Status: $\\($r.StatusCode\\)\"\"; if \\($r.Content -is [byte[]]\\) { [System.Text.Encoding]::UTF8.GetString\\($r.Content\\).Substring\\(0,500\\) } else { $r.Content.Substring\\(0, [Math]::Min\\(500, $r.Content.Length\\)\\) }')",
+      "Bash(pwsh -Command '$body = @{email=\"\"admin@quantumbuild.ai\"\";password=\"\"Admin1234!\"\"} | ConvertTo-Json; $r = Invoke-WebRequest -Uri \"\"http://localhost:5222/api/auth/login\"\" -Method POST -Headers @{\"\"Content-Type\"\"=\"\"application/json\"\"} -Body $body -SkipHttpErrorCheck; \"\"Status: $\\($r.StatusCode\\)\"\"')",
+      "Bash(pwsh -Command '$body = @{email=\"\"admin@quantumbuild.ai\"\";password=\"\"Admin123!\"\"} | ConvertTo-Json; \"\"Sending: $body\"\"; $r = Invoke-WebRequest -Uri \"\"http://localhost:5222/api/auth/login\"\" -Method POST -ContentType \"\"application/json\"\" -Body \\([System.Text.Encoding]::UTF8.GetBytes\\($body\\)\\) -SkipHttpErrorCheck; \"\"Status: $\\($r.StatusCode\\)\"\"; if \\($r.Content -is [byte[]]\\) { [System.Text.Encoding]::UTF8.GetString\\($r.Content\\) } else { $r.Content }')",
+      "Bash(pwsh -Command '$pw = \"\"Admin123!\"\"; $body = @{email=\"\"admin@quantumbuild.ai\"\";password=$pw} | ConvertTo-Json; \"\"JSON: $body\"\"')",
+      "Bash(pwsh -Command '$pw = \"\"Admin123!\"\"; $body = @{email=\"\"admin@quantumbuild.ai\"\";password=$pw} | ConvertTo-Json; $body = $body -replace \"\"\\\\\\\\\\\\\\\\!\"\", \"\"!\"\"; \"\"JSON: $body\"\"')",
+      "Bash(pwsh -Command '[System.Text.Json.JsonSerializer.Serialize\\(@{email=\"\"admin@quantumbuild.ai\"\";password=\"\"Admin123!\"\"}\\)]')",
+      "Bash(pwsh -Command '$h = @{email=\"\"admin@quantumbuild.ai\"\";password=\"\"Admin123!\"\"}; $j = [System.Text.Json.JsonSerializer]::Serialize\\($h\\); \"\"JSON: $j\"\"')",
+      "Bash(pwsh -Command '$pw = \"\"SuperUser123!\"\"; $body = \"\"{`\"\"email`\"\":`\"\"superuser@certifiediq.ai`\"\",`\"\"password`\"\":`\"\"$pw`\"\"}\"\"; \"\"Body: $body\"\"; $r = Invoke-WebRequest -Uri \"\"http://localhost:5222/api/auth/login\"\" -Method POST -ContentType \"\"application/json\"\" -Body $body -SkipHttpErrorCheck; \"\"Status: $\\($r.StatusCode\\)\"\"; if \\($r.Content -is [byte[]]\\) { [System.Text.Encoding]::UTF8.GetString\\($r.Content\\).Substring\\(0,200\\) } else { $r.Content.Substring\\(0, [Math]::Min\\(200, $r.Content.Length\\)\\) }')"
     ]
   }
 }

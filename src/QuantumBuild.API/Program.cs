@@ -123,6 +123,7 @@ builder.Services.AddScoped<UpdateOverdueToolboxTalksJob>();
 builder.Services.AddScoped<ContentGenerationJob>();
 builder.Services.AddScoped<TranslationValidationJob>();
 builder.Services.AddScoped<DailyTranslationScanJob>();
+builder.Services.AddScoped<ExpiredSessionCleanupJob>();
 builder.Services.AddScoped<LessonParseJob>();
 
 // Add Hangfire with PostgreSQL storage
@@ -378,6 +379,11 @@ using (var scope = app.Services.CreateScope())
         "daily-translation-scan",
         job => job.ExecuteAsync(CancellationToken.None),
         Cron.Daily(2, 0)); // 2am UTC daily
+
+    recurringJobManager.AddOrUpdate<ExpiredSessionCleanupJob>(
+        "expired-session-cleanup",
+        job => job.ExecuteAsync(CancellationToken.None),
+        Cron.Daily(3, 0)); // 3am UTC daily
 }
 
 app.Run();

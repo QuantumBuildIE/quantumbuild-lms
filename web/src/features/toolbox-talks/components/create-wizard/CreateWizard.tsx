@@ -206,7 +206,7 @@ export function CreateWizard() {
   };
 
   return (
-    <div className="mx-auto max-w-5xl py-6">
+    <div className="space-y-6">
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center gap-4 mb-2">

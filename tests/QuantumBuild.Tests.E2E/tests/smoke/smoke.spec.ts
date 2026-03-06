@@ -26,9 +26,6 @@ test.describe.skip('Smoke Tests @smoke', () => {
         { url: '/dashboard', pattern: /dashboard/i },
         { url: '/admin/employees', pattern: /employee/i },
         { url: '/admin/sites', pattern: /site/i },
-        { url: '/stock/products', pattern: /product/i },
-        { url: '/stock/orders', pattern: /order/i },
-        { url: '/proposals', pattern: /proposal/i },
       ];
 
       for (const section of sections) {
@@ -67,43 +64,11 @@ test.describe.skip('Smoke Tests @smoke', () => {
     });
   });
 
-  test.describe('Warehouse User Smoke Tests', () => {
-    test.use({ storageState: 'playwright/.auth/warehouse.json' });
-
-    test('can access stock management pages', async ({ page }) => {
-      await page.goto('/stock/products');
-      await expect(page).not.toHaveURL(/\/login/);
-      await page.waitForLoadState('networkidle');
-    });
-
-    test('can view stock orders', async ({ page }) => {
-      await page.goto('/stock/orders');
-      await expect(page).not.toHaveURL(/\/login/);
-      await page.waitForLoadState('networkidle');
-    });
-  });
-
-  test.describe('Site Manager User Smoke Tests', () => {
-    test.use({ storageState: 'playwright/.auth/sitemanager.json' });
-
-    test('can access site manager home page', async ({ page }) => {
-      await page.goto('/stock/orders');
-      await expect(page).not.toHaveURL(/\/login/);
-      await page.waitForLoadState('networkidle');
-    });
-  });
-
   test.describe('Finance User Smoke Tests', () => {
     test.use({ storageState: 'playwright/.auth/finance.json' });
 
     test('can access dashboard', async ({ page }) => {
       await page.goto('/dashboard');
-      await expect(page).not.toHaveURL(/\/login/);
-      await page.waitForLoadState('networkidle');
-    });
-
-    test('can view proposals', async ({ page }) => {
-      await page.goto('/proposals');
       await expect(page).not.toHaveURL(/\/login/);
       await page.waitForLoadState('networkidle');
     });
@@ -129,37 +94,6 @@ test.describe.skip('Module Data Loading @smoke', () => {
     const hasEmptyState = await emptyState.isVisible().catch(() => false);
 
     expect(hasRows || hasEmptyState).toBeTruthy();
-  });
-
-  test('products list loads data', async ({ page }) => {
-    await page.goto('/stock/products');
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(2000);
-
-    const tableRows = page.locator('tbody tr, [data-testid="product-row"]');
-    const emptyState = page.locator('[data-testid="empty-state"], .empty-state');
-
-    const hasRows = await tableRows.count() > 0;
-    const hasEmptyState = await emptyState.isVisible().catch(() => false);
-
-    expect(hasRows || hasEmptyState).toBeTruthy();
-  });
-
-  test('stock orders list loads', async ({ page }) => {
-    await page.goto('/stock/orders');
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(2000);
-
-    // Should have either orders table or empty state
-    await expect(page.locator('table, [data-testid="orders-list"], .empty-state').first()).toBeVisible();
-  });
-
-  test('proposals list loads', async ({ page }) => {
-    await page.goto('/proposals');
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(2000);
-
-    await expect(page.locator('table, [data-testid="proposals-list"], .empty-state').first()).toBeVisible();
   });
 
   test('toolbox talks list loads', async ({ page }) => {
@@ -227,9 +161,6 @@ test.describe.skip('API Health @smoke', () => {
     const endpoints = [
       '/api/auth/me',
       '/api/employees',
-      '/api/products',
-      '/api/stock-orders',
-      '/api/proposals'
     ];
 
     for (const endpoint of endpoints) {
