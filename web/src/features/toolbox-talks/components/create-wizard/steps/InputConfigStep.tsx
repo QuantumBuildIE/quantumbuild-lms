@@ -32,7 +32,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/lib/auth/use-auth';
 import { useLookupValues } from '@/hooks/use-lookups';
 import { useAllCompanies } from '@/lib/api/admin/use-companies';
-import { useCreateSession, useUploadSessionFile } from '@/lib/api/toolbox-talks/use-content-creation';
+import { useCreateSession, useUploadSessionFile, useUpdateSource } from '@/lib/api/toolbox-talks/use-content-creation';
 import { useTenantSettings } from '@/lib/api/admin/use-tenant-settings';
 import type { WizardState } from '../CreateWizard';
 import type { InputMode } from '@/types/content-creation';
@@ -82,6 +82,7 @@ export function InputConfigStep({
   const { user } = useAuth();
   const createSession = useCreateSession();
   const uploadFile = useUploadSessionFile();
+  const updateSource = useUpdateSource();
 
   // Lookups
   const { data: languages = [], isLoading: languagesLoading } =
@@ -231,7 +232,7 @@ export function InputConfigStep({
           ? customAuditPurpose
           : state.auditPurpose;
 
-      // Step 1: Create session if not yet created
+      // Step 1: Create session if not yet created, or update source if returning
       let sessionId = state.sessionId;
 
       if (!sessionId) {
@@ -249,6 +250,17 @@ export function InputConfigStep({
 
         sessionId = session.id;
         updateState({ sessionId: session.id });
+      } else {
+        // Session exists — update source content and reset to Draft for re-parsing
+        await updateSource.mutateAsync({
+          sessionId,
+          sourceText: state.inputMode === 'Text' ? state.sourceText : undefined,
+        });
+        updateState({
+          parsedSections: [],
+          suggestedOutputType: null,
+          selectedOutputType: null,
+        });
       }
 
       // Step 2: Upload file if applicable
@@ -723,14 +735,15 @@ export function InputConfigStep({
           disabled={
             !canContinue ||
             createSession.isPending ||
+            updateSource.isPending ||
             uploadFile.isPending ||
             isUploading
           }
         >
-          {createSession.isPending || isUploading ? (
+          {createSession.isPending || updateSource.isPending || isUploading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              {isUploading ? 'Uploading...' : 'Creating session...'}
+              {isUploading ? 'Uploading...' : updateSource.isPending ? 'Updating...' : 'Creating session...'}
             </>
           ) : (
             <>

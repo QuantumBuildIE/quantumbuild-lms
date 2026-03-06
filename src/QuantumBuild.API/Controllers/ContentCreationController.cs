@@ -92,6 +92,40 @@ public class ContentCreationController : ControllerBase
     }
 
     /// <summary>
+    /// Update source content and reset session to Draft for re-parsing
+    /// </summary>
+    [HttpPut("session/{id:guid}/source")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(typeof(ContentCreationSessionDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateSource(
+        Guid id,
+        [FromBody] UpdateSourceRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var tenantId = _currentUserService.TenantId;
+            var session = await _sessionService.UpdateSourceAsync(id, request, tenantId, cancellationToken);
+            return Ok(session);
+        }
+        catch (InvalidOperationException ex) when (ex.Message == "Session not found")
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(Result.Fail(ex.Message));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating source for session {SessionId}", id);
+            return StatusCode(500, Result.Fail("Error updating source"));
+        }
+    }
+
+    /// <summary>
     /// Trigger content parsing for a session
     /// </summary>
     [HttpPost("session/{id:guid}/parse")]

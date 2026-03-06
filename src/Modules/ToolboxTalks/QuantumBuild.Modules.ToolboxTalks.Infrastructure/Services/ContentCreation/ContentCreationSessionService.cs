@@ -128,6 +128,32 @@ public class ContentCreationSessionService : IContentCreationSessionService
         return MapToDto(session);
     }
 
+    public async Task<ContentCreationSessionDto> UpdateSourceAsync(
+        Guid sessionId,
+        UpdateSourceRequest request,
+        Guid tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        var session = await GetSessionEntityAsync(sessionId, tenantId, cancellationToken);
+
+        if (session.InputMode == InputMode.Text)
+        {
+            session.SourceText = request.SourceText;
+        }
+
+        // Reset to Draft so parse can be triggered again
+        session.Status = ContentCreationSessionStatus.Draft;
+        session.ParsedSectionsJson = null;
+        session.OutputType = null;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "[ContentCreationSession] Source updated and reset to Draft for session {SessionId}",
+            sessionId);
+
+        return MapToDto(session);
+    }
+
     public async Task<ContentCreationSessionDto> ParseContentAsync(
         Guid sessionId,
         Guid tenantId,

@@ -19,6 +19,12 @@ public interface IContentCreationSessionService
         Guid tenantId,
         CancellationToken cancellationToken = default);
 
+    Task<ContentCreationSessionDto> UpdateSourceAsync(
+        Guid sessionId,
+        UpdateSourceRequest request,
+        Guid tenantId,
+        CancellationToken cancellationToken = default);
+
     Task<ContentCreationSessionDto> ParseContentAsync(
         Guid sessionId,
         Guid tenantId,
@@ -109,6 +115,11 @@ public record CreateSessionRequest
     public string? DocumentRef { get; init; }
     public string? ClientName { get; init; }
     public string? AuditPurpose { get; init; }
+}
+
+public record UpdateSourceRequest
+{
+    public string? SourceText { get; init; }
 }
 
 public record UpdateSectionsRequest

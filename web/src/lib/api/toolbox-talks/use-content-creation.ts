@@ -5,6 +5,7 @@ import {
   createSession,
   getSession,
   uploadSessionFile,
+  updateSessionSource,
   parseSessionContent,
   updateSessionSections,
   startTranslateValidate,
@@ -108,6 +109,29 @@ export function useUploadSessionFile() {
       file: File;
       onProgress?: (percent: number) => void;
     }) => uploadSessionFile(sessionId, file, onProgress),
+    onSuccess: (session) => {
+      queryClient.setQueryData(
+        contentCreationKeys.session(session.id),
+        session
+      );
+    },
+  });
+}
+
+/**
+ * Update source content and reset session to Draft for re-parsing
+ */
+export function useUpdateSource() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      sessionId,
+      sourceText,
+    }: {
+      sessionId: string;
+      sourceText?: string;
+    }) => updateSessionSource(sessionId, sourceText),
     onSuccess: (session) => {
       queryClient.setQueryData(
         contentCreationKeys.session(session.id),

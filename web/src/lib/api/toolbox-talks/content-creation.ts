@@ -73,6 +73,20 @@ export async function uploadSessionFile(
 }
 
 /**
+ * Update source content and reset session to Draft for re-parsing
+ */
+export async function updateSessionSource(
+  sessionId: string,
+  sourceText?: string
+): Promise<ContentCreationSession> {
+  const response = await apiClient.put<ContentCreationSession>(
+    `/toolbox-talks/create/session/${sessionId}/source`,
+    { sourceText }
+  );
+  return response.data;
+}
+
+/**
  * Trigger content parsing for the session
  */
 export async function parseSessionContent(
