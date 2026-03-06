@@ -1,5 +1,4 @@
 import { apiClient } from '@/lib/api/client';
-import type { ApiResponse } from '@/types/auth';
 import type {
   ContentCreationSession,
   ContentCreationSettings,
@@ -25,11 +24,11 @@ import type {
 export async function createSession(
   request: CreateSessionRequest
 ): Promise<ContentCreationSession> {
-  const response = await apiClient.post<ApiResponse<ContentCreationSession>>(
+  const response = await apiClient.post<ContentCreationSession>(
     '/toolbox-talks/create/session',
     request
   );
-  return response.data.data;
+  return response.data;
 }
 
 /**
@@ -38,10 +37,10 @@ export async function createSession(
 export async function getSession(
   sessionId: string
 ): Promise<ContentCreationSession> {
-  const response = await apiClient.get<ApiResponse<ContentCreationSession>>(
+  const response = await apiClient.get<ContentCreationSession>(
     `/toolbox-talks/create/session/${sessionId}`
   );
-  return response.data.data;
+  return response.data;
 }
 
 /**
@@ -55,7 +54,7 @@ export async function uploadSessionFile(
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await apiClient.post<ApiResponse<ContentCreationSession>>(
+  const response = await apiClient.post<ContentCreationSession>(
     `/toolbox-talks/create/session/${sessionId}/upload`,
     formData,
     {
@@ -70,7 +69,7 @@ export async function uploadSessionFile(
       },
     }
   );
-  return response.data.data;
+  return response.data;
 }
 
 /**
@@ -79,10 +78,10 @@ export async function uploadSessionFile(
 export async function parseSessionContent(
   sessionId: string
 ): Promise<ContentCreationSession> {
-  const response = await apiClient.post<ApiResponse<ContentCreationSession>>(
+  const response = await apiClient.post<ContentCreationSession>(
     `/toolbox-talks/create/session/${sessionId}/parse`
   );
-  return response.data.data;
+  return response.data;
 }
 
 /**
@@ -92,11 +91,11 @@ export async function updateSessionSections(
   sessionId: string,
   request: UpdateSectionsRequest
 ): Promise<ContentCreationSession> {
-  const response = await apiClient.put<ApiResponse<ContentCreationSession>>(
+  const response = await apiClient.put<ContentCreationSession>(
     `/toolbox-talks/create/session/${sessionId}/sections`,
     request
   );
-  return response.data.data;
+  return response.data;
 }
 
 /**
@@ -106,11 +105,11 @@ export async function startTranslateValidate(
   sessionId: string,
   request: StartTranslateValidateRequest
 ): Promise<ContentCreationSession> {
-  const response = await apiClient.post<ApiResponse<ContentCreationSession>>(
+  const response = await apiClient.post<ContentCreationSession>(
     `/toolbox-talks/create/session/${sessionId}/translate-validate`,
     request
   );
-  return response.data.data;
+  return response.data;
 }
 
 /**
@@ -120,11 +119,11 @@ export async function publishSession(
   sessionId: string,
   request: PublishRequest
 ): Promise<PublishResult> {
-  const response = await apiClient.post<ApiResponse<PublishResult>>(
+  const response = await apiClient.post<PublishResult>(
     `/toolbox-talks/create/session/${sessionId}/publish`,
     request
   );
-  return response.data.data;
+  return response.data;
 }
 
 /**
@@ -144,10 +143,10 @@ export async function abandonSession(sessionId: string): Promise<void> {
 export async function generateSessionQuiz(
   sessionId: string
 ): Promise<ContentCreationSession> {
-  const response = await apiClient.post<ApiResponse<ContentCreationSession>>(
+  const response = await apiClient.post<ContentCreationSession>(
     `/toolbox-talks/create/session/${sessionId}/generate-quiz`
   );
-  return response.data.data;
+  return response.data;
 }
 
 /**
@@ -156,10 +155,10 @@ export async function generateSessionQuiz(
 export async function getSessionQuizData(
   sessionId: string
 ): Promise<QuizData> {
-  const response = await apiClient.get<ApiResponse<QuizData>>(
+  const response = await apiClient.get<QuizData>(
     `/toolbox-talks/create/session/${sessionId}/quiz`
   );
-  return response.data.data;
+  return response.data;
 }
 
 /**
@@ -169,11 +168,11 @@ export async function updateSessionQuestions(
   sessionId: string,
   questions: QuizQuestion[]
 ): Promise<ContentCreationSession> {
-  const response = await apiClient.put<ApiResponse<ContentCreationSession>>(
+  const response = await apiClient.put<ContentCreationSession>(
     `/toolbox-talks/create/session/${sessionId}/questions`,
     { questions }
   );
-  return response.data.data;
+  return response.data;
 }
 
 /**
@@ -183,11 +182,11 @@ export async function updateSessionQuizSettings(
   sessionId: string,
   settings: QuizSettings
 ): Promise<ContentCreationSession> {
-  const response = await apiClient.put<ApiResponse<ContentCreationSession>>(
+  const response = await apiClient.put<ContentCreationSession>(
     `/toolbox-talks/create/session/${sessionId}/quiz-settings`,
     settings
   );
-  return response.data.data;
+  return response.data;
 }
 
 // ============================================
@@ -200,10 +199,10 @@ export async function updateSessionQuizSettings(
 export async function getSessionSettings(
   sessionId: string
 ): Promise<ContentCreationSettings> {
-  const response = await apiClient.get<ApiResponse<ContentCreationSettings>>(
+  const response = await apiClient.get<ContentCreationSettings>(
     `/toolbox-talks/create/session/${sessionId}/settings`
   );
-  return response.data.data;
+  return response.data;
 }
 
 /**
@@ -213,11 +212,11 @@ export async function updateSessionSettings(
   sessionId: string,
   settings: ContentCreationSettings
 ): Promise<ContentCreationSession> {
-  const response = await apiClient.put<ApiResponse<ContentCreationSession>>(
+  const response = await apiClient.put<ContentCreationSession>(
     `/toolbox-talks/create/session/${sessionId}/settings`,
     settings
   );
-  return response.data.data;
+  return response.data;
 }
 
 /**
@@ -230,12 +229,12 @@ export async function uploadSessionCoverImage(
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await apiClient.post<ApiResponse<ContentCreationSession>>(
+  const response = await apiClient.post<ContentCreationSession>(
     `/toolbox-talks/create/session/${sessionId}/cover-image`,
     formData,
     { headers: { 'Content-Type': 'multipart/form-data' } }
   );
-  return response.data.data;
+  return response.data;
 }
 
 // ============================================
@@ -249,10 +248,10 @@ export async function getValidationRun(
   talkId: string,
   runId: string
 ): Promise<ValidationRunDetail> {
-  const response = await apiClient.get<ApiResponse<ValidationRunDetail>>(
+  const response = await apiClient.get<ValidationRunDetail>(
     `/toolbox-talks/${talkId}/validation/runs/${runId}`
   );
-  return response.data.data;
+  return response.data;
 }
 
 /**
@@ -261,10 +260,10 @@ export async function getValidationRun(
 export async function getValidationRuns(
   talkId: string
 ): Promise<ValidationRunSummary[]> {
-  const response = await apiClient.get<ApiResponse<ValidationRunSummary[]>>(
+  const response = await apiClient.get<ValidationRunSummary[]>(
     `/toolbox-talks/${talkId}/validation/runs`
   );
-  return response.data.data;
+  return response.data;
 }
 
 /**
@@ -371,10 +370,10 @@ export async function getSessionValidationRun(
   sessionId: string,
   runId: string
 ): Promise<ValidationRunDetail> {
-  const response = await apiClient.get<ApiResponse<ValidationRunDetail>>(
+  const response = await apiClient.get<ValidationRunDetail>(
     `/toolbox-talks/create/session/${sessionId}/validation/runs/${runId}`
   );
-  return response.data.data;
+  return response.data;
 }
 
 /**
