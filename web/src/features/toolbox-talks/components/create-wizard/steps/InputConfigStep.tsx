@@ -653,7 +653,7 @@ export function InputConfigStep({
                   <SelectTrigger id="audit-purpose">
                     <SelectValue placeholder="Select purpose..." />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent position="popper" className="max-h-60">
                     {auditPurposes.map((p) => (
                       <SelectItem key={p} value={p}>
                         {p}
