@@ -231,6 +231,24 @@ function SectionRow({
   const { attributes, listeners, setNodeRef, style, isDragging } =
     useSortableItem({ id });
 
+  // Manual double-click detection — immune to dnd-kit pointer event interference
+  const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleTitlePointerUp = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.button !== 0) return; // left-click only
+      if (clickTimer.current) {
+        clearTimeout(clickTimer.current);
+        clickTimer.current = null;
+        onStartRename();
+      } else {
+        clickTimer.current = setTimeout(() => {
+          clickTimer.current = null;
+        }, 300);
+      }
+    },
+    [onStartRename]
+  );
+
   const label = `L${String(index + 1).padStart(2, '0')}`;
 
   return (
@@ -280,7 +298,7 @@ function SectionRow({
         ) : (
           <span
             className="flex-1 cursor-default truncate text-sm"
-            onDoubleClick={onStartRename}
+            onPointerUp={handleTitlePointerUp}
             title={section.title}
           >
             {section.title}

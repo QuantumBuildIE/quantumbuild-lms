@@ -30,6 +30,15 @@ import { OutputTypeSelector } from './parse/OutputTypeSelector';
 import { SectionList } from './parse/SectionList';
 import { ParseLogPanel } from './parse/ParseLogPanel';
 
+/** Normalize section keys from PascalCase (legacy) or camelCase to the expected shape */
+function normalizeSections(raw: Record<string, unknown>[]): ParsedSection[] {
+  return raw.map((s, i) => ({
+    title: (s.title ?? s.Title ?? 'Untitled') as string,
+    content: (s.content ?? s.Content ?? '') as string,
+    suggestedOrder: (s.suggestedOrder ?? s.SuggestedOrder ?? i) as number,
+  }));
+}
+
 // ============================================
 // Props
 // ============================================
@@ -136,7 +145,8 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
     if (!session?.parsedSectionsJson) return;
 
     try {
-      const parsed: ParsedSection[] = JSON.parse(session.parsedSectionsJson);
+      const raw = JSON.parse(session.parsedSectionsJson);
+      const parsed = normalizeSections(raw);
       const outputType = session.outputType ?? (parsed.length >= 3 ? 'Course' : 'Lesson');
 
       updateState({
@@ -227,7 +237,8 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
     }
 
     try {
-      const parsed: ParsedSection[] = JSON.parse(sectionsJson);
+      const raw = JSON.parse(sectionsJson);
+      const parsed = normalizeSections(raw);
       const suggested: OutputType = parsed.length >= 3 ? 'Course' : 'Lesson';
 
       updateState({

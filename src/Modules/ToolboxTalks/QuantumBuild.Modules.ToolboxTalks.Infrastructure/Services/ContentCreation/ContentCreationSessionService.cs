@@ -27,6 +27,11 @@ public class ContentCreationSessionService : IContentCreationSessionService
     private readonly TranslationValidationSettings _validationSettings;
     private readonly ILogger<ContentCreationSessionService> _logger;
 
+    private static readonly JsonSerializerOptions CamelCaseJson = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
+
     private static readonly HashSet<string> CommonWords = new(StringComparer.OrdinalIgnoreCase)
     {
         "a", "an", "the", "and", "or", "for", "in", "to", "of", "on", "at", "by", "with", "from", "is", "it"
@@ -160,7 +165,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
                 throw new InvalidOperationException($"Parsing failed: {parseResult.ErrorMessage}");
             }
 
-            session.ParsedSectionsJson = JsonSerializer.Serialize(parseResult.Sections);
+            session.ParsedSectionsJson = JsonSerializer.Serialize(parseResult.Sections, CamelCaseJson);
             session.OutputType = parseResult.SuggestedOutputType;
             session.Status = ContentCreationSessionStatus.Parsed;
             await _dbContext.SaveChangesAsync(cancellationToken);
@@ -201,7 +206,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
             .OrderBy(s => s.SuggestedOrder)
             .ToList();
 
-        session.ParsedSectionsJson = JsonSerializer.Serialize(sections);
+        session.ParsedSectionsJson = JsonSerializer.Serialize(sections, CamelCaseJson);
         session.OutputType = request.OutputType;
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -437,7 +442,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
                 }
             }
 
-            session.QuestionsJson = JsonSerializer.Serialize(allQuestions);
+            session.QuestionsJson = JsonSerializer.Serialize(allQuestions, CamelCaseJson);
 
             // Initialize default quiz settings if not already set
             if (string.IsNullOrWhiteSpace(session.QuizSettingsJson))
@@ -450,7 +455,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
                     ShuffleOptions = false,
                     AllowRetry = true
                 };
-                session.QuizSettingsJson = JsonSerializer.Serialize(defaultSettings);
+                session.QuizSettingsJson = JsonSerializer.Serialize(defaultSettings, CamelCaseJson);
             }
 
             session.Status = ContentCreationSessionStatus.QuizGenerated;
@@ -506,7 +511,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
             session.Status != ContentCreationSessionStatus.Parsed)
             throw new InvalidOperationException("Questions can only be updated in QuizGenerated, Validated, or Parsed status");
 
-        session.QuestionsJson = JsonSerializer.Serialize(request.Questions);
+        session.QuestionsJson = JsonSerializer.Serialize(request.Questions, CamelCaseJson);
 
         // If questions are being set for the first time (no prior generation), move to QuizGenerated
         if (session.Status != ContentCreationSessionStatus.QuizGenerated)
@@ -529,7 +534,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
     {
         var session = await GetSessionEntityAsync(sessionId, tenantId, cancellationToken);
 
-        session.QuizSettingsJson = JsonSerializer.Serialize(settings);
+        session.QuizSettingsJson = JsonSerializer.Serialize(settings, CamelCaseJson);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(
@@ -576,7 +581,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
     {
         var session = await GetSessionEntityAsync(sessionId, tenantId, cancellationToken);
 
-        session.SettingsJson = JsonSerializer.Serialize(settings);
+        session.SettingsJson = JsonSerializer.Serialize(settings, CamelCaseJson);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(
@@ -616,7 +621,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
             : new SessionSettingsDto();
 
         settings = settings with { CoverImageUrl = result.PublicUrl };
-        session.SettingsJson = JsonSerializer.Serialize(settings);
+        session.SettingsJson = JsonSerializer.Serialize(settings, CamelCaseJson);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(
