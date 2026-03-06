@@ -31,7 +31,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/auth/use-auth';
 import { useLookupValues } from '@/hooks/use-lookups';
-import { useCompanies } from '@/lib/api/admin/use-companies';
+import { useAllCompanies } from '@/lib/api/admin/use-companies';
 import { useCreateSession, useUploadSessionFile } from '@/lib/api/toolbox-talks/use-content-creation';
 import { useTenantSettings } from '@/lib/api/admin/use-tenant-settings';
 import type { WizardState } from '../CreateWizard';
@@ -87,7 +87,7 @@ export function InputConfigStep({
   const { data: languages = [], isLoading: languagesLoading } =
     useLookupValues('Language');
   const { data: companies = [], isLoading: companiesLoading } =
-    useCompanies({ pageSize: 100 });
+    useAllCompanies();
   const { data: tenantSettings } = useTenantSettings();
 
   // Derive thresholds and audit purposes from tenant settings, falling back to defaults
@@ -144,7 +144,7 @@ export function InputConfigStep({
   }));
 
   // Build company options for client dropdown
-  const companyList = companies && 'items' in companies ? companies.items : [];
+  const companyList = Array.isArray(companies) ? companies : [];
 
   // ============================================
   // Mode selection
@@ -625,7 +625,7 @@ export function InputConfigStep({
                       Loading...
                     </SelectItem>
                   ) : (
-                    companyList.map((c: { id: string; companyName: string }) => (
+                    companyList.map((c) => (
                       <SelectItem key={c.id} value={c.companyName}>
                         {c.companyName}
                       </SelectItem>
