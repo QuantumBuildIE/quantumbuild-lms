@@ -1,15 +1,13 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
-  ArrowUp,
-  ArrowDown,
   Trash2,
-  Check,
-  X,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DragHandle, useSortableItem } from '@/components/ui/sortable';
@@ -50,6 +48,7 @@ interface SectionListProps {
 export function SectionList({ sections, onChange }: SectionListProps) {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState('');
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   // Stable IDs: one per section, persisted across reorders
   const idsRef = useRef<string[]>([]);
@@ -58,11 +57,9 @@ export function SectionList({ sections, onChange }: SectionListProps) {
   if (idsRef.current.length !== sections.length) {
     const existing = idsRef.current;
     const newIds = [...existing];
-    // Add IDs for new sections
     while (newIds.length < sections.length) {
       newIds.push(crypto.randomUUID());
     }
-    // Trim if sections were removed
     newIds.length = sections.length;
     idsRef.current = newIds;
   }
@@ -86,7 +83,6 @@ export function SectionList({ sections, onChange }: SectionListProps) {
       const newIndex = ids.indexOf(String(over.id));
       if (oldIndex === -1 || newIndex === -1) return;
 
-      // Reorder both sections and IDs in sync
       const reorderedSections = arrayMove([...sections], oldIndex, newIndex);
       idsRef.current = arrayMove([...ids], oldIndex, newIndex);
 
@@ -95,34 +91,32 @@ export function SectionList({ sections, onChange }: SectionListProps) {
     [sections, ids, onChange]
   );
 
-  const handleMoveUp = useCallback(
-    (index: number) => {
-      if (index === 0) return;
-      const updated = arrayMove([...sections], index, index - 1);
-      idsRef.current = arrayMove([...ids], index, index - 1);
-      onChange(updated.map((s, i) => ({ ...s, suggestedOrder: i })));
-    },
-    [sections, ids, onChange]
-  );
-
-  const handleMoveDown = useCallback(
-    (index: number) => {
-      if (index === sections.length - 1) return;
-      const updated = arrayMove([...sections], index, index + 1);
-      idsRef.current = arrayMove([...ids], index, index + 1);
-      onChange(updated.map((s, i) => ({ ...s, suggestedOrder: i })));
-    },
-    [sections, ids, onChange]
-  );
-
   const handleDelete = useCallback(
     (index: number) => {
+      const deletedId = ids[index];
       const updated = sections.filter((_, i) => i !== index);
       idsRef.current = ids.filter((_, i) => i !== index);
+      setExpandedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(deletedId);
+        return next;
+      });
       onChange(updated.map((s, i) => ({ ...s, suggestedOrder: i })));
     },
     [sections, ids, onChange]
   );
+
+  const toggleExpanded = useCallback((id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
 
   const startRename = (index: number) => {
     setEditingIndex(index);
@@ -183,17 +177,14 @@ export function SectionList({ sections, onChange }: SectionListProps) {
                 id={ids[index]}
                 section={section}
                 index={index}
-                isFirst={index === 0}
-                isLast={index === sections.length - 1}
                 isEditing={editingIndex === index}
+                isExpanded={expandedIds.has(ids[index])}
                 editTitle={editTitle}
                 onEditTitleChange={setEditTitle}
                 onStartRename={() => startRename(index)}
                 onConfirmRename={confirmRename}
-                onCancelRename={cancelRename}
                 onRenameKeyDown={handleRenameKeyDown}
-                onMoveUp={() => handleMoveUp(index)}
-                onMoveDown={() => handleMoveDown(index)}
+                onToggleExpanded={() => toggleExpanded(ids[index])}
                 onDelete={() => handleDelete(index)}
               />
             ))}
@@ -212,17 +203,14 @@ interface SectionRowProps {
   id: string;
   section: ParsedSection;
   index: number;
-  isFirst: boolean;
-  isLast: boolean;
   isEditing: boolean;
+  isExpanded: boolean;
   editTitle: string;
   onEditTitleChange: (value: string) => void;
   onStartRename: () => void;
   onConfirmRename: () => void;
-  onCancelRename: () => void;
   onRenameKeyDown: (e: React.KeyboardEvent) => void;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
+  onToggleExpanded: () => void;
   onDelete: () => void;
 }
 
@@ -230,17 +218,14 @@ function SectionRow({
   id,
   section,
   index,
-  isFirst,
-  isLast,
   isEditing,
+  isExpanded,
   editTitle,
   onEditTitleChange,
   onStartRename,
   onConfirmRename,
-  onCancelRename,
   onRenameKeyDown,
-  onMoveUp,
-  onMoveDown,
+  onToggleExpanded,
   onDelete,
 }: SectionRowProps) {
   const { attributes, listeners, setNodeRef, style, isDragging } =
@@ -253,77 +238,76 @@ function SectionRow({
       ref={setNodeRef}
       style={style}
       className={cn(
-        'flex items-center gap-3 rounded-lg border bg-card px-3 py-2.5',
+        'rounded-lg border bg-card',
         isDragging && 'bg-muted/50 shadow-md'
       )}
     >
-      {/* Drag handle — always visible */}
-      <DragHandle {...listeners} {...attributes} />
+      {/* Row header */}
+      <div className="flex items-center gap-3 px-3 py-2.5">
+        {/* Drag handle */}
+        <DragHandle {...listeners} {...attributes} />
 
-      {/* Badge */}
-      <Badge variant="secondary" className="shrink-0 font-mono text-xs">
-        {label}
-      </Badge>
+        {/* Expand/collapse toggle */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 shrink-0"
+          onClick={onToggleExpanded}
+          title={isExpanded ? 'Collapse' : 'Expand'}
+        >
+          {isExpanded ? (
+            <ChevronDown className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5" />
+          )}
+        </Button>
 
-      {/* Title — inline edit on double-click */}
-      {isEditing ? (
-        <div className="flex flex-1 items-center gap-1">
+        {/* Badge */}
+        <Badge variant="secondary" className="shrink-0 font-mono text-xs">
+          {label}
+        </Badge>
+
+        {/* Title — inline edit on double-click */}
+        {isEditing ? (
           <Input
             value={editTitle}
             onChange={(e) => onEditTitleChange(e.target.value)}
             onKeyDown={onRenameKeyDown}
+            onBlur={onConfirmRename}
             autoFocus
-            className="h-7 text-sm"
+            className="h-7 flex-1 text-sm"
           />
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onConfirmRename}>
-            <Check className="h-3.5 w-3.5" />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onCancelRename}>
-            <X className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      ) : (
-        <span
-          className="flex-1 cursor-default truncate text-sm"
-          onDoubleClick={onStartRename}
-          title={section.title}
-        >
-          {section.title}
-        </span>
-      )}
+        ) : (
+          <span
+            className="flex-1 cursor-default truncate text-sm"
+            onDoubleClick={onStartRename}
+            title={section.title}
+          >
+            {section.title}
+          </span>
+        )}
 
-      {/* Actions — always visible */}
-      <div className="flex shrink-0 items-center gap-0.5">
+        {/* Delete action */}
         <Button
           variant="ghost"
           size="icon"
-          className="h-7 w-7"
-          onClick={onMoveUp}
-          disabled={isFirst}
-          title="Move up"
-        >
-          <ArrowUp className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          onClick={onMoveDown}
-          disabled={isLast}
-          title="Move down"
-        >
-          <ArrowDown className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 text-destructive hover:text-destructive"
+          className="h-7 w-7 shrink-0 text-destructive hover:text-destructive"
           onClick={onDelete}
           title="Delete section"
         >
           <Trash2 className="h-3.5 w-3.5" />
         </Button>
       </div>
+
+      {/* Expanded content */}
+      {isExpanded && (
+        <div className="border-t px-3 py-3 pl-[4.5rem]">
+          <div
+            className="prose prose-sm dark:prose-invert max-w-none text-sm text-muted-foreground"
+            dangerouslySetInnerHTML={{ __html: section.content }}
+          />
+        </div>
+      )}
     </div>
   );
 }
