@@ -258,6 +258,84 @@ public class ContentCreationSessionService : IContentCreationSessionService
         if (request.TargetLanguageCodes.Count == 0)
             throw new InvalidOperationException("At least one target language code is required");
 
+        if (string.IsNullOrWhiteSpace(session.ParsedSectionsJson))
+            throw new InvalidOperationException("No parsed sections available for validation");
+
+        // Parse the sections from the session
+        var sections = JsonSerializer.Deserialize<List<ParsedSection>>(session.ParsedSectionsJson, CamelCaseJson) ?? new();
+        if (sections.Count == 0)
+            throw new InvalidOperationException("No sections available for validation");
+
+        // Create or reuse a draft ToolboxTalk so the validation job can load sections
+        Guid talkId;
+        if (session.OutputId.HasValue)
+        {
+            // Re-running validation on existing draft — reuse the talk
+            talkId = session.OutputId.Value;
+
+            // Update sections in case they changed (user edited in Step 2)
+            var existingSections = await _dbContext.ToolboxTalkSections
+                .Where(s => s.ToolboxTalkId == talkId)
+                .ToListAsync(cancellationToken);
+
+            // Remove old sections
+            foreach (var existing in existingSections)
+                existing.IsDeleted = true;
+
+            // Add updated sections
+            foreach (var (parsed, i) in sections.Select((s, i) => (s, i)))
+            {
+                _dbContext.ToolboxTalkSections.Add(new ToolboxTalkSection
+                {
+                    Id = Guid.NewGuid(),
+                    ToolboxTalkId = talkId,
+                    SectionNumber = parsed.SuggestedOrder,
+                    Title = parsed.Title,
+                    Content = parsed.Content,
+                    RequiresAcknowledgment = true
+                });
+            }
+
+            // Remove old translations so they are regenerated
+            var existingTranslations = await _dbContext.ToolboxTalkTranslations
+                .Where(t => t.ToolboxTalkId == talkId)
+                .ToListAsync(cancellationToken);
+            foreach (var t in existingTranslations)
+                t.IsDeleted = true;
+        }
+        else
+        {
+            // Create a draft talk from session sections
+            var draftCode = await GenerateCodeAsync("Draft Validation", tenantId, cancellationToken);
+            var draftTalk = new ToolboxTalk
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                Code = draftCode,
+                Title = $"[Draft] Session {sessionId.ToString()[..8]}",
+                Status = ToolboxTalkStatus.Draft,
+                SourceLanguageCode = "en",
+                IsActive = false
+            };
+
+            foreach (var (parsed, i) in sections.Select((s, i) => (s, i)))
+            {
+                draftTalk.Sections.Add(new ToolboxTalkSection
+                {
+                    Id = Guid.NewGuid(),
+                    ToolboxTalkId = draftTalk.Id,
+                    SectionNumber = parsed.SuggestedOrder,
+                    Title = parsed.Title,
+                    Content = parsed.Content,
+                    RequiresAcknowledgment = true
+                });
+            }
+
+            _dbContext.ToolboxTalks.Add(draftTalk);
+            talkId = draftTalk.Id;
+            session.OutputId = talkId;
+        }
+
         session.TargetLanguageCodes = JsonSerializer.Serialize(request.TargetLanguageCodes);
         session.Status = ContentCreationSessionStatus.TranslatingValidating;
 
@@ -269,6 +347,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
             {
                 Id = Guid.NewGuid(),
                 TenantId = tenantId,
+                ToolboxTalkId = talkId,
                 LanguageCode = langCode,
                 SectorKey = session.SectorKey,
                 PassThreshold = session.PassThreshold,
@@ -297,8 +376,8 @@ public class ContentCreationSessionService : IContentCreationSessionService
         }
 
         _logger.LogInformation(
-            "[ContentCreationSession] Started translate+validate for session {SessionId}: {Count} languages",
-            sessionId, request.TargetLanguageCodes.Count);
+            "[ContentCreationSession] Started translate+validate for session {SessionId}: {Count} languages, TalkId: {TalkId}",
+            sessionId, request.TargetLanguageCodes.Count, talkId);
 
         return MapToDto(session);
     }

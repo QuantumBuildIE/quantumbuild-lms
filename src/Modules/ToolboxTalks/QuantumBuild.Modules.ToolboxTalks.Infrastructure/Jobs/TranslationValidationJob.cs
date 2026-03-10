@@ -4,8 +4,10 @@ using Hangfire;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Translations;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Application.Services.Subtitles;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Hubs;
 
@@ -15,23 +17,30 @@ namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 /// Hangfire background job that orchestrates a full translation validation run.
 /// Loads the run, iterates through each section, calls ITranslationValidationService,
 /// reports progress via SignalR, and updates the run with aggregate results.
+/// If translations are missing (e.g., during the creation wizard flow), generates them first.
 /// </summary>
 public class TranslationValidationJob
 {
     private readonly ITranslationValidationService _validationService;
     private readonly IToolboxTalksDbContext _dbContext;
     private readonly IHubContext<TranslationValidationHub> _hubContext;
+    private readonly IContentTranslationService _contentTranslationService;
+    private readonly ILanguageCodeService _languageCodeService;
     private readonly ILogger<TranslationValidationJob> _logger;
 
     public TranslationValidationJob(
         ITranslationValidationService validationService,
         IToolboxTalksDbContext dbContext,
         IHubContext<TranslationValidationHub> hubContext,
+        IContentTranslationService contentTranslationService,
+        ILanguageCodeService languageCodeService,
         ILogger<TranslationValidationJob> logger)
     {
         _validationService = validationService;
         _dbContext = dbContext;
         _hubContext = hubContext;
+        _contentTranslationService = contentTranslationService;
+        _languageCodeService = languageCodeService;
         _logger = logger;
     }
 
@@ -203,6 +212,9 @@ public class TranslationValidationJob
             await SendCompletionAsync(validationRunId, true,
                 $"Validation complete: {run.PassedSections}/{run.TotalSections} passed, " +
                 $"score {run.OverallScore}%");
+
+            // If this run belongs to a creation session, check if all runs are done
+            await TryUpdateSessionStatusAsync(validationRunId, tenantId);
         }
         catch (OperationCanceledException)
         {
@@ -259,7 +271,7 @@ public class TranslationValidationJob
             .IgnoreQueryFilters()
             .Where(s => s.ToolboxTalkId == run.ToolboxTalkId && !s.IsDeleted)
             .OrderBy(s => s.SectionNumber)
-            .Select(s => new { s.Id, s.SectionNumber, s.Title, s.Content })
+            .Select(s => new OriginalSectionInfo(s.Id, s.SectionNumber, s.Title, s.Content))
             .ToListAsync(cancellationToken);
 
         if (originalSections.Count == 0)
@@ -277,10 +289,21 @@ public class TranslationValidationJob
 
         if (string.IsNullOrWhiteSpace(translation))
         {
-            _logger.LogWarning(
-                "No translation found for ToolboxTalk {TalkId}, Language {Lang}",
+            _logger.LogInformation(
+                "No translation found for ToolboxTalk {TalkId}, Language {Lang} — generating now",
                 run.ToolboxTalkId, run.LanguageCode);
-            return [];
+
+            // Generate translations inline (creation wizard flow — translations don't exist yet)
+            translation = await GenerateTranslationForSectionsAsync(
+                run.ToolboxTalkId.Value, tenantId, run.LanguageCode, originalSections, cancellationToken);
+
+            if (string.IsNullOrWhiteSpace(translation))
+            {
+                _logger.LogWarning(
+                    "Translation generation failed for ToolboxTalk {TalkId}, Language {Lang}",
+                    run.ToolboxTalkId, run.LanguageCode);
+                return [];
+            }
         }
 
         // Parse translated sections JSON: [{SectionId, Title, Content}]
@@ -516,6 +539,177 @@ public class TranslationValidationJob
     }
 
     /// <summary>
+    /// Generates translations for sections when they don't exist yet (creation wizard flow).
+    /// Creates a ToolboxTalkTranslation record and returns the TranslatedSections JSON.
+    /// </summary>
+    private async Task<string?> GenerateTranslationForSectionsAsync(
+        Guid talkId,
+        Guid tenantId,
+        string languageCode,
+        List<OriginalSectionInfo> originalSections,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var languageName = await _languageCodeService.GetLanguageNameAsync(languageCode);
+
+            _logger.LogInformation(
+                "Generating translations for {Count} sections to {Language} ({Code})",
+                originalSections.Count, languageName, languageCode);
+
+            var translatedSections = new List<object>();
+
+            foreach (var section in originalSections)
+            {
+                var sectionId = section.Id;
+                var title = section.Title;
+                var content = section.Content;
+
+                var titleResult = await _contentTranslationService.TranslateTextAsync(
+                    title, languageName, false, cancellationToken);
+
+                var contentResult = await _contentTranslationService.TranslateTextAsync(
+                    content, languageName, true, cancellationToken);
+
+                if (titleResult.Success && contentResult.Success)
+                {
+                    translatedSections.Add(new
+                    {
+                        SectionId = sectionId,
+                        Title = titleResult.TranslatedContent,
+                        Content = contentResult.TranslatedContent
+                    });
+                }
+                else
+                {
+                    _logger.LogWarning(
+                        "Translation failed for section {SectionId} to {Language}. Title: {TitleOk}, Content: {ContentOk}",
+                        sectionId, languageName, titleResult.Success, contentResult.Success);
+                }
+            }
+
+            if (translatedSections.Count == 0)
+                return null;
+
+            var translatedSectionsJson = JsonSerializer.Serialize(translatedSections);
+
+            // Translate the talk title for the translation record
+            var talk = await _dbContext.ToolboxTalks
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(t => t.Id == talkId && !t.IsDeleted, cancellationToken);
+
+            var translatedTitle = talk?.Title ?? "Untitled";
+            if (talk != null)
+            {
+                var titleTranslation = await _contentTranslationService.TranslateTextAsync(
+                    talk.Title, languageName, false, cancellationToken);
+                if (titleTranslation.Success)
+                    translatedTitle = titleTranslation.TranslatedContent;
+            }
+
+            // Persist the translation record
+            var translation = new Domain.Entities.ToolboxTalkTranslation
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                ToolboxTalkId = talkId,
+                LanguageCode = languageCode,
+                TranslatedTitle = translatedTitle,
+                TranslatedSections = translatedSectionsJson,
+                TranslatedAt = DateTime.UtcNow,
+                TranslationProvider = "Claude",
+                EmailSubject = translatedTitle,
+                EmailBody = translatedTitle
+            };
+
+            _dbContext.ToolboxTalkTranslations.Add(translation);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation(
+                "Generated translation for {Count}/{Total} sections to {Language}",
+                translatedSections.Count, originalSections.Count, languageName);
+
+            return translatedSectionsJson;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Failed to generate translations for ToolboxTalk {TalkId}, Language {Lang}",
+                talkId, languageCode);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Checks if this validation run belongs to a content creation session,
+    /// and if all runs for the session are complete, transitions the session to Validated.
+    /// </summary>
+    private async Task TryUpdateSessionStatusAsync(Guid validationRunId, Guid tenantId)
+    {
+        try
+        {
+            // Find any session that references this run ID in its ValidationRunIds JSON
+            var sessions = await _dbContext.ContentCreationSessions
+                .IgnoreQueryFilters()
+                .Where(s => s.TenantId == tenantId
+                    && s.Status == Domain.Enums.ContentCreationSessionStatus.TranslatingValidating
+                    && s.ValidationRunIds != null
+                    && !s.IsDeleted)
+                .ToListAsync();
+
+            var runIdString = validationRunId.ToString();
+
+            foreach (var session in sessions)
+            {
+                if (session.ValidationRunIds == null || !session.ValidationRunIds.Contains(runIdString))
+                    continue;
+
+                // Parse the run IDs from JSON
+                List<Guid> runIds;
+                try
+                {
+                    runIds = JsonSerializer.Deserialize<List<Guid>>(session.ValidationRunIds) ?? new();
+                }
+                catch
+                {
+                    continue;
+                }
+
+                if (!runIds.Contains(validationRunId))
+                    continue;
+
+                // Check if ALL runs for this session are completed
+                var allRunStatuses = await _dbContext.TranslationValidationRuns
+                    .IgnoreQueryFilters()
+                    .Where(r => runIds.Contains(r.Id) && !r.IsDeleted)
+                    .Select(r => r.Status)
+                    .ToListAsync();
+
+                var allComplete = allRunStatuses.Count > 0 &&
+                    allRunStatuses.All(s => s == ValidationRunStatus.Completed || s == ValidationRunStatus.Failed);
+
+                if (allComplete)
+                {
+                    session.Status = Domain.Enums.ContentCreationSessionStatus.Validated;
+                    await _dbContext.SaveChangesAsync();
+
+                    _logger.LogInformation(
+                        "Session {SessionId} transitioned to Validated — all {Count} runs complete",
+                        session.Id, runIds.Count);
+                }
+
+                break; // A run belongs to at most one session
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Failed to check/update session status after run {RunId} completed",
+                validationRunId);
+        }
+    }
+
+    /// <summary>
     /// Represents a paired original/translated section for validation.
     /// </summary>
     private sealed record SectionPair(int Index, string Title, string OriginalText, string TranslatedText);
@@ -524,4 +718,9 @@ public class TranslationValidationJob
     /// Parsed translated section from the JSON array.
     /// </summary>
     private sealed record TranslatedSectionJson(string Title, string Content);
+
+    /// <summary>
+    /// Projection of an original section loaded from the database.
+    /// </summary>
+    private sealed record OriginalSectionInfo(Guid Id, int SectionNumber, string Title, string Content);
 }
