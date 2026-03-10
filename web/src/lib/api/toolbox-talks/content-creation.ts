@@ -374,72 +374,62 @@ export async function retrySection(
 
 // ============================================
 // Session-Context Validation API
-// (Used during creation wizard when no talkId exists yet)
+// (Used during creation wizard — delegates to talk-context endpoints
+//  using the session's outputId as talkId)
 // ============================================
 
 /**
- * Get validation run details via session context
+ * Get validation run details via session context.
+ * Requires the session's outputId (talkId) which is set after content generation.
  */
 export async function getSessionValidationRun(
-  sessionId: string,
+  talkId: string,
   runId: string
 ): Promise<ValidationRunDetail> {
-  const response = await apiClient.get<ValidationRunDetail>(
-    `/toolbox-talks/create/session/${sessionId}/validation/runs/${runId}`
-  );
-  return response.data;
+  return getValidationRun(talkId, runId);
 }
 
 /**
  * Accept a section translation via session context
  */
 export async function acceptSessionSection(
-  sessionId: string,
+  talkId: string,
   runId: string,
   sectionIndex: number
 ): Promise<void> {
-  await apiClient.put(
-    `/toolbox-talks/create/session/${sessionId}/validation/runs/${runId}/sections/${sectionIndex}/accept`
-  );
+  return acceptSection(talkId, runId, sectionIndex);
 }
 
 /**
  * Reject a section translation via session context
  */
 export async function rejectSessionSection(
-  sessionId: string,
+  talkId: string,
   runId: string,
   sectionIndex: number
 ): Promise<void> {
-  await apiClient.put(
-    `/toolbox-talks/create/session/${sessionId}/validation/runs/${runId}/sections/${sectionIndex}/reject`
-  );
+  return rejectSection(talkId, runId, sectionIndex);
 }
 
 /**
  * Edit a section translation via session context
  */
 export async function editSessionSection(
-  sessionId: string,
+  talkId: string,
   runId: string,
   sectionIndex: number,
   editedTranslation: string
 ): Promise<void> {
-  await apiClient.put(
-    `/toolbox-talks/create/session/${sessionId}/validation/runs/${runId}/sections/${sectionIndex}/edit`,
-    { editedTranslation }
-  );
+  return editSection(talkId, runId, sectionIndex, editedTranslation);
 }
 
 /**
  * Retry validation for a section via session context
  */
 export async function retrySessionSection(
-  sessionId: string,
+  talkId: string,
   runId: string,
   sectionIndex: number
 ): Promise<void> {
-  await apiClient.post(
-    `/toolbox-talks/create/session/${sessionId}/validation/runs/${runId}/sections/${sectionIndex}/retry`
-  );
+  return retrySection(talkId, runId, sectionIndex);
 }

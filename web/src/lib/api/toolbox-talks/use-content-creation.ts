@@ -356,35 +356,37 @@ export function useGenerateValidationReport() {
 }
 
 /**
- * Fetch validation run details via session context (creation wizard)
+ * Fetch validation run details via session context (creation wizard).
+ * Uses the session's outputId (talkId) to call the talk-context endpoint.
  */
 export function useSessionValidationRun(
-  sessionId: string | null,
+  talkId: string | null,
   runId: string | null
 ) {
   return useQuery({
-    queryKey: contentCreationKeys.validationRun(sessionId ?? '', runId ?? ''),
-    queryFn: () => getSessionValidationRun(sessionId!, runId!),
-    enabled: !!sessionId && !!runId,
+    queryKey: contentCreationKeys.validationRun(talkId ?? '', runId ?? ''),
+    queryFn: () => getSessionValidationRun(talkId!, runId!),
+    enabled: !!talkId && !!runId,
     staleTime: 10 * 1000,
   });
 }
 
 /**
- * Section decisions via session context (creation wizard)
+ * Section decisions via session context (creation wizard).
+ * Uses the session's outputId (talkId) to call the talk-context endpoints.
  */
 export function useSessionSectionDecision() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async ({
-      sessionId,
+      talkId,
       runId,
       sectionIndex,
       action,
       editedTranslation,
     }: {
-      sessionId: string;
+      talkId: string;
       runId: string;
       sectionIndex: number;
       action: 'accept' | 'reject' | 'edit' | 'retry';
@@ -392,23 +394,23 @@ export function useSessionSectionDecision() {
     }) => {
       switch (action) {
         case 'accept':
-          return acceptSessionSection(sessionId, runId, sectionIndex);
+          return acceptSessionSection(talkId, runId, sectionIndex);
         case 'reject':
-          return rejectSessionSection(sessionId, runId, sectionIndex);
+          return rejectSessionSection(talkId, runId, sectionIndex);
         case 'edit':
           return editSessionSection(
-            sessionId,
+            talkId,
             runId,
             sectionIndex,
             editedTranslation!
           );
         case 'retry':
-          return retrySessionSection(sessionId, runId, sectionIndex);
+          return retrySessionSection(talkId, runId, sectionIndex);
       }
     },
-    onSuccess: (_, { sessionId, runId }) => {
+    onSuccess: (_, { talkId, runId }) => {
       queryClient.invalidateQueries({
-        queryKey: contentCreationKeys.validationRun(sessionId, runId),
+        queryKey: contentCreationKeys.validationRun(talkId, runId),
       });
     },
   });

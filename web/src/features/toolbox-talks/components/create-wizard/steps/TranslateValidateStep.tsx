@@ -92,12 +92,15 @@ export function TranslateValidateStep({
   // SignalR hub connection for active run
   const hub = useValidationHub(activeEntry?.runId ?? null);
 
+  // The talk ID created by content generation — needed for validation API calls
+  const talkId = session?.outputId ?? null;
+
   // REST data for active run
   const {
     data: runDetail,
     refetch: refetchRun,
     isLoading: isRunLoading,
-  } = useSessionValidationRun(sessionId, activeEntry?.runId ?? null);
+  } = useSessionValidationRun(talkId, activeEntry?.runId ?? null);
 
   // Section decision mutation
   const sectionDecision = useSessionSectionDecision();
@@ -223,11 +226,11 @@ export function TranslateValidateStep({
       action: 'accept' | 'reject' | 'edit' | 'retry',
       editedTranslation?: string
     ) => {
-      if (!sessionId || !activeEntry?.runId) return;
+      if (!talkId || !activeEntry?.runId) return;
 
       sectionDecision.mutate(
         {
-          sessionId,
+          talkId,
           runId: activeEntry.runId,
           sectionIndex,
           action,
@@ -254,7 +257,7 @@ export function TranslateValidateStep({
         }
       );
     },
-    [sessionId, activeEntry?.runId, sectionDecision]
+    [talkId, activeEntry?.runId, sectionDecision]
   );
 
   // ============================================

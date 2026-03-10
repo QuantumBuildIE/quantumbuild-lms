@@ -14,7 +14,7 @@ import type {
 } from '@/types/content-creation';
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5222';
+  (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5222/api').replace(/\/api\/?$/, '');
 
 interface UseValidationHubReturn {
   isConnected: boolean;
