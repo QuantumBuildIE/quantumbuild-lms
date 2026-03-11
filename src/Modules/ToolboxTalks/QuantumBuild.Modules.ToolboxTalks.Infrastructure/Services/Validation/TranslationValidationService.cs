@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Validation;
@@ -107,37 +108,49 @@ public class TranslationValidationService : ITranslationValidationService
             }
         }
 
-        // 4. Build and persist the result entity
-        var entity = new TranslationValidationResult
-        {
-            ValidationRunId = validationRunId,
-            SectionIndex = sectionIndex,
-            SectionTitle = sectionTitle,
-            OriginalText = originalText,
-            TranslatedText = translatedText,
-            BackTranslationA = consensus.BackTranslationA,
-            BackTranslationB = consensus.BackTranslationB,
-            BackTranslationC = consensus.BackTranslationC,
-            BackTranslationD = consensus.BackTranslationD,
-            ScoreA = consensus.ScoreA,
-            ScoreB = consensus.ScoreB,
-            ScoreC = consensus.ScoreC,
-            ScoreD = consensus.ScoreD,
-            FinalScore = consensus.FinalScore,
-            RoundsUsed = consensus.RoundsUsed,
-            Outcome = consensus.Outcome,
-            EngineOutcome = engineOutcome,
-            IsSafetyCritical = safetyResult.IsSafetyCritical,
-            CriticalTerms = safetyResult.CriticalTermsFound.Count > 0
-                ? JsonSerializer.Serialize(safetyResult.CriticalTermsFound)
-                : null,
-            GlossaryMismatches = glossaryResult?.HasMismatches == true
-                ? JsonSerializer.Serialize(glossaryResult.Mismatches)
-                : null,
-            EffectiveThreshold = effectiveThreshold
-        };
+        // 4. Upsert the result entity — find existing row for {RunId, SectionIndex} or create new
+        var entity = await _dbContext.TranslationValidationResults
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(r => r.ValidationRunId == validationRunId
+                && r.SectionIndex == sectionIndex, cancellationToken);
 
-        _dbContext.TranslationValidationResults.Add(entity);
+        if (entity == null)
+        {
+            entity = new TranslationValidationResult
+            {
+                ValidationRunId = validationRunId,
+                SectionIndex = sectionIndex
+            };
+            _dbContext.TranslationValidationResults.Add(entity);
+        }
+
+        entity.SectionTitle = sectionTitle;
+        entity.OriginalText = originalText;
+        entity.TranslatedText = translatedText;
+        entity.BackTranslationA = consensus.BackTranslationA;
+        entity.BackTranslationB = consensus.BackTranslationB;
+        entity.BackTranslationC = consensus.BackTranslationC;
+        entity.BackTranslationD = consensus.BackTranslationD;
+        entity.ScoreA = consensus.ScoreA;
+        entity.ScoreB = consensus.ScoreB;
+        entity.ScoreC = consensus.ScoreC;
+        entity.ScoreD = consensus.ScoreD;
+        entity.FinalScore = consensus.FinalScore;
+        entity.RoundsUsed = consensus.RoundsUsed;
+        entity.Outcome = consensus.Outcome;
+        entity.EngineOutcome = engineOutcome;
+        entity.IsSafetyCritical = safetyResult.IsSafetyCritical;
+        entity.CriticalTerms = safetyResult.CriticalTermsFound.Count > 0
+            ? JsonSerializer.Serialize(safetyResult.CriticalTermsFound)
+            : null;
+        entity.GlossaryMismatches = glossaryResult?.HasMismatches == true
+            ? JsonSerializer.Serialize(glossaryResult.Mismatches)
+            : null;
+        entity.EffectiveThreshold = effectiveThreshold;
+        // Reset reviewer decision on re-validation
+        entity.ReviewerDecision = Domain.Enums.ReviewerDecision.Pending;
+        entity.EditedTranslation = null;
+
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(

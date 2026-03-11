@@ -113,22 +113,7 @@ public class TranslationValidationJob
             run.TotalSections = sections.Count;
             await _dbContext.SaveChangesAsync(cancellationToken);
 
-            // Remove existing results for this run (retry scenario — unique index on RunId+SectionIndex)
-            var existingResults = await _dbContext.TranslationValidationResults
-                .IgnoreQueryFilters()
-                .Where(r => r.ValidationRunId == validationRunId)
-                .ToListAsync(cancellationToken);
-
-            if (existingResults.Count > 0)
-            {
-                _logger.LogInformation(
-                    "Removing {Count} existing result(s) for run {RunId} before re-validation",
-                    existingResults.Count, validationRunId);
-                _dbContext.TranslationValidationResults.RemoveRange(existingResults);
-                await _dbContext.SaveChangesAsync(cancellationToken);
-            }
-
-            // Validate each section
+            // Validate each section (upsert logic in ValidateSectionAsync handles retry scenarios)
             var results = new List<Domain.Entities.TranslationValidationResult>();
 
             for (int i = 0; i < sections.Count; i++)
@@ -172,21 +157,30 @@ public class TranslationValidationJob
                         i, section.Title, validationRunId,
                         ex.GetType().FullName, ex.Message);
 
-                    // Create a failed result so the run can still complete
-                    var failedResult = new Domain.Entities.TranslationValidationResult
-                    {
-                        ValidationRunId = validationRunId,
-                        SectionIndex = section.Index,
-                        SectionTitle = section.Title,
-                        OriginalText = section.OriginalText,
-                        TranslatedText = section.TranslatedText,
-                        Outcome = ValidationOutcome.Fail,
-                        FinalScore = 0,
-                        RoundsUsed = 0,
-                        EffectiveThreshold = run.PassThreshold
-                    };
+                    // Upsert a failed result so the run can still complete
+                    var failedResult = await _dbContext.TranslationValidationResults
+                        .IgnoreQueryFilters()
+                        .FirstOrDefaultAsync(r => r.ValidationRunId == validationRunId
+                            && r.SectionIndex == section.Index, cancellationToken);
 
-                    _dbContext.TranslationValidationResults.Add(failedResult);
+                    if (failedResult == null)
+                    {
+                        failedResult = new Domain.Entities.TranslationValidationResult
+                        {
+                            ValidationRunId = validationRunId,
+                            SectionIndex = section.Index
+                        };
+                        _dbContext.TranslationValidationResults.Add(failedResult);
+                    }
+
+                    failedResult.SectionTitle = section.Title;
+                    failedResult.OriginalText = section.OriginalText;
+                    failedResult.TranslatedText = section.TranslatedText;
+                    failedResult.Outcome = ValidationOutcome.Fail;
+                    failedResult.FinalScore = 0;
+                    failedResult.RoundsUsed = 0;
+                    failedResult.EffectiveThreshold = run.PassThreshold;
+
                     await _dbContext.SaveChangesAsync(cancellationToken);
                     results.Add(failedResult);
                 }
