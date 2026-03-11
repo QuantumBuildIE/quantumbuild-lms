@@ -2,7 +2,6 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   ArrowRight,
@@ -12,7 +11,6 @@ import {
   Languages,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
 import {
   useCreationSession,
   useSessionValidationRun,
@@ -20,10 +18,7 @@ import {
 } from '@/lib/api/toolbox-talks/use-content-creation';
 import { useValidationHub } from '@/features/toolbox-talks/hooks/use-validation-hub';
 import type { WizardState } from '../CreateWizard';
-import type {
-  SectionValidationResult,
-  ValidationRunDetail,
-} from '@/types/content-creation';
+import type { SectionValidationResult } from '@/types/content-creation';
 import { ValidationProgressPanel } from './validate/ValidationProgressPanel';
 import { ValidationSectionCard } from './validate/ValidationSectionCard';
 
@@ -285,8 +280,45 @@ export function TranslateValidateStep({
   }
 
   // ============================================
+  // Initial loading — run detail not yet fetched and no hub progress received
+  // ============================================
+
+  const hasHubProgress =
+    hub.isConnected || hub.completedSections.size > 0 || hub.isComplete;
+  const isInitialLoading = isRunLoading && !hasHubProgress;
+
+  // ============================================
   // Render
   // ============================================
+
+  if (isInitialLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col items-center justify-center gap-3 rounded-lg border bg-card py-16">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm font-medium text-muted-foreground">
+            Starting translation validation&hellip;
+          </p>
+          <p className="text-xs text-muted-foreground/70">
+            This may take a few minutes. Sections will appear as they are
+            validated.
+          </p>
+        </div>
+
+        {/* Bottom bar (back only) */}
+        <div className="flex items-center justify-between border-t pt-4">
+          <Button variant="outline" onClick={onBack}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Button>
+          <Button disabled>
+            Continue
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
