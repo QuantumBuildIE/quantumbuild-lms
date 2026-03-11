@@ -73,6 +73,9 @@ export function SettingsStep({ state, onNext, onBack }: SettingsStepProps) {
   }, [serverSettings, session?.parsedSectionsJson, hydrated]);
 
   // Debounced auto-save (500ms)
+  // Use a ref for the mutation to avoid recreating handleChange when mutation state changes
+  const updateSettingsRef = useRef(updateSettings);
+  updateSettingsRef.current = updateSettings;
   const saveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleChange = useCallback(
     (newSettings: ContentCreationSettings) => {
@@ -80,14 +83,14 @@ export function SettingsStep({ state, onNext, onBack }: SettingsStepProps) {
       if (saveRef.current) clearTimeout(saveRef.current);
       saveRef.current = setTimeout(() => {
         if (sessionId) {
-          updateSettings.mutate(
+          updateSettingsRef.current.mutate(
             { sessionId, settings: newSettings },
             { onError: () => toast.error('Failed to save settings') }
           );
         }
       }, 500);
     },
-    [sessionId, updateSettings]
+    [sessionId]
   );
 
   // Cleanup debounce timer on unmount
@@ -97,10 +100,12 @@ export function SettingsStep({ state, onNext, onBack }: SettingsStepProps) {
     };
   }, []);
 
+  const uploadCoverImageRef = useRef(uploadCoverImage);
+  uploadCoverImageRef.current = uploadCoverImage;
   const handleUploadCoverImage = useCallback(
     (file: File) => {
       if (!sessionId) return;
-      uploadCoverImage.mutate(
+      uploadCoverImageRef.current.mutate(
         { sessionId, file },
         {
           onSuccess: (updatedSession) => {
@@ -122,7 +127,7 @@ export function SettingsStep({ state, onNext, onBack }: SettingsStepProps) {
         }
       );
     },
-    [sessionId, uploadCoverImage]
+    [sessionId]
   );
 
   const [isStartingValidation, setIsStartingValidation] = useState(false);
