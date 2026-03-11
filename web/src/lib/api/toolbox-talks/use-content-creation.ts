@@ -17,12 +17,10 @@ import {
   downloadValidationReport,
   generateValidationReport,
   acceptSection,
-  rejectSection,
   editSection,
   retrySection,
   getSessionValidationRun,
   acceptSessionSection,
-  rejectSessionSection,
   editSessionSection,
   retrySessionSection,
   generateSessionQuiz,
@@ -221,14 +219,12 @@ export function useSectionDecision() {
       talkId: string;
       runId: string;
       sectionIndex: number;
-      action: 'accept' | 'reject' | 'edit' | 'retry';
+      action: 'accept' | 'edit' | 'retry';
       editedTranslation?: string;
     }) => {
       switch (action) {
         case 'accept':
           return acceptSection(talkId, runId, sectionIndex);
-        case 'reject':
-          return rejectSection(talkId, runId, sectionIndex);
         case 'edit':
           return editSection(talkId, runId, sectionIndex, editedTranslation!);
         case 'retry':
@@ -389,14 +385,12 @@ export function useSessionSectionDecision() {
       talkId: string;
       runId: string;
       sectionIndex: number;
-      action: 'accept' | 'reject' | 'edit' | 'retry';
+      action: 'accept' | 'edit' | 'retry';
       editedTranslation?: string;
     }) => {
       switch (action) {
         case 'accept':
           return acceptSessionSection(talkId, runId, sectionIndex);
-        case 'reject':
-          return rejectSessionSection(talkId, runId, sectionIndex);
         case 'edit':
           return editSessionSection(
             talkId,

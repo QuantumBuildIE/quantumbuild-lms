@@ -229,7 +229,6 @@ export function ValidationRunDetailView({
             languageCode={run.languageCode}
             passThreshold={run.passThreshold}
             onAccept={() => {}}
-            onReject={() => {}}
             onEdit={() => {}}
             onRetry={() => {}}
             isDecisionPending={false}

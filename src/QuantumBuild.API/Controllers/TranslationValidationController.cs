@@ -297,6 +297,15 @@ public class TranslationValidationController : ControllerBase
             if (result == null)
                 return NotFound(new { message = "Validation result not found" });
 
+            // Record implicit rejection for audit trail if not already accepted
+            if (result.ReviewerDecision != ReviewerDecision.Accepted)
+            {
+                result.ReviewerDecision = ReviewerDecision.Rejected;
+                result.DecisionAt = DateTime.UtcNow;
+                result.DecisionBy = _currentUserService.UserName;
+                await _dbContext.SaveChangesAsync(cancellationToken);
+            }
+
             result.ReviewerDecision = ReviewerDecision.Edited;
             result.EditedTranslation = request.EditedTranslation;
             result.DecisionAt = DateTime.UtcNow;
@@ -342,6 +351,21 @@ public class TranslationValidationController : ControllerBase
             var result = await GetValidationResultAsync(talkId, runId, sectionIndex, cancellationToken);
             if (result == null)
                 return NotFound(new { message = "Validation result not found" });
+
+            // Record implicit rejection for audit trail if not already accepted
+            if (result.ReviewerDecision != ReviewerDecision.Accepted)
+            {
+                result.ReviewerDecision = ReviewerDecision.Rejected;
+                result.DecisionAt = DateTime.UtcNow;
+                result.DecisionBy = _currentUserService.UserName;
+                await _dbContext.SaveChangesAsync(cancellationToken);
+            }
+
+            // Reset to Pending while retry runs
+            result.ReviewerDecision = ReviewerDecision.Pending;
+            result.DecisionAt = null;
+            result.DecisionBy = null;
+            await _dbContext.SaveChangesAsync(cancellationToken);
 
             var jobId = BackgroundJob.Enqueue<TranslationValidationJob>(
                 job => job.ExecuteAsync(runId, _currentUserService.TenantId, CancellationToken.None));

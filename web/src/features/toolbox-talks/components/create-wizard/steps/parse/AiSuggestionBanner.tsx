@@ -24,7 +24,7 @@ export function AiSuggestionBanner({
       <Alert className="border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30">
         <AlertTriangle className="h-4 w-4 text-amber-600" />
         <AlertDescription className="text-amber-800 dark:text-amber-200">
-          <span className="font-medium">Override active.</span> AI suggested{' '}
+          <span className="font-medium">Override active.</span> We suggested{' '}
           <span className="font-semibold">{suggestedType}</span> based on{' '}
           {sectionCount} sections, but you selected{' '}
           <span className="font-semibold">{selectedType}</span>.
@@ -40,7 +40,7 @@ export function AiSuggestionBanner({
     <Alert className="border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/30">
       <Sparkles className="h-4 w-4 text-blue-600" />
       <AlertDescription className="text-blue-800 dark:text-blue-200">
-        <span className="font-medium">AI suggests:</span>{' '}
+        <span className="font-medium">We suggest:</span>{' '}
         <span className="font-semibold">{suggestedType}</span>
         {suggestedType === 'Course' ? (
           <> — {sectionCount} sections detected, ideal for a multi-lesson course with sequential completion.</>

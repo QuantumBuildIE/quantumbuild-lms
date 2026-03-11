@@ -124,6 +124,11 @@ public class DeepLTranslationService : IDeepLTranslationService
             return null;
         }
 
+        _logger.LogInformation(
+            "DeepL configured with BaseUrl={BaseUrl}, ApiKey={KeyPrefix}***",
+            _settings.DeepL.BaseUrl,
+            _settings.DeepL.ApiKey.Length > 4 ? _settings.DeepL.ApiKey[..4] : "****");
+
         if (string.IsNullOrWhiteSpace(text))
         {
             return BackTranslationResult.SuccessResult(string.Empty, ProviderName);
@@ -190,9 +195,12 @@ public class DeepLTranslationService : IDeepLTranslationService
 
                 if (!response.IsSuccessStatusCode)
                 {
+                    var hint = response.StatusCode == System.Net.HttpStatusCode.Forbidden
+                        ? " (403 Forbidden — this usually means a paid API key is being used with the free-tier URL api-free.deepl.com, or vice versa. Check TranslationValidation__DeepL__BaseUrl: paid keys use https://api.deepl.com/v2, free keys use https://api-free.deepl.com/v2)"
+                        : "";
                     _logger.LogError(
-                        "DeepL API error: {StatusCode} - {Response}",
-                        response.StatusCode, responseBody);
+                        "DeepL API error: {StatusCode} — BaseUrl={BaseUrl}, ResponseBody={Response}{Hint}",
+                        response.StatusCode, _settings.DeepL.BaseUrl, responseBody, hint);
                     return BackTranslationResult.FailureResult(
                         $"DeepL API error: {response.StatusCode}", ProviderName);
                 }

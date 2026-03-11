@@ -517,9 +517,9 @@ export function InputConfigStep({
         </div>
       )}
 
-      {/* Target Languages + Pass Threshold */}
+      {/* Target Languages + Translation Pass Threshold */}
       <div className="flex items-start gap-4">
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0" style={{ flex: '1 1 60%' }}>
           <Label className="mb-2 block text-sm font-medium">
             Target Languages
           </Label>
@@ -539,9 +539,9 @@ export function InputConfigStep({
             Content will be translated and validated for each selected language
           </p>
         </div>
-        <div className="w-36 shrink-0">
+        <div className="w-52 shrink-0">
           <Label className="mb-2 block text-sm font-medium">
-            Pass Threshold
+            Translation Pass Threshold
           </Label>
           <Select
             value={String(state.passThreshold)}

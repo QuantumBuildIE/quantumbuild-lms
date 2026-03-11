@@ -223,7 +223,7 @@ export function TranslateValidateStep({
   const handleSectionAction = useCallback(
     (
       sectionIndex: number,
-      action: 'accept' | 'reject' | 'edit' | 'retry',
+      action: 'accept' | 'edit' | 'retry',
       editedTranslation?: string
     ) => {
       if (!talkId || !activeEntry?.runId) return;
@@ -241,11 +241,9 @@ export function TranslateValidateStep({
             const label =
               action === 'accept'
                 ? 'accepted'
-                : action === 'reject'
-                  ? 'rejected'
-                  : action === 'edit'
-                    ? 'edited & re-validating'
-                    : 'retrying';
+                : action === 'edit'
+                  ? 'edited & re-validating'
+                  : 'retrying';
             toast.success(`Section ${sectionIndex + 1} ${label}`);
           },
           onError: (error) => {
@@ -344,9 +342,6 @@ export function TranslateValidateStep({
             passThreshold={passThreshold}
             onAccept={() =>
               handleSectionAction(section.index, 'accept')
-            }
-            onReject={() =>
-              handleSectionAction(section.index, 'reject')
             }
             onEdit={(text) =>
               handleSectionAction(section.index, 'edit', text)

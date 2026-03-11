@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -40,7 +40,6 @@ interface ValidationSectionCardProps {
   languageCode: string;
   passThreshold: number;
   onAccept: () => void;
-  onReject: () => void;
   onEdit: (editedTranslation: string) => void;
   onRetry: () => void;
   isDecisionPending: boolean;
@@ -107,7 +106,6 @@ export function ValidationSectionCard({
   languageCode,
   passThreshold,
   onAccept,
-  onReject,
   onEdit,
   onRetry,
   isDecisionPending,
@@ -117,6 +115,18 @@ export function ValidationSectionCard({
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState('');
+
+  // Auto-collapse when a section is accepted
+  const prevDecision = useRef(result?.reviewerDecision);
+  useEffect(() => {
+    if (
+      result?.reviewerDecision === 'Accepted' &&
+      prevDecision.current !== 'Accepted'
+    ) {
+      setIsExpanded(false);
+    }
+    prevDecision.current = result?.reviewerDecision;
+  }, [result?.reviewerDecision]);
 
   const sectionLabel = `L${String(sectionIndex + 1).padStart(2, '0')}`;
   const isPending = !result && !isRunning;
@@ -468,19 +478,6 @@ export function ValidationSectionCard({
             >
               <Check className="mr-1 h-3 w-3" />
               Accept
-            </Button>
-            <Button
-              size="sm"
-              variant={
-                result.reviewerDecision === 'Rejected'
-                  ? 'destructive'
-                  : 'outline'
-              }
-              onClick={onReject}
-              disabled={isDecisionPending}
-            >
-              <X className="mr-1 h-3 w-3" />
-              Reject
             </Button>
             <Button
               size="sm"

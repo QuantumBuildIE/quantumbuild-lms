@@ -86,6 +86,18 @@ export function useValidationHub(
       }
     );
 
+    // Handle validation run completion
+    connection.on(
+      'ValidationComplete',
+      (payload: { validationRunId: string; success: boolean; message: string }) => {
+        if (!isActive) return;
+        setIsComplete(true);
+        if (!payload.success) {
+          setError(payload.message);
+        }
+      }
+    );
+
     connection.onreconnecting(() => {
       if (!isActive) return;
       setIsConnected(false);

@@ -157,8 +157,19 @@ public class ConsensusEngine : IConsensusEngine
     /// </summary>
     private void ApplyBackTranslation(ConsensusResult result, char slot, BackTranslationResult? btResult, string originalText)
     {
-        if (btResult is not { Success: true })
+        if (btResult == null)
+        {
+            _logger.LogWarning("Provider {Slot} returned null (not configured or skipped)", slot);
             return;
+        }
+
+        if (!btResult.Success)
+        {
+            _logger.LogWarning(
+                "Provider {Slot} ({Provider}) failed: {Error}",
+                slot, btResult.ProviderName, btResult.ErrorMessage);
+            return;
+        }
 
         var score = (int)Math.Round(_scorer.Score(originalText, btResult.BackTranslatedText));
 
