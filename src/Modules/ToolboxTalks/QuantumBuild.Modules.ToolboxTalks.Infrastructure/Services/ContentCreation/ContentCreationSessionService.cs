@@ -665,11 +665,11 @@ public class ContentCreationSessionService : IContentCreationSessionService
         var session = await GetSessionEntityAsync(sessionId, tenantId, cancellationToken);
 
         var questions = !string.IsNullOrWhiteSpace(session.QuestionsJson)
-            ? JsonSerializer.Deserialize<List<SessionQuizQuestionDto>>(session.QuestionsJson) ?? new()
+            ? JsonSerializer.Deserialize<List<SessionQuizQuestionDto>>(session.QuestionsJson, CamelCaseJson) ?? new()
             : new List<SessionQuizQuestionDto>();
 
         var settings = !string.IsNullOrWhiteSpace(session.QuizSettingsJson)
-            ? JsonSerializer.Deserialize<SessionQuizSettingsDto>(session.QuizSettingsJson) ?? new()
+            ? JsonSerializer.Deserialize<SessionQuizSettingsDto>(session.QuizSettingsJson, CamelCaseJson) ?? new()
             : new SessionQuizSettingsDto();
 
         return new SessionQuizDataDto
