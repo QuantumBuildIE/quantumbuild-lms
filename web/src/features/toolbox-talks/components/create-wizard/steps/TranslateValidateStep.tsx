@@ -191,10 +191,13 @@ export function TranslateValidateStep({
         ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
         : 0;
 
-    const percentComplete = hub.progress?.percentComplete
-      ?? (mergedSections.length > 0
-        ? (scores.length / mergedSections.length) * 100
-        : 0);
+    // Force 100% when hub signals completion; otherwise use hub progress or derive from sections
+    const percentComplete = hub.isComplete
+      ? 100
+      : hub.progress?.percentComplete
+        ?? (mergedSections.length > 0
+          ? (scores.length / mergedSections.length) * 100
+          : 0);
 
     return {
       overallScore,
@@ -203,7 +206,7 @@ export function TranslateValidateStep({
       totalSections: mergedSections.length,
       statusCounts: { pass, review, fail, running, pending },
     };
-  }, [mergedSections, hub.progress]);
+  }, [mergedSections, hub.progress, hub.isComplete]);
 
   // Use run detail for authoritative aggregates when available
   const safetyVerdict = runDetail?.safetyVerdict ?? null;
@@ -240,6 +243,11 @@ export function TranslateValidateStep({
                   ? 'edited & re-validating'
                   : 'retrying';
             toast.success(`Section ${sectionIndex + 1} ${label}`);
+
+            // Reset hub state so it picks up new progress events from the re-validation job
+            if (action === 'retry' || action === 'edit') {
+              hub.reset();
+            }
           },
           onError: (error) => {
             toast.error('Action failed', {
@@ -250,7 +258,7 @@ export function TranslateValidateStep({
         }
       );
     },
-    [talkId, activeEntry?.runId, sectionDecision]
+    [talkId, activeEntry?.runId, sectionDecision, hub]
   );
 
   // ============================================
