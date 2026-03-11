@@ -10,10 +10,10 @@ export type ContentCreationSessionStatus =
   | 'Draft'
   | 'Parsing'
   | 'Parsed'
-  | 'TranslatingValidating'
-  | 'Validated'
   | 'GeneratingQuiz'
   | 'QuizGenerated'
+  | 'TranslatingValidating'
+  | 'Validated'
   | 'Publishing'
   | 'Completed'
   | 'Abandoned'
@@ -289,8 +289,8 @@ export type WizardStep = 1 | 2 | 3 | 4 | 5 | 6;
 export const WIZARD_STEPS = [
   { step: 1 as const, label: 'Input & Config' },
   { step: 2 as const, label: 'Parse' },
-  { step: 3 as const, label: 'Translate & Validate' },
-  { step: 4 as const, label: 'Quiz' },
-  { step: 5 as const, label: 'Settings' },
+  { step: 3 as const, label: 'Quiz' },
+  { step: 4 as const, label: 'Settings' },
+  { step: 5 as const, label: 'Translate & Validate' },
   { step: 6 as const, label: 'Publish' },
 ] as const;

@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Languages, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   useCreationSession,
   useSessionSettings,
   useUpdateSessionSettings,
   useUploadCoverImage,
+  useStartValidation,
 } from '@/lib/api/toolbox-talks/use-content-creation';
 import { TitleDescriptionPanel } from './settings/TitleDescriptionPanel';
 import { CategoryPanel } from './settings/CategoryPanel';
@@ -45,6 +46,7 @@ export function SettingsStep({ state, onNext, onBack }: SettingsStepProps) {
   const { data: serverSettings, isLoading } = useSessionSettings(sessionId);
   const updateSettings = useUpdateSessionSettings();
   const uploadCoverImage = useUploadCoverImage();
+  const startValidation = useStartValidation();
 
   // Local state
   const [settings, setSettings] = useState<ContentCreationSettings>(DEFAULT_SETTINGS);
@@ -123,8 +125,39 @@ export function SettingsStep({ state, onNext, onBack }: SettingsStepProps) {
     [sessionId, uploadCoverImage]
   );
 
+  const [isStartingValidation, setIsStartingValidation] = useState(false);
   const isSaving = updateSettings.isPending;
   const canContinue = settings.title.trim().length > 0;
+
+  // Flush pending settings save, then start translate-validate, then navigate
+  const handleContinue = useCallback(async () => {
+    if (!sessionId || !canContinue) return;
+
+    setIsStartingValidation(true);
+    try {
+      // Flush any pending debounced save by saving immediately
+      if (saveRef.current) {
+        clearTimeout(saveRef.current);
+        saveRef.current = null;
+      }
+      await updateSettings.mutateAsync({ sessionId, settings });
+
+      // Start translate-validate (backend will sync quiz + settings to draft talk)
+      await startValidation.mutateAsync({
+        sessionId,
+        request: {
+          targetLanguageCodes: state.targetLanguageCodes,
+        },
+      });
+
+      onNext();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to start validation';
+      toast.error('Error', { description: message });
+    } finally {
+      setIsStartingValidation(false);
+    }
+  }, [sessionId, canContinue, settings, state.targetLanguageCodes, updateSettings, startValidation, onNext]);
 
   if (isLoading && !serverSettings) {
     return (
@@ -171,11 +204,25 @@ export function SettingsStep({ state, onNext, onBack }: SettingsStepProps) {
 
       {/* Navigation */}
       <div className="flex justify-between pt-4 border-t">
-        <Button variant="outline" onClick={onBack}>
+        <Button variant="outline" onClick={onBack} disabled={isStartingValidation}>
           Back
         </Button>
-        <Button onClick={onNext} disabled={!canContinue || isSaving}>
-          Continue
+        <Button
+          onClick={handleContinue}
+          disabled={!canContinue || isSaving || isStartingValidation}
+        >
+          {isStartingValidation ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Starting Validation...
+            </>
+          ) : (
+            <>
+              <Languages className="mr-2 h-4 w-4" />
+              Translate & Validate
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </>
+          )}
         </Button>
       </div>
     </div>

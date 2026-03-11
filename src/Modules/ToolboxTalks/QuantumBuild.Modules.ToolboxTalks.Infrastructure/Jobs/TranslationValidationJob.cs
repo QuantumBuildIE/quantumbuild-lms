@@ -593,18 +593,88 @@ public class TranslationValidationJob
 
             var translatedSectionsJson = JsonSerializer.Serialize(translatedSections);
 
-            // Translate the talk title for the translation record
+            // Load the talk to translate title, description, and quiz questions
             var talk = await _dbContext.ToolboxTalks
                 .IgnoreQueryFilters()
                 .FirstOrDefaultAsync(t => t.Id == talkId && !t.IsDeleted, cancellationToken);
 
             var translatedTitle = talk?.Title ?? "Untitled";
+            string? translatedDescription = null;
             if (talk != null)
             {
                 var titleTranslation = await _contentTranslationService.TranslateTextAsync(
                     talk.Title, languageName, false, cancellationToken);
                 if (titleTranslation.Success)
                     translatedTitle = titleTranslation.TranslatedContent;
+
+                // Translate description if present
+                if (!string.IsNullOrWhiteSpace(talk.Description))
+                {
+                    var descResult = await _contentTranslationService.TranslateTextAsync(
+                        talk.Description, languageName, false, cancellationToken);
+                    if (descResult.Success)
+                        translatedDescription = descResult.TranslatedContent;
+                }
+            }
+
+            // Translate quiz questions if the talk has any
+            string? translatedQuestionsJson = null;
+            var questions = await _dbContext.ToolboxTalkQuestions
+                .IgnoreQueryFilters()
+                .Where(q => q.ToolboxTalkId == talkId)
+                .OrderBy(q => q.QuestionNumber)
+                .ToListAsync(cancellationToken);
+
+            if (questions.Count > 0)
+            {
+                var translatedQuestions = new List<object>();
+                foreach (var q in questions)
+                {
+                    // Translate question text
+                    var qTextResult = await _contentTranslationService.TranslateTextAsync(
+                        q.QuestionText, languageName, false, cancellationToken);
+                    var translatedQuestionText = qTextResult.Success
+                        ? qTextResult.TranslatedContent
+                        : q.QuestionText;
+
+                    // Translate options if present
+                    List<string>? translatedOptions = null;
+                    if (!string.IsNullOrWhiteSpace(q.Options))
+                    {
+                        try
+                        {
+                            var options = JsonSerializer.Deserialize<List<string>>(q.Options) ?? new();
+                            translatedOptions = new List<string>();
+                            foreach (var option in options)
+                            {
+                                var optResult = await _contentTranslationService.TranslateTextAsync(
+                                    option, languageName, false, cancellationToken);
+                                translatedOptions.Add(optResult.Success ? optResult.TranslatedContent : option);
+                            }
+                        }
+                        catch (JsonException)
+                        {
+                            _logger.LogWarning(
+                                "Failed to parse options JSON for question {QuestionId}", q.Id);
+                        }
+                    }
+
+                    translatedQuestions.Add(new
+                    {
+                        QuestionId = q.Id,
+                        QuestionNumber = q.QuestionNumber,
+                        QuestionText = translatedQuestionText,
+                        QuestionType = q.QuestionType.ToString(),
+                        Options = translatedOptions,
+                        CorrectOptionIndex = q.CorrectOptionIndex,
+                        Points = q.Points
+                    });
+                }
+
+                translatedQuestionsJson = JsonSerializer.Serialize(translatedQuestions);
+                _logger.LogInformation(
+                    "Translated {Count} quiz questions to {Language}",
+                    translatedQuestions.Count, languageName);
             }
 
             // Persist the translation record
@@ -615,7 +685,9 @@ public class TranslationValidationJob
                 ToolboxTalkId = talkId,
                 LanguageCode = languageCode,
                 TranslatedTitle = translatedTitle,
+                TranslatedDescription = translatedDescription,
                 TranslatedSections = translatedSectionsJson,
+                TranslatedQuestions = translatedQuestionsJson,
                 TranslatedAt = DateTime.UtcNow,
                 TranslationProvider = "Claude",
                 EmailSubject = translatedTitle,

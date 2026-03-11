@@ -9,7 +9,6 @@ import {
   ArrowLeft,
   RefreshCw,
   AlertTriangle,
-  Languages,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -17,7 +16,6 @@ import {
   useCreationSession,
   useParseContent,
   useUpdateSections,
-  useStartValidation,
 } from '@/lib/api/toolbox-talks/use-content-creation';
 import type { WizardState } from '../CreateWizard';
 import type {
@@ -66,7 +64,6 @@ interface ParseLogEntry {
 export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps) {
   const parseContent = useParseContent();
   const updateSections = useUpdateSections();
-  const startValidation = useStartValidation();
 
   // Polling query — enabled only while parsing
   const [isPolling, setIsPolling] = useState(false);
@@ -315,14 +312,6 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
         },
       });
 
-      // Start translate-validate
-      await startValidation.mutateAsync({
-        sessionId: state.sessionId,
-        request: {
-          targetLanguageCodes: state.targetLanguageCodes,
-        },
-      });
-
       onNext();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to proceed';
@@ -333,7 +322,6 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
   const isBusy =
     parseContent.isPending ||
     updateSections.isPending ||
-    startValidation.isPending ||
     isPolling;
 
   const isParsing = parseContent.isPending || isPolling;
@@ -405,12 +393,6 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
           {hasParsed && sections.length > 0 && (
             <span className="text-sm text-muted-foreground">
               {sections.length} section{sections.length !== 1 ? 's' : ''}
-              {state.targetLanguageCodes.length > 0 && (
-                <>
-                  {' '}· {state.targetLanguageCodes.length} language
-                  {state.targetLanguageCodes.length !== 1 ? 's' : ''}
-                </>
-              )}
             </span>
           )}
 
@@ -422,15 +404,14 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
               isBusy
             }
           >
-            {updateSections.isPending || startValidation.isPending ? (
+            {updateSections.isPending ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Processing...
+                Saving...
               </>
             ) : (
               <>
-                <Languages className="mr-2 h-4 w-4" />
-                Translate & Validate All
+                Continue
                 <ArrowRight className="ml-2 h-4 w-4" />
               </>
             )}

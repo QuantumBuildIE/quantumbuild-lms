@@ -37,9 +37,9 @@ const PublishStep = lazy(() =>
 const STEPS = [
   { id: 1 as WizardStep, name: 'Input & Config', description: 'Content source and settings' },
   { id: 2 as WizardStep, name: 'Parse', description: 'Extract sections from content' },
-  { id: 3 as WizardStep, name: 'Translate & Validate', description: 'AI translation with validation' },
-  { id: 4 as WizardStep, name: 'Quiz', description: 'Review generated questions' },
-  { id: 5 as WizardStep, name: 'Settings', description: 'Title, category, behaviour' },
+  { id: 3 as WizardStep, name: 'Quiz', description: 'Review generated questions' },
+  { id: 4 as WizardStep, name: 'Settings', description: 'Title, category, behaviour' },
+  { id: 5 as WizardStep, name: 'Translate & Validate', description: 'AI translation with validation' },
   { id: 6 as WizardStep, name: 'Publish', description: 'Review and publish' },
 ];
 
@@ -160,7 +160,7 @@ export function CreateWizard() {
       case 3:
         return (
           <Suspense fallback={<StepLoader />}>
-            <TranslateValidateStep
+            <QuizStep
               state={wizardState}
               updateState={updateState}
               onNext={goToNextStep}
@@ -171,7 +171,7 @@ export function CreateWizard() {
       case 4:
         return (
           <Suspense fallback={<StepLoader />}>
-            <QuizStep
+            <SettingsStep
               state={wizardState}
               updateState={updateState}
               onNext={goToNextStep}
@@ -182,7 +182,7 @@ export function CreateWizard() {
       case 5:
         return (
           <Suspense fallback={<StepLoader />}>
-            <SettingsStep
+            <TranslateValidateStep
               state={wizardState}
               updateState={updateState}
               onNext={goToNextStep}

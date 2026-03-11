@@ -252,8 +252,9 @@ public class ContentCreationSessionService : IContentCreationSessionService
         var session = await GetSessionEntityAsync(sessionId, tenantId, cancellationToken);
 
         if (session.Status != ContentCreationSessionStatus.Parsed &&
-            session.Status != ContentCreationSessionStatus.Validated)
-            throw new InvalidOperationException("Translation/validation can only start from Parsed or Validated status");
+            session.Status != ContentCreationSessionStatus.Validated &&
+            session.Status != ContentCreationSessionStatus.QuizGenerated)
+            throw new InvalidOperationException("Translation/validation can only start from Parsed, QuizGenerated, or Validated status");
 
         if (request.TargetLanguageCodes.Count == 0)
             throw new InvalidOperationException("At least one target language code is required");
@@ -266,12 +267,46 @@ public class ContentCreationSessionService : IContentCreationSessionService
         if (sections.Count == 0)
             throw new InvalidOperationException("No sections available for validation");
 
+        // Parse settings from session (title, description, category)
+        SessionSettingsDto? sessionSettings = null;
+        if (!string.IsNullOrWhiteSpace(session.SettingsJson))
+            sessionSettings = JsonSerializer.Deserialize<SessionSettingsDto>(session.SettingsJson, CamelCaseJson);
+
+        // Parse quiz questions and settings from session
+        List<SessionQuizQuestionDto>? quizQuestions = null;
+        if (!string.IsNullOrWhiteSpace(session.QuestionsJson))
+            quizQuestions = JsonSerializer.Deserialize<List<SessionQuizQuestionDto>>(session.QuestionsJson, CamelCaseJson);
+
+        SessionQuizSettingsDto? quizSettings = null;
+        if (!string.IsNullOrWhiteSpace(session.QuizSettingsJson))
+            quizSettings = JsonSerializer.Deserialize<SessionQuizSettingsDto>(session.QuizSettingsJson, CamelCaseJson);
+
+        // Derive the talk title from settings or fallback
+        var talkTitle = !string.IsNullOrWhiteSpace(sessionSettings?.Title)
+            ? sessionSettings.Title
+            : $"[Draft] Session {sessionId.ToString()[..8]}";
+        var talkDescription = sessionSettings?.Description;
+        var talkCategory = sessionSettings?.Category;
+
         // Create or reuse a draft ToolboxTalk so the validation job can load sections
         Guid talkId;
         if (session.OutputId.HasValue)
         {
             // Re-running validation on existing draft — reuse the talk
             talkId = session.OutputId.Value;
+
+            // Update the talk metadata from session settings and quiz
+            var existingTalk = await _dbContext.ToolboxTalks
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(t => t.Id == talkId && !t.IsDeleted, cancellationToken);
+
+            if (existingTalk != null)
+            {
+                existingTalk.Title = talkTitle;
+                existingTalk.Description = talkDescription;
+                existingTalk.Category = talkCategory;
+                SyncQuizSettingsToTalk(existingTalk, quizSettings);
+            }
 
             // Update sections in case they changed (user edited in Step 2)
             var existingSections = await _dbContext.ToolboxTalkSections
@@ -296,6 +331,16 @@ public class ContentCreationSessionService : IContentCreationSessionService
                 });
             }
 
+            // Remove old questions so they are recreated from session quiz data
+            var existingQuestions = await _dbContext.ToolboxTalkQuestions
+                .Where(q => q.ToolboxTalkId == talkId)
+                .ToListAsync(cancellationToken);
+            foreach (var q in existingQuestions)
+                _dbContext.ToolboxTalkQuestions.Remove(q);
+
+            // Add quiz questions from session
+            SyncQuizQuestionsToTalk(talkId, quizQuestions);
+
             // Remove old translations so they are regenerated
             var existingTranslations = await _dbContext.ToolboxTalkTranslations
                 .Where(t => t.ToolboxTalkId == talkId)
@@ -305,18 +350,22 @@ public class ContentCreationSessionService : IContentCreationSessionService
         }
         else
         {
-            // Create a draft talk from session sections
-            var draftCode = await GenerateCodeAsync("Draft Validation", tenantId, cancellationToken);
+            // Create a draft talk from session sections with full metadata
+            var draftCode = await GenerateCodeAsync(talkTitle, tenantId, cancellationToken);
             var draftTalk = new ToolboxTalk
             {
                 Id = Guid.NewGuid(),
                 TenantId = tenantId,
                 Code = draftCode,
-                Title = $"[Draft] Session {sessionId.ToString()[..8]}",
+                Title = talkTitle,
+                Description = talkDescription,
+                Category = talkCategory,
                 Status = ToolboxTalkStatus.Draft,
                 SourceLanguageCode = "en",
                 IsActive = false
             };
+
+            SyncQuizSettingsToTalk(draftTalk, quizSettings);
 
             foreach (var (parsed, i) in sections.Select((s, i) => (s, i)))
             {
@@ -329,6 +378,33 @@ public class ContentCreationSessionService : IContentCreationSessionService
                     Content = parsed.Content,
                     RequiresAcknowledgment = true
                 });
+            }
+
+            // Add quiz questions from session
+            if (quizQuestions != null)
+            {
+                var questionNumber = 1;
+                foreach (var q in quizQuestions)
+                {
+                    var options = q.Options;
+                    var correctAnswer = q.CorrectAnswerIndex >= 0 && q.CorrectAnswerIndex < options.Count
+                        ? options[q.CorrectAnswerIndex]
+                        : string.Empty;
+
+                    draftTalk.Questions.Add(new ToolboxTalkQuestion
+                    {
+                        Id = Guid.NewGuid(),
+                        ToolboxTalkId = draftTalk.Id,
+                        QuestionNumber = questionNumber++,
+                        QuestionText = q.QuestionText,
+                        QuestionType = Enum.TryParse<QuestionType>(q.QuestionType, out var qt) ? qt : QuestionType.MultipleChoice,
+                        Options = JsonSerializer.Serialize(options),
+                        CorrectAnswer = correctAnswer,
+                        CorrectOptionIndex = q.CorrectAnswerIndex,
+                        Points = q.Points,
+                        Source = ContentSource.Pdf
+                    });
+                }
             }
 
             _dbContext.ToolboxTalks.Add(draftTalk);
@@ -966,6 +1042,51 @@ public class ContentCreationSessionService : IContentCreationSessionService
             CreatedAt = session.CreatedAt,
             UpdatedAt = session.UpdatedAt
         };
+    }
+
+    /// <summary>
+    /// Syncs quiz settings from the session onto the draft ToolboxTalk entity.
+    /// </summary>
+    private static void SyncQuizSettingsToTalk(ToolboxTalk talk, SessionQuizSettingsDto? quizSettings)
+    {
+        if (quizSettings == null) return;
+
+        talk.RequiresQuiz = quizSettings.RequireQuiz;
+        talk.PassingScore = quizSettings.PassingScore;
+        talk.ShuffleQuestions = quizSettings.ShuffleQuestions;
+        talk.ShuffleOptions = quizSettings.ShuffleOptions;
+    }
+
+    /// <summary>
+    /// Syncs quiz questions from session JSON to the draft ToolboxTalk (via DbContext direct add).
+    /// Used when the talk already exists (re-run scenario).
+    /// </summary>
+    private void SyncQuizQuestionsToTalk(Guid talkId, List<SessionQuizQuestionDto>? quizQuestions)
+    {
+        if (quizQuestions == null || quizQuestions.Count == 0) return;
+
+        var questionNumber = 1;
+        foreach (var q in quizQuestions)
+        {
+            var options = q.Options;
+            var correctAnswer = q.CorrectAnswerIndex >= 0 && q.CorrectAnswerIndex < options.Count
+                ? options[q.CorrectAnswerIndex]
+                : string.Empty;
+
+            _dbContext.ToolboxTalkQuestions.Add(new ToolboxTalkQuestion
+            {
+                Id = Guid.NewGuid(),
+                ToolboxTalkId = talkId,
+                QuestionNumber = questionNumber++,
+                QuestionText = q.QuestionText,
+                QuestionType = Enum.TryParse<QuestionType>(q.QuestionType, out var qt) ? qt : QuestionType.MultipleChoice,
+                Options = JsonSerializer.Serialize(options),
+                CorrectAnswer = correctAnswer,
+                CorrectOptionIndex = q.CorrectAnswerIndex,
+                Points = q.Points,
+                Source = ContentSource.Pdf
+            });
+        }
     }
 
     #endregion
