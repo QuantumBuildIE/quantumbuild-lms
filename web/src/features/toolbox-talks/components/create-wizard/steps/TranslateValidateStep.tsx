@@ -94,7 +94,6 @@ export function TranslateValidateStep({
   const {
     data: runDetail,
     refetch: refetchRun,
-    isLoading: isRunLoading,
   } = useSessionValidationRun(talkId, activeEntry?.runId ?? null);
 
   // Section decision mutation
@@ -291,9 +290,10 @@ export function TranslateValidateStep({
   // Initial loading — run detail not yet fetched and no hub progress received
   // ============================================
 
-  const hasHubProgress =
-    hub.isConnected || hub.completedSections.size > 0 || hub.isComplete;
-  const isInitialLoading = isRunLoading && !hasHubProgress;
+  const hasAnyResults = (runDetail?.results?.length ?? 0) > 0;
+  const hasHubActivity =
+    hub.progress !== null || hub.completedSections.size > 0 || hub.isComplete;
+  const isInitialLoading = !hasAnyResults && !hasHubActivity;
 
   // ============================================
   // Render

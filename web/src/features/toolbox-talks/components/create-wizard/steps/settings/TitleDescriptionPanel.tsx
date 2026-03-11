@@ -79,7 +79,6 @@ export function TitleDescriptionPanel({
           value={settings.title}
           onChange={(e) => onChange({ ...settings, title: e.target.value })}
           placeholder="Enter a title for this learning"
-          disabled={isSaving}
         />
       </div>
 
@@ -94,7 +93,6 @@ export function TitleDescriptionPanel({
           onChange={(e) => onChange({ ...settings, description: e.target.value })}
           placeholder="Enter a description (optional)"
           rows={3}
-          disabled={isSaving}
         />
       </div>
 

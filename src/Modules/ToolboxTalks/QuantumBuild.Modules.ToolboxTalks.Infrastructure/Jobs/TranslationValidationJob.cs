@@ -113,6 +113,21 @@ public class TranslationValidationJob
             run.TotalSections = sections.Count;
             await _dbContext.SaveChangesAsync(cancellationToken);
 
+            // Remove existing results for this run (retry scenario — unique index on RunId+SectionIndex)
+            var existingResults = await _dbContext.TranslationValidationResults
+                .IgnoreQueryFilters()
+                .Where(r => r.ValidationRunId == validationRunId)
+                .ToListAsync(cancellationToken);
+
+            if (existingResults.Count > 0)
+            {
+                _logger.LogInformation(
+                    "Removing {Count} existing result(s) for run {RunId} before re-validation",
+                    existingResults.Count, validationRunId);
+                _dbContext.TranslationValidationResults.RemoveRange(existingResults);
+                await _dbContext.SaveChangesAsync(cancellationToken);
+            }
+
             // Validate each section
             var results = new List<Domain.Entities.TranslationValidationResult>();
 
@@ -152,8 +167,10 @@ public class TranslationValidationJob
                 catch (Exception ex)
                 {
                     _logger.LogError(ex,
-                        "Failed to validate section {Index} '{Title}' in run {RunId}",
-                        i, section.Title, validationRunId);
+                        "Failed to validate section {Index} '{Title}' in run {RunId}. " +
+                        "Exception: {ExType}: {ExMessage}",
+                        i, section.Title, validationRunId,
+                        ex.GetType().FullName, ex.Message);
 
                     // Create a failed result so the run can still complete
                     var failedResult = new Domain.Entities.TranslationValidationResult
@@ -236,16 +253,31 @@ public class TranslationValidationJob
             _logger.LogError(ex,
                 "========== TRANSLATION VALIDATION JOB EXCEPTION ==========\n" +
                 "ValidationRunId: {RunId}\n" +
+                "TenantId: {TenantId}\n" +
                 "Duration before error: {Duration}ms\n" +
-                "Exception: {ExType}: {Message}",
+                "Exception: {ExType}: {Message}\n" +
+                "StackTrace: {Stack}",
                 validationRunId,
+                tenantId,
                 stopwatch.ElapsedMilliseconds,
                 ex.GetType().FullName,
-                ex.Message);
+                ex.Message,
+                ex.StackTrace);
 
             await UpdateRunStatusAsync(validationRunId, tenantId, ValidationRunStatus.Failed);
-            await SendCompletionAsync(validationRunId, false,
-                "Validation failed due to an unexpected error");
+
+            // Surface a meaningful error to the frontend instead of a generic fallback
+            var clientMessage = ex switch
+            {
+                InvalidOperationException => $"Validation configuration error: {ex.Message}",
+                HttpRequestException => $"External translation service unavailable: {ex.Message}",
+                TaskCanceledException => "Validation timed out — an external provider did not respond in time",
+                JsonException => $"Failed to parse translation data: {ex.Message}",
+                Microsoft.EntityFrameworkCore.DbUpdateException => $"Database error while saving results: {ex.Message}",
+                _ => $"Validation failed: {ex.Message}"
+            };
+
+            await SendCompletionAsync(validationRunId, false, clientMessage);
 
             throw;
         }

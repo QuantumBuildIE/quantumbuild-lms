@@ -407,7 +407,7 @@ quantumbuild-lms/
 |------|-------------|
 | `/admin/toolbox-talks` | Overview dashboard with KPIs |
 | `/admin/toolbox-talks/talks` | List all talks |
-| `/admin/toolbox-talks/talks/new` | Create talk (multi-step wizard) |
+| `/admin/toolbox-talks/talks/new` | Create talk (6-step wizard: Input & Config → Parse → Quiz → Settings → Translate & Validate → Publish) |
 | `/admin/toolbox-talks/talks/[id]` | View talk details |
 | `/admin/toolbox-talks/talks/[id]/edit` | Edit talk |
 | `/admin/toolbox-talks/courses` | List courses |
@@ -591,7 +591,7 @@ Start Validation → Back-translate sections (multi-provider consensus) → Scor
 5. **Outcome:** Pass (≥ threshold), Review (≥ threshold-15), or Fail
 
 **Reviewer Workflow:**
-- Reviewers can Accept, Reject, or Edit each section result
+- Reviewers can Accept or Edit each section result (no explicit Reject button — implicit rejection is recorded automatically on Edit or Retry)
 - Edited sections trigger automatic re-validation
 - Full audit trail with reviewer name, decision time, metadata
 
@@ -761,6 +761,30 @@ dotnet ef database update
 
 ---
 
+## Deployment (Railway)
+
+### Branch Strategy
+- The **TransVal feature** is developed on the `transval` branch
+- Two remotes must be kept in sync: `origin/transval` and `company/transval`
+- Railway auto-deploys from the `transval` branch, but **auto-deploy does not always trigger on push**
+- To force a Railway redeploy: `git commit --allow-empty -m "chore: trigger Railway redeploy"`
+
+---
+
+## Phase 13 (TransVal) Key Fixes
+
+These are important implementation details discovered during Phase 13 testing:
+
+1. **SignalR event name casing** — Event names (`ValidationComplete`, `ValidationProgress`, `SectionCompleted`) must be PascalCase on both server and client
+2. **DeepL paid API base URL** — `https://api.deepl.com/v2` (without `/translate` suffix); the free tier uses `https://api-free.deepl.com/v2`
+3. **Quiz JSON deserialization** — `ContentCreationSessionService` uses `CamelCaseJson` options (`JsonSerializerOptions` with `camelCase` naming policy) throughout for quiz and settings data from session
+4. **Wizard Reject button removed** — No explicit Reject button in the TransVal wizard UI; implicit rejection is recorded automatically on Edit or Retry actions
+5. **SettingsStep textarea focus fix** — Mutation refs stabilised via `useCallback` dependencies to prevent textarea losing focus on every keystroke
+6. **SignalR reconnection** — Extended to 10 retry attempts with exponential backoff; manual reconnect fallback on `onclose` event to handle WebSocket 1006 disconnects
+7. **Progress bar stuck at 95%** — Fixed by ensuring `ValidationComplete` event properly transitions the UI to completion state
+
+---
+
 ## Reusable Frontend Components
 
 ### shadcn/ui Components (31)
@@ -917,7 +941,7 @@ Multi-round back-translation consensus engine that validates AI-generated transl
 ### Configuration (`TranslationValidation` settings section)
 ```json
 {
-  "DeepL": { "ApiKey": "...", "BaseUrl": "https://api-free.deepl.com/v2" },
+  "DeepL": { "ApiKey": "...", "BaseUrl": "https://api.deepl.com/v2" },
   "Gemini": { "ApiKey": "...", "Model": "gemini-2.0-flash", "BaseUrl": "..." },
   "DeepSeek": { "ApiKey": "...", "Model": "deepseek-chat", "BaseUrl": "..." },
   "DefaultThreshold": 75,
@@ -931,7 +955,8 @@ Multi-round back-translation consensus engine that validates AI-generated transl
 **Route:** `/api/hubs/translation-validation`
 - `ValidationProgress` — Progress update: stage, percentComplete, message
 - `SectionCompleted` — Section result: index, outcome, score, isSafetyCritical
-- `ValidationComplete` — Run completion: success, message
+- `ValidationComplete` — Run completion: success, message (note: event names are PascalCase on the wire)
+- **Reconnection:** Extended to 10 retry attempts with exponential backoff; manual reconnect fallback on `onclose`
 
 ### Frontend
 - **Validation history tab** on talk detail page — lists all runs with status, score, outcome
@@ -977,8 +1002,12 @@ Multi-round back-translation consensus engine that validates AI-generated transl
 18. **SafetyGlossary scoping** — System defaults (TenantId = null) vs tenant-specific overrides; sector-based (construction, mining, manufacturing, etc.)
 19. **TransVal uses direct services** — Not CQRS; uses ITranslationValidationService, ILexicalScoringService, IConsensusEngine, ISafetyClassificationService, IGlossaryTermVerificationService
 20. **TransVal configuration** — `TranslationValidation` settings section: DeepL/Gemini/DeepSeek API keys, DefaultThreshold (75), SafetyCriticalBump (10), MaxRounds (3), SessionExpiryHours (24)
+21. **Create Content wizard step order** — Input & Config → Parse → Quiz → Settings → Translate & Validate → Publish (Quiz and Settings come before TransVal)
+22. **DeepL paid vs free** — Paid API base URL is `https://api.deepl.com/v2`; free tier is `https://api-free.deepl.com/v2`. Do NOT append `/translate` to the base URL
+23. **CamelCaseJson for session data** — Quiz and settings JSON in `ContentCreationSessionService` must use camelCase `JsonSerializerOptions` for correct deserialization
+24. **Railway deployment** — `transval` branch deployed to Railway; keep `origin/transval` and `company/transval` in sync; use empty commits to force redeploy when auto-deploy doesn't trigger
 
 ---
 
-*Last Updated: March 5, 2026*
+*Last Updated: March 11, 2026*
 *Architecture: Modular Monolith with Clean Architecture*
