@@ -65,6 +65,10 @@ public class ContentCreationSessionConfiguration : IEntityTypeConfiguration<Cont
         builder.Property(s => s.SectorKey)
             .HasMaxLength(50);
 
+        builder.Property(s => s.IncludeQuiz)
+            .IsRequired()
+            .HasDefaultValue(true);
+
         // Audit metadata
         builder.Property(s => s.ReviewerName)
             .HasMaxLength(200);

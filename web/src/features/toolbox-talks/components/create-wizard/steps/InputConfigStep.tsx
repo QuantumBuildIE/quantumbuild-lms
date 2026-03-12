@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/multi-select-combobox';
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Switch } from '@/components/ui/switch';
 import {
   FileText,
   FileVideo,
@@ -240,6 +241,7 @@ export function InputConfigStep({
           inputMode: state.inputMode,
           sourceText: state.inputMode === 'Text' ? state.sourceText : undefined,
           passThreshold: state.passThreshold,
+          includeQuiz: state.includeQuiz,
           reviewerName: state.reviewerName || undefined,
           reviewerOrg: state.reviewerOrg || undefined,
           reviewerRole: state.reviewerRole || undefined,
@@ -562,6 +564,23 @@ export function InputConfigStep({
             Min score to pass
           </p>
         </div>
+      </div>
+
+      {/* Include Quiz Toggle */}
+      <div className="flex items-center justify-between rounded-lg border p-4">
+        <div className="space-y-0.5">
+          <Label htmlFor="include-quiz" className="text-sm font-medium">
+            Include Quiz
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            Generate quiz questions for this content. When disabled, the Quiz step is skipped.
+          </p>
+        </div>
+        <Switch
+          id="include-quiz"
+          checked={state.includeQuiz}
+          onCheckedChange={(checked) => updateState({ includeQuiz: checked })}
+        />
       </div>
 
       {/* Audit Metadata */}

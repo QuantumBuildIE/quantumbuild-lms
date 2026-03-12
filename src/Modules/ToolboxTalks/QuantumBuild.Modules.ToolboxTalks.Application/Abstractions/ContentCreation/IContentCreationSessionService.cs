@@ -107,6 +107,7 @@ public record CreateSessionRequest
     public string? SourceText { get; init; }
     public string? SectorKey { get; init; }
     public int PassThreshold { get; init; } = 75;
+    public bool IncludeQuiz { get; init; } = true;
 
     // Audit metadata
     public string? ReviewerName { get; init; }
@@ -165,6 +166,7 @@ public record ContentCreationSessionDto
     public Guid? OutputCourseId { get; init; }
     public string? TargetLanguageCodes { get; init; }
     public int PassThreshold { get; init; }
+    public bool IncludeQuiz { get; init; }
     public string? SectorKey { get; init; }
     public string? ReviewerName { get; init; }
     public string? ReviewerOrg { get; init; }

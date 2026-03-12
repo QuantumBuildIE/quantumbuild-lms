@@ -37,6 +37,9 @@ public class ContentCreationSession : TenantEntity
     public int PassThreshold { get; set; } = 75;
     public string? SectorKey { get; set; }
 
+    // Quiz inclusion — when false, skip quiz generation and set RequiresQuiz = false on publish
+    public bool IncludeQuiz { get; set; } = true;
+
     // Audit metadata
     public string? ReviewerName { get; set; }
     public string? ReviewerOrg { get; set; }

@@ -49,6 +49,7 @@ export interface ContentCreationSession {
   outputCourseId: string | null;
   targetLanguageCodes: string | null;
   passThreshold: number;
+  includeQuiz: boolean;
   sectorKey: string | null;
   reviewerName: string | null;
   reviewerOrg: string | null;
@@ -89,6 +90,7 @@ export interface CreateSessionRequest {
   sourceText?: string;
   sectorKey?: string;
   passThreshold?: number;
+  includeQuiz?: boolean;
   reviewerName?: string;
   reviewerOrg?: string;
   reviewerRole?: string;

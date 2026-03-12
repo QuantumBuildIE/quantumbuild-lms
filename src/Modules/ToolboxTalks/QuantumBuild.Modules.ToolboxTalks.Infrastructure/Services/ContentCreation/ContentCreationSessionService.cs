@@ -84,6 +84,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
             Status = ContentCreationSessionStatus.Draft,
             SourceText = request.InputMode == InputMode.Text ? request.SourceText : null,
             PassThreshold = request.PassThreshold,
+            IncludeQuiz = request.IncludeQuiz,
             SectorKey = request.SectorKey,
             ReviewerName = request.ReviewerName,
             ReviewerOrg = request.ReviewerOrg,
@@ -343,14 +344,17 @@ public class ContentCreationSessionService : IContentCreationSessionService
         if (!string.IsNullOrWhiteSpace(session.SettingsJson))
             sessionSettings = JsonSerializer.Deserialize<SessionSettingsDto>(session.SettingsJson, CamelCaseJson);
 
-        // Parse quiz questions and settings from session
+        // Parse quiz questions and settings from session (skip when quiz excluded)
         List<SessionQuizQuestionDto>? quizQuestions = null;
-        if (!string.IsNullOrWhiteSpace(session.QuestionsJson))
-            quizQuestions = JsonSerializer.Deserialize<List<SessionQuizQuestionDto>>(session.QuestionsJson, CamelCaseJson);
-
         SessionQuizSettingsDto? quizSettings = null;
-        if (!string.IsNullOrWhiteSpace(session.QuizSettingsJson))
-            quizSettings = JsonSerializer.Deserialize<SessionQuizSettingsDto>(session.QuizSettingsJson, CamelCaseJson);
+        if (session.IncludeQuiz)
+        {
+            if (!string.IsNullOrWhiteSpace(session.QuestionsJson))
+                quizQuestions = JsonSerializer.Deserialize<List<SessionQuizQuestionDto>>(session.QuestionsJson, CamelCaseJson);
+
+            if (!string.IsNullOrWhiteSpace(session.QuizSettingsJson))
+                quizSettings = JsonSerializer.Deserialize<SessionQuizSettingsDto>(session.QuizSettingsJson, CamelCaseJson);
+        }
 
         // Derive the talk title from settings or fallback
         var talkTitle = !string.IsNullOrWhiteSpace(sessionSettings?.Title)
@@ -377,7 +381,10 @@ public class ContentCreationSessionService : IContentCreationSessionService
                 existingTalk.Title = talkTitle;
                 existingTalk.Description = talkDescription;
                 existingTalk.Category = talkCategory;
-                SyncQuizSettingsToTalk(existingTalk, quizSettings);
+                if (session.IncludeQuiz)
+                    SyncQuizSettingsToTalk(existingTalk, quizSettings);
+                else
+                    existingTalk.RequiresQuiz = false;
             }
 
             // Update sections in case they changed (user edited in Step 2)
@@ -410,8 +417,9 @@ public class ContentCreationSessionService : IContentCreationSessionService
             foreach (var q in existingQuestions)
                 _dbContext.ToolboxTalkQuestions.Remove(q);
 
-            // Add quiz questions from session
-            SyncQuizQuestionsToTalk(talkId, quizQuestions, session.InputMode);
+            // Add quiz questions from session (skip when quiz excluded)
+            if (session.IncludeQuiz)
+                SyncQuizQuestionsToTalk(talkId, quizQuestions, session.InputMode);
 
             // Remove old translations so they are regenerated
             var existingTranslations = await _dbContext.ToolboxTalkTranslations
@@ -437,7 +445,10 @@ public class ContentCreationSessionService : IContentCreationSessionService
                 IsActive = false
             };
 
-            SyncQuizSettingsToTalk(newDraftTalk, quizSettings);
+            if (session.IncludeQuiz)
+                SyncQuizSettingsToTalk(newDraftTalk, quizSettings);
+            else
+                newDraftTalk.RequiresQuiz = false;
 
             foreach (var (parsed, i) in sections.Select((s, i) => (s, i)))
             {
@@ -452,8 +463,8 @@ public class ContentCreationSessionService : IContentCreationSessionService
                 });
             }
 
-            // Add quiz questions from session
-            if (quizQuestions != null)
+            // Add quiz questions from session (skip when quiz excluded)
+            if (session.IncludeQuiz && quizQuestions != null)
             {
                 var source = session.InputMode switch
                 {
@@ -1138,23 +1149,29 @@ public class ContentCreationSessionService : IContentCreationSessionService
                     });
                 }
 
-                // Re-sync quiz settings from session
-                SessionQuizSettingsDto? courseQuizSettings = null;
-                if (!string.IsNullOrWhiteSpace(session.QuizSettingsJson))
-                    courseQuizSettings = JsonSerializer.Deserialize<SessionQuizSettingsDto>(session.QuizSettingsJson, CamelCaseJson);
-                SyncQuizSettingsToTalk(draftTalk, courseQuizSettings);
+                // Re-sync quiz settings and questions from session (skip when quiz excluded)
+                if (session.IncludeQuiz)
+                {
+                    SessionQuizSettingsDto? courseQuizSettings = null;
+                    if (!string.IsNullOrWhiteSpace(session.QuizSettingsJson))
+                        courseQuizSettings = JsonSerializer.Deserialize<SessionQuizSettingsDto>(session.QuizSettingsJson, CamelCaseJson);
+                    SyncQuizSettingsToTalk(draftTalk, courseQuizSettings);
 
-                // Re-sync quiz questions from session
-                var existingQuestions = await _dbContext.ToolboxTalkQuestions
-                    .Where(q => q.ToolboxTalkId == draftTalk.Id)
-                    .ToListAsync(cancellationToken);
-                foreach (var q in existingQuestions)
-                    _dbContext.ToolboxTalkQuestions.Remove(q);
+                    var existingQuestions = await _dbContext.ToolboxTalkQuestions
+                        .Where(q => q.ToolboxTalkId == draftTalk.Id)
+                        .ToListAsync(cancellationToken);
+                    foreach (var q in existingQuestions)
+                        _dbContext.ToolboxTalkQuestions.Remove(q);
 
-                List<SessionQuizQuestionDto>? courseQuizQuestions = null;
-                if (!string.IsNullOrWhiteSpace(session.QuestionsJson))
-                    courseQuizQuestions = JsonSerializer.Deserialize<List<SessionQuizQuestionDto>>(session.QuestionsJson, CamelCaseJson);
-                SyncQuizQuestionsToTalk(draftTalk.Id, courseQuizQuestions, session.InputMode);
+                    List<SessionQuizQuestionDto>? courseQuizQuestions = null;
+                    if (!string.IsNullOrWhiteSpace(session.QuestionsJson))
+                        courseQuizQuestions = JsonSerializer.Deserialize<List<SessionQuizQuestionDto>>(session.QuestionsJson, CamelCaseJson);
+                    SyncQuizQuestionsToTalk(draftTalk.Id, courseQuizQuestions, session.InputMode);
+                }
+                else
+                {
+                    draftTalk.RequiresQuiz = false;
+                }
 
                 await _dbContext.SaveChangesAsync(cancellationToken);
                 return draftTalk.Id;
@@ -1236,17 +1253,23 @@ public class ContentCreationSessionService : IContentCreationSessionService
             talk.Sections.Add(section);
         }
 
-        // Sync quiz settings from session
-        SessionQuizSettingsDto? quizSettings = null;
-        if (!string.IsNullOrWhiteSpace(session.QuizSettingsJson))
-            quizSettings = JsonSerializer.Deserialize<SessionQuizSettingsDto>(session.QuizSettingsJson, CamelCaseJson);
-        SyncQuizSettingsToTalk(talk, quizSettings);
+        // Sync quiz settings and questions from session (skip when quiz excluded)
+        if (session.IncludeQuiz)
+        {
+            SessionQuizSettingsDto? quizSettings = null;
+            if (!string.IsNullOrWhiteSpace(session.QuizSettingsJson))
+                quizSettings = JsonSerializer.Deserialize<SessionQuizSettingsDto>(session.QuizSettingsJson, CamelCaseJson);
+            SyncQuizSettingsToTalk(talk, quizSettings);
 
-        // Sync quiz questions from session
-        List<SessionQuizQuestionDto>? quizQuestions = null;
-        if (!string.IsNullOrWhiteSpace(session.QuestionsJson))
-            quizQuestions = JsonSerializer.Deserialize<List<SessionQuizQuestionDto>>(session.QuestionsJson, CamelCaseJson);
-        SyncQuizQuestionsToTalk(talk.Id, quizQuestions, session.InputMode);
+            List<SessionQuizQuestionDto>? quizQuestions = null;
+            if (!string.IsNullOrWhiteSpace(session.QuestionsJson))
+                quizQuestions = JsonSerializer.Deserialize<List<SessionQuizQuestionDto>>(session.QuestionsJson, CamelCaseJson);
+            SyncQuizQuestionsToTalk(talk.Id, quizQuestions, session.InputMode);
+        }
+        else
+        {
+            talk.RequiresQuiz = false;
+        }
 
         _dbContext.ToolboxTalks.Add(talk);
         await SaveWithCodeRetryAsync(() => [talk], tenantId, cancellationToken);
@@ -1261,13 +1284,16 @@ public class ContentCreationSessionService : IContentCreationSessionService
         Guid tenantId,
         CancellationToken cancellationToken)
     {
-        // Deserialize quiz data from session so each course talk gets quiz questions & settings
+        // Deserialize quiz data from session so each course talk gets quiz questions & settings (skip when quiz excluded)
         List<SessionQuizQuestionDto>? quizQuestions = null;
-        if (!string.IsNullOrWhiteSpace(session.QuestionsJson))
-            quizQuestions = JsonSerializer.Deserialize<List<SessionQuizQuestionDto>>(session.QuestionsJson, CamelCaseJson);
-
         SessionQuizSettingsDto? quizSettings = null;
-        if (!string.IsNullOrWhiteSpace(session.QuizSettingsJson))
+        if (session.IncludeQuiz)
+        {
+            if (!string.IsNullOrWhiteSpace(session.QuestionsJson))
+                quizQuestions = JsonSerializer.Deserialize<List<SessionQuizQuestionDto>>(session.QuestionsJson, CamelCaseJson);
+        }
+
+        if (session.IncludeQuiz && !string.IsNullOrWhiteSpace(session.QuizSettingsJson))
             quizSettings = JsonSerializer.Deserialize<SessionQuizSettingsDto>(session.QuizSettingsJson, CamelCaseJson);
 
         SessionSettingsDto? sessionSettings = null;
@@ -1420,9 +1446,16 @@ public class ContentCreationSessionService : IContentCreationSessionService
             _dbContext.ToolboxTalks.Add(talk);
             courseTalks.Add(talk);
 
-            // Sync quiz settings and questions to the course talk
-            SyncQuizSettingsToTalk(talk, quizSettings);
-            SyncQuizQuestionsToTalk(talk.Id, quizQuestions, session.InputMode);
+            // Sync quiz settings and questions to the course talk (skip when quiz excluded)
+            if (session.IncludeQuiz)
+            {
+                SyncQuizSettingsToTalk(talk, quizSettings);
+                SyncQuizQuestionsToTalk(talk.Id, quizQuestions, session.InputMode);
+            }
+            else
+            {
+                talk.RequiresQuiz = false;
+            }
 
             // Migrate translations from the draft talk to this course talk
             if (draftTranslations != null && draftSections != null)
@@ -1705,6 +1738,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
             OutputCourseId = session.OutputCourseId,
             TargetLanguageCodes = session.TargetLanguageCodes,
             PassThreshold = session.PassThreshold,
+            IncludeQuiz = session.IncludeQuiz,
             SectorKey = session.SectorKey,
             ReviewerName = session.ReviewerName,
             ReviewerOrg = session.ReviewerOrg,

@@ -56,6 +56,7 @@ export interface WizardState {
   videoUrl: string;
   targetLanguageCodes: string[];
   passThreshold: number;
+  includeQuiz: boolean;
   // Audit metadata
   reviewerName: string;
   reviewerOrg: string;
@@ -80,6 +81,7 @@ const initialState: WizardState = {
   videoUrl: '',
   targetLanguageCodes: [],
   passThreshold: 75,
+  includeQuiz: true,
   reviewerName: '',
   reviewerOrg: '',
   reviewerRole: '',
@@ -108,24 +110,38 @@ export function CreateWizard() {
 
   const goToNextStep = useCallback(() => {
     setCurrentStep((prev) => {
-      const next = Math.min(prev + 1, 6) as WizardStep;
+      let next = Math.min(prev + 1, 6) as WizardStep;
+      // Skip Quiz step when quiz is excluded
+      if (next === 3 && !wizardState.includeQuiz) next = 4 as WizardStep;
       setHighestStep((h) => Math.max(h, next) as WizardStep);
       return next;
     });
-  }, []);
+  }, [wizardState.includeQuiz]);
 
   const goToPreviousStep = useCallback(() => {
-    setCurrentStep((prev) => Math.max(prev - 1, 1) as WizardStep);
-  }, []);
+    setCurrentStep((prev) => {
+      let next = Math.max(prev - 1, 1) as WizardStep;
+      // Skip Quiz step when quiz is excluded
+      if (next === 3 && !wizardState.includeQuiz) next = 2 as WizardStep;
+      return next;
+    });
+  }, [wizardState.includeQuiz]);
 
   const goToStep = useCallback(
     (step: WizardStep) => {
+      // Prevent navigating to Quiz step when quiz is excluded
+      if (step === 3 && !wizardState.includeQuiz) return;
       if (step <= highestStep) {
         setCurrentStep(step);
       }
     },
-    [highestStep]
+    [highestStep, wizardState.includeQuiz]
   );
+
+  // Filter out Quiz step from display when quiz is excluded
+  const visibleSteps = wizardState.includeQuiz
+    ? STEPS
+    : STEPS.filter((s) => s.id !== 3);
 
   const handleCancel = () => {
     if (confirm('Are you sure you want to cancel? All progress will be lost.')) {
@@ -229,16 +245,16 @@ export function CreateWizard() {
       {/* Step Indicator */}
       <nav aria-label="Progress" className="mb-8">
         <ol className="flex items-center">
-          {STEPS.map((step, stepIdx) => (
+          {visibleSteps.map((step, stepIdx) => (
             <li
               key={step.id}
               className={cn(
                 'relative',
-                stepIdx !== STEPS.length - 1 ? 'flex-1 pr-8 sm:pr-20' : ''
+                stepIdx !== visibleSteps.length - 1 ? 'flex-1 pr-8 sm:pr-20' : ''
               )}
             >
               {/* Connector line */}
-              {stepIdx !== STEPS.length - 1 && (
+              {stepIdx !== visibleSteps.length - 1 && (
                 <div
                   className={cn(
                     'absolute left-7 top-4 -ml-px mt-0.5 h-0.5 w-full',
