@@ -161,7 +161,8 @@ public record ContentCreationSessionDto
     public string? TranscriptText { get; init; }
     public string? ParsedSectionsJson { get; init; }
     public OutputType? OutputType { get; init; }
-    public Guid? OutputId { get; init; }
+    public Guid? OutputTalkId { get; init; }
+    public Guid? OutputCourseId { get; init; }
     public string? TargetLanguageCodes { get; init; }
     public int PassThreshold { get; init; }
     public string? SectorKey { get; init; }

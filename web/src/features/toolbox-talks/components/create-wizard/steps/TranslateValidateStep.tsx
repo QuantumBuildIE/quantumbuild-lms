@@ -88,7 +88,7 @@ export function TranslateValidateStep({
   const hub = useValidationHub(activeEntry?.runId ?? null);
 
   // The talk ID created by content generation — needed for validation API calls
-  const talkId = session?.outputId ?? null;
+  const talkId = session?.outputTalkId ?? null;
 
   // REST data for active run
   const {

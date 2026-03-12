@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Npgsql;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.ContentCreation;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Storage;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
@@ -290,10 +291,11 @@ public class ContentCreationSessionService : IContentCreationSessionService
 
         // Create or reuse a draft ToolboxTalk so the validation job can load sections
         Guid talkId;
-        if (session.OutputId.HasValue)
+        ToolboxTalk? newDraftTalk = null;
+        if (session.OutputTalkId.HasValue)
         {
             // Re-running validation on existing draft — reuse the talk
-            talkId = session.OutputId.Value;
+            talkId = session.OutputTalkId.Value;
 
             // Update the talk metadata from session settings and quiz
             var existingTalk = await _dbContext.ToolboxTalks
@@ -352,7 +354,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
         {
             // Create a draft talk from session sections with full metadata
             var draftCode = await GenerateCodeAsync(talkTitle, tenantId, cancellationToken);
-            var draftTalk = new ToolboxTalk
+            newDraftTalk = new ToolboxTalk
             {
                 Id = Guid.NewGuid(),
                 TenantId = tenantId,
@@ -365,14 +367,14 @@ public class ContentCreationSessionService : IContentCreationSessionService
                 IsActive = false
             };
 
-            SyncQuizSettingsToTalk(draftTalk, quizSettings);
+            SyncQuizSettingsToTalk(newDraftTalk, quizSettings);
 
             foreach (var (parsed, i) in sections.Select((s, i) => (s, i)))
             {
-                draftTalk.Sections.Add(new ToolboxTalkSection
+                newDraftTalk.Sections.Add(new ToolboxTalkSection
                 {
                     Id = Guid.NewGuid(),
-                    ToolboxTalkId = draftTalk.Id,
+                    ToolboxTalkId = newDraftTalk.Id,
                     SectionNumber = parsed.SuggestedOrder,
                     Title = parsed.Title,
                     Content = parsed.Content,
@@ -391,10 +393,10 @@ public class ContentCreationSessionService : IContentCreationSessionService
                         ? options[q.CorrectAnswerIndex]
                         : string.Empty;
 
-                    draftTalk.Questions.Add(new ToolboxTalkQuestion
+                    newDraftTalk.Questions.Add(new ToolboxTalkQuestion
                     {
                         Id = Guid.NewGuid(),
-                        ToolboxTalkId = draftTalk.Id,
+                        ToolboxTalkId = newDraftTalk.Id,
                         QuestionNumber = questionNumber++,
                         QuestionText = q.QuestionText,
                         QuestionType = Enum.TryParse<QuestionType>(q.QuestionType, out var qt) ? qt : QuestionType.MultipleChoice,
@@ -407,9 +409,9 @@ public class ContentCreationSessionService : IContentCreationSessionService
                 }
             }
 
-            _dbContext.ToolboxTalks.Add(draftTalk);
-            talkId = draftTalk.Id;
-            session.OutputId = talkId;
+            _dbContext.ToolboxTalks.Add(newDraftTalk);
+            talkId = newDraftTalk.Id;
+            session.OutputTalkId = talkId;
         }
 
         session.TargetLanguageCodes = JsonSerializer.Serialize(request.TargetLanguageCodes);
@@ -442,7 +444,17 @@ public class ContentCreationSessionService : IContentCreationSessionService
         }
 
         session.ValidationRunIds = JsonSerializer.Serialize(runIds);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        if (newDraftTalk != null)
+        {
+            await SaveWithCodeRetryAsync(
+                () => [newDraftTalk],
+                tenantId,
+                cancellationToken);
+        }
+        else
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
 
         // Enqueue Hangfire jobs after save
         foreach (var runId in runIds)
@@ -545,27 +557,33 @@ public class ContentCreationSessionService : IContentCreationSessionService
             {
                 var outputId = await PublishAsLessonAsync(
                     session, sections, request, tenantId, cancellationToken);
-                session.OutputId = outputId;
+                session.OutputTalkId = outputId;
             }
             else
             {
                 var outputId = await PublishAsCourseAsync(
                     session, sections, request, tenantId, cancellationToken);
-                session.OutputId = outputId;
+                session.OutputCourseId = outputId;
             }
 
             session.Status = ContentCreationSessionStatus.Completed;
             await _dbContext.SaveChangesAsync(cancellationToken);
 
+            var effectiveOutputId = session.OutputType == OutputType.Lesson
+                ? session.OutputTalkId
+                : session.OutputCourseId;
+
             _logger.LogInformation(
                 "[ContentCreationSession] Published session {SessionId} as {OutputType} {OutputId}",
-                sessionId, session.OutputType, session.OutputId);
+                sessionId, session.OutputType, effectiveOutputId);
 
-            return new PublishResult(true, session.OutputId, session.OutputType);
+            return new PublishResult(true, effectiveOutputId, session.OutputType);
         }
         catch (Exception ex)
         {
-            session.Status = ContentCreationSessionStatus.Failed;
+            ((DbContext)_dbContext).ChangeTracker.Clear();
+            var failedSession = await GetSessionEntityAsync(sessionId, tenantId, cancellationToken);
+            failedSession.Status = ContentCreationSessionStatus.Failed;
             await _dbContext.SaveChangesAsync(cancellationToken);
             _logger.LogError(ex, "[ContentCreationSession] Publish failed for session {SessionId}", sessionId);
             return new PublishResult(false, null, null, ex.Message);
@@ -858,11 +876,11 @@ public class ContentCreationSessionService : IContentCreationSessionService
         // If a draft talk already exists (created during StartTranslateValidateAsync),
         // promote it instead of creating a duplicate — translations and validation runs
         // are already linked to this draft talk ID.
-        if (session.OutputId.HasValue)
+        if (session.OutputTalkId.HasValue)
         {
             var draftTalk = await _dbContext.ToolboxTalks
                 .IgnoreQueryFilters()
-                .FirstOrDefaultAsync(t => t.Id == session.OutputId.Value && !t.IsDeleted, cancellationToken);
+                .FirstOrDefaultAsync(t => t.Id == session.OutputTalkId.Value && !t.IsDeleted, cancellationToken);
 
             if (draftTalk != null)
             {
@@ -877,11 +895,37 @@ public class ContentCreationSessionService : IContentCreationSessionService
                 draftTalk.Category = request.Category;
                 draftTalk.SourceLanguageCode = request.SourceLanguageCode ?? "en";
                 draftTalk.Status = ToolboxTalkStatus.Published;
-                draftTalk.IsActive = true;
                 draftTalk.VideoUrl = session.InputMode == InputMode.Video ? session.SourceFileUrl : null;
                 draftTalk.VideoSource = session.InputMode == InputMode.Video ? VideoSource.DirectUrl : VideoSource.None;
                 draftTalk.PdfUrl = session.InputMode == InputMode.Pdf ? session.SourceFileUrl : null;
                 draftTalk.PdfFileName = session.InputMode == InputMode.Pdf ? session.SourceFileName : null;
+
+                // Apply behaviour fields from session settings
+                SessionSettingsDto? courseSessionSettings = null;
+                if (!string.IsNullOrWhiteSpace(session.SettingsJson))
+                    courseSessionSettings = JsonSerializer.Deserialize<SessionSettingsDto>(session.SettingsJson, CamelCaseJson);
+
+                draftTalk.IsActive = courseSessionSettings?.IsActiveOnPublish ?? true;
+                draftTalk.GenerateCertificate = courseSessionSettings?.GenerateCertificate ?? false;
+                draftTalk.MinimumVideoWatchPercent = courseSessionSettings?.MinimumWatchPercent ?? 90;
+                draftTalk.AutoAssignToNewEmployees = courseSessionSettings?.AutoAssign ?? false;
+                draftTalk.AutoAssignDueDays = courseSessionSettings?.AutoAssignDueDays ?? 14;
+
+                if (courseSessionSettings != null && courseSessionSettings.RefresherFrequency != "Once")
+                {
+                    draftTalk.RequiresRefresher = true;
+                    draftTalk.RefresherIntervalMonths = courseSessionSettings.RefresherFrequency switch
+                    {
+                        "Monthly" => 1,
+                        "Quarterly" => 3,
+                        "Annually" => 12,
+                        _ => 12
+                    };
+                }
+                else
+                {
+                    draftTalk.RequiresRefresher = false;
+                }
 
                 // Regenerate code if a custom one was requested
                 if (!string.IsNullOrWhiteSpace(request.Code) && request.Code.Trim() != draftTalk.Code)
@@ -892,6 +936,44 @@ public class ContentCreationSessionService : IContentCreationSessionService
                         throw new InvalidOperationException($"A learning with code '{request.Code}' already exists.");
                     draftTalk.Code = request.Code.Trim();
                 }
+
+                // Re-sync sections from session in case they were edited after validation
+                var existingSections = await _dbContext.ToolboxTalkSections
+                    .Where(s => s.ToolboxTalkId == draftTalk.Id)
+                    .ToListAsync(cancellationToken);
+                foreach (var existing in existingSections)
+                    existing.IsDeleted = true;
+
+                foreach (var parsedSection in sections)
+                {
+                    _dbContext.ToolboxTalkSections.Add(new ToolboxTalkSection
+                    {
+                        Id = Guid.NewGuid(),
+                        ToolboxTalkId = draftTalk.Id,
+                        SectionNumber = parsedSection.SuggestedOrder,
+                        Title = parsedSection.Title,
+                        Content = parsedSection.Content,
+                        RequiresAcknowledgment = true
+                    });
+                }
+
+                // Re-sync quiz settings from session
+                SessionQuizSettingsDto? courseQuizSettings = null;
+                if (!string.IsNullOrWhiteSpace(session.QuizSettingsJson))
+                    courseQuizSettings = JsonSerializer.Deserialize<SessionQuizSettingsDto>(session.QuizSettingsJson, CamelCaseJson);
+                SyncQuizSettingsToTalk(draftTalk, courseQuizSettings);
+
+                // Re-sync quiz questions from session
+                var existingQuestions = await _dbContext.ToolboxTalkQuestions
+                    .Where(q => q.ToolboxTalkId == draftTalk.Id)
+                    .ToListAsync(cancellationToken);
+                foreach (var q in existingQuestions)
+                    _dbContext.ToolboxTalkQuestions.Remove(q);
+
+                List<SessionQuizQuestionDto>? courseQuizQuestions = null;
+                if (!string.IsNullOrWhiteSpace(session.QuestionsJson))
+                    courseQuizQuestions = JsonSerializer.Deserialize<List<SessionQuizQuestionDto>>(session.QuestionsJson, CamelCaseJson);
+                SyncQuizQuestionsToTalk(draftTalk.Id, courseQuizQuestions);
 
                 await _dbContext.SaveChangesAsync(cancellationToken);
                 return draftTalk.Id;
@@ -920,6 +1002,11 @@ public class ContentCreationSessionService : IContentCreationSessionService
             code = await GenerateCodeAsync(request.Title, tenantId, cancellationToken);
         }
 
+        // Apply behaviour fields from session settings
+        SessionSettingsDto? sessionSettings = null;
+        if (!string.IsNullOrWhiteSpace(session.SettingsJson))
+            sessionSettings = JsonSerializer.Deserialize<SessionSettingsDto>(session.SettingsJson, CamelCaseJson);
+
         var talk = new ToolboxTalk
         {
             Id = Guid.NewGuid(),
@@ -934,8 +1021,24 @@ public class ContentCreationSessionService : IContentCreationSessionService
             VideoSource = session.InputMode == InputMode.Video ? VideoSource.DirectUrl : VideoSource.None,
             PdfUrl = session.InputMode == InputMode.Pdf ? session.SourceFileUrl : null,
             PdfFileName = session.InputMode == InputMode.Pdf ? session.SourceFileName : null,
-            IsActive = true
+            IsActive = sessionSettings?.IsActiveOnPublish ?? true,
+            GenerateCertificate = sessionSettings?.GenerateCertificate ?? false,
+            MinimumVideoWatchPercent = sessionSettings?.MinimumWatchPercent ?? 90,
+            AutoAssignToNewEmployees = sessionSettings?.AutoAssign ?? false,
+            AutoAssignDueDays = sessionSettings?.AutoAssignDueDays ?? 14
         };
+
+        if (sessionSettings != null && sessionSettings.RefresherFrequency != "Once")
+        {
+            talk.RequiresRefresher = true;
+            talk.RefresherIntervalMonths = sessionSettings.RefresherFrequency switch
+            {
+                "Monthly" => 1,
+                "Quarterly" => 3,
+                "Annually" => 12,
+                _ => 12
+            };
+        }
 
         // Create sections (same pattern as CreateToolboxTalkCommandHandler)
         foreach (var parsedSection in sections)
@@ -952,8 +1055,20 @@ public class ContentCreationSessionService : IContentCreationSessionService
             talk.Sections.Add(section);
         }
 
+        // Sync quiz settings from session
+        SessionQuizSettingsDto? quizSettings = null;
+        if (!string.IsNullOrWhiteSpace(session.QuizSettingsJson))
+            quizSettings = JsonSerializer.Deserialize<SessionQuizSettingsDto>(session.QuizSettingsJson, CamelCaseJson);
+        SyncQuizSettingsToTalk(talk, quizSettings);
+
+        // Sync quiz questions from session
+        List<SessionQuizQuestionDto>? quizQuestions = null;
+        if (!string.IsNullOrWhiteSpace(session.QuestionsJson))
+            quizQuestions = JsonSerializer.Deserialize<List<SessionQuizQuestionDto>>(session.QuestionsJson, CamelCaseJson);
+        SyncQuizQuestionsToTalk(talk.Id, quizQuestions);
+
         _dbContext.ToolboxTalks.Add(talk);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await SaveWithCodeRetryAsync(() => [talk], tenantId, cancellationToken);
 
         return talk.Id;
     }
@@ -965,12 +1080,38 @@ public class ContentCreationSessionService : IContentCreationSessionService
         Guid tenantId,
         CancellationToken cancellationToken)
     {
+        // Deserialize quiz data from session so each course talk gets quiz questions & settings
+        List<SessionQuizQuestionDto>? quizQuestions = null;
+        if (!string.IsNullOrWhiteSpace(session.QuestionsJson))
+            quizQuestions = JsonSerializer.Deserialize<List<SessionQuizQuestionDto>>(session.QuestionsJson, CamelCaseJson);
+
+        SessionQuizSettingsDto? quizSettings = null;
+        if (!string.IsNullOrWhiteSpace(session.QuizSettingsJson))
+            quizSettings = JsonSerializer.Deserialize<SessionQuizSettingsDto>(session.QuizSettingsJson, CamelCaseJson);
+
         // Validate title uniqueness (same pattern as CreateToolboxTalkCourseCommandHandler)
         var titleExists = await _dbContext.ToolboxTalkCourses
             .AnyAsync(c => c.TenantId == tenantId && c.Title == request.Title && !c.IsDeleted, cancellationToken);
 
         if (titleExists)
             throw new InvalidOperationException($"A course with title '{request.Title}' already exists.");
+
+        // Load draft talk translations if a draft was created during StartTranslateValidateAsync
+        List<ToolboxTalkTranslation>? draftTranslations = null;
+        List<ToolboxTalkSection>? draftSections = null;
+        if (session.OutputTalkId.HasValue)
+        {
+            draftSections = await _dbContext.ToolboxTalkSections
+                .IgnoreQueryFilters()
+                .Where(s => s.ToolboxTalkId == session.OutputTalkId.Value && !s.IsDeleted)
+                .OrderBy(s => s.SectionNumber)
+                .ToListAsync(cancellationToken);
+
+            draftTranslations = await _dbContext.ToolboxTalkTranslations
+                .IgnoreQueryFilters()
+                .Where(t => t.ToolboxTalkId == session.OutputTalkId.Value && !t.IsDeleted)
+                .ToListAsync(cancellationToken);
+        }
 
         var course = new ToolboxTalkCourse
         {
@@ -984,6 +1125,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
 
         // Create a Talk per section and add as course items
         var orderIndex = 0;
+        var courseTalks = new List<ToolboxTalk>();
         foreach (var parsedSection in sections)
         {
             var talkCode = await GenerateCodeAsync(parsedSection.Title, tenantId, cancellationToken);
@@ -1014,6 +1156,52 @@ public class ContentCreationSessionService : IContentCreationSessionService
             talk.Sections.Add(section);
 
             _dbContext.ToolboxTalks.Add(talk);
+            courseTalks.Add(talk);
+
+            // Sync quiz settings and questions to the course talk
+            SyncQuizSettingsToTalk(talk, quizSettings);
+            SyncQuizQuestionsToTalk(talk.Id, quizQuestions);
+
+            // Migrate translations from the draft talk to this course talk
+            if (draftTranslations != null && draftSections != null)
+            {
+                // Find the matching draft section by index (sections are in the same order)
+                var draftSection = orderIndex < draftSections.Count ? draftSections[orderIndex] : null;
+
+                if (draftSection != null)
+                {
+                    foreach (var draftTranslation in draftTranslations)
+                    {
+                        // Extract the translated section data for this specific section
+                        var translatedSectionJson = ExtractTranslatedSectionForId(
+                            draftTranslation.TranslatedSections, draftSection.Id, section.Id);
+
+                        if (translatedSectionJson != null)
+                        {
+                            // Extract the translated title for this section from the sections JSON
+                            var translatedTitle = ExtractTranslatedSectionTitle(
+                                draftTranslation.TranslatedSections, draftSection.Id)
+                                ?? parsedSection.Title;
+
+                            _dbContext.ToolboxTalkTranslations.Add(new ToolboxTalkTranslation
+                            {
+                                Id = Guid.NewGuid(),
+                                TenantId = tenantId,
+                                ToolboxTalkId = talk.Id,
+                                LanguageCode = draftTranslation.LanguageCode,
+                                TranslatedTitle = translatedTitle,
+                                TranslatedDescription = $"Part of course: {request.Title}",
+                                TranslatedSections = translatedSectionJson,
+                                TranslatedQuestions = draftTranslation.TranslatedQuestions,
+                                TranslatedAt = draftTranslation.TranslatedAt,
+                                TranslationProvider = draftTranslation.TranslationProvider,
+                                EmailSubject = translatedTitle,
+                                EmailBody = translatedTitle
+                            });
+                        }
+                    }
+                }
+            }
 
             var courseItem = new ToolboxTalkCourseItem
             {
@@ -1026,10 +1214,130 @@ public class ContentCreationSessionService : IContentCreationSessionService
             course.CourseItems.Add(courseItem);
         }
 
+        // Create course-level translations from the draft talk translations
+        if (draftTranslations != null)
+        {
+            foreach (var draftTranslation in draftTranslations)
+            {
+                _dbContext.ToolboxTalkCourseTranslations.Add(new ToolboxTalkCourseTranslation
+                {
+                    Id = Guid.NewGuid(),
+                    CourseId = course.Id,
+                    LanguageCode = draftTranslation.LanguageCode,
+                    TranslatedTitle = draftTranslation.TranslatedTitle,
+                    TranslatedDescription = draftTranslation.TranslatedDescription
+                });
+            }
+        }
+
         _dbContext.ToolboxTalkCourses.Add(course);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await SaveWithCodeRetryAsync(() => courseTalks.ToArray(), tenantId, cancellationToken);
+
+        // Delete the orphaned draft talk now that translations have been migrated
+        if (session.OutputTalkId.HasValue)
+        {
+            await DeleteDraftTalkAsync(session.OutputTalkId.Value, cancellationToken);
+            session.OutputTalkId = null;
+        }
 
         return course.Id;
+    }
+
+    /// <summary>
+    /// Extracts a single section's translated data from the TranslatedSections JSON array,
+    /// matching by the draft section's SectionId, and remaps to the new course talk's section ID.
+    /// Returns a JSON array with a single element, or null if not found.
+    /// Format: [{SectionId, Title, Content}]
+    /// </summary>
+    private static string? ExtractTranslatedSectionForId(string translatedSectionsJson, Guid draftSectionId, Guid newSectionId)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(translatedSectionsJson);
+            foreach (var element in doc.RootElement.EnumerateArray())
+            {
+                if (element.TryGetProperty("SectionId", out var sectionIdProp) &&
+                    sectionIdProp.TryGetGuid(out var sectionId) &&
+                    sectionId == draftSectionId)
+                {
+                    var title = element.TryGetProperty("Title", out var titleProp) ? titleProp.GetString() : null;
+                    var content = element.TryGetProperty("Content", out var contentProp) ? contentProp.GetString() : null;
+
+                    var remapped = new[] { new { SectionId = newSectionId, Title = title, Content = content } };
+                    return JsonSerializer.Serialize(remapped);
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // Malformed JSON — skip
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Extracts the translated title for a specific section from the TranslatedSections JSON.
+    /// </summary>
+    private static string? ExtractTranslatedSectionTitle(string translatedSectionsJson, Guid draftSectionId)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(translatedSectionsJson);
+            foreach (var element in doc.RootElement.EnumerateArray())
+            {
+                if (element.TryGetProperty("SectionId", out var sectionIdProp) &&
+                    sectionIdProp.TryGetGuid(out var sectionId) &&
+                    sectionId == draftSectionId)
+                {
+                    return element.TryGetProperty("Title", out var titleProp) ? titleProp.GetString() : null;
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // Malformed JSON — skip
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Soft-deletes the orphaned draft talk and all its related data (sections, questions, translations).
+    /// </summary>
+    private async Task DeleteDraftTalkAsync(Guid draftTalkId, CancellationToken cancellationToken)
+    {
+        var draftTalk = await _dbContext.ToolboxTalks
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(t => t.Id == draftTalkId && !t.IsDeleted, cancellationToken);
+
+        if (draftTalk == null) return;
+
+        draftTalk.IsDeleted = true;
+
+        var draftSections = await _dbContext.ToolboxTalkSections
+            .IgnoreQueryFilters()
+            .Where(s => s.ToolboxTalkId == draftTalkId && !s.IsDeleted)
+            .ToListAsync(cancellationToken);
+        foreach (var s in draftSections) s.IsDeleted = true;
+
+        var draftQuestions = await _dbContext.ToolboxTalkQuestions
+            .IgnoreQueryFilters()
+            .Where(q => q.ToolboxTalkId == draftTalkId)
+            .ToListAsync(cancellationToken);
+        foreach (var q in draftQuestions) _dbContext.ToolboxTalkQuestions.Remove(q);
+
+        var draftTranslations = await _dbContext.ToolboxTalkTranslations
+            .IgnoreQueryFilters()
+            .Where(t => t.ToolboxTalkId == draftTalkId && !t.IsDeleted)
+            .ToListAsync(cancellationToken);
+        foreach (var t in draftTranslations) t.IsDeleted = true;
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "[ContentCreationSession] Deleted orphaned draft talk {DraftTalkId} after course publish",
+            draftTalkId);
     }
 
     private async Task<string> GenerateCodeAsync(string? title, Guid tenantId, CancellationToken cancellationToken)
@@ -1074,6 +1382,41 @@ public class ContentCreationSessionService : IContentCreationSessionService
         return $"{prefix}-{(maxNumber + 1):D3}";
     }
 
+    private static bool IsUniqueCodeViolation(DbUpdateException ex)
+    {
+        return ex.InnerException is PostgresException pgEx
+            && pgEx.SqlState == PostgresErrorCodes.UniqueViolation
+            && pgEx.ConstraintName?.Contains("Code", StringComparison.OrdinalIgnoreCase) == true;
+    }
+
+    private async Task SaveWithCodeRetryAsync(
+        Func<ToolboxTalk[]> getTalks,
+        Guid tenantId,
+        CancellationToken cancellationToken)
+    {
+        const int maxAttempts = 3;
+
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                return;
+            }
+            catch (DbUpdateException ex) when (attempt < maxAttempts && IsUniqueCodeViolation(ex))
+            {
+                _logger.LogWarning(
+                    "Talk code unique constraint violation on attempt {Attempt}, regenerating codes",
+                    attempt);
+
+                foreach (var talk in getTalks())
+                {
+                    talk.Code = await GenerateCodeAsync(talk.Title, tenantId, cancellationToken);
+                }
+            }
+        }
+    }
+
     private static ContentCreationSessionDto MapToDto(ContentCreationSession session)
     {
         return new ContentCreationSessionDto
@@ -1088,7 +1431,8 @@ public class ContentCreationSessionService : IContentCreationSessionService
             TranscriptText = session.TranscriptText,
             ParsedSectionsJson = session.ParsedSectionsJson,
             OutputType = session.OutputType,
-            OutputId = session.OutputId,
+            OutputTalkId = session.OutputTalkId,
+            OutputCourseId = session.OutputCourseId,
             TargetLanguageCodes = session.TargetLanguageCodes,
             PassThreshold = session.PassThreshold,
             SectorKey = session.SectorKey,

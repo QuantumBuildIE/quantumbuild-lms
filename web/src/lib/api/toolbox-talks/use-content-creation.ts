@@ -243,6 +243,8 @@ export function useSectionDecision() {
  * Publish session
  */
 export function usePublish() {
+  const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: ({
       sessionId,
@@ -251,6 +253,10 @@ export function usePublish() {
       sessionId: string;
       request: PublishRequest;
     }) => publishSession(sessionId, request),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['toolbox-talks'] });
+      queryClient.invalidateQueries({ queryKey: ['courses'] });
+    },
   });
 }
 
@@ -353,7 +359,7 @@ export function useGenerateValidationReport() {
 
 /**
  * Fetch validation run details via session context (creation wizard).
- * Uses the session's outputId (talkId) to call the talk-context endpoint.
+ * Uses the session's outputTalkId (talkId) to call the talk-context endpoint.
  */
 export function useSessionValidationRun(
   talkId: string | null,
@@ -369,7 +375,7 @@ export function useSessionValidationRun(
 
 /**
  * Section decisions via session context (creation wizard).
- * Uses the session's outputId (talkId) to call the talk-context endpoints.
+ * Uses the session's outputTalkId (talkId) to call the talk-context endpoints.
  */
 export function useSessionSectionDecision() {
   const queryClient = useQueryClient();

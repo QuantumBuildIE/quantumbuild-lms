@@ -29,7 +29,8 @@ public class ContentCreationSession : TenantEntity
 
     // Output configuration
     public OutputType? OutputType { get; set; }
-    public Guid? OutputId { get; set; }
+    public Guid? OutputTalkId { get; set; }
+    public Guid? OutputCourseId { get; set; }
 
     // Translation & validation
     public string? TargetLanguageCodes { get; set; }

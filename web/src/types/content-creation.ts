@@ -45,7 +45,8 @@ export interface ContentCreationSession {
   transcriptText: string | null;
   parsedSectionsJson: string | null;
   outputType: OutputType | null;
-  outputId: string | null;
+  outputTalkId: string | null;
+  outputCourseId: string | null;
   targetLanguageCodes: string | null;
   passThreshold: number;
   sectorKey: string | null;
@@ -120,7 +121,7 @@ export interface PublishRequest {
 
 export interface PublishResult {
   success: boolean;
-  outputId: string | null;
+  outputId: string | null; // Effective output ID (talkId for Lesson, courseId for Course)
   outputType: OutputType | null;
   errorMessage: string | null;
 }

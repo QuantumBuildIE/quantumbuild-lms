@@ -118,8 +118,8 @@ export function PublishStep({ state, onBack }: PublishStepProps) {
   }, [languages]);
 
   // Fetch all validation runs in parallel (stable hook count via useQueries)
-  // Validation runs are stored against the draft talk (session.outputId), not the session ID
-  const talkId = session?.outputId ?? null;
+  // Validation runs are stored against the draft talk (session.outputTalkId), not the session ID
+  const talkId = session?.outputTalkId ?? null;
   const validationRunQueries = useQueries({
     queries: validationRunIds.map((runId) => ({
       queryKey: contentCreationKeys.validationRun(talkId ?? '', runId),

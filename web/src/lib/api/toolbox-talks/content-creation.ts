@@ -375,12 +375,12 @@ export async function retrySection(
 // ============================================
 // Session-Context Validation API
 // (Used during creation wizard — delegates to talk-context endpoints
-//  using the session's outputId as talkId)
+//  using the session's outputTalkId as talkId)
 // ============================================
 
 /**
  * Get validation run details via session context.
- * Requires the session's outputId (talkId) which is set after content generation.
+ * Requires the session's outputTalkId (talkId) which is set after content generation.
  */
 export async function getSessionValidationRun(
   talkId: string,

@@ -51,7 +51,8 @@ public class ContentCreationSessionConfiguration : IEntityTypeConfiguration<Cont
             .HasConversion<string>()
             .HasMaxLength(20);
 
-        builder.Property(s => s.OutputId);
+        builder.Property(s => s.OutputTalkId);
+        builder.Property(s => s.OutputCourseId);
 
         // Translation & validation
         builder.Property(s => s.TargetLanguageCodes)
@@ -123,19 +124,20 @@ public class ContentCreationSessionConfiguration : IEntityTypeConfiguration<Cont
             .IsRequired()
             .HasDefaultValue(false);
 
-        // Relationships — optional FK to Talk or Course created from this session
+        // Relationships — separate FKs to Talk and Course
         builder.HasOne(s => s.OutputTalk)
             .WithMany()
-            .HasForeignKey(s => s.OutputId)
+            .HasForeignKey(s => s.OutputTalkId)
             .HasConstraintName("fk_content_creation_sessions_talk")
             .IsRequired(false)
             .OnDelete(DeleteBehavior.SetNull);
 
-        // Note: OutputId can point to either a Talk or Course.
-        // We use a single nullable FK column; the OutputType enum disambiguates.
-        // Only one navigation is configured to avoid EF conflicts.
-        // OutputCourse is left unmapped as a convenience property.
-        builder.Ignore(s => s.OutputCourse);
+        builder.HasOne(s => s.OutputCourse)
+            .WithMany()
+            .HasForeignKey(s => s.OutputCourseId)
+            .HasConstraintName("fk_content_creation_sessions_course")
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.SetNull);
 
         // Indexes
         builder.HasIndex(s => s.TenantId)
