@@ -187,28 +187,28 @@ export function SettingsStep({ state, onNext, onBack }: SettingsStepProps) {
         isSaving={isSaving}
       />
 
-      {/* Panel B — Category */}
-      <CategoryPanel
-        settings={settings}
-        onChange={handleChange}
-        isSaving={isSaving}
-      />
-
       <div className="grid gap-6 sm:grid-cols-2">
+        {/* Panel B — Category */}
+        <CategoryPanel
+          settings={settings}
+          onChange={handleChange}
+          isSaving={isSaving}
+        />
+
         {/* Panel C — Refresher Frequency */}
         <RefresherPanel
           settings={settings}
           onChange={handleChange}
           isSaving={isSaving}
         />
-
-        {/* Panel D — Behaviour */}
-        <BehaviourPanel
-          settings={settings}
-          onChange={handleChange}
-          isSaving={isSaving}
-        />
       </div>
+
+      {/* Panel D — Behaviour */}
+      <BehaviourPanel
+        settings={settings}
+        onChange={handleChange}
+        isSaving={isSaving}
+      />
 
       {/* Panel E — Slideshow */}
       <SlideshowPanel
