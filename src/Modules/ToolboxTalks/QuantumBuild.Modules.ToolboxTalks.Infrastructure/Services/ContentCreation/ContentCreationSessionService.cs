@@ -538,7 +538,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
 
         try
         {
-            var sections = JsonSerializer.Deserialize<List<ParsedSection>>(session.ParsedSectionsJson)
+            var sections = JsonSerializer.Deserialize<List<ParsedSection>>(session.ParsedSectionsJson, CamelCaseJson)
                 ?? new List<ParsedSection>();
 
             if (session.OutputType == OutputType.Lesson)
@@ -588,7 +588,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
         if (string.IsNullOrWhiteSpace(session.ParsedSectionsJson))
             throw new InvalidOperationException("No parsed sections available for quiz generation");
 
-        var sections = JsonSerializer.Deserialize<List<ParsedSection>>(session.ParsedSectionsJson) ?? new();
+        var sections = JsonSerializer.Deserialize<List<ParsedSection>>(session.ParsedSectionsJson, CamelCaseJson) ?? new();
         if (sections.Count == 0)
             throw new InvalidOperationException("No sections found");
 
@@ -750,7 +750,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
         var session = await GetSessionEntityAsync(sessionId, tenantId, cancellationToken);
 
         if (!string.IsNullOrWhiteSpace(session.SettingsJson))
-            return JsonSerializer.Deserialize<SessionSettingsDto>(session.SettingsJson) ?? new();
+            return JsonSerializer.Deserialize<SessionSettingsDto>(session.SettingsJson, CamelCaseJson) ?? new();
 
         // Build defaults from parsed content
         var suggestedTitle = string.Empty;
@@ -758,7 +758,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
         {
             try
             {
-                var sections = JsonSerializer.Deserialize<List<ParsedSection>>(session.ParsedSectionsJson);
+                var sections = JsonSerializer.Deserialize<List<ParsedSection>>(session.ParsedSectionsJson, CamelCaseJson);
                 if (sections?.Count > 0)
                     suggestedTitle = sections[0].Title;
             }
@@ -816,7 +816,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
 
         // Update settings with the new cover image URL
         var settings = !string.IsNullOrWhiteSpace(session.SettingsJson)
-            ? JsonSerializer.Deserialize<SessionSettingsDto>(session.SettingsJson) ?? new()
+            ? JsonSerializer.Deserialize<SessionSettingsDto>(session.SettingsJson, CamelCaseJson) ?? new()
             : new SessionSettingsDto();
 
         settings = settings with { CoverImageUrl = result.PublicUrl };
@@ -1032,8 +1032,11 @@ public class ContentCreationSessionService : IContentCreationSessionService
         return course.Id;
     }
 
-    private async Task<string> GenerateCodeAsync(string title, Guid tenantId, CancellationToken cancellationToken)
+    private async Task<string> GenerateCodeAsync(string? title, Guid tenantId, CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(title))
+            title = "TALK";
+
         var words = title.Split(' ', StringSplitOptions.RemoveEmptyEntries)
             .Where(w => !CommonWords.Contains(w))
             .ToList();
