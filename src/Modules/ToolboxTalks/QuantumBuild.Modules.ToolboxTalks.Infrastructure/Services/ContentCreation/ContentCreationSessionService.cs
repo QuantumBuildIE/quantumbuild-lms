@@ -31,6 +31,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
     private readonly IPdfExtractionService _pdfExtractionService;
     private readonly ITranscriptionService _transcriptionService;
     private readonly ISubtitleProcessingOrchestrator _subtitleOrchestrator;
+    private readonly ILanguageCodeService _languageCodeService;
     private readonly TranslationValidationSettings _validationSettings;
     private readonly ILogger<ContentCreationSessionService> _logger;
 
@@ -52,6 +53,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
         IPdfExtractionService pdfExtractionService,
         ITranscriptionService transcriptionService,
         ISubtitleProcessingOrchestrator subtitleOrchestrator,
+        ILanguageCodeService languageCodeService,
         IOptions<TranslationValidationSettings> validationSettings,
         ILogger<ContentCreationSessionService> logger)
     {
@@ -62,6 +64,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
         _pdfExtractionService = pdfExtractionService;
         _transcriptionService = transcriptionService;
         _subtitleOrchestrator = subtitleOrchestrator;
+        _languageCodeService = languageCodeService;
         _validationSettings = validationSettings.Value;
         _logger = logger;
     }
@@ -555,13 +558,26 @@ public class ContentCreationSessionService : IContentCreationSessionService
         // Start subtitle processing for video-based sessions
         if (session.InputMode == InputMode.Video && !string.IsNullOrEmpty(session.SourceFileUrl))
         {
+            _logger.LogInformation(
+                "[ContentCreationSession] Attempting subtitle processing for session {SessionId}, TalkId: {TalkId}, VideoUrl: {VideoUrl}, Languages: {Languages}",
+                sessionId, talkId, session.SourceFileUrl, string.Join(", ", request.TargetLanguageCodes));
+
             try
             {
+                // Resolve language codes (e.g. "es") to display names (e.g. "Spanish")
+                // because StartProcessingAsync expects language names, not codes
+                var targetLanguageNames = new List<string>();
+                foreach (var code in request.TargetLanguageCodes)
+                {
+                    var name = await _languageCodeService.GetLanguageNameAsync(code);
+                    targetLanguageNames.Add(name);
+                }
+
                 var subtitleJobId = await _subtitleOrchestrator.StartProcessingAsync(
                     talkId,
                     session.SourceFileUrl,
                     SubtitleVideoSourceType.DirectUrl,
-                    request.TargetLanguageCodes,
+                    targetLanguageNames,
                     cancellationToken);
 
                 session.SubtitleJobId = subtitleJobId.ToString();
@@ -573,10 +589,16 @@ public class ContentCreationSessionService : IContentCreationSessionService
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex,
-                    "[ContentCreationSession] Subtitle processing failed to start for session {SessionId} — continuing without subtitles",
-                    sessionId);
+                _logger.LogError(ex,
+                    "[ContentCreationSession] Subtitle processing FAILED for session {SessionId}, TalkId: {TalkId}. Exception: {ExceptionType}: {ExceptionMessage}",
+                    sessionId, talkId, ex.GetType().Name, ex.Message);
             }
+        }
+        else
+        {
+            _logger.LogInformation(
+                "[ContentCreationSession] Skipping subtitle processing for session {SessionId} — InputMode: {InputMode}, HasSourceFile: {HasSourceFile}",
+                sessionId, session.InputMode, !string.IsNullOrEmpty(session.SourceFileUrl));
         }
 
         _logger.LogInformation(
