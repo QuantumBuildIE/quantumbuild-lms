@@ -515,6 +515,24 @@ public class ContentCreationSessionService : IContentCreationSessionService
         if (string.IsNullOrWhiteSpace(session.ParsedSectionsJson))
             throw new InvalidOperationException("No parsed sections available for publishing");
 
+        // Fall back to session settings for missing request fields (title, description, category)
+        if (string.IsNullOrWhiteSpace(request.Title) && !string.IsNullOrWhiteSpace(session.SettingsJson))
+        {
+            var sessionSettings = JsonSerializer.Deserialize<SessionSettingsDto>(session.SettingsJson, CamelCaseJson);
+            if (sessionSettings != null)
+            {
+                request = request with
+                {
+                    Title = !string.IsNullOrWhiteSpace(sessionSettings.Title) ? sessionSettings.Title : request.Title,
+                    Description = request.Description ?? sessionSettings.Description,
+                    Category = request.Category ?? sessionSettings.Category
+                };
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Title))
+            throw new InvalidOperationException("A title is required to publish. Set a title in the Settings step.");
+
         session.Status = ContentCreationSessionStatus.Publishing;
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -837,11 +855,54 @@ public class ContentCreationSessionService : IContentCreationSessionService
         Guid tenantId,
         CancellationToken cancellationToken)
     {
-        // Validate title uniqueness (same pattern as CreateToolboxTalkCommandHandler)
-        var titleExists = await _dbContext.ToolboxTalks
+        // If a draft talk already exists (created during StartTranslateValidateAsync),
+        // promote it instead of creating a duplicate — translations and validation runs
+        // are already linked to this draft talk ID.
+        if (session.OutputId.HasValue)
+        {
+            var draftTalk = await _dbContext.ToolboxTalks
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(t => t.Id == session.OutputId.Value && !t.IsDeleted, cancellationToken);
+
+            if (draftTalk != null)
+            {
+                // Validate title uniqueness (exclude the draft itself)
+                var titleExists = await _dbContext.ToolboxTalks
+                    .AnyAsync(t => t.TenantId == tenantId && t.Title == request.Title && t.Id != draftTalk.Id, cancellationToken);
+                if (titleExists)
+                    throw new InvalidOperationException($"A learning with title '{request.Title}' already exists.");
+
+                draftTalk.Title = request.Title;
+                draftTalk.Description = request.Description;
+                draftTalk.Category = request.Category;
+                draftTalk.SourceLanguageCode = request.SourceLanguageCode ?? "en";
+                draftTalk.Status = ToolboxTalkStatus.Published;
+                draftTalk.IsActive = true;
+                draftTalk.VideoUrl = session.InputMode == InputMode.Video ? session.SourceFileUrl : null;
+                draftTalk.VideoSource = session.InputMode == InputMode.Video ? VideoSource.DirectUrl : VideoSource.None;
+                draftTalk.PdfUrl = session.InputMode == InputMode.Pdf ? session.SourceFileUrl : null;
+                draftTalk.PdfFileName = session.InputMode == InputMode.Pdf ? session.SourceFileName : null;
+
+                // Regenerate code if a custom one was requested
+                if (!string.IsNullOrWhiteSpace(request.Code) && request.Code.Trim() != draftTalk.Code)
+                {
+                    var codeExists = await _dbContext.ToolboxTalks
+                        .AnyAsync(t => t.TenantId == tenantId && t.Code == request.Code && t.Id != draftTalk.Id, cancellationToken);
+                    if (codeExists)
+                        throw new InvalidOperationException($"A learning with code '{request.Code}' already exists.");
+                    draftTalk.Code = request.Code.Trim();
+                }
+
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                return draftTalk.Id;
+            }
+        }
+
+        // No draft exists — create a new talk (fallback path)
+        var titleExistsNew = await _dbContext.ToolboxTalks
             .AnyAsync(t => t.TenantId == tenantId && t.Title == request.Title, cancellationToken);
 
-        if (titleExists)
+        if (titleExistsNew)
             throw new InvalidOperationException($"A learning with title '{request.Title}' already exists.");
 
         // Generate or validate code (same pattern as CreateToolboxTalkCommandHandler)
@@ -868,7 +929,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
             Description = request.Description,
             Category = request.Category,
             SourceLanguageCode = request.SourceLanguageCode,
-            Status = ToolboxTalkStatus.Draft,
+            Status = ToolboxTalkStatus.Published,
             VideoUrl = session.InputMode == InputMode.Video ? session.SourceFileUrl : null,
             VideoSource = session.InputMode == InputMode.Video ? VideoSource.DirectUrl : VideoSource.None,
             PdfUrl = session.InputMode == InputMode.Pdf ? session.SourceFileUrl : null,
@@ -936,7 +997,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
                 Description = $"Part of course: {request.Title}",
                 Category = request.Category,
                 SourceLanguageCode = request.SourceLanguageCode,
-                Status = ToolboxTalkStatus.Draft,
+                Status = ToolboxTalkStatus.Published,
                 IsActive = true
             };
 

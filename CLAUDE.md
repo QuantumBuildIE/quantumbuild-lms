@@ -771,17 +771,37 @@ dotnet ef database update
 
 ---
 
-## Phase 13 (TransVal) Key Fixes
+## Phase 13 (TransVal) — Implementation Details
 
-These are important implementation details discovered during Phase 13 testing:
+### Create Content Wizard — Step Order
+1. **Input & Config** — Upload video/PDF, set title, category, language
+2. **Parse** — AI extracts/generates sections from uploaded content
+3. **Quiz** — AI-generated quiz questions (min 5, up to 10 for longer content — count is AI-determined, not hardcoded per section)
+4. **Settings** — Quiz settings, certificate, refresher, due days
+5. **Translate & Validate** — Translation + back-translation validation
+6. **Publish** — Final review and publish
 
-1. **SignalR event name casing** — Event names (`ValidationComplete`, `ValidationProgress`, `SectionCompleted`) must be PascalCase on both server and client
-2. **DeepL paid API base URL** — `https://api.deepl.com/v2` (without `/translate` suffix); the free tier uses `https://api-free.deepl.com/v2`
-3. **Quiz JSON deserialization** — `ContentCreationSessionService` uses `CamelCaseJson` options (`JsonSerializerOptions` with `camelCase` naming policy) throughout for quiz and settings data from session
-4. **Wizard Reject button removed** — No explicit Reject button in the TransVal wizard UI; implicit rejection is recorded automatically on Edit or Retry actions
-5. **SettingsStep textarea focus fix** — Mutation refs stabilised via `useCallback` dependencies to prevent textarea losing focus on every keystroke
-6. **SignalR reconnection** — Extended to 10 retry attempts with exponential backoff; manual reconnect fallback on `onclose` event to handle WebSocket 1006 disconnects
-7. **Progress bar stuck at 95%** — Fixed by ensuring `ValidationComplete` event properly transitions the UI to completion state
+Quiz and Settings come **before** Translate & Validate so all content (sections, quiz questions, title, description) exists before translation runs.
+
+### Create Content Wizard — Key Architecture Decisions
+- **Draft ToolboxTalk created in `ContentCreationSessionService.StartTranslateValidateAsync`** — sections, quiz questions, quiz settings, title, description and category are all synced to the draft talk before the translation job fires
+- **TranslationValidationJob translates everything** — section content, quiz question text, answer options, talk title and description into all target languages
+- **Quiz question count is AI-determined** within a range (min 5, up to 10 for longer content) — not hardcoded per section
+- **Reject button removed from reviewer UI** — implicit rejection is recorded automatically when Edit or Retry is triggered on a non-Accepted section
+- **Upsert pattern for TranslationValidationResult rows** — `TranslationValidationService.ValidateSectionAsync` queries for existing `{ValidationRunId, SectionIndex}` and updates in place rather than delete-then-insert, preventing race conditions with parallel validation workers
+
+### SignalR — Translation Validation Hub
+- **Hub route:** `/api/hubs/translation-validation`
+- **Event names are case-sensitive** — backend sends `ValidationProgress`, `SectionCompleted`, `ValidationComplete` (PascalCase on both server and client)
+- **`ValidationComplete` sets `percentComplete` to 100** on the frontend, fixing the progress bar stuck at 95% issue
+- **Retry actions call `hub.reset()`** to clear stale `isComplete` state before re-running validation
+- **Manual reconnect fallback** with 10 retry attempts (~2 min exponential backoff) handles WebSocket 1006 drops mid-validation via `onclose` event handler
+
+### Known Issues / Watch Points
+1. **DeepL base URL** — Must be `https://api.deepl.com/v2` (no trailing `/translate`) for paid keys; free tier uses `https://api-free.deepl.com/v2`
+2. **Railway auto-deploy** does not always trigger on push — workaround: `git commit --allow-empty -m "chore: trigger Railway redeploy"` pushed to both `origin` and `company` remotes
+3. **CamelCaseJson for session data** — `ContentCreationSessionService` uses camelCase `JsonSerializerOptions` throughout for quiz and settings JSON deserialization
+4. **SettingsStep textarea focus** — Mutation refs stabilised via `useCallback` dependencies to prevent textarea losing focus on every keystroke
 
 ---
 
@@ -1006,6 +1026,7 @@ Multi-round back-translation consensus engine that validates AI-generated transl
 22. **DeepL paid vs free** — Paid API base URL is `https://api.deepl.com/v2`; free tier is `https://api-free.deepl.com/v2`. Do NOT append `/translate` to the base URL
 23. **CamelCaseJson for session data** — Quiz and settings JSON in `ContentCreationSessionService` must use camelCase `JsonSerializerOptions` for correct deserialization
 24. **Railway deployment** — `transval` branch deployed to Railway; keep `origin/transval` and `company/transval` in sync; use empty commits to force redeploy when auto-deploy doesn't trigger
+25. **TranslationValidationResult upsert pattern** — `ValidateSectionAsync` uses find-or-create on `{ValidationRunId, SectionIndex}` instead of delete-then-insert. The job no longer pre-deletes existing results before re-validation. This prevents unique constraint violations from parallel workers racing on the same run
 
 ---
 
