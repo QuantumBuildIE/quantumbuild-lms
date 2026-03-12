@@ -214,6 +214,7 @@ public class ToolboxTalkConfiguration : IEntityTypeConfiguration<ToolboxTalk>
         // Indexes
         builder.HasIndex(t => new { t.TenantId, t.Code })
             .IsUnique()
+            .HasFilter("\"IsDeleted\" = false")
             .HasDatabaseName("IX_ToolboxTalks_TenantId_Code");
 
         builder.HasIndex(t => new { t.TenantId, t.IsDeleted, t.IsActive })

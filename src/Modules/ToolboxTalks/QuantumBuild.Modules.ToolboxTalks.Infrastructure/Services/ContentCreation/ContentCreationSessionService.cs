@@ -1634,6 +1634,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
 
         var pattern = prefix + "-";
         var existingCodes = await _dbContext.ToolboxTalks
+            .IgnoreQueryFilters()
             .Where(t => t.TenantId == tenantId && t.Code.StartsWith(pattern))
             .Select(t => t.Code)
             .ToListAsync(cancellationToken);
@@ -1661,7 +1662,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
         Guid tenantId,
         CancellationToken cancellationToken)
     {
-        const int maxAttempts = 3;
+        const int maxAttempts = 10;
 
         for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
@@ -1675,6 +1676,8 @@ public class ContentCreationSessionService : IContentCreationSessionService
                 _logger.LogWarning(
                     "Talk code unique constraint violation on attempt {Attempt}, regenerating codes",
                     attempt);
+
+                await Task.Delay(Random.Shared.Next(50, 200), cancellationToken);
 
                 foreach (var talk in getTalks())
                 {

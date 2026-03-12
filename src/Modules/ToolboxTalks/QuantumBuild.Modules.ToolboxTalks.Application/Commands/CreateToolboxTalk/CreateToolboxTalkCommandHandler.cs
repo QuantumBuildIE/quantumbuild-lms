@@ -200,6 +200,7 @@ public class CreateToolboxTalkCommandHandler : IRequestHandler<CreateToolboxTalk
         // Find existing codes with the same prefix to determine next number
         var pattern = prefix + "-";
         var existingCodes = await _dbContext.ToolboxTalks
+            .IgnoreQueryFilters()
             .Where(t => t.TenantId == tenantId && t.Code.StartsWith(pattern))
             .Select(t => t.Code)
             .ToListAsync(cancellationToken);

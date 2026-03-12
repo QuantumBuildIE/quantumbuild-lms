@@ -313,7 +313,7 @@ export function TranslateValidateStep({
             Starting translation validation&hellip;
           </p>
           <p className="text-xs text-muted-foreground">
-            This may take a several minutes. Sections will appear as they are
+            This may take several minutes. Sections will appear as they are
             validated.
           </p>
         </div>
