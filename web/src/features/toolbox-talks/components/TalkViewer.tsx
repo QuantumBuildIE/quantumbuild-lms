@@ -195,6 +195,18 @@ export function TalkViewer({ scheduledTalkId }: TalkViewerProps) {
   const [initialStepSet, setInitialStepSet] = React.useState(false);
   const [hasRecordedStart, setHasRecordedStart] = React.useState(false);
 
+  // Standalone video talk: video-based talk with a single auto-generated placeholder section.
+  // These are created by the wizard for video-only talks and don't need a separate Sections step.
+  const isStandaloneVideoTalk = React.useMemo(() => {
+    if (!talk) return false;
+    return (
+      !!talk.videoUrl &&
+      talk.videoSource !== 'None' &&
+      talk.sections.length === 1 &&
+      talk.sections[0].content === '<p>Watch the training video above.</p>'
+    );
+  }, [talk]);
+
   // Determine available steps based on talk configuration
   const getAvailableSteps = React.useCallback((talk: MyToolboxTalk | undefined) => {
     if (!talk) return [];
@@ -206,8 +218,10 @@ export function TalkViewer({ scheduledTalkId }: TalkViewerProps) {
       steps.push({ key: 'video', label: 'Video', icon: Video, available: true });
     }
 
-    // Sections step (always)
-    steps.push({ key: 'sections', label: 'Sections', icon: FileText, available: true });
+    // Sections step (skip for standalone video talks — the single placeholder section is auto-acknowledged)
+    if (!isStandaloneVideoTalk) {
+      steps.push({ key: 'sections', label: 'Sections', icon: FileText, available: true });
+    }
 
     // Quiz step (if requires quiz)
     if (talk.requiresQuiz && talk.questions.length > 0) {
@@ -221,7 +235,7 @@ export function TalkViewer({ scheduledTalkId }: TalkViewerProps) {
     steps.push({ key: 'complete', label: 'Complete', icon: CheckCircle2, available: true });
 
     return steps;
-  }, []);
+  }, [isStandaloneVideoTalk]);
 
   // Set initial step based on progress (only on first load, not on data updates)
   React.useEffect(() => {
@@ -245,7 +259,7 @@ export function TalkViewer({ scheduledTalkId }: TalkViewerProps) {
 
     if (!videoComplete && hasVideo) {
       setCurrentStep('video');
-    } else if (!sectionsComplete) {
+    } else if (!sectionsComplete && !isStandaloneVideoTalk) {
       setCurrentStep('sections');
       // Find first unread section
       const firstUnread = talk.sections.findIndex((s) => !s.isRead);
@@ -514,9 +528,11 @@ export function TalkViewer({ scheduledTalkId }: TalkViewerProps) {
       <Card className="p-4">
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm font-medium">Overall Progress</span>
-          <span className="text-sm text-muted-foreground">
-            {talk.completedSections} of {talk.totalSections} sections
-          </span>
+          {!isStandaloneVideoTalk && (
+            <span className="text-sm text-muted-foreground">
+              {talk.completedSections} of {talk.totalSections} sections
+            </span>
+          )}
         </div>
         <Progress value={talk.progressPercent} className="h-2" />
       </Card>
@@ -554,9 +570,24 @@ export function TalkViewer({ scheduledTalkId }: TalkViewerProps) {
               )}
               <div className="flex justify-end">
                 <Button
-                  onClick={() => {
-                    // Navigate to next step: sections if available, otherwise quiz, otherwise signature
-                    if (talk.sections.length > 0) {
+                  onClick={async () => {
+                    if (isStandaloneVideoTalk) {
+                      // Auto-acknowledge the placeholder section so the backend stays consistent
+                      const section = talk.sections[0];
+                      if (!section.isRead) {
+                        try {
+                          await handleMarkSectionRead(section.sectionId);
+                        } catch {
+                          // Already toasted in handler — don't block navigation
+                        }
+                      }
+                      // Skip sections — go directly to quiz or signature
+                      if (talk.requiresQuiz && talk.questions.length > 0) {
+                        setCurrentStep('quiz');
+                      } else {
+                        setCurrentStep('signature');
+                      }
+                    } else if (talk.sections.length > 0) {
                       setCurrentStep('sections');
                     } else if (talk.requiresQuiz && talk.questions.length > 0) {
                       setCurrentStep('quiz');
@@ -566,7 +597,11 @@ export function TalkViewer({ scheduledTalkId }: TalkViewerProps) {
                   }}
                   disabled={!canProceedFromVideo}
                 >
-                  {talk.sections.length > 0
+                  {isStandaloneVideoTalk
+                    ? talk.requiresQuiz && talk.questions.length > 0
+                      ? 'Continue to Quiz'
+                      : 'Continue to Sign'
+                    : talk.sections.length > 0
                     ? 'Continue to Sections'
                     : talk.requiresQuiz && talk.questions.length > 0
                     ? 'Continue to Quiz'
