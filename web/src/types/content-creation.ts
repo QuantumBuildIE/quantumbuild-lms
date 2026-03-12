@@ -61,6 +61,7 @@ export interface ContentCreationSession {
   questionsJson: string | null;
   quizSettingsJson: string | null;
   settingsJson: string | null;
+  subtitleJobId: string | null;
   createdAt: string;
   updatedAt: string | null;
 }
@@ -256,6 +257,8 @@ export interface ContentCreationSettings {
   minimumWatchPercent: number;
   autoAssign: boolean;
   autoAssignDueDays: number;
+  generateSlideshow: boolean;
+  slideshowSource: string;
 }
 
 // ============================================

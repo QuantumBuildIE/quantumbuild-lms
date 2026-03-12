@@ -32,4 +32,16 @@ public interface IAiSlideshowGenerationService
         string transcriptText,
         string documentTitle,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Generates an HTML slideshow from parsed section titles and content using AI.
+    /// </summary>
+    /// <param name="sections">List of (title, content) pairs representing the talk sections</param>
+    /// <param name="documentTitle">Title to use for the slideshow</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Complete HTML string for the slideshow</returns>
+    Task<Result<string>> GenerateSlideshowFromSectionsAsync(
+        IReadOnlyList<(string Title, string Content)> sections,
+        string documentTitle,
+        CancellationToken cancellationToken = default);
 }

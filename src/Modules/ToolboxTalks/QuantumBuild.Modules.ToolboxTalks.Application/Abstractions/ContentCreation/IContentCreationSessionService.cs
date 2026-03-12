@@ -177,6 +177,7 @@ public record ContentCreationSessionDto
     public string? QuestionsJson { get; init; }
     public string? QuizSettingsJson { get; init; }
     public string? SettingsJson { get; init; }
+    public string? SubtitleJobId { get; init; }
     public DateTime CreatedAt { get; init; }
     public DateTime? UpdatedAt { get; init; }
 }
@@ -231,6 +232,8 @@ public record SessionSettingsDto
     public int MinimumWatchPercent { get; init; } = 90;
     public bool AutoAssign { get; init; }
     public int AutoAssignDueDays { get; init; } = 14;
+    public bool GenerateSlideshow { get; init; }
+    public string SlideshowSource { get; init; } = "none";
 }
 
 #endregion

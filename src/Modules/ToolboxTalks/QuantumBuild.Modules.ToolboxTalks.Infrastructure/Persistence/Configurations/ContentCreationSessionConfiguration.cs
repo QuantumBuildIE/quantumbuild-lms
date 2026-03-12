@@ -103,6 +103,10 @@ public class ContentCreationSessionConfiguration : IEntityTypeConfiguration<Cont
         builder.Property(s => s.SettingsJson)
             .HasColumnType("text");
 
+        // Subtitle processing
+        builder.Property(s => s.SubtitleJobId)
+            .HasMaxLength(100);
+
         // Tenant
         builder.Property(s => s.TenantId)
             .IsRequired();

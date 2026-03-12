@@ -58,6 +58,9 @@ public class ContentCreationSession : TenantEntity
     // Settings — JSON object of publish/behaviour settings (title, category, refresher, etc.)
     public string? SettingsJson { get; set; }
 
+    // Subtitle processing — tracks the subtitle job spawned during content creation
+    public string? SubtitleJobId { get; set; }
+
     // Navigation
     public ToolboxTalk? OutputTalk { get; set; }
     public ToolboxTalkCourse? OutputCourse { get; set; }

@@ -15,6 +15,7 @@ import { TitleDescriptionPanel } from './settings/TitleDescriptionPanel';
 import { CategoryPanel } from './settings/CategoryPanel';
 import { RefresherPanel } from './settings/RefresherPanel';
 import { BehaviourPanel } from './settings/BehaviourPanel';
+import { SlideshowPanel } from './settings/SlideshowPanel';
 import type { WizardState } from '../CreateWizard';
 import type { ContentCreationSettings, ParsedSection } from '@/types/content-creation';
 
@@ -36,6 +37,8 @@ const DEFAULT_SETTINGS: ContentCreationSettings = {
   minimumWatchPercent: 90,
   autoAssign: false,
   autoAssignDueDays: 14,
+  generateSlideshow: false,
+  slideshowSource: 'sections',
 };
 
 export function SettingsStep({ state, onNext, onBack }: SettingsStepProps) {
@@ -206,6 +209,14 @@ export function SettingsStep({ state, onNext, onBack }: SettingsStepProps) {
           isSaving={isSaving}
         />
       </div>
+
+      {/* Panel E — Slideshow */}
+      <SlideshowPanel
+        settings={settings}
+        onChange={handleChange}
+        inputMode={session?.inputMode ?? 'Text'}
+        isSaving={isSaving}
+      />
 
       {/* Navigation */}
       <div className="flex justify-between pt-4 border-t">

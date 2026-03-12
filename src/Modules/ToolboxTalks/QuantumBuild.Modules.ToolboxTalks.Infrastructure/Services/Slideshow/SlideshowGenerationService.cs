@@ -50,7 +50,11 @@ public class SlideshowGenerationService : ISlideshowGenerationService
 
         Result<string> result;
 
-        if (string.Equals(source, "video", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(source, "sections", StringComparison.OrdinalIgnoreCase))
+        {
+            result = await GenerateFromSectionsAsync(talk, toolboxTalkId, cancellationToken);
+        }
+        else if (string.Equals(source, "video", StringComparison.OrdinalIgnoreCase))
         {
             result = await GenerateFromVideoTranscriptAsync(talk, toolboxTalkId, cancellationToken);
         }
@@ -91,6 +95,32 @@ public class SlideshowGenerationService : ISlideshowGenerationService
             toolboxTalkId, source, result.Data.Length, saved);
 
         return Result.Ok(result.Data);
+    }
+
+    private async Task<Result<string>> GenerateFromSectionsAsync(
+        Domain.Entities.ToolboxTalk talk,
+        Guid toolboxTalkId,
+        CancellationToken cancellationToken)
+    {
+        var sections = await _context.ToolboxTalkSections
+            .Where(s => s.ToolboxTalkId == toolboxTalkId && !s.IsDeleted)
+            .OrderBy(s => s.SectionNumber)
+            .Select(s => new { s.Title, s.Content })
+            .ToListAsync(cancellationToken);
+
+        if (sections.Count == 0)
+            return Result.Fail<string>("No sections found for this talk");
+
+        _logger.LogInformation(
+            "Generating slideshow from {SectionCount} sections for talk {TalkId}",
+            sections.Count, toolboxTalkId);
+
+        var sectionPairs = sections
+            .Select(s => (s.Title, s.Content))
+            .ToList();
+
+        return await _aiService.GenerateSlideshowFromSectionsAsync(
+            sectionPairs, talk.Title, cancellationToken);
     }
 
     private async Task<Result<string>> GenerateFromPdfAsync(

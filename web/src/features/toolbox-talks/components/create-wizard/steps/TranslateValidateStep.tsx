@@ -9,6 +9,7 @@ import {
   Loader2,
   AlertTriangle,
   Languages,
+  Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -21,6 +22,7 @@ import type { WizardState } from '../CreateWizard';
 import type { SectionValidationResult } from '@/types/content-creation';
 import { ValidationProgressPanel } from './validate/ValidationProgressPanel';
 import { ValidationSectionCard } from './validate/ValidationSectionCard';
+import { SubtitleProgressPanel } from './validate/SubtitleProgressPanel';
 
 // ============================================
 // Props
@@ -302,12 +304,15 @@ export function TranslateValidateStep({
   if (isInitialLoading) {
     return (
       <div className="space-y-6">
-        <div className="flex flex-col items-center justify-center gap-3 rounded-lg border bg-card py-16">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-sm font-medium text-muted-foreground">
+        <div className="flex flex-col items-center justify-center gap-4 rounded-lg border bg-card py-16">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-primary animate-pulse" />
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          </div>
+          <p className="text-sm font-medium">
             Starting translation validation&hellip;
           </p>
-          <p className="text-xs text-muted-foreground/70">
+          <p className="text-xs text-muted-foreground">
             This may take a few minutes. Sections will appear as they are
             validated.
           </p>
@@ -394,6 +399,11 @@ export function TranslateValidateStep({
           />
         ))}
       </div>
+
+      {/* Subtitle processing progress (informational only — video input with active job) */}
+      {session?.inputMode === 'Video' && session?.subtitleJobId && (
+        <SubtitleProgressPanel jobId={session.subtitleJobId} />
+      )}
 
       {/* Bottom bar */}
       <div className="flex items-center justify-between border-t pt-4">

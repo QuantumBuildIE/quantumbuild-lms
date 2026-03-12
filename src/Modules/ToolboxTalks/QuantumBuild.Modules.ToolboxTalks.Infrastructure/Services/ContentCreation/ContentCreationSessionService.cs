@@ -10,6 +10,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Pdf;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Storage;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Subtitles;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Application.Services.Subtitles;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services;
@@ -29,6 +30,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
     private readonly IAiQuizGenerationService _aiQuizService;
     private readonly IPdfExtractionService _pdfExtractionService;
     private readonly ITranscriptionService _transcriptionService;
+    private readonly ISubtitleProcessingOrchestrator _subtitleOrchestrator;
     private readonly TranslationValidationSettings _validationSettings;
     private readonly ILogger<ContentCreationSessionService> _logger;
 
@@ -49,6 +51,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
         IAiQuizGenerationService aiQuizService,
         IPdfExtractionService pdfExtractionService,
         ITranscriptionService transcriptionService,
+        ISubtitleProcessingOrchestrator subtitleOrchestrator,
         IOptions<TranslationValidationSettings> validationSettings,
         ILogger<ContentCreationSessionService> logger)
     {
@@ -58,6 +61,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
         _aiQuizService = aiQuizService;
         _pdfExtractionService = pdfExtractionService;
         _transcriptionService = transcriptionService;
+        _subtitleOrchestrator = subtitleOrchestrator;
         _validationSettings = validationSettings.Value;
         _logger = logger;
     }
@@ -484,6 +488,21 @@ public class ContentCreationSessionService : IContentCreationSessionService
             session.OutputTalkId = talkId;
         }
 
+        // Ensure video URL is set on the draft talk for subtitle processing (R4 risk mitigation)
+        if (session.InputMode == InputMode.Video && !string.IsNullOrEmpty(session.SourceFileUrl))
+        {
+            var draftTalk = newDraftTalk
+                ?? await _dbContext.ToolboxTalks
+                    .IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(t => t.Id == talkId && !t.IsDeleted, cancellationToken);
+
+            if (draftTalk != null)
+            {
+                draftTalk.VideoUrl = session.SourceFileUrl;
+                draftTalk.VideoSource = VideoSource.DirectUrl;
+            }
+        }
+
         session.TargetLanguageCodes = JsonSerializer.Serialize(request.TargetLanguageCodes);
         session.Status = ContentCreationSessionStatus.TranslatingValidating;
 
@@ -531,6 +550,33 @@ public class ContentCreationSessionService : IContentCreationSessionService
         {
             BackgroundJob.Enqueue<TranslationValidationJob>(
                 job => job.ExecuteAsync(runId, tenantId, CancellationToken.None));
+        }
+
+        // Start subtitle processing for video-based sessions
+        if (session.InputMode == InputMode.Video && !string.IsNullOrEmpty(session.SourceFileUrl))
+        {
+            try
+            {
+                var subtitleJobId = await _subtitleOrchestrator.StartProcessingAsync(
+                    talkId,
+                    session.SourceFileUrl,
+                    SubtitleVideoSourceType.DirectUrl,
+                    request.TargetLanguageCodes,
+                    cancellationToken);
+
+                session.SubtitleJobId = subtitleJobId.ToString();
+                await _dbContext.SaveChangesAsync(cancellationToken);
+
+                _logger.LogInformation(
+                    "[ContentCreationSession] Started subtitle processing for session {SessionId}, job {SubtitleJobId}",
+                    sessionId, subtitleJobId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "[ContentCreationSession] Subtitle processing failed to start for session {SessionId} — continuing without subtitles",
+                    sessionId);
+            }
         }
 
         _logger.LogInformation(
@@ -646,6 +692,49 @@ public class ContentCreationSessionService : IContentCreationSessionService
             _logger.LogInformation(
                 "[ContentCreationSession] Published session {SessionId} as {OutputType} {OutputId}",
                 sessionId, session.OutputType, effectiveOutputId);
+
+            // Enqueue slideshow generation if enabled in settings
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(session.SettingsJson))
+                {
+                    var slideshowSettings = JsonSerializer.Deserialize<SessionSettingsDto>(session.SettingsJson, CamelCaseJson);
+                    if (slideshowSettings is { GenerateSlideshow: true }
+                        && !string.Equals(slideshowSettings.SlideshowSource, "none", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Determine the target talk for slideshow generation
+                        Guid? slideshowTalkId = null;
+
+                        if (session.OutputType == OutputType.Lesson)
+                        {
+                            slideshowTalkId = session.OutputTalkId;
+                        }
+                        else if (session.OutputType == OutputType.Course && session.InputMode == InputMode.Video)
+                        {
+                            // For Course + Video, the draft talk was repurposed as a standalone video talk
+                            slideshowTalkId = session.OutputTalkId;
+                        }
+                        // For Course + PDF/Text, slideshow doesn't apply to section-based course talks
+
+                        if (slideshowTalkId.HasValue)
+                        {
+                            BackgroundJob.Enqueue<ContentGenerationJob>(
+                                job => job.GenerateSlideshowOnlyAsync(
+                                    slideshowTalkId.Value, tenantId, slideshowSettings.SlideshowSource, CancellationToken.None));
+
+                            _logger.LogInformation(
+                                "[ContentCreationSession] Enqueued slideshow generation for talk {TalkId} with source '{Source}'",
+                                slideshowTalkId.Value, slideshowSettings.SlideshowSource);
+                        }
+                    }
+                }
+            }
+            catch (Exception slideshowEx)
+            {
+                _logger.LogError(slideshowEx,
+                    "[ContentCreationSession] Failed to enqueue slideshow generation for session {SessionId}. Publish succeeded.",
+                    sessionId);
+            }
 
             return new PublishResult(true, effectiveOutputId, session.OutputType);
         }
@@ -1159,6 +1248,10 @@ public class ContentCreationSessionService : IContentCreationSessionService
         if (!string.IsNullOrWhiteSpace(session.QuizSettingsJson))
             quizSettings = JsonSerializer.Deserialize<SessionQuizSettingsDto>(session.QuizSettingsJson, CamelCaseJson);
 
+        SessionSettingsDto? sessionSettings = null;
+        if (!string.IsNullOrWhiteSpace(session.SettingsJson))
+            sessionSettings = JsonSerializer.Deserialize<SessionSettingsDto>(session.SettingsJson, CamelCaseJson);
+
         // Validate title uniqueness (same pattern as CreateToolboxTalkCourseCommandHandler)
         var titleExists = await _dbContext.ToolboxTalkCourses
             .AnyAsync(c => c.TenantId == tenantId && c.Title == request.Title && !c.IsDeleted, cancellationToken);
@@ -1167,6 +1260,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
             throw new InvalidOperationException($"A course with title '{request.Title}' already exists.");
 
         // Load draft talk translations if a draft was created during StartTranslateValidateAsync
+        // R1 mitigation: extract translations BEFORE any section clearing so data is not lost
         List<ToolboxTalkTranslation>? draftTranslations = null;
         List<ToolboxTalkSection>? draftSections = null;
         if (session.OutputTalkId.HasValue)
@@ -1193,9 +1287,85 @@ public class ContentCreationSessionService : IContentCreationSessionService
             RequireSequentialCompletion = true
         };
 
-        // Create a Talk per section and add as course items
+        // For Video input mode, repurpose the draft talk as a "Full Video" learning (first course item)
         var orderIndex = 0;
         var courseTalks = new List<ToolboxTalk>();
+
+        if (session.InputMode == InputMode.Video && session.OutputTalkId.HasValue)
+        {
+            var videoTalk = await _dbContext.ToolboxTalks
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(t => t.Id == session.OutputTalkId.Value && !t.IsDeleted, cancellationToken);
+
+            if (videoTalk != null)
+            {
+                // Repurpose the draft talk as a standalone "Full Video" learning
+                videoTalk.Title = $"{request.Title} — Full Video";
+                videoTalk.Description = $"Part of course: {request.Title}";
+                videoTalk.Category = request.Category;
+                videoTalk.SourceLanguageCode = request.SourceLanguageCode;
+                videoTalk.VideoUrl = session.SourceFileUrl;
+                videoTalk.VideoSource = VideoSource.DirectUrl;
+                videoTalk.RequiresQuiz = false;
+                videoTalk.GenerateCertificate = false;
+                videoTalk.MinimumVideoWatchPercent = sessionSettings?.MinimumWatchPercent ?? 90;
+                videoTalk.Status = ToolboxTalkStatus.Published;
+                videoTalk.IsActive = true;
+
+                // Clear existing sections and replace with a single minimal "Video" section
+                // R1 mitigation: draftSections and draftTranslations were already extracted above
+                foreach (var s in draftSections ?? []) s.IsDeleted = true;
+
+                var videoSection = new ToolboxTalkSection
+                {
+                    Id = Guid.NewGuid(),
+                    ToolboxTalkId = videoTalk.Id,
+                    SectionNumber = 1,
+                    Title = "Video",
+                    Content = "<p>Watch the training video above.</p>",
+                    RequiresAcknowledgment = true
+                };
+                _dbContext.ToolboxTalkSections.Add(videoSection);
+
+                // Remove quiz questions from the video talk (no quiz for full video)
+                var videoTalkQuestions = await _dbContext.ToolboxTalkQuestions
+                    .IgnoreQueryFilters()
+                    .Where(q => q.ToolboxTalkId == videoTalk.Id)
+                    .ToListAsync(cancellationToken);
+                foreach (var q in videoTalkQuestions) _dbContext.ToolboxTalkQuestions.Remove(q);
+
+                // Update translations for the video talk (title change, clear section translations)
+                if (draftTranslations != null)
+                {
+                    foreach (var translation in draftTranslations)
+                    {
+                        translation.TranslatedTitle = $"{translation.TranslatedTitle} — Full Video";
+                        translation.TranslatedSections = "[]";
+                        translation.TranslatedQuestions = null;
+                    }
+                }
+
+                // Generate a new code for the video talk
+                videoTalk.Code = await GenerateCodeAsync(videoTalk.Title, tenantId, cancellationToken);
+                courseTalks.Add(videoTalk);
+
+                // Add as the first course item (OrderIndex = 0)
+                course.CourseItems.Add(new ToolboxTalkCourseItem
+                {
+                    Id = Guid.NewGuid(),
+                    CourseId = course.Id,
+                    ToolboxTalkId = videoTalk.Id,
+                    OrderIndex = orderIndex++,
+                    IsRequired = true
+                });
+
+                _logger.LogInformation(
+                    "[ContentCreationSession] Repurposed draft talk {DraftTalkId} as Full Video learning for course",
+                    videoTalk.Id);
+            }
+        }
+
+        // Create a Talk per section and add as course items
         foreach (var parsedSection in sections)
         {
             var talkCode = await GenerateCodeAsync(parsedSection.Title, tenantId, cancellationToken);
@@ -1236,7 +1406,11 @@ public class ContentCreationSessionService : IContentCreationSessionService
             if (draftTranslations != null && draftSections != null)
             {
                 // Find the matching draft section by index (sections are in the same order)
-                var draftSection = orderIndex < draftSections.Count ? draftSections[orderIndex] : null;
+                // When Video mode adds a video talk at index 0, section-based talks start at offset
+                var sectionIndex = session.InputMode == InputMode.Video
+                    ? orderIndex - 1  // Subtract 1 because orderIndex already incremented for video talk
+                    : orderIndex;
+                var draftSection = sectionIndex < draftSections.Count ? draftSections[sectionIndex] : null;
 
                 if (draftSection != null)
                 {
@@ -1303,8 +1477,9 @@ public class ContentCreationSessionService : IContentCreationSessionService
         _dbContext.ToolboxTalkCourses.Add(course);
         await SaveWithCodeRetryAsync(() => courseTalks.ToArray(), tenantId, cancellationToken);
 
-        // Delete the orphaned draft talk now that translations have been migrated
-        if (session.OutputTalkId.HasValue)
+        // Delete the orphaned draft talk — only for non-Video input modes
+        // Video mode repurposes the draft talk as the "Full Video" course item instead
+        if (session.OutputTalkId.HasValue && session.InputMode != InputMode.Video)
         {
             await DeleteDraftTalkAsync(session.OutputTalkId.Value, cancellationToken);
             session.OutputTalkId = null;
@@ -1517,6 +1692,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
             QuestionsJson = session.QuestionsJson,
             QuizSettingsJson = session.QuizSettingsJson,
             SettingsJson = session.SettingsJson,
+            SubtitleJobId = session.SubtitleJobId,
             CreatedAt = session.CreatedAt,
             UpdatedAt = session.UpdatedAt
         };

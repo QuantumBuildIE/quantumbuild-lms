@@ -9,6 +9,7 @@ import {
   ArrowLeft,
   RefreshCw,
   AlertTriangle,
+  Info,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -372,6 +373,17 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
             selectedType={selectedType}
             onSelect={handleOutputTypeChange}
           />
+
+          {/* Video + Course informational banner */}
+          {state.inputMode === 'Video' && selectedType === 'Course' && (
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertDescription>
+                The full video will be added as the first learning in the course.
+                Each section below will become a separate text-based learning that follows it.
+              </AlertDescription>
+            </Alert>
+          )}
 
           {/* Section List */}
           <SectionList

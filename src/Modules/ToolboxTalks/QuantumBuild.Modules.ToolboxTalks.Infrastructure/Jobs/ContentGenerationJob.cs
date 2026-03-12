@@ -260,6 +260,84 @@ public class ContentGenerationJob
     }
 
     /// <summary>
+    /// Generates a slideshow for an existing published talk from its sections,
+    /// without regenerating sections or quiz content.
+    /// Callable by Hangfire as a background job.
+    /// </summary>
+    /// <param name="talkId">The toolbox talk to generate a slideshow for</param>
+    /// <param name="tenantId">The tenant ID</param>
+    /// <param name="slideshowSource">The slideshow source: "sections", "pdf", or "video"</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    [AutomaticRetry(Attempts = 1)]
+    [Queue("content-generation")]
+    public async Task GenerateSlideshowOnlyAsync(
+        Guid talkId,
+        Guid tenantId,
+        string slideshowSource = "sections",
+        CancellationToken cancellationToken = default)
+    {
+        var stopwatch = Stopwatch.StartNew();
+
+        _logger.LogInformation(
+            "========== SLIDESHOW-ONLY GENERATION JOB STARTED ==========\n" +
+            "ToolboxTalkId: {TalkId}\n" +
+            "TenantId: {TenantId}\n" +
+            "SlideshowSource: {Source}",
+            talkId, tenantId, slideshowSource);
+
+        try
+        {
+            var talk = await _toolboxTalksDbContext.ToolboxTalks
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(t => t.Id == talkId && t.TenantId == tenantId && !t.IsDeleted, cancellationToken);
+
+            if (talk == null)
+            {
+                _logger.LogError("Slideshow-only generation failed: Talk {TalkId} not found for tenant {TenantId}", talkId, tenantId);
+                return;
+            }
+
+            _logger.LogInformation(
+                "Generating slideshow for talk {TalkId} ({Title}) from source '{Source}'...",
+                talkId, talk.Title, slideshowSource);
+
+            var slideResult = await _slideshowGenerationService.GenerateSlideshowAsync(
+                tenantId, talkId, slideshowSource, cancellationToken);
+
+            stopwatch.Stop();
+
+            if (slideResult.Success && !string.IsNullOrEmpty(slideResult.Data))
+            {
+                _logger.LogInformation(
+                    "========== SLIDESHOW-ONLY GENERATION JOB COMPLETED ==========\n" +
+                    "ToolboxTalkId: {TalkId}\n" +
+                    "Duration: {Duration}ms\n" +
+                    "HTML size: {HtmlSize} chars",
+                    talkId, stopwatch.ElapsedMilliseconds, slideResult.Data.Length);
+            }
+            else
+            {
+                _logger.LogError(
+                    "========== SLIDESHOW-ONLY GENERATION JOB FAILED ==========\n" +
+                    "ToolboxTalkId: {TalkId}\n" +
+                    "Duration: {Duration}ms\n" +
+                    "Errors: {Errors}",
+                    talkId, stopwatch.ElapsedMilliseconds, string.Join("; ", slideResult.Errors));
+            }
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            _logger.LogError(ex,
+                "========== SLIDESHOW-ONLY GENERATION JOB EXCEPTION ==========\n" +
+                "ToolboxTalkId: {TalkId}\n" +
+                "Duration: {Duration}ms",
+                talkId, stopwatch.ElapsedMilliseconds);
+            throw;
+        }
+    }
+
+    /// <summary>
     /// Generates a user-friendly completion message based on the result.
     /// </summary>
     private static string GetCompletionMessage(ContentGenerationResult result)

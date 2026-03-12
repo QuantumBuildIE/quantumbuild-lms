@@ -248,6 +248,127 @@ public class AiSlideshowGenerationService : IAiSlideshowGenerationService
         }
     }
 
+    public async Task<Result<string>> GenerateSlideshowFromSectionsAsync(
+        IReadOnlyList<(string Title, string Content)> sections,
+        string documentTitle,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(_settings.Claude.ApiKey))
+            {
+                _logger.LogError("Claude API key is not configured");
+                return Result.Fail<string>("Claude API key not configured");
+            }
+
+            if (sections.Count == 0)
+                return Result.Fail<string>("No sections provided for slideshow generation");
+
+            // Format sections into structured text
+            var sb = new StringBuilder();
+            sb.AppendLine($"Document title: {documentTitle}");
+            sb.AppendLine();
+            sb.AppendLine("=== SECTIONS ===");
+            sb.AppendLine();
+            for (var i = 0; i < sections.Count; i++)
+            {
+                var (title, content) = sections[i];
+                sb.AppendLine($"--- Section {i + 1}: {title} ---");
+                sb.AppendLine(content);
+                sb.AppendLine();
+            }
+
+            var sectionsText = sb.ToString();
+
+            _logger.LogInformation(
+                "Generating AI slideshow from {SectionCount} sections for document: {Title}, content length: {Length} chars",
+                sections.Count, documentTitle, sectionsText.Length);
+
+            var prompt = SlideshowGenerationPrompts.GetSectionsSlideshowPrompt();
+
+            string SerializeBody(string p) => JsonSerializer.Serialize(new
+            {
+                model = _settings.Claude.Model,
+                max_tokens = 32000,
+                messages = new[]
+                {
+                    new
+                    {
+                        role = "user",
+                        content = new object[]
+                        {
+                            new
+                            {
+                                type = "text",
+                                text = sectionsText
+                            },
+                            new
+                            {
+                                type = "text",
+                                text = p
+                            }
+                        }
+                    }
+                }
+            });
+
+            _logger.LogInformation(
+                "Sending sections to Claude for slideshow generation (document: {Title})",
+                documentTitle);
+
+            // First attempt
+            var (html, wasTruncated, error) = await SendAndParseAsync(
+                SerializeBody(prompt), documentTitle, cancellationToken);
+
+            if (error != null)
+                return Result.Fail<string>(error);
+
+            // Retry once on truncation with efficiency instructions
+            if (wasTruncated)
+            {
+                _logger.LogWarning(
+                    "Retrying sections slideshow generation with efficiency instructions for {Title}",
+                    documentTitle);
+
+                var (retryHtml, retryTruncated, retryError) = await SendAndParseAsync(
+                    SerializeBody(TruncationRetryPrefix + prompt), documentTitle, cancellationToken);
+
+                if (retryError == null && retryHtml != null)
+                {
+                    html = retryHtml;
+                    if (retryTruncated)
+                    {
+                        _logger.LogError(
+                            "Sections slideshow generation still truncated after retry for {Title}",
+                            documentTitle);
+                    }
+                }
+            }
+
+            // Validate HTML completeness
+            var validation = ValidateHtml(html, documentTitle);
+            if (!validation.Success) return Result.Fail<string>(validation.Errors.First());
+
+            html = InjectPostMessageBridge(html!);
+
+            _logger.LogInformation(
+                "Successfully generated HTML slideshow from sections for {Title}, size: {Size} characters",
+                documentTitle, html.Length);
+
+            return Result.Ok(html);
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "HTTP request failed during sections slideshow generation for {Title}", documentTitle);
+            return Result.Fail<string>($"HTTP request failed: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating AI slideshow from sections for document: {Title}", documentTitle);
+            return Result.Fail<string>($"Failed to generate slideshow: {ex.Message}");
+        }
+    }
+
     private async Task<(string? Html, bool WasTruncated, string? Error)> SendAndParseAsync(
         string jsonContent,
         string documentTitle,

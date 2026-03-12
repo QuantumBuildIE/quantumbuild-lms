@@ -24,6 +24,9 @@ import {
   Rocket,
   BookOpen,
   GraduationCap,
+  Presentation,
+  Captions,
+  Film,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -400,6 +403,7 @@ function ContentSummaryPanel({
 
 function ThreeColumnSummary({
   session,
+  settings,
   parsedSections,
   quizData,
   targetLanguageCodes,
@@ -434,6 +438,40 @@ function ThreeColumnSummary({
           <Row label="Input mode" value={session.inputMode} />
           <Row label="Output type" value={session.outputType ?? 'Lesson'} />
           <Row label="Source language" value="English" />
+
+          {/* Slideshow — generating after publish */}
+          {settings.generateSlideshow && (
+            <div className="flex items-center justify-between gap-2 pt-1">
+              <span className="text-muted-foreground flex items-center gap-1.5">
+                <Presentation className="h-3 w-3" />
+                Slideshow
+              </span>
+              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800">
+                Generating in background
+              </Badge>
+            </div>
+          )}
+
+          {/* Subtitles — still processing when user reaches publish */}
+          {session.inputMode === 'Video' && session.subtitleJobId && (
+            <div className="flex items-center justify-between gap-2 pt-1">
+              <span className="text-muted-foreground flex items-center gap-1.5">
+                <Captions className="h-3 w-3" />
+                Subtitles
+              </span>
+              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800">
+                Processing in background
+              </Badge>
+            </div>
+          )}
+
+          {/* Course + Video note */}
+          {session.outputType === 'Course' && session.inputMode === 'Video' && (
+            <div className="flex items-start gap-1.5 pt-2 text-xs text-muted-foreground">
+              <Film className="h-3 w-3 mt-0.5 flex-shrink-0" />
+              <span>Full video added as first learning in course</span>
+            </div>
+          )}
         </CardContent>
       </Card>
 
