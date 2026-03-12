@@ -6,7 +6,9 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Npgsql;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.ContentCreation;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Pdf;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Storage;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Subtitles;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
@@ -25,6 +27,8 @@ public class ContentCreationSessionService : IContentCreationSessionService
     private readonly IContentParserService _parserService;
     private readonly IR2StorageService _storageService;
     private readonly IAiQuizGenerationService _aiQuizService;
+    private readonly IPdfExtractionService _pdfExtractionService;
+    private readonly ITranscriptionService _transcriptionService;
     private readonly TranslationValidationSettings _validationSettings;
     private readonly ILogger<ContentCreationSessionService> _logger;
 
@@ -43,6 +47,8 @@ public class ContentCreationSessionService : IContentCreationSessionService
         IContentParserService parserService,
         IR2StorageService storageService,
         IAiQuizGenerationService aiQuizService,
+        IPdfExtractionService pdfExtractionService,
+        ITranscriptionService transcriptionService,
         IOptions<TranslationValidationSettings> validationSettings,
         ILogger<ContentCreationSessionService> logger)
     {
@@ -50,6 +56,8 @@ public class ContentCreationSessionService : IContentCreationSessionService
         _parserService = parserService;
         _storageService = storageService;
         _aiQuizService = aiQuizService;
+        _pdfExtractionService = pdfExtractionService;
+        _transcriptionService = transcriptionService;
         _validationSettings = validationSettings.Value;
         _logger = logger;
     }
@@ -164,6 +172,61 @@ public class ContentCreationSessionService : IContentCreationSessionService
 
         if (session.Status != ContentCreationSessionStatus.Draft)
             throw new InvalidOperationException("Content can only be parsed in Draft status");
+
+        // PDF mode: extract text from uploaded PDF if not already transcribed
+        if (session.InputMode == InputMode.Pdf && string.IsNullOrWhiteSpace(session.TranscriptText))
+        {
+            if (string.IsNullOrWhiteSpace(session.SourceFileUrl))
+                throw new InvalidOperationException("No PDF file uploaded. Upload a PDF first.");
+
+            _logger.LogInformation(
+                "[ContentCreationSession] Extracting text from PDF for session {SessionId}, URL: {Url}",
+                sessionId, session.SourceFileUrl);
+
+            var pdfResult = await _pdfExtractionService.ExtractTextFromUrlAsync(
+                session.SourceFileUrl, cancellationToken);
+
+            if (string.IsNullOrWhiteSpace(pdfResult.Text))
+                throw new InvalidOperationException("PDF text extraction returned no content. The PDF may be scanned or image-based.");
+
+            session.TranscriptText = pdfResult.Text;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation(
+                "[ContentCreationSession] PDF extraction complete for session {SessionId}: {PageCount} pages, {Length} chars",
+                sessionId, pdfResult.PageCount, pdfResult.Text.Length);
+        }
+
+        // Video mode: transcribe video if not already transcribed
+        if (session.InputMode == InputMode.Video && string.IsNullOrWhiteSpace(session.TranscriptText))
+        {
+            if (string.IsNullOrWhiteSpace(session.SourceFileUrl))
+                throw new InvalidOperationException("No video file uploaded. Upload a video first.");
+
+            _logger.LogInformation(
+                "[ContentCreationSession] Transcribing video for session {SessionId}, URL: {Url}",
+                sessionId, session.SourceFileUrl);
+
+            var transcriptionResult = await _transcriptionService.TranscribeAsync(
+                session.SourceFileUrl, cancellationToken);
+
+            if (!transcriptionResult.Success)
+                throw new InvalidOperationException($"Video transcription failed: {transcriptionResult.ErrorMessage}");
+
+            var transcriptText = string.Join(" ", transcriptionResult.Words
+                .Where(w => w.Type == "word")
+                .Select(w => w.Text));
+
+            if (string.IsNullOrWhiteSpace(transcriptText))
+                throw new InvalidOperationException("Video transcription returned no content.");
+
+            session.TranscriptText = transcriptText;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation(
+                "[ContentCreationSession] Video transcription complete for session {SessionId}: {WordCount} words, {Length} chars",
+                sessionId, transcriptionResult.Words.Count(w => w.Type == "word"), transcriptText.Length);
+        }
 
         // Determine raw text to parse
         var rawText = session.InputMode switch
