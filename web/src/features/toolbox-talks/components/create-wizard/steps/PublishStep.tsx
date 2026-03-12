@@ -180,7 +180,7 @@ export function PublishStep({ state, onBack }: PublishStepProps) {
   if (publishResult?.success) {
     const outputLabel = state.selectedOutputType === 'Course' ? 'Course' : 'Toolbox Talk';
     const viewPath = state.selectedOutputType === 'Course'
-      ? `/admin/toolbox-talks/courses/${publishResult.outputId}/edit`
+      ? `/admin/toolbox-talks/courses`
       : `/admin/toolbox-talks/talks/${publishResult.outputId}`;
 
     return (
@@ -198,7 +198,7 @@ export function PublishStep({ state, onBack }: PublishStepProps) {
         <div className="flex gap-3">
           <Button onClick={() => router.push(viewPath)}>
             <Eye className="h-4 w-4 mr-2" />
-            View {outputLabel}
+            {state.selectedOutputType === 'Course' ? 'View Course List' : `View ${outputLabel}`}
           </Button>
           <Button
             variant="outline"

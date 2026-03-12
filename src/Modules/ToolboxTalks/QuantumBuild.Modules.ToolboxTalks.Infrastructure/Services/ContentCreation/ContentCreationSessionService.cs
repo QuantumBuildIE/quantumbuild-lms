@@ -341,7 +341,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
                 _dbContext.ToolboxTalkQuestions.Remove(q);
 
             // Add quiz questions from session
-            SyncQuizQuestionsToTalk(talkId, quizQuestions);
+            SyncQuizQuestionsToTalk(talkId, quizQuestions, session.InputMode);
 
             // Remove old translations so they are regenerated
             var existingTranslations = await _dbContext.ToolboxTalkTranslations
@@ -385,6 +385,13 @@ public class ContentCreationSessionService : IContentCreationSessionService
             // Add quiz questions from session
             if (quizQuestions != null)
             {
+                var source = session.InputMode switch
+                {
+                    InputMode.Video => ContentSource.Video,
+                    InputMode.Pdf => ContentSource.Pdf,
+                    _ => ContentSource.Manual
+                };
+
                 var questionNumber = 1;
                 foreach (var q in quizQuestions)
                 {
@@ -404,7 +411,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
                         CorrectAnswer = correctAnswer,
                         CorrectOptionIndex = q.CorrectAnswerIndex,
                         Points = q.Points,
-                        Source = ContentSource.Pdf
+                        Source = source
                     });
                 }
             }
@@ -586,7 +593,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
             failedSession.Status = ContentCreationSessionStatus.Failed;
             await _dbContext.SaveChangesAsync(cancellationToken);
             _logger.LogError(ex, "[ContentCreationSession] Publish failed for session {SessionId}", sessionId);
-            return new PublishResult(false, null, null, ex.Message);
+            return new PublishResult(false, null, null, "An error occurred while publishing. Please try again.");
         }
     }
 
@@ -973,7 +980,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
                 List<SessionQuizQuestionDto>? courseQuizQuestions = null;
                 if (!string.IsNullOrWhiteSpace(session.QuestionsJson))
                     courseQuizQuestions = JsonSerializer.Deserialize<List<SessionQuizQuestionDto>>(session.QuestionsJson, CamelCaseJson);
-                SyncQuizQuestionsToTalk(draftTalk.Id, courseQuizQuestions);
+                SyncQuizQuestionsToTalk(draftTalk.Id, courseQuizQuestions, session.InputMode);
 
                 await _dbContext.SaveChangesAsync(cancellationToken);
                 return draftTalk.Id;
@@ -1065,7 +1072,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
         List<SessionQuizQuestionDto>? quizQuestions = null;
         if (!string.IsNullOrWhiteSpace(session.QuestionsJson))
             quizQuestions = JsonSerializer.Deserialize<List<SessionQuizQuestionDto>>(session.QuestionsJson, CamelCaseJson);
-        SyncQuizQuestionsToTalk(talk.Id, quizQuestions);
+        SyncQuizQuestionsToTalk(talk.Id, quizQuestions, session.InputMode);
 
         _dbContext.ToolboxTalks.Add(talk);
         await SaveWithCodeRetryAsync(() => [talk], tenantId, cancellationToken);
@@ -1160,7 +1167,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
 
             // Sync quiz settings and questions to the course talk
             SyncQuizSettingsToTalk(talk, quizSettings);
-            SyncQuizQuestionsToTalk(talk.Id, quizQuestions);
+            SyncQuizQuestionsToTalk(talk.Id, quizQuestions, session.InputMode);
 
             // Migrate translations from the draft talk to this course talk
             if (draftTranslations != null && draftSections != null)
@@ -1469,9 +1476,16 @@ public class ContentCreationSessionService : IContentCreationSessionService
     /// Syncs quiz questions from session JSON to the draft ToolboxTalk (via DbContext direct add).
     /// Used when the talk already exists (re-run scenario).
     /// </summary>
-    private void SyncQuizQuestionsToTalk(Guid talkId, List<SessionQuizQuestionDto>? quizQuestions)
+    private void SyncQuizQuestionsToTalk(Guid talkId, List<SessionQuizQuestionDto>? quizQuestions, InputMode inputMode = InputMode.Text)
     {
         if (quizQuestions == null || quizQuestions.Count == 0) return;
+
+        var source = inputMode switch
+        {
+            InputMode.Video => ContentSource.Video,
+            InputMode.Pdf => ContentSource.Pdf,
+            _ => ContentSource.Manual
+        };
 
         var questionNumber = 1;
         foreach (var q in quizQuestions)
@@ -1492,7 +1506,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
                 CorrectAnswer = correctAnswer,
                 CorrectOptionIndex = q.CorrectAnswerIndex,
                 Points = q.Points,
-                Source = ContentSource.Pdf
+                Source = source
             });
         }
     }
