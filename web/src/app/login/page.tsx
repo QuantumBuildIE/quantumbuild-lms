@@ -142,8 +142,13 @@ function LoginForm() {
             {loading ? "Signing in..." : "Sign In"}
           </Button>
         </form>
-        <div className="mt-6 text-center">
+        <div className="mt-6 text-center space-y-1">
           <span className="text-xs text-muted-foreground">A CertifiedIQ Product</span>
+          <div>
+            <a href="/ai-system-card" className="text-xs text-muted-foreground hover:text-primary hover:underline transition-colors">
+              AI System Card
+            </a>
+          </div>
         </div>
       </CardContent>
     </Card>

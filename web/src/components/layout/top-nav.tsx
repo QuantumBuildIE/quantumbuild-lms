@@ -145,8 +145,13 @@ export function TopNav() {
               <span>Sign out</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <div className="px-2 py-1.5 text-center">
+            <div className="px-2 py-1.5 text-center space-y-0.5">
               <span className="text-xs text-muted-foreground">A CertifiedIQ Product</span>
+              <div>
+                <a href="/ai-system-card" className="text-xs text-muted-foreground hover:text-primary hover:underline transition-colors">
+                  AI System Card
+                </a>
+              </div>
             </div>
           </DropdownMenuContent>
         </DropdownMenu>
