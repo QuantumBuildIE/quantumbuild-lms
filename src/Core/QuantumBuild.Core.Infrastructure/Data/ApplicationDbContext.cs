@@ -51,6 +51,7 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
     public DbSet<Contact> Contacts => Set<Contact>();
     public DbSet<SupervisorAssignment> SupervisorAssignments => Set<SupervisorAssignment>();
     public DbSet<TenantModule> TenantModules => Set<TenantModule>();
+    public DbSet<DpaAcceptance> DpaAcceptances => Set<DpaAcceptance>();
 
     // Settings DbSets
     public DbSet<TenantSetting> TenantSettings => Set<TenantSetting>();
@@ -196,6 +197,7 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.ApplyConfiguration(new ContactConfiguration());
         modelBuilder.ApplyConfiguration(new SupervisorAssignmentConfiguration());
         modelBuilder.ApplyConfiguration(new TenantModuleConfiguration());
+        modelBuilder.ApplyConfiguration(new DpaAcceptanceConfiguration());
 
         // Apply Settings entity configurations
         modelBuilder.ApplyConfiguration(new TenantSettingConfiguration());
@@ -242,6 +244,7 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.Entity<Contact>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<SupervisorAssignment>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<TenantModule>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
+        modelBuilder.Entity<DpaAcceptance>().HasQueryFilter(e => !e.IsDeleted);
 
         // Note: Toolbox Talks query filters are defined in entity configurations
         // TenantEntity-based: ToolboxTalk, ToolboxTalkCourse, ToolboxTalkSchedule, ScheduledTalk, ToolboxTalkTranslation, ToolboxTalkVideoTranslation, ToolboxTalkCertificate, SubtitleProcessingJob, ToolboxTalkSlide, TranslationValidationRun, ContentCreationSession

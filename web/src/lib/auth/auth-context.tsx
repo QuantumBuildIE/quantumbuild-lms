@@ -9,10 +9,12 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  dpaAccepted: boolean;
   activeTenantId: string | null;
   setActiveTenantId: (tenantId: string | null) => void;
   login: (email: string, password: string, rememberMe?: boolean) => Promise<{ success: boolean; error?: string; user?: User }>;
   logout: () => void;
+  refreshDpaStatus: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -28,6 +30,7 @@ interface AuthState {
   user: User | null;
   token: string | null;
   isLoading: boolean;
+  dpaAccepted: boolean;
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
@@ -35,10 +38,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
     user: null,
     token: null,
     isLoading: true,
+    dpaAccepted: false,
   });
   const [activeTenantId, setActiveTenantIdState] = useState<string | null>(null);
 
-  const { user, token, isLoading } = authState;
+  const { user, token, isLoading, dpaAccepted } = authState;
 
   const setActiveTenantId = useCallback((tenantId: string | null) => {
     setActiveTenantIdState(tenantId);
@@ -52,6 +56,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   const isAuthenticated = !!user && !!token;
+
+  const fetchDpaStatus = useCallback(async (accessToken: string): Promise<boolean> => {
+    try {
+      const response = await apiClient.get<{ accepted: boolean; version: string }>("/dpa/status", {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      return response.data.accepted;
+    } catch {
+      return false;
+    }
+  }, []);
 
   const loadUser = useCallback(async (accessToken: string): Promise<User | null> => {
     try {
@@ -74,10 +89,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
           employeeId: userData.employeeId ?? null,
           enabledModules: userData.enabledModules ?? [],
         };
+
+        // SuperUsers bypass DPA gate
+        const dpaStatus = loadedUser.isSuperUser ? true : await fetchDpaStatus(accessToken);
+
         setAuthState({
           user: loadedUser,
           token: accessToken,
           isLoading: false,
+          dpaAccepted: dpaStatus,
         });
         return loadedUser;
       }
@@ -85,7 +105,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } catch {
       return null;
     }
-  }, []);
+  }, [fetchDpaStatus]);
 
   useEffect(() => {
     const initAuth = async () => {
@@ -107,16 +127,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
             const retryUser = await loadUser(newToken);
             if (!retryUser) {
               clearStoredTokens();
-              setAuthState({ user: null, token: null, isLoading: false });
+              setAuthState({ user: null, token: null, isLoading: false, dpaAccepted: false });
             }
           } else {
             clearStoredTokens();
-            setAuthState({ user: null, token: null, isLoading: false });
+            setAuthState({ user: null, token: null, isLoading: false, dpaAccepted: false });
           }
         }
         // If loadUser succeeded, it already set isLoading: false atomically
       } else {
-        setAuthState({ user: null, token: null, isLoading: false });
+        setAuthState({ user: null, token: null, isLoading: false, dpaAccepted: false });
       }
     };
 
@@ -156,7 +176,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
           enabledModules: userData.enabledModules ?? [],
         };
 
-        setAuthState({ user: loggedInUser, token: accessToken, isLoading: false });
+        const fallbackDpa = loggedInUser.isSuperUser ? true : await fetchDpaStatus(accessToken);
+        setAuthState({ user: loggedInUser, token: accessToken, isLoading: false, dpaAccepted: fallbackDpa });
 
         return { success: true, user: loggedInUser };
       }
@@ -171,9 +192,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
+  const refreshDpaStatus = useCallback(async () => {
+    const currentToken = getStoredToken("accessToken");
+    if (currentToken) {
+      const status = await fetchDpaStatus(currentToken);
+      setAuthState((prev) => ({ ...prev, dpaAccepted: status }));
+    }
+  }, [fetchDpaStatus]);
+
   const logout = useCallback(() => {
     clearStoredTokens();
-    setAuthState({ user: null, token: null, isLoading: false });
+    setAuthState({ user: null, token: null, isLoading: false, dpaAccepted: false });
     setActiveTenantId(null);
   }, [setActiveTenantId]);
 
@@ -184,10 +213,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
         token,
         isLoading,
         isAuthenticated,
+        dpaAccepted,
         activeTenantId,
         setActiveTenantId,
         login,
         logout,
+        refreshDpaStatus,
       }}
     >
       {children}

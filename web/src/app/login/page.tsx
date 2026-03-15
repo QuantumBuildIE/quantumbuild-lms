@@ -22,7 +22,7 @@ function isValidReturnUrl(url: string | null): url is string {
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, login, isLoading: authLoading } = useAuth();
+  const { user, login, isLoading: authLoading, dpaAccepted } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
@@ -39,7 +39,7 @@ function LoginForm() {
   useEffect(() => {
     if (user && !authLoading) {
       const returnUrl = searchParams.get("returnUrl");
-      router.push(isValidReturnUrl(returnUrl) ? returnUrl : getHomeRoute(user));
+      router.push(isValidReturnUrl(returnUrl) ? returnUrl : getHomeRoute(user, dpaAccepted));
     }
   }, [user, authLoading, router, searchParams]);
 
@@ -59,7 +59,7 @@ function LoginForm() {
       if (result.success && result.user) {
         toast.success("Login successful");
         const returnUrl = searchParams.get("returnUrl");
-        const destination = isValidReturnUrl(returnUrl) ? returnUrl : getHomeRoute(result.user);
+        const destination = isValidReturnUrl(returnUrl) ? returnUrl : getHomeRoute(result.user, dpaAccepted);
         router.push(destination);
       } else {
         toast.error(result.error || "Login failed");
