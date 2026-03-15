@@ -114,8 +114,16 @@ export default function DpaAcceptancePage() {
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 10;
     if (atBottom) setHasScrolledToBottom(true);
+  }, []);
+
+  // If the DPA text fits without scrolling, unlock checkboxes immediately
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el && el.scrollHeight <= el.clientHeight) {
+      setHasScrolledToBottom(true);
+    }
   }, []);
 
   const formComplete =
