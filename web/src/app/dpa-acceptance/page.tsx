@@ -119,11 +119,15 @@ export default function DpaAcceptancePage() {
   }, []);
 
   // If the DPA text fits without scrolling, unlock checkboxes immediately
+  // Wrapped in setTimeout(0) to ensure DOM has painted and scrollHeight is accurate
   useEffect(() => {
-    const el = scrollRef.current;
-    if (el && el.scrollHeight <= el.clientHeight) {
-      setHasScrolledToBottom(true);
-    }
+    const timer = setTimeout(() => {
+      const el = scrollRef.current;
+      if (el && el.scrollHeight <= el.clientHeight) {
+        setHasScrolledToBottom(true);
+      }
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   const formComplete =
@@ -344,7 +348,73 @@ export default function DpaAcceptancePage() {
                     trading as CertifiedIQ).
                   </p>
 
-                  <p>[Full DPA text will be rendered here]</p>
+                  <p>
+                    This Data Processing Agreement is entered into between the
+                    organisation identified above (&lsquo;Controller&rsquo;) and
+                    Richmond IT Services Ltd, trading as Quantum Build AI, a
+                    company registered in Ireland, County Wexford
+                    (&lsquo;Processor&rsquo;).
+                  </p>
+
+                  <p className="font-semibold mt-4">1. Definitions</p>
+
+                  <p>
+                    <strong>&ldquo;GDPR&rdquo;</strong> means the General Data
+                    Protection Regulation (EU) 2016/679 of the European
+                    Parliament and of the Council of 27 April 2016, and any
+                    national implementing legislation, as amended, replaced, or
+                    superseded from time to time. Where the United Kingdom GDPR
+                    (as defined in the Data Protection Act 2018) applies, it
+                    shall be included in this definition.
+                  </p>
+
+                  <p>
+                    <strong>&ldquo;Personal Data&rdquo;</strong> means any
+                    information relating to an identified or identifiable natural
+                    person (&lsquo;Data Subject&rsquo;); an identifiable natural
+                    person is one who can be identified, directly or indirectly,
+                    in particular by reference to an identifier such as a name,
+                    an identification number, location data, an online
+                    identifier, or to one or more factors specific to the
+                    physical, physiological, genetic, mental, economic, cultural,
+                    or social identity of that natural person. In the context of
+                    this Agreement, Personal Data includes but is not limited to
+                    employee names, email addresses, training completion records,
+                    digital signatures, geolocation data captured during training
+                    sessions, and IP addresses logged for audit purposes.
+                  </p>
+
+                  <p>
+                    <strong>&ldquo;Processing&rdquo;</strong> means any operation
+                    or set of operations which is performed on Personal Data or
+                    on sets of Personal Data, whether or not by automated means,
+                    such as collection, recording, organisation, structuring,
+                    storage, adaptation or alteration, retrieval, consultation,
+                    use, disclosure by transmission, dissemination or otherwise
+                    making available, alignment or combination, restriction,
+                    erasure, or destruction. The Processor shall process Personal
+                    Data only on documented instructions from the Controller,
+                    including with regard to transfers of Personal Data to a
+                    third country or an international organisation, unless
+                    required to do so by Union or Member State law to which the
+                    Processor is subject.
+                  </p>
+
+                  <p>
+                    <strong>&ldquo;Sub-Processor&rdquo;</strong> means any third
+                    party appointed by the Processor (or by any other
+                    Sub-Processor of the Processor) to process Personal Data on
+                    behalf of the Controller in connection with this Agreement.
+                    The Controller hereby provides general written authorisation
+                    for the Processor to engage Sub-Processors, subject to the
+                    Processor: (a) maintaining an up-to-date list of
+                    Sub-Processors; (b) notifying the Controller of any intended
+                    changes concerning the addition or replacement of
+                    Sub-Processors, thereby giving the Controller the
+                    opportunity to object to such changes; and (c) ensuring that
+                    each Sub-Processor is bound by data protection obligations no
+                    less protective than those set out in this Agreement.
+                  </p>
 
                   <div className="pt-4 border-t text-xs text-muted-foreground">
                     <p>
