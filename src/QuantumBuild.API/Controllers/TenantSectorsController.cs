@@ -1,6 +1,7 @@
 using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Sectors;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Sectors;
 
@@ -11,15 +12,23 @@ namespace QuantumBuild.API.Controllers;
 [Authorize(Policy = "Tenant.Manage")]
 public class TenantSectorsController(
     ITenantSectorService tenantSectorService,
-    IValidator<AssignTenantSectorRequest> validator) : ControllerBase
+    IValidator<AssignTenantSectorRequest> validator,
+    ICurrentUserService currentUserService) : ControllerBase
 {
     /// <summary>
-    /// Get all active sectors assigned to a tenant
+    /// Get all active sectors assigned to a tenant.
+    /// Any authenticated user can read their own tenant's sectors.
+    /// SuperUsers can read any tenant's sectors.
     /// </summary>
     [HttpGet]
+    [Authorize]
     [ProducesResponseType(typeof(List<TenantSectorDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetTenantSectors(Guid tenantId, CancellationToken cancellationToken)
     {
+        if (!currentUserService.IsSuperUser && currentUserService.TenantId != tenantId)
+            return Forbid();
+
         var sectors = await tenantSectorService.GetTenantSectorsAsync(tenantId, cancellationToken);
         return Ok(sectors);
     }
@@ -101,13 +110,20 @@ public class TenantSectorsController(
     }
 
     /// <summary>
-    /// Get the default sector for a tenant (used by TransVal wizard auto-population)
+    /// Get the default sector for a tenant (used by TransVal wizard auto-population).
+    /// Any authenticated user can read their own tenant's default sector.
+    /// SuperUsers can read any tenant's default sector.
     /// </summary>
     [HttpGet("default")]
+    [Authorize]
     [ProducesResponseType(typeof(TenantSectorDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetDefault(Guid tenantId, CancellationToken cancellationToken)
     {
+        if (!currentUserService.IsSuperUser && currentUserService.TenantId != tenantId)
+            return Forbid();
+
         var result = await tenantSectorService.GetDefaultSectorAsync(tenantId, cancellationToken);
 
         if (result == null)
