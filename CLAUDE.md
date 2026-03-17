@@ -8,6 +8,7 @@ A multi-tenant Learning Management System for workplace safety training and comp
 
 ### Business Context
 - **Primary Use:** Toolbox Talks — video-based safety training with quizzes, certificates, and compliance tracking
+- **Sectors:** Any industry with a workplace — construction, manufacturing, mining, transport, food & hospitality, healthcare, homecare, and others. Multi-tenant architecture means each tenant configures their own sector context.
 - **Scale:** Multi-language support, AI-generated content, subtitle processing, course management
 - **Key Workflows:** Talk creation (manual + AI-generated), scheduling & assignment, employee completion with signature, quiz assessment, certificate generation, refresher scheduling, translation validation (TransVal)
 
@@ -622,9 +623,20 @@ Progress updates sent via SignalR hub in real-time.
   - **Restore-on-reassign pattern:** Re-assigning a previously unassigned operator restores the soft-deleted row (clears `IsDeleted`, updates `UpdatedBy`/`UpdatedAt`) rather than inserting a new row that would violate the unique index
   - Employee deletion validates no active supervisor assignments exist before allowing soft delete
 
+### Sector & TenantSector
+- **Sector** — First-class sector entity in the ToolboxTalks module domain (`BaseEntity`)
+  - `Key` (string, max 50, unique) — Canonical string matching `SafetyGlossary.SectorKey` and `TranslationValidationRun.SectorKey`
+  - `Name` (string, max 100), `Icon` (string, max 10, nullable), `DisplayOrder` (int), `IsActive` (bool, default true)
+  - **Important:** `SafetyGlossary.SectorKey` and `TranslationValidationRun.SectorKey` remain as plain strings — they are intentionally NOT converted to FKs. They must match `Sector.Key` values exactly
+  - Seeded values: `construction`, `homecare`, `manufacturing`, `transport`, `food_hospitality`
+- **TenantSector** — Junction entity linking Tenant to Sector (`BaseEntity`)
+  - `TenantId` (Guid), `SectorId` (Guid), `IsDefault` (bool — marks tenant's primary sector)
+  - Composite unique index on `{TenantId, SectorId}`
+  - Cross-module FK to `Tenant` (no navigation property on Tenant side, `DeleteBehavior.Restrict`)
+
 ---
 
-## Toolbox Talks Module Entities (26 Total)
+## Toolbox Talks Module Entities (33 Total)
 
 ### Content
 1. **ToolboxTalk** — Core entity: code (unique per tenant, max 20 chars, auto-generated from title initials), title, description, category, video, PDF, sections, questions, quiz settings, certificate/refresher options, AI generation state, translations
@@ -668,7 +680,16 @@ Progress updates sent via SignalR hub in real-time.
 25. **SafetyGlossary** — Sector-based safety glossary (TenantId nullable: null = system default, Guid = tenant override), sector key/name/icon
 26. **SafetyGlossaryTerm** — Individual term: English term, category, isCritical flag, translations JSON (language code → translated term)
 
-### Enums (16 Total)
+### Regulatory Profile Chain
+27. **RegulatoryBody** — System-managed (no TenantId): Name, Code (unique, max 20), Country, Website. e.g. HIQA, HSA, FSAI, RSA
+28. **RegulatoryDocument** — System-managed: Title, Version, EffectiveDate, Source, SourceUrl, IsActive. FK to RegulatoryBody
+29. **RegulatoryProfile** — System-managed intersection of RegulatoryDocument × Sector. SectorKey is a denormalised copy of Sector.Key maintained for quick lookup. CategoryWeightsJson holds JSON array of {Key, Label, Weight} scoring categories. Composite unique index on {RegulatoryDocumentId, SectorId}
+30. **RegulatoryCriteria** — Individual criteria items within a profile. Supports tenant overrides following the SafetyGlossary pattern (TenantId nullable: null = system default, Guid = tenant override). Query filter is `!IsDeleted` only — tenant filtering handled at service level. Composite unique index on {RegulatoryProfileId, TenantId, CategoryKey, DisplayOrder}
+
+### Regulatory Scoring
+31. **ValidationRegulatoryScore** — TenantEntity: ValidationRunId (FK to TranslationValidationRun), ScoreType (ValidationScoreType enum), RegulatoryProfileId (nullable FK to RegulatoryProfile), OverallScore, CategoryScoresJson (JSON), Verdict, Summary, RunLabel, RunNumber, FullResponseJson, ScoredSectionCount, TargetLanguage, RegulatoryBody (denormalised code)
+
+### Enums (17 Total)
 - **CertificateType** — Talk, Course
 - **ContentSource** — Manual, Video, Pdf, Both
 - **CourseAssignmentStatus** — Assigned, InProgress, Completed, Overdue
@@ -681,6 +702,7 @@ Progress updates sent via SignalR hub in real-time.
 - **ToolboxTalkScheduleStatus** — Draft, Active, Completed, Cancelled
 - **ToolboxTalkStatus** — Draft, Processing, ReadyForReview, Published
 - **VideoSource** — None, YouTube, GoogleDrive, Vimeo, DirectUrl
+- **ValidationScoreType** — SourceDocument, PureTranslation, RegulatoryTranslation
 - **VideoTranslationStatus** — Pending, Processing, Completed, Failed, ManualRequired
 - **ValidationRunStatus** — Pending, Running, Completed, Failed, Cancelled
 - **ValidationOutcome** — Pass, Review, Fail
@@ -957,6 +979,7 @@ Multi-round back-translation consensus engine that validates AI-generated transl
 | **GlossaryTermVerificationService** | Verifies expected glossary translations are present in translated text |
 | **TranslationValidationService** | Orchestrator: safety classify → bump threshold → consensus → glossary verify → persist result |
 | **ValidationReportService** | QuestPDF-based audit report: cover page, executive summary, per-section details, colour-coded outcomes |
+| **RegulatoryScoreService** | Claude Sonnet scoring: source document quality, pure linguistic translation, regulatory-aware translation with sector criteria |
 
 ### Configuration (`TranslationValidation` settings section)
 ```json
@@ -1019,16 +1042,23 @@ Multi-round back-translation consensus engine that validates AI-generated transl
 15. **ToolboxTalk Code field** — Auto-generated from title initials + numeric suffix; unique per tenant (`IX_ToolboxTalks_TenantId_Code`); propagated to all DTOs throughout the system
 16. **Skills Matrix** — Employee × learning grid with 5 cell statuses; role-scoped; derives data from ScheduledTalks; Excel export via ClosedXML
 17. **Translation Validation (TransVal)** — Multi-round back-translation consensus with up to 4 providers (Claude Haiku, DeepL, Gemini, DeepSeek); safety classification via glossary + regex patterns; configurable thresholds with safety-critical bump; reviewer accept/reject/edit workflow; audit PDF reports
-18. **SafetyGlossary scoping** — System defaults (TenantId = null) vs tenant-specific overrides; sector-based (construction, mining, manufacturing, etc.)
+18. **SafetyGlossary scoping** — System defaults (TenantId = null) vs tenant-specific overrides; sector-based (construction, mining, manufacturing, transport, food & hospitality, homecare, healthcare — any sector with regulatory translation requirements)
 19. **TransVal uses direct services** — Not CQRS; uses ITranslationValidationService, ILexicalScoringService, IConsensusEngine, ISafetyClassificationService, IGlossaryTermVerificationService
 20. **TransVal configuration** — `TranslationValidation` settings section: DeepL/Gemini/DeepSeek API keys, DefaultThreshold (75), SafetyCriticalBump (10), MaxRounds (3), SessionExpiryHours (24)
 21. **Create Content wizard step order** — Input & Config → Parse → Quiz → Settings → Translate & Validate → Publish (Quiz and Settings come before TransVal)
 22. **DeepL paid vs free** — Paid API base URL is `https://api.deepl.com/v2`; free tier is `https://api-free.deepl.com/v2`. Do NOT append `/translate` to the base URL
-23. **CamelCaseJson for session data** — Quiz and settings JSON in `ContentCreationSessionService` must use camelCase `JsonSerializerOptions` for correct deserialization
+23. **CamelCaseJson for session data** — All `JsonSerializer.Deserialize` calls in `ContentCreationSessionService` must use camelCase `JsonSerializerOptions` for correct deserialization. This is a recurring bug — always check this when adding new deserialization calls
 24. **Railway deployment** — `transval` branch deployed to Railway; keep `origin/transval` and `company/transval` in sync; use empty commits to force redeploy when auto-deploy doesn't trigger
 25. **TranslationValidationResult upsert pattern** — `ValidateSectionAsync` uses find-or-create on `{ValidationRunId, SectionIndex}` instead of delete-then-insert. The job no longer pre-deletes existing results before re-validation. This prevents unique constraint violations from parallel workers racing on the same run
+26. **DPA Acceptance Gate** — Every tenant must accept the DPA (v1.0) before accessing the application. Acceptance stored in `DpaAcceptances` table. `DpaConstants.CurrentDpaVersion` controls the active version — bumping this string forces all tenants to re-accept. SuperUsers bypass the gate. Enforced client-side in `auth-context.tsx` and `(authenticated)/layout.tsx`. No `middleware.ts` exists — all auth is client-side
+27. **Create Content Wizard architecture** — Quiz step is skippable via `includeQuiz` toggle in Step 1. `SubtitleJobId` on `ContentCreationSession` links to background subtitle processing job. For Video + Course output: draft talk is repurposed as standalone "Full Video" learning (`OrderIndex 0`), section-based talks start at `OrderIndex 1`. Slideshow generation runs as a Hangfire background job at publish time via `ContentGenerationJob.GenerateSlideshowOnlyAsync`. `SubtitleProcessingOrchestrator.StartProcessingAsync` expects language names ("Spanish", "French") not codes ("es", "fr") — use `ILanguageCodeService.GetLanguageNameAsync()` to resolve before calling. `isStandaloneVideoTalk` detection in `TalkViewer.tsx`: VideoUrl set + exactly one section + placeholder content — Sections step hidden for these talks
+28. **Code generation** — `GenerateCodeAsync` uses `IgnoreQueryFilters()` so soft-deleted talks' codes are included in availability checks. `SaveWithCodeRetryAsync` has 10 retry attempts with 50–200ms random jitter. `IX_ToolboxTalks_TenantId_Code` is a filtered unique index (`WHERE IsDeleted = false`)
+29. **Public pages (no auth required)** — `/ai-system-card` and `/dpa-acceptance` are outside the `(authenticated)` route group. Both are linked from login page, set-password page, and top-nav user dropdown
+30. **Sector entity** — `Sector.Key` is the canonical string value for sectors. `SafetyGlossary.SectorKey` and `TranslationValidationRun.SectorKey` remain as plain strings (not FKs) and must match `Sector.Key` values exactly. `TenantSector` is the junction entity linking tenants to their sectors
+31. **Regulatory profile chain** — `RegulatoryBody` → `RegulatoryDocument` → `RegulatoryProfile` are system-managed (no TenantId, inherit from `BaseEntity`). `RegulatoryCriteria` supports tenant overrides (nullable TenantId, same pattern as `SafetyGlossary`). `RegulatoryProfile.CategoryWeightsJson` holds a JSON array of `{Key, Label, Weight}` scoring categories. `RegulatoryProfile.SectorKey` is a denormalised copy of `Sector.Key` maintained for quick lookup — must match `Sector.Key` values exactly. Seeded with Irish regulatory bodies (HIQA, HSA, FSAI, RSA) and sector-specific profiles with criteria
+32. **Regulatory Score service** — `IRegulatoryScoreService` / `RegulatoryScoreService` scores validation runs via Claude Sonnet (`claude-sonnet-4-20250514`). Three scoring types (`ValidationScoreType` enum): `SourceDocument` (source quality against regulatory standard), `PureTranslation` (pure linguistic — fixed 5 categories: Accuracy, Fluency, Completeness, Consistency, Style), `RegulatoryTranslation` (translation against sector-specific regulatory criteria). `ValidationRegulatoryScore` entity (TenantEntity) persists scores with `RunNumber` sequential per `{ValidationRunId, ScoreType}`, `RunLabel` (Source Assessment / Linguistic Assessment / Pre-Remediation Baseline / Post-Remediation Pass N), `CategoryScoresJson`, `FullResponseJson` for audit. Critical prompt rule: RegulatoryTranslation scoring must NOT penalise the translation for faithfully reflecting weaknesses in the source document — only penalise translator-introduced problems. API: `POST /api/toolbox-talks/validation-runs/{runId}/regulatory-score` (Learnings.Admin), `GET .../history` (Learnings.View). Registered as HttpClient service in `ServiceCollectionExtensions`
 
 ---
 
-*Last Updated: March 11, 2026*
+*Last Updated: March 17, 2026*
 *Architecture: Modular Monolith with Clean Architecture*

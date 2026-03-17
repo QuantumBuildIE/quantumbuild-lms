@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using QuantumBuild.Core.Infrastructure.Data;
@@ -11,9 +12,11 @@ using QuantumBuild.Core.Infrastructure.Data;
 namespace QuantumBuild.Core.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260317125749_AddSectorAndTenantSector")]
+    partial class AddSectorAndTenantSector
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1309,264 +1312,6 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                         .HasDatabaseName("ix_content_creation_sessions_tenant_status");
 
                     b.ToTable("ContentCreationSessions", "toolbox_talks");
-                });
-
-            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.RegulatoryBody", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Code")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("Country")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("CreatedBy")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<string>("Website")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Code")
-                        .IsUnique()
-                        .HasDatabaseName("ix_regulatory_bodies_code");
-
-                    b.ToTable("RegulatoryBodies", "toolbox_talks");
-                });
-
-            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.RegulatoryCriteria", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("CategoryKey")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("CreatedBy")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<string>("CriteriaText")
-                        .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<int>("DisplayOrder")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("IsActive")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<Guid>("RegulatoryProfileId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Source")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TenantId")
-                        .HasDatabaseName("ix_regulatory_criteria_tenant");
-
-                    b.HasIndex("RegulatoryProfileId", "TenantId", "CategoryKey", "DisplayOrder")
-                        .IsUnique()
-                        .HasDatabaseName("ix_regulatory_criteria_profile_tenant_category_order");
-
-                    b.ToTable("RegulatoryCriteria", "toolbox_talks");
-                });
-
-            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.RegulatoryDocument", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("CreatedBy")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<DateOnly?>("EffectiveDate")
-                        .HasColumnType("date");
-
-                    b.Property<bool>("IsActive")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<Guid>("RegulatoryBodyId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Source")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<string>("SourceUrl")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<string>("Version")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RegulatoryBodyId")
-                        .HasDatabaseName("ix_regulatory_documents_body");
-
-                    b.ToTable("RegulatoryDocuments", "toolbox_talks");
-                });
-
-            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.RegulatoryProfile", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("CategoryWeightsJson")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("CreatedBy")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<string>("ExportLabel")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<bool>("IsActive")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<Guid>("RegulatoryDocumentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ScoreLabel")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<Guid>("SectorId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("SectorKey")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("SectorId");
-
-                    b.HasIndex("SectorKey")
-                        .HasDatabaseName("ix_regulatory_profiles_sector_key");
-
-                    b.HasIndex("RegulatoryDocumentId", "SectorId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_regulatory_profiles_document_sector");
-
-                    b.ToTable("RegulatoryProfiles", "toolbox_talks");
                 });
 
             modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.SafetyGlossary", b =>
@@ -3980,108 +3725,6 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                     b.ToTable("TranslationValidationRuns", "toolbox_talks");
                 });
 
-            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.ValidationRegulatoryScore", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("CategoryScoresJson")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("CreatedBy")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<string>("FullResponseJson")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<int>("OverallScore")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
-
-                    b.Property<string>("RegulatoryBody")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<Guid?>("RegulatoryProfileId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("RunLabel")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<int>("RunNumber")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("ScoreType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<int>("ScoredSectionCount")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
-
-                    b.Property<string>("Summary")
-                        .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<string>("TargetLanguage")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<Guid>("ValidationRunId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Verdict")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RegulatoryProfileId")
-                        .HasDatabaseName("ix_validation_regulatory_scores_regulatory_profile");
-
-                    b.HasIndex("TenantId")
-                        .HasDatabaseName("ix_validation_regulatory_scores_tenant");
-
-                    b.HasIndex("ValidationRunId")
-                        .HasDatabaseName("ix_validation_regulatory_scores_run");
-
-                    b.HasIndex("ValidationRunId", "ScoreType")
-                        .HasDatabaseName("ix_validation_regulatory_scores_run_type");
-
-                    b.ToTable("ValidationRegulatoryScores", "toolbox_talks");
-                });
-
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
                 {
                     b.HasOne("QuantumBuild.Core.Domain.Entities.Role", null)
@@ -4292,52 +3935,6 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                     b.Navigation("OutputCourse");
 
                     b.Navigation("OutputTalk");
-                });
-
-            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.RegulatoryCriteria", b =>
-                {
-                    b.HasOne("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.RegulatoryProfile", "RegulatoryProfile")
-                        .WithMany("Criteria")
-                        .HasForeignKey("RegulatoryProfileId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("QuantumBuild.Core.Domain.Entities.Tenant", null)
-                        .WithMany()
-                        .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("RegulatoryProfile");
-                });
-
-            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.RegulatoryDocument", b =>
-                {
-                    b.HasOne("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.RegulatoryBody", "RegulatoryBody")
-                        .WithMany("Documents")
-                        .HasForeignKey("RegulatoryBodyId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("RegulatoryBody");
-                });
-
-            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.RegulatoryProfile", b =>
-                {
-                    b.HasOne("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.RegulatoryDocument", "RegulatoryDocument")
-                        .WithMany("Profiles")
-                        .HasForeignKey("RegulatoryDocumentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.Sector", "Sector")
-                        .WithMany()
-                        .HasForeignKey("SectorId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("RegulatoryDocument");
-
-                    b.Navigation("Sector");
                 });
 
             modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.SafetyGlossaryTerm", b =>
@@ -4687,24 +4284,6 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                     b.Navigation("ToolboxTalk");
                 });
 
-            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.ValidationRegulatoryScore", b =>
-                {
-                    b.HasOne("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.RegulatoryProfile", "RegulatoryProfile")
-                        .WithMany()
-                        .HasForeignKey("RegulatoryProfileId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.TranslationValidationRun", "ValidationRun")
-                        .WithMany()
-                        .HasForeignKey("ValidationRunId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("RegulatoryProfile");
-
-                    b.Navigation("ValidationRun");
-                });
-
             modelBuilder.Entity("QuantumBuild.Core.Domain.Entities.Company", b =>
                 {
                     b.Navigation("Contacts");
@@ -4741,21 +4320,6 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
             modelBuilder.Entity("QuantumBuild.Core.Domain.Entities.User", b =>
                 {
                     b.Navigation("UserRoles");
-                });
-
-            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.RegulatoryBody", b =>
-                {
-                    b.Navigation("Documents");
-                });
-
-            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.RegulatoryDocument", b =>
-                {
-                    b.Navigation("Profiles");
-                });
-
-            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.RegulatoryProfile", b =>
-                {
-                    b.Navigation("Criteria");
                 });
 
             modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.SafetyGlossary", b =>

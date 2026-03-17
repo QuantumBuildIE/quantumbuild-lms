@@ -12,6 +12,9 @@ import type {
   QuizData,
   QuizQuestion,
   QuizSettings,
+  ValidationScoreType,
+  RegulatoryScoreResultDto,
+  RegulatoryScoreHistoryDto,
 } from '@/types/content-creation';
 
 // ============================================
@@ -370,6 +373,38 @@ export async function retrySection(
   await apiClient.post(
     `/toolbox-talks/${talkId}/validation/runs/${runId}/sections/${sectionIndex}/retry`
   );
+}
+
+// ============================================
+// Regulatory Score API
+// ============================================
+
+/**
+ * Trigger a regulatory score assessment on a validation run
+ */
+export async function triggerRegulatoryScore(
+  talkId: string,
+  runId: string,
+  scoreType: ValidationScoreType
+): Promise<RegulatoryScoreResultDto> {
+  const response = await apiClient.post<RegulatoryScoreResultDto>(
+    `/toolbox-talks/validation-runs/${runId}/regulatory-score`,
+    { scoreType }
+  );
+  return response.data;
+}
+
+/**
+ * Get the full regulatory score history for a validation run
+ */
+export async function getRegulatoryScoreHistory(
+  talkId: string,
+  runId: string
+): Promise<RegulatoryScoreHistoryDto> {
+  const response = await apiClient.get<RegulatoryScoreHistoryDto>(
+    `/toolbox-talks/validation-runs/${runId}/regulatory-score/history`
+  );
+  return response.data;
 }
 
 // ============================================

@@ -50,5 +50,18 @@ public interface IToolboxTalksDbContext
     // Content creation session entities
     DbSet<ContentCreationSession> ContentCreationSessions { get; }
 
+    // Sector entities
+    DbSet<Sector> Sectors { get; }
+    DbSet<TenantSector> TenantSectors { get; }
+
+    // Regulatory profile entities
+    DbSet<RegulatoryBody> RegulatoryBodies { get; }
+    DbSet<RegulatoryDocument> RegulatoryDocuments { get; }
+    DbSet<RegulatoryProfile> RegulatoryProfiles { get; }
+    DbSet<RegulatoryCriteria> RegulatoryCriteria { get; }
+
+    // Regulatory score entities
+    DbSet<ValidationRegulatoryScore> ValidationRegulatoryScores { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

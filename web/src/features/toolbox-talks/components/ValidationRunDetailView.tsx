@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ValidationProgressPanel } from './create-wizard/steps/validate/ValidationProgressPanel';
 import { ValidationSectionCard } from './create-wizard/steps/validate/ValidationSectionCard';
+import { RegulatoryScorePanel } from './RegulatoryScorePanel';
 import {
   useValidationRun,
   useDownloadValidationReport,
@@ -43,6 +44,11 @@ export function ValidationRunDetailView({
       running: 0,
       pending: 0,
     };
+  }, [run]);
+
+  const completedSectionCount = useMemo(() => {
+    if (!run) return 0;
+    return run.results.filter((r) => r.finalScore > 0).length;
   }, [run]);
 
   if (isLoading) {
@@ -236,6 +242,15 @@ export function ValidationRunDetailView({
           />
         ))}
       </div>
+
+      {/* Regulatory Score */}
+      <RegulatoryScorePanel
+        talkId={talkId}
+        runId={runId}
+        sectorKey={run.sectorKey ?? null}
+        targetLanguage={run.languageCode}
+        hasCompletedSections={completedSectionCount > 0}
+      />
     </div>
   );
 }

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using QuantumBuild.Core.Infrastructure.Data;
@@ -11,9 +12,11 @@ using QuantumBuild.Core.Infrastructure.Data;
 namespace QuantumBuild.Core.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260317131056_AddRegulatoryProfileChain")]
+    partial class AddRegulatoryProfileChain
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -3980,108 +3983,6 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                     b.ToTable("TranslationValidationRuns", "toolbox_talks");
                 });
 
-            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.ValidationRegulatoryScore", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("CategoryScoresJson")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("CreatedBy")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<string>("FullResponseJson")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<int>("OverallScore")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
-
-                    b.Property<string>("RegulatoryBody")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<Guid?>("RegulatoryProfileId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("RunLabel")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<int>("RunNumber")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("ScoreType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<int>("ScoredSectionCount")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
-
-                    b.Property<string>("Summary")
-                        .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<string>("TargetLanguage")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<Guid>("ValidationRunId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Verdict")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RegulatoryProfileId")
-                        .HasDatabaseName("ix_validation_regulatory_scores_regulatory_profile");
-
-                    b.HasIndex("TenantId")
-                        .HasDatabaseName("ix_validation_regulatory_scores_tenant");
-
-                    b.HasIndex("ValidationRunId")
-                        .HasDatabaseName("ix_validation_regulatory_scores_run");
-
-                    b.HasIndex("ValidationRunId", "ScoreType")
-                        .HasDatabaseName("ix_validation_regulatory_scores_run_type");
-
-                    b.ToTable("ValidationRegulatoryScores", "toolbox_talks");
-                });
-
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
                 {
                     b.HasOne("QuantumBuild.Core.Domain.Entities.Role", null)
@@ -4685,24 +4586,6 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                     b.Navigation("Course");
 
                     b.Navigation("ToolboxTalk");
-                });
-
-            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.ValidationRegulatoryScore", b =>
-                {
-                    b.HasOne("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.RegulatoryProfile", "RegulatoryProfile")
-                        .WithMany()
-                        .HasForeignKey("RegulatoryProfileId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.TranslationValidationRun", "ValidationRun")
-                        .WithMany()
-                        .HasForeignKey("ValidationRunId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("RegulatoryProfile");
-
-                    b.Navigation("ValidationRun");
                 });
 
             modelBuilder.Entity("QuantumBuild.Core.Domain.Entities.Company", b =>

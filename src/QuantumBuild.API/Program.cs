@@ -402,6 +402,8 @@ static async Task SeedToolboxTalksDataAsync(IServiceProvider serviceProvider)
         var context = services.GetRequiredService<DbContext>();
         await ToolboxTalksSeedData.SeedAsync(context, logger);
         await SafetyGlossarySeedData.SeedAsync(context, logger);
+        await SectorSeedData.SeedAsync(context, logger);
+        await RegulatoryProfileSeedData.SeedAsync(context, logger);
         logger.LogInformation("Learnings module seeding completed");
     }
     catch (Exception ex)

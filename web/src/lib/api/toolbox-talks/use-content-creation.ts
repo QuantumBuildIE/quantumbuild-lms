@@ -30,6 +30,8 @@ import {
   getSessionSettings,
   updateSessionSettings,
   uploadSessionCoverImage,
+  triggerRegulatoryScore,
+  getRegulatoryScoreHistory,
 } from './content-creation';
 import type {
   CreateSessionRequest,
@@ -39,6 +41,7 @@ import type {
   QuizQuestion,
   QuizSettings,
   ContentCreationSettings,
+  ValidationScoreType,
 } from '@/types/content-creation';
 
 // ============================================
@@ -56,6 +59,8 @@ export const contentCreationKeys = {
     [...contentCreationKeys.all, 'quiz', sessionId] as const,
   settingsData: (sessionId: string) =>
     [...contentCreationKeys.all, 'settings', sessionId] as const,
+  regulatoryScoreHistory: (talkId: string, runId: string) =>
+    [...contentCreationKeys.all, 'validation', talkId, runId, 'regulatory-score-history'] as const,
 };
 
 // ============================================
@@ -567,6 +572,49 @@ export function useUploadCoverImage() {
       );
       queryClient.invalidateQueries({
         queryKey: contentCreationKeys.settingsData(session.id),
+      });
+    },
+  });
+}
+
+// ============================================
+// Regulatory Score Hooks
+// ============================================
+
+/**
+ * Fetch regulatory score history for a validation run
+ */
+export function useRegulatoryScoreHistory(
+  talkId: string | null,
+  runId: string | null
+) {
+  return useQuery({
+    queryKey: contentCreationKeys.regulatoryScoreHistory(talkId ?? '', runId ?? ''),
+    queryFn: () => getRegulatoryScoreHistory(talkId!, runId!),
+    enabled: !!talkId && !!runId,
+    staleTime: 0, // Always fresh — scores are added by mutations
+  });
+}
+
+/**
+ * Trigger a regulatory score assessment
+ */
+export function useTriggerRegulatoryScore() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      talkId,
+      runId,
+      scoreType,
+    }: {
+      talkId: string;
+      runId: string;
+      scoreType: ValidationScoreType;
+    }) => triggerRegulatoryScore(talkId, runId, scoreType),
+    onSuccess: (_, { talkId, runId }) => {
+      queryClient.invalidateQueries({
+        queryKey: contentCreationKeys.regulatoryScoreHistory(talkId, runId),
       });
     },
   });

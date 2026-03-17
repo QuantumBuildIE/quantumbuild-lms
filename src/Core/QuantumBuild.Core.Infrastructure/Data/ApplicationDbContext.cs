@@ -93,6 +93,13 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
     public DbSet<SafetyGlossary> SafetyGlossaries => Set<SafetyGlossary>();
     public DbSet<SafetyGlossaryTerm> SafetyGlossaryTerms => Set<SafetyGlossaryTerm>();
     public DbSet<ContentCreationSession> ContentCreationSessions => Set<ContentCreationSession>();
+    public DbSet<Sector> Sectors => Set<Sector>();
+    public DbSet<TenantSector> TenantSectors => Set<TenantSector>();
+    public DbSet<RegulatoryBody> RegulatoryBodies => Set<RegulatoryBody>();
+    public DbSet<RegulatoryDocument> RegulatoryDocuments => Set<RegulatoryDocument>();
+    public DbSet<RegulatoryProfile> RegulatoryProfiles => Set<RegulatoryProfile>();
+    public DbSet<RegulatoryCriteria> RegulatoryCriteria => Set<RegulatoryCriteria>();
+    public DbSet<ValidationRegulatoryScore> ValidationRegulatoryScores => Set<ValidationRegulatoryScore>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -235,6 +242,13 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.ApplyConfiguration(new SafetyGlossaryConfiguration());
         modelBuilder.ApplyConfiguration(new SafetyGlossaryTermConfiguration());
         modelBuilder.ApplyConfiguration(new ContentCreationSessionConfiguration());
+        modelBuilder.ApplyConfiguration(new SectorConfiguration());
+        modelBuilder.ApplyConfiguration(new TenantSectorConfiguration());
+        modelBuilder.ApplyConfiguration(new RegulatoryBodyConfiguration());
+        modelBuilder.ApplyConfiguration(new RegulatoryDocumentConfiguration());
+        modelBuilder.ApplyConfiguration(new RegulatoryProfileConfiguration());
+        modelBuilder.ApplyConfiguration(new RegulatoryCriteriaConfiguration());
+        modelBuilder.ApplyConfiguration(new ValidationRegulatoryScoreConfiguration());
 
         // Apply global query filters - Core entities
         // BypassTenantFilter allows SuperUser to see all tenants' data when no tenant is selected
@@ -244,11 +258,12 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.Entity<Contact>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<SupervisorAssignment>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<TenantModule>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
+        modelBuilder.Entity<TenantSector>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<DpaAcceptance>().HasQueryFilter(e => !e.IsDeleted);
 
         // Note: Toolbox Talks query filters are defined in entity configurations
-        // TenantEntity-based: ToolboxTalk, ToolboxTalkCourse, ToolboxTalkSchedule, ScheduledTalk, ToolboxTalkTranslation, ToolboxTalkVideoTranslation, ToolboxTalkCertificate, SubtitleProcessingJob, ToolboxTalkSlide, TranslationValidationRun, ContentCreationSession
-        // BaseEntity-based (not tenant-scoped): ToolboxTalkSlideshowTranslation, SafetyGlossary, SafetyGlossaryTerm
+        // TenantEntity-based: ToolboxTalk, ToolboxTalkCourse, ToolboxTalkSchedule, ScheduledTalk, ToolboxTalkTranslation, ToolboxTalkVideoTranslation, ToolboxTalkCertificate, SubtitleProcessingJob, ToolboxTalkSlide, TranslationValidationRun, ContentCreationSession, ValidationRegulatoryScore
+        // BaseEntity-based (not tenant-scoped): ToolboxTalkSlideshowTranslation, SafetyGlossary, SafetyGlossaryTerm, RegulatoryBody, RegulatoryDocument, RegulatoryProfile, RegulatoryCriteria
         // BaseEntity-based (not tenant-scoped): ToolboxTalkSection, ToolboxTalkQuestion, ToolboxTalkCourseItem, ToolboxTalkCourseTranslation,
         //   ToolboxTalkScheduleAssignment, ScheduledTalkSectionProgress, ScheduledTalkQuizAttempt, ScheduledTalkCompletion, ToolboxTalkSettings, SubtitleTranslation, ToolboxTalkSlideTranslation, TranslationValidationResult
 

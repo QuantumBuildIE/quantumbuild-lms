@@ -211,6 +211,44 @@ export interface SectionValidationResult {
 }
 
 // ============================================
+// Regulatory Score Types
+// ============================================
+
+export type ValidationScoreType = 'SourceDocument' | 'PureTranslation' | 'RegulatoryTranslation';
+
+export interface CategoryScoreDto {
+  key: string;
+  label: string;
+  weight: number;
+  score: number;
+}
+
+export interface RegulatoryScoreResultDto {
+  id: string;
+  scoreType: ValidationScoreType;
+  overallScore: number;
+  verdict: string;
+  summary: string;
+  categoryScores: CategoryScoreDto[];
+  runLabel: string;
+  runNumber: number;
+  regulatoryBody: string | null;
+  scoreLabel: string | null;
+  scoredSectionCount: number;
+  targetLanguage: string;
+  createdAt: string;
+  comparisonDelta: number | null;
+  fullResponse: string;
+}
+
+export interface RegulatoryScoreHistoryDto {
+  validationRunId: string;
+  sourceScore: RegulatoryScoreResultDto | null;
+  pureScore: RegulatoryScoreResultDto | null;
+  regulatoryScores: RegulatoryScoreResultDto[];
+}
+
+// ============================================
 // Quiz Types
 // ============================================
 

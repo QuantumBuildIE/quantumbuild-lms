@@ -17,6 +17,7 @@ using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Slideshow;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Translations;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.ContentCreation;
+using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.ContentCreation;
 
@@ -200,6 +201,12 @@ public static class ServiceCollectionExtensions
 
         // Register validation report PDF generation service
         services.AddScoped<IValidationReportService, ValidationReportService>();
+
+        // Register regulatory score service (Claude Sonnet for regulatory scoring)
+        services.AddHttpClient<IRegulatoryScoreService, RegulatoryScoreService>(client =>
+        {
+            client.Timeout = TimeSpan.FromMinutes(3); // 3 minutes for regulatory scoring
+        });
 
         // Register content creation session services (Phase 7 — creation wizard pipeline)
         services.AddHttpClient<IContentParserService, ContentParserService>(client =>
