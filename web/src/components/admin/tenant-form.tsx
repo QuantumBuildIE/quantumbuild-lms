@@ -78,28 +78,54 @@ export function TenantForm({ tenant, onSuccess, onCancel }: TenantFormProps) {
       contactEmail: data.contactEmail || undefined,
     };
 
-    try {
-      if (isEditing) {
+    if (isEditing) {
+      try {
         await updateTenant.mutateAsync({ id: tenant.id, data: payload });
         toast.success("Tenant updated successfully");
-      } else {
-        const newTenant = await createTenant.mutateAsync(payload);
+        onSuccess();
+      } catch {
+        toast.error("Failed to update tenant");
+      }
+      return;
+    }
 
-        // Assign sectors after creation
-        const sectorIds = data.sectorIds ?? [];
-        for (let i = 0; i < sectorIds.length; i++) {
+    // Step 1 — Create tenant
+    let newTenant: TenantDetail;
+    try {
+      newTenant = await createTenant.mutateAsync(payload);
+    } catch {
+      toast.error("Failed to create tenant");
+      return;
+    }
+
+    // Step 2 — Assign sectors (only runs if tenant creation succeeded)
+    if (data.sectorIds?.length) {
+      const sectorIds = data.sectorIds;
+      let sectorsFailed = false;
+      for (let i = 0; i < sectorIds.length; i++) {
+        try {
           await assignTenantSector(newTenant.id, {
             sectorId: sectorIds[i],
             isDefault: i === 0,
           });
+        } catch (err) {
+          console.error("Sector assignment failed:", err);
+          sectorsFailed = true;
+          break;
         }
-
-        toast.success("Tenant created successfully");
       }
-      onSuccess();
-    } catch {
-      toast.error(isEditing ? "Failed to update tenant" : "Failed to create tenant");
+      if (sectorsFailed) {
+        toast.warning(
+          "Tenant created but sector assignment failed — please configure sectors on the tenant detail page."
+        );
+        onSuccess?.();
+        return;
+      }
     }
+
+    // Step 3 — Success
+    toast.success("Tenant created successfully");
+    onSuccess?.();
   };
 
   const isPending = createTenant.isPending || updateTenant.isPending;
