@@ -17,7 +17,9 @@ using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Slideshow;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Translations;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.ContentCreation;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Sectors;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Sectors;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.ContentCreation;
 
@@ -207,6 +209,10 @@ public static class ServiceCollectionExtensions
         {
             client.Timeout = TimeSpan.FromMinutes(3); // 3 minutes for regulatory scoring
         });
+
+        // Register sector services (system-wide sector lookup + tenant-sector management)
+        services.AddScoped<ISectorService, SectorService>();
+        services.AddScoped<ITenantSectorService, TenantSectorService>();
 
         // Register content creation session services (Phase 7 — creation wizard pipeline)
         services.AddHttpClient<IContentParserService, ContentParserService>(client =>

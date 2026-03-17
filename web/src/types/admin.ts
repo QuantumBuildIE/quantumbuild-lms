@@ -91,6 +91,29 @@ export interface Contact {
   notes?: string;
 }
 
+export interface SectorDto {
+  id: string;
+  key: string;
+  name: string;
+  icon: string | null;
+  displayOrder: number;
+}
+
+export interface TenantSectorDto {
+  id: string;
+  tenantId: string;
+  sectorId: string;
+  sectorKey: string;
+  sectorName: string;
+  sectorIcon: string | null;
+  isDefault: boolean;
+}
+
+export interface AssignTenantSectorRequest {
+  sectorId: string;
+  isDefault: boolean;
+}
+
 export type TenantStatus = "Active" | "Suspended" | "Inactive";
 
 export interface TenantListItem {

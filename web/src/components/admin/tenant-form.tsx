@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Form,
   FormControl,
@@ -15,6 +16,8 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { useCreateTenant, useUpdateTenant } from "@/lib/api/admin/use-tenants";
+import { useAvailableSectors } from "@/lib/api/admin/use-tenant-sectors";
+import { assignTenantSector } from "@/lib/api/admin/tenant-sectors";
 import type { TenantDetail } from "@/types/admin";
 import { toast } from "sonner";
 
@@ -30,6 +33,7 @@ const tenantFormSchema = z.object({
     .optional()
     .nullable()
     .or(z.literal("")),
+  sectorIds: z.array(z.string()),
 });
 
 type TenantFormData = z.infer<typeof tenantFormSchema>;
@@ -44,6 +48,7 @@ export function TenantForm({ tenant, onSuccess, onCancel }: TenantFormProps) {
   const isEditing = !!tenant;
   const createTenant = useCreateTenant();
   const updateTenant = useUpdateTenant();
+  const { data: availableSectors } = useAvailableSectors();
 
   const form = useForm<TenantFormData>({
     resolver: zodResolver(tenantFormSchema),
@@ -53,10 +58,18 @@ export function TenantForm({ tenant, onSuccess, onCancel }: TenantFormProps) {
       companyName: tenant?.companyName ?? "",
       contactName: tenant?.contactName ?? "",
       contactEmail: tenant?.contactEmail ?? "",
+      sectorIds: [],
     },
   });
 
   const onSubmit = async (data: TenantFormData) => {
+    if (!isEditing && (!data.sectorIds || data.sectorIds.length === 0)) {
+      form.setError("sectorIds", {
+        message: "At least one sector is required",
+      });
+      return;
+    }
+
     const payload = {
       name: data.name,
       code: data.code || undefined,
@@ -70,7 +83,17 @@ export function TenantForm({ tenant, onSuccess, onCancel }: TenantFormProps) {
         await updateTenant.mutateAsync({ id: tenant.id, data: payload });
         toast.success("Tenant updated successfully");
       } else {
-        await createTenant.mutateAsync(payload);
+        const newTenant = await createTenant.mutateAsync(payload);
+
+        // Assign sectors after creation
+        const sectorIds = data.sectorIds ?? [];
+        for (let i = 0; i < sectorIds.length; i++) {
+          await assignTenantSector(newTenant.id, {
+            sectorId: sectorIds[i],
+            isDefault: i === 0,
+          });
+        }
+
         toast.success("Tenant created successfully");
       }
       onSuccess();
@@ -177,6 +200,52 @@ export function TenantForm({ tenant, onSuccess, onCancel }: TenantFormProps) {
             </FormItem>
           )}
         />
+
+        {!isEditing && availableSectors && availableSectors.length > 0 && (
+          <FormField
+            control={form.control}
+            name="sectorIds"
+            render={() => (
+              <FormItem>
+                <FormLabel>Sectors *</FormLabel>
+                <FormDescription>
+                  Select the industry sectors that apply to this tenant
+                </FormDescription>
+                <div className="space-y-2 pt-1">
+                  {availableSectors.map((sector) => (
+                    <FormField
+                      key={sector.id}
+                      control={form.control}
+                      name="sectorIds"
+                      render={({ field }) => (
+                        <FormItem className="flex items-center gap-2 space-y-0">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value?.includes(sector.id)}
+                              onCheckedChange={(checked) => {
+                                const current = field.value ?? [];
+                                field.onChange(
+                                  checked
+                                    ? [...current, sector.id]
+                                    : current.filter((id: string) => id !== sector.id)
+                                );
+                              }}
+                            />
+                          </FormControl>
+                          <FormLabel className="font-normal cursor-pointer">
+                            {sector.icon ? `${sector.icon} ` : ""}
+                            {sector.name}
+                          </FormLabel>
+                        </FormItem>
+                      )}
+                    />
+                  ))}
+                </div>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
 
         <div className="flex items-center gap-4 pt-4">
           <Button type="submit" disabled={isPending}>

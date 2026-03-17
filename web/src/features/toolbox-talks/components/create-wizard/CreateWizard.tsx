@@ -68,6 +68,8 @@ export interface WizardState {
   parsedSections: ParsedSection[];
   suggestedOutputType: OutputType | null;
   selectedOutputType: OutputType | null;
+  // Sector
+  sectorKey: string | null;
   // Validation
   validationRunIds: string[];
 }
@@ -91,6 +93,7 @@ const initialState: WizardState = {
   parsedSections: [],
   suggestedOutputType: null,
   selectedOutputType: null,
+  sectorKey: null,
   validationRunIds: [],
 };
 

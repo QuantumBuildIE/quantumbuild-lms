@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { TenantForm } from "@/components/admin/tenant-form";
 import { TenantModulesCard } from "@/components/admin/tenant-modules-card";
+import { TenantSectorsCard } from "@/components/admin/tenant-sectors-card";
 import { useTenant, useUpdateTenantStatus } from "@/lib/api/admin/use-tenants";
 import { useIsSuperUser } from "@/lib/auth/use-auth";
 import type { TenantStatus } from "@/types/admin";
@@ -243,6 +244,9 @@ export default function TenantDetailPage() {
 
           {/* Modules */}
           <TenantModulesCard tenantId={tenantId} />
+
+          {/* Sectors */}
+          <TenantSectorsCard tenantId={tenantId} />
         </div>
 
         {/* Right column: Edit Form */}

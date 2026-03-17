@@ -20,6 +20,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Switch } from '@/components/ui/switch';
 import {
+  AlertTriangle,
   FileText,
   FileVideo,
   Type,
@@ -28,11 +29,13 @@ import {
   Info,
   ArrowRight,
 } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/auth/use-auth';
 import { useLookupValues } from '@/hooks/use-lookups';
 import { useAllCompanies } from '@/lib/api/admin/use-companies';
+import { useTenantSectors, useAvailableSectors } from '@/lib/api/admin/use-tenant-sectors';
 import { useCreateSession, useUploadSessionFile, useUpdateSource } from '@/lib/api/toolbox-talks/use-content-creation';
 import { useTenantSettings } from '@/lib/api/admin/use-tenant-settings';
 import type { WizardState } from '../CreateWizard';
@@ -92,6 +95,15 @@ export function InputConfigStep({
     useAllCompanies();
   const { data: tenantSettings } = useTenantSettings();
 
+  // Sector data
+  const tenantId = user?.tenantId ?? '';
+  const {
+    data: tenantSectors = [],
+    isLoading: tenantSectorsLoading,
+    isError: tenantSectorsError,
+  } = useTenantSectors(tenantId);
+  const { data: allSectors = [] } = useAvailableSectors();
+
   // Derive thresholds and audit purposes from tenant settings, falling back to defaults
   const passThresholds = (() => {
     const raw = tenantSettings?.['ValidationPassThresholds'];
@@ -137,6 +149,19 @@ export function InputConfigStep({
       });
     }
   }, [user, state.reviewerName, updateState]);
+
+  // Auto-select sector when tenant has exactly one, or default
+  useEffect(() => {
+    if (tenantSectorsLoading || tenantSectorsError || state.sectorKey) return;
+    if (tenantSectors.length === 1) {
+      updateState({ sectorKey: tenantSectors[0].sectorKey });
+    } else if (tenantSectors.length > 1) {
+      const defaultSector = tenantSectors.find((s) => s.isDefault);
+      if (defaultSector) {
+        updateState({ sectorKey: defaultSector.sectorKey });
+      }
+    }
+  }, [tenantSectors, tenantSectorsLoading, tenantSectorsError, state.sectorKey, updateState]);
 
   // Build language options for multi-select
   const languageOptions: MultiSelectOption[] = languages.map((lang) => ({
@@ -214,9 +239,13 @@ export function InputConfigStep({
   // Continue / Session creation
   // ============================================
 
+  // Sector is required when tenant has multiple sectors configured (Case B)
+  const sectorRequired = !tenantSectorsLoading && !tenantSectorsError && tenantSectors.length > 1;
+
   const canContinue =
     !!state.inputMode &&
     state.targetLanguageCodes.length > 0 &&
+    (!sectorRequired || !!state.sectorKey) &&
     (state.inputMode === 'Text'
       ? state.sourceText.trim().length > 0
       : state.inputMode === 'Pdf'
@@ -240,6 +269,7 @@ export function InputConfigStep({
         const session = await createSession.mutateAsync({
           inputMode: state.inputMode,
           sourceText: state.inputMode === 'Text' ? state.sourceText : undefined,
+          sectorKey: state.sectorKey || undefined,
           passThreshold: state.passThreshold,
           includeQuiz: state.includeQuiz,
           reviewerName: state.reviewerName || undefined,
@@ -582,6 +612,90 @@ export function InputConfigStep({
           onCheckedChange={(checked) => updateState({ includeQuiz: checked })}
         />
       </div>
+
+      {/* Sector Selection */}
+      {tenantSectorsLoading ? (
+        <div className="flex items-center gap-3 rounded-lg border p-4">
+          <Skeleton className="h-5 w-5 rounded" />
+          <div className="flex-1 space-y-1.5">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-3 w-48" />
+          </div>
+        </div>
+      ) : tenantSectorsError || tenantSectors.length === 0 ? (
+        /* Case C — No sectors configured (or fetch error) */
+        <div className="space-y-3">
+          <Alert className="border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/30">
+            <AlertTriangle className="h-4 w-4 text-amber-600" />
+            <AlertDescription className="text-amber-700 dark:text-amber-400">
+              No sector configured for your account. Contact your administrator
+              to set up sector configuration. Regulatory scoring will not be
+              available for this run.
+            </AlertDescription>
+          </Alert>
+          <div>
+            <Label className="mb-2 block text-sm font-medium">
+              Sector{' '}
+              <span className="font-normal text-muted-foreground">
+                (Optional — select to enable regulatory scoring)
+              </span>
+            </Label>
+            <Select
+              value={state.sectorKey ?? ''}
+              onValueChange={(v) =>
+                updateState({ sectorKey: v || null })
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a sector..." />
+              </SelectTrigger>
+              <SelectContent>
+                {allSectors.map((s) => (
+                  <SelectItem key={s.id} value={s.key}>
+                    {s.icon ? `${s.icon} ${s.name}` : s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      ) : tenantSectors.length === 1 ? (
+        /* Case A — Single sector, auto-selected */
+        <div className="flex items-center gap-3 rounded-lg border p-4">
+          {tenantSectors[0].sectorIcon && (
+            <span className="text-lg">{tenantSectors[0].sectorIcon}</span>
+          )}
+          <div className="min-w-0">
+            <p className="text-sm font-medium">{tenantSectors[0].sectorName}</p>
+            <p className="text-xs text-muted-foreground">
+              Auto-selected based on your account configuration
+            </p>
+          </div>
+        </div>
+      ) : (
+        /* Case B — Multiple sectors, user picks */
+        <div>
+          <Label className="mb-2 block text-sm font-medium">Sector</Label>
+          <Select
+            value={state.sectorKey ?? ''}
+            onValueChange={(v) => updateState({ sectorKey: v })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select the sector this document belongs to" />
+            </SelectTrigger>
+            <SelectContent>
+              {tenantSectors.map((s) => (
+                <SelectItem key={s.id} value={s.sectorKey}>
+                  {s.sectorIcon ? `${s.sectorIcon} ${s.sectorName}` : s.sectorName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Select the sector this document belongs to
+          </p>
+        </div>
+      )}
 
       {/* Audit Metadata */}
       <Card>

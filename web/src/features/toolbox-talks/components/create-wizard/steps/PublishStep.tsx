@@ -39,6 +39,7 @@ import {
 } from '@/lib/api/toolbox-talks/use-content-creation';
 import { getSessionValidationRun } from '@/lib/api/toolbox-talks/content-creation';
 import { useLookupValues } from '@/hooks/use-lookups';
+import { useAvailableSectors } from '@/lib/api/admin/use-tenant-sectors';
 import type { WizardState } from '../CreateWizard';
 import type {
   ContentCreationSettings,
@@ -560,6 +561,16 @@ function AuditSummaryPanel({
 }: {
   session: NonNullable<ReturnType<typeof useCreationSession>['data']>;
 }) {
+  const { data: sectors = [] } = useAvailableSectors();
+
+  // Resolve sectorKey to display name with icon
+  const sectorDisplay = useMemo(() => {
+    if (!session.sectorKey) return null;
+    const match = sectors.find((s) => s.key === session.sectorKey);
+    if (match) return match.icon ? `${match.icon} ${match.name}` : match.name;
+    return session.sectorKey;
+  }, [session.sectorKey, sectors]);
+
   const fields = [
     { label: 'Reviewer', value: session.reviewerName },
     { label: 'Organisation', value: session.reviewerOrg },
@@ -568,7 +579,7 @@ function AuditSummaryPanel({
     { label: 'Client', value: session.clientName },
     { label: 'Audit Purpose', value: session.auditPurpose },
     { label: 'Pass Threshold', value: session.passThreshold ? `${session.passThreshold}%` : null },
-    { label: 'Safety Sector', value: session.sectorKey },
+    { label: 'Safety Sector', value: sectorDisplay },
   ];
 
   // Only show if at least one field has a value
