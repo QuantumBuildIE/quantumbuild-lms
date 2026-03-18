@@ -77,9 +77,11 @@ public class RequirementIngestionService : IRequirementIngestionService
             .ToListAsync(cancellationToken);
 
         var requirements = await _dbContext.RegulatoryRequirements
+            .IgnoreQueryFilters()
             .Include(r => r.RegulatoryProfile)
                 .ThenInclude(p => p.Sector)
-            .Where(r => profileIds.Contains(r.RegulatoryProfileId)
+            .Where(r => !r.IsDeleted
+                && profileIds.Contains(r.RegulatoryProfileId)
                 && r.IngestionStatus == RequirementIngestionStatus.Draft)
             .OrderBy(r => r.RegulatoryProfile.SectorKey)
             .ThenBy(r => r.DisplayOrder)
