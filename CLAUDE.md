@@ -364,6 +364,31 @@ quantumbuild-lms/
 | POST | `/runs/{runId}/report/generate` | Generate audit report PDF | ToolboxTalks.Admin |
 | DELETE | `/runs/{runId}` | Soft-delete validation run | ToolboxTalks.Admin |
 
+#### Sectors (`/api/toolbox-talks/sectors`)
+| Method | Endpoint | Description | Permission |
+|--------|----------|-------------|------------|
+| GET | `/` | List all active system-wide sectors | Authenticated |
+
+#### Tenant Sectors (`/api/tenants/{tenantId}/sectors`)
+| Method | Endpoint | Description | Permission |
+|--------|----------|-------------|------------|
+| GET | `/` | List tenant's sectors (tenant ID guard: own tenant only unless SuperUser) | Authenticated |
+| POST | `/` | Assign sector to tenant | Tenant.Manage |
+| DELETE | `/{sectorId}` | Remove sector from tenant (400 if last sector) | Tenant.Manage |
+| PUT | `/{sectorId}/set-default` | Set sector as tenant default | Tenant.Manage |
+
+#### Regulatory Scoring (`/api/toolbox-talks/validation-runs/{runId}`)
+| Method | Endpoint | Description | Permission |
+|--------|----------|-------------|------------|
+| POST | `/regulatory-score` | Trigger regulatory scoring run | Learnings.Admin |
+| GET | `/regulatory-score/history` | Get score history for a validation run | Learnings.View |
+
+#### Course Validation (`/api/toolbox-talks/courses/{courseId}`)
+| Method | Endpoint | Description | Permission |
+|--------|----------|-------------|------------|
+| GET | `/validation-runs` | List validation runs for a course | ToolboxTalks.View |
+| GET | `/validation/runs/{runId}` | Get course-level validation run detail | ToolboxTalks.View |
+
 #### Safety Glossary (`/api/toolbox-talks/glossaries`)
 | Method | Endpoint | Description | Permission |
 |--------|----------|-------------|------------|
@@ -375,6 +400,18 @@ quantumbuild-lms/
 | POST | `/{id}/terms` | Add term to glossary | ToolboxTalks.Admin |
 | PUT | `/{id}/terms/{termId}` | Update glossary term | ToolboxTalks.Admin |
 | DELETE | `/{id}/terms/{termId}` | Delete glossary term | ToolboxTalks.Admin |
+
+#### Regulatory Ingestion (`/api/regulatory`)
+| Method | Endpoint | Description | Permission |
+|--------|----------|-------------|------------|
+| GET | `/documents` | List all regulatory documents with body, profiles, counts | Tenant.Manage |
+| POST | `/documents/{documentId}/ingest` | Start AI ingestion from document URL | Tenant.Manage |
+| GET | `/documents/{documentId}/ingestion-status` | Get ingestion status and counts | Tenant.Manage |
+| GET | `/documents/{documentId}/draft-requirements` | List draft requirements for review | Tenant.Manage |
+| PUT | `/requirements/{requirementId}/approve` | Approve draft (with optional edits) | Tenant.Manage |
+| PUT | `/requirements/{requirementId}/reject` | Reject draft with notes | Tenant.Manage |
+| PUT | `/requirements/{requirementId}` | Update draft without status change | Tenant.Manage |
+| POST | `/documents/{documentId}/approve-all` | Bulk approve all drafts | Tenant.Manage |
 
 ---
 
@@ -446,6 +483,12 @@ quantumbuild-lms/
 | `/admin/users` | List users |
 | `/admin/users/new` | Create user |
 | `/admin/users/[id]/edit` | Edit user |
+
+#### Admin — Regulatory (SuperUser only) (`/admin/regulatory/*`)
+| Path | Description |
+|------|-------------|
+| `/admin/regulatory` | Regulatory documents list with ingestion status |
+| `/admin/regulatory/[documentId]` | Document detail, ingestion trigger, draft requirement review |
 
 #### User
 | Path | Description |
@@ -624,19 +667,11 @@ Progress updates sent via SignalR hub in real-time.
   - Employee deletion validates no active supervisor assignments exist before allowing soft delete
 
 ### Sector & TenantSector
-- **Sector** — First-class sector entity in the ToolboxTalks module domain (`BaseEntity`)
-  - `Key` (string, max 50, unique) — Canonical string matching `SafetyGlossary.SectorKey` and `TranslationValidationRun.SectorKey`
-  - `Name` (string, max 100), `Icon` (string, max 10, nullable), `DisplayOrder` (int), `IsActive` (bool, default true)
-  - **Important:** `SafetyGlossary.SectorKey` and `TranslationValidationRun.SectorKey` remain as plain strings — they are intentionally NOT converted to FKs. They must match `Sector.Key` values exactly
-  - Seeded values: `construction`, `homecare`, `manufacturing`, `transport`, `food_hospitality`
-- **TenantSector** — Junction entity linking Tenant to Sector (`BaseEntity`)
-  - `TenantId` (Guid), `SectorId` (Guid), `IsDefault` (bool — marks tenant's primary sector)
-  - Composite unique index on `{TenantId, SectorId}`
-  - Cross-module FK to `Tenant` (no navigation property on Tenant side, `DeleteBehavior.Restrict`)
+> **Note:** Sector and TenantSector entities physically live in the ToolboxTalks module domain — see entities #28-29 in the ToolboxTalks section below for full documentation.
 
 ---
 
-## Toolbox Talks Module Entities (33 Total)
+## Toolbox Talks Module Entities (37 Total)
 
 ### Content
 1. **ToolboxTalk** — Core entity: code (unique per tenant, max 20 chars, auto-generated from title initials), title, description, category, video, PDF, sections, questions, quiz settings, certificate/refresher options, AI generation state, translations
@@ -680,20 +715,40 @@ Progress updates sent via SignalR hub in real-time.
 25. **SafetyGlossary** — Sector-based safety glossary (TenantId nullable: null = system default, Guid = tenant override), sector key/name/icon
 26. **SafetyGlossaryTerm** — Individual term: English term, category, isCritical flag, translations JSON (language code → translated term)
 
+### Content Creation
+27. **ContentCreationSession** — Wizard session state: InputMode, OutputType, status, sectorKey, language config, subtitle job link, draft talk reference
+
+### Sector Management
+28. **Sector** — First-class sector entity (`BaseEntity`): Key (string, max 50, unique — canonical string matching `SafetyGlossary.SectorKey` and `TranslationValidationRun.SectorKey`), Name, Icon, DisplayOrder, IsActive. String FK fields intentionally not converted to real FKs
+29. **TenantSector** — Junction entity linking Tenant to Sector (`BaseEntity`): TenantId, SectorId, IsDefault. Composite unique index on `{TenantId, SectorId}`. Cross-module FK to Tenant (`DeleteBehavior.Restrict`). Restore-on-reassign pattern (note 12)
+
 ### Regulatory Profile Chain
-27. **RegulatoryBody** — System-managed (no TenantId): Name, Code (unique, max 20), Country, Website. e.g. HIQA, HSA, FSAI, RSA
-28. **RegulatoryDocument** — System-managed: Title, Version, EffectiveDate, Source, SourceUrl, IsActive. FK to RegulatoryBody
-29. **RegulatoryProfile** — System-managed intersection of RegulatoryDocument × Sector. SectorKey is a denormalised copy of Sector.Key maintained for quick lookup. CategoryWeightsJson holds JSON array of {Key, Label, Weight} scoring categories. Composite unique index on {RegulatoryDocumentId, SectorId}
-30. **RegulatoryCriteria** — Individual criteria items within a profile. Supports tenant overrides following the SafetyGlossary pattern (TenantId nullable: null = system default, Guid = tenant override). Query filter is `!IsDeleted` only — tenant filtering handled at service level. Composite unique index on {RegulatoryProfileId, TenantId, CategoryKey, DisplayOrder}
+30. **RegulatoryBody** — System-managed (no TenantId): Name, Code (unique, max 20), Country, Website. e.g. HIQA, HSA, FSAI, RSA
+31. **RegulatoryDocument** — System-managed: Title, Version, EffectiveDate, Source, SourceUrl, IsActive. FK to RegulatoryBody
+32. **RegulatoryProfile** — System-managed intersection of RegulatoryDocument × Sector. SectorKey is a denormalised copy of Sector.Key maintained for quick lookup. CategoryWeightsJson holds JSON array of {Key, Label, Weight} scoring categories. Composite unique index on {RegulatoryDocumentId, SectorId}
+33. **RegulatoryCriteria** — Individual criteria items within a profile. Supports tenant overrides following the SafetyGlossary pattern (TenantId nullable: null = system default, Guid = tenant override). Query filter is `!IsDeleted` only — tenant filtering handled at service level. Composite unique index on {RegulatoryProfileId, TenantId, CategoryKey, DisplayOrder}
 
 ### Regulatory Scoring
-31. **ValidationRegulatoryScore** — TenantEntity: ValidationRunId (FK to TranslationValidationRun), ScoreType (ValidationScoreType enum), RegulatoryProfileId (nullable FK to RegulatoryProfile), OverallScore, CategoryScoresJson (JSON), Verdict, Summary, RunLabel, RunNumber, FullResponseJson, ScoredSectionCount, TargetLanguage, RegulatoryBody (denormalised code)
+34. **ValidationRegulatoryScore** — TenantEntity: ValidationRunId (FK to TranslationValidationRun), ScoreType (ValidationScoreType enum), RegulatoryProfileId (nullable FK to RegulatoryProfile), OverallScore, CategoryScoresJson (JSON), Verdict, Summary, RunLabel, RunNumber, FullResponseJson, ScoredSectionCount, TargetLanguage, RegulatoryBody (denormalised code)
 
-### Enums (17 Total)
+### Regulatory Requirements & Compliance Mapping
+35. **RegulatoryRequirement** — System-managed (`BaseEntity`, no TenantId): specific compliance obligation within a RegulatoryProfile. Title, Description, Section/SectionLabel, Principle/PrincipleLabel, Priority (high/med/low), DisplayOrder, IngestionSource (Manual/Automated), IngestionStatus (Draft/Approved/Rejected — gates visibility to tenants), IngestionNotes, IsActive. FK to RegulatoryProfile (Restrict). Seeded with 15 HIQA homecare requirements
+36. **RegulatoryRequirementMapping** — Tenant-scoped (`TenantEntity`): maps a RegulatoryRequirement to either a ToolboxTalk or ToolboxTalkCourse (never both — enforced by check constraint). MappingStatus (Suggested/Confirmed/Rejected), ConfidenceScore (0-100, AI), AiReasoning, ReviewedBy, ReviewedAt. Composite unique indexes on `{TenantId, RequirementId, TalkId}` and `{TenantId, RequirementId, CourseId}` with filtered nulls. Tenant query filter in ApplicationDbContext
+
+### Enums (24 Total — 23 ToolboxTalks + 1 Core)
+
+#### Core Module
+- **TenantStatus** — Active, Inactive, Suspended
+
+#### ToolboxTalks Module
 - **CertificateType** — Talk, Course
+- **ContentCreationSessionStatus** — Active, Completed, Expired, Cancelled
 - **ContentSource** — Manual, Video, Pdf, Both
 - **CourseAssignmentStatus** — Assigned, InProgress, Completed, Overdue
+- **InputMode** — Video, Pdf
+- **OutputType** — Talk, Course
 - **QuestionType** — MultipleChoice, TrueFalse, ShortAnswer
+- **ReviewerDecision** — Pending, Accepted, Rejected, Edited
 - **ScheduledTalkStatus** — Pending, InProgress, Completed, Overdue, Cancelled
 - **SubtitleProcessingStatus** — Pending, Transcribing, Translating, Uploading, Completed, Failed, Cancelled
 - **SubtitleTranslationStatus** — Pending, InProgress, Completed, Failed
@@ -701,12 +756,14 @@ Progress updates sent via SignalR hub in real-time.
 - **ToolboxTalkFrequency** — Once, Weekly, Monthly, Annually
 - **ToolboxTalkScheduleStatus** — Draft, Active, Completed, Cancelled
 - **ToolboxTalkStatus** — Draft, Processing, ReadyForReview, Published
-- **VideoSource** — None, YouTube, GoogleDrive, Vimeo, DirectUrl
-- **ValidationScoreType** — SourceDocument, PureTranslation, RegulatoryTranslation
-- **VideoTranslationStatus** — Pending, Processing, Completed, Failed, ManualRequired
-- **ValidationRunStatus** — Pending, Running, Completed, Failed, Cancelled
 - **ValidationOutcome** — Pass, Review, Fail
-- **ReviewerDecision** — Pending, Accepted, Rejected, Edited
+- **ValidationRunStatus** — Pending, Running, Completed, Failed, Cancelled
+- **ValidationScoreType** — SourceDocument, PureTranslation, RegulatoryTranslation
+- **VideoSource** — None, YouTube, GoogleDrive, Vimeo, DirectUrl
+- **RequirementIngestionSource** — Manual, Automated
+- **RequirementIngestionStatus** — Draft, Approved, Rejected
+- **RequirementMappingStatus** — Suggested, Confirmed, Rejected
+- **VideoTranslationStatus** — Pending, Processing, Completed, Failed, ManualRequired
 
 ---
 
@@ -724,6 +781,7 @@ Progress updates sent via SignalR hub in real-time.
 | TranslationValidationJob | On-demand | Multi-round back-translation consensus validation per section (SignalR progress) |
 | ValidationReportJob | On-demand | Generate audit report PDF (QuestPDF) and upload to R2 |
 | ExpiredSessionCleanupJob | Daily | Clean up expired validation sessions |
+| RequirementIngestionJob | On-demand | AI-powered extraction of regulatory requirements from document URLs (Claude Sonnet) |
 
 ---
 
@@ -1059,8 +1117,21 @@ Multi-round back-translation consensus engine that validates AI-generated transl
 32. **Regulatory Score service** — `IRegulatoryScoreService` / `RegulatoryScoreService` scores validation runs via Claude Sonnet (`claude-sonnet-4-20250514`). Three scoring types (`ValidationScoreType` enum): `SourceDocument` (source quality against regulatory standard), `PureTranslation` (pure linguistic — fixed 5 categories: Accuracy, Fluency, Completeness, Consistency, Style), `RegulatoryTranslation` (translation against sector-specific regulatory criteria). `ValidationRegulatoryScore` entity (TenantEntity) persists scores with `RunNumber` sequential per `{ValidationRunId, ScoreType}`, `RunLabel` (Source Assessment / Linguistic Assessment / Pre-Remediation Baseline / Post-Remediation Pass N), `CategoryScoresJson`, `FullResponseJson` for audit. Critical prompt rule: RegulatoryTranslation scoring must NOT penalise the translation for faithfully reflecting weaknesses in the source document — only penalise translator-introduced problems. API: `POST /api/toolbox-talks/validation-runs/{runId}/regulatory-score` (Learnings.Admin), `GET .../history` (Learnings.View). Registered as HttpClient service in `ServiceCollectionExtensions`
 
 33. **Sector & TenantSector API** — `GET /api/toolbox-talks/sectors` returns all active system-wide sectors, accessible to any authenticated user (used by TransVal wizard sector picker). TenantSector CRUD at `GET|POST|DELETE|PUT /api/tenants/{tenantId}/sectors[/{sectorId}[/set-default]]` — SuperUser only via `Tenant.Manage` policy (same as TenantsController and TenantModulesController). Follows **restore-on-reassign pattern** (CLAUDE.md note 12): soft-deleted TenantSector records are restored on re-assignment rather than inserting new rows, preventing unique index violations on `{TenantId, SectorId}`. `GetDefaultSectorAsync` logic: returns the sector marked `IsDefault = true`; if none marked, falls back to returning the single active sector; returns `null` if multiple exist with no default set (ambiguous). Delete validates at least one sector remains; auto-promotes lowest-DisplayOrder sector as default if the deleted sector was default
+34. **Sector entity** — `Sector.Key` is the canonical string that ties to `SafetyGlossary.SectorKey` and `TranslationValidationRun.SectorKey`. These string fields are intentionally not converted to FKs — they must match `Sector.Key` values exactly. Current keys: `construction`, `homecare`, `manufacturing`, `transport`, `food_hospitality`
+35. **TenantSector** — Minimum one sector required per tenant. DELETE returns 400 if removing last sector. Restore-on-reassign pattern applies — soft-delete on remove, restore existing record on re-add. `IsDefault` auto-promotes to remaining sector on delete of default. `GetDefaultSectorAsync` logic: `IsDefault` first, single-sector fallback, `null` if multiple with no default (ambiguous)
+36. **Regulatory profile chain** — System-managed: `RegulatoryBody` → `RegulatoryDocument` → `RegulatoryProfile` → `RegulatoryCriteria`. Only `RegulatoryCriteria` supports tenant overrides (nullable TenantId, SafetyGlossary pattern). `CategoryWeightsJson` on `RegulatoryProfile` is a JSON array — deserialise with camelCase `JsonSerializerOptions` (note 23 applies)
+37. **Regulatory Score service** — Three scoring types via `IRegulatoryScoreService`. `RunLabel`: first regulatory run = "Pre-Remediation Baseline", subsequent = "Post-Remediation Pass {n}". Source and Pure runs always labelled "Source Assessment" and "Linguistic Assessment". Critical prompt rule: do not penalise translation for faithfully reflecting source document weaknesses — only penalise translator-introduced problems. All three scoring modes use `claude-sonnet-4-20250514`
+38. **ValidationRun course association** — `TranslationValidationRun` has both `ToolboxTalkId` (nullable) and `CourseId` (nullable). For standalone talks: `ToolboxTalkId` set, `CourseId` null. For course output: wizard `PublishAsCourseAsync` reassociates runs from draft `ToolboxTalkId` to `CourseId` after course is persisted. Validation tab hidden on section talks (detected via description `startsWith "Part of course:"`) — TODO: replace with proper `IsPartOfCourse` field
+39. **Wizard sector logic** — Three cases in InputConfigStep: (A) single TenantSector → auto-selected, read-only display, no dropdown; (B) multiple TenantSectors → dropdown showing tenant sectors only, `IsDefault` pre-selected; (C) no TenantSectors → amber warning, optional full sector list shown, does not block progression. `SectorKey` flows through `WizardState` → `CreateSessionRequest` → `ContentCreationSession` → `TranslationValidationRun`
+40. **TenantSectorsController auth pattern** — Class-level `[Authorize]` (any authenticated user). GET endpoints have tenant ID guard: non-SuperUsers may only read their own tenant's sectors. Write endpoints (POST, DELETE, PUT) have method-level `[Authorize(Policy = "Tenant.Manage")]` — SuperUser only. Note: ASP.NET Core `[Authorize]` attributes are additive not overriding — method-level `[Authorize]` does NOT override class-level policy, both must pass. Always move the restrictive policy to the write endpoints individually
+41. **RegulatoryRequirement** — System-managed (`BaseEntity`, no TenantId), seeded from HIQA homecare profile data. `IngestionStatus` gates visibility: only `Approved` requirements are shown to tenants. `IngestionSource` tracks whether the requirement was `Manual` or `Automated` (AI-ingested). FK to `RegulatoryProfile` (Restrict). Seeded after `RegulatoryProfileSeedData` in `Program.cs`
+42. **RegulatoryRequirementMapping** — Tenant-scoped (`TenantEntity`), AI-suggested or manually created. `MappingStatus` drives compliance checklist status: `Suggested` (AI), `Confirmed` (reviewer), `Rejected`. `ConfidenceScore` (0-100) and `AiReasoning` populated when AI suggests mappings. Check constraint enforces exactly one of `ToolboxTalkId` or `CourseId` — never both, never neither. Tenant query filter applied in `ApplicationDbContext` alongside `SupervisorAssignment` and `TenantSector`
+43. **RequirementIngestionSource/Status/MappingStatus enums** — Three enums in ToolboxTalks.Domain.Enums: `RequirementIngestionSource` (Manual, Automated), `RequirementIngestionStatus` (Draft, Approved, Rejected), `RequirementMappingStatus` (Suggested, Confirmed, Rejected). All stored as strings via `.HasConversion<string>()` in EF configurations
+44. **Requirement Ingestion Pipeline** — AI-powered extraction of `RegulatoryRequirement` records from regulatory document URLs. Flow: SuperUser triggers ingestion via `POST /api/regulatory/documents/{id}/ingest` → `RequirementIngestionJob` (Hangfire, `content-generation` queue) fetches document text (PDF via `IPdfExtractionService.ExtractTextFromUrlAsync`, web pages via `HttpClient` + HTML stripping) → sends to Claude Sonnet for structured extraction → persists as `Draft` requirements → SuperUser reviews/edits/approves/rejects. `LastIngestedAt` (nullable `DateTimeOffset`) added to `RegulatoryDocument`. Multiple profiles per document: HSA covers both construction and manufacturing — drafts created for all active profiles. Duplicate check uses `IgnoreQueryFilters()` to include soft-deleted records. JSON parsing uses camelCase `JsonSerializerOptions` (note 23). Frontend at `/admin/regulatory` (SuperUser-only nav tab) with list page and detail/ingestion page with inline editing, approve/reject/approve-all actions, and 3-second polling during ingestion
+45. **RegulatoryIngestionController** — SuperUser-only via class-level `[Authorize(Policy = "Tenant.Manage")]`. Routes: `GET /api/regulatory/documents`, `POST .../documents/{id}/ingest`, `GET .../documents/{id}/ingestion-status`, `GET .../documents/{id}/draft-requirements`, `PUT .../requirements/{id}/approve`, `PUT .../requirements/{id}/reject`, `PUT .../requirements/{id}`, `POST .../documents/{id}/approve-all`. No tenant filtering — system-wide records
+46. **RequirementIngestionJob** — Hangfire background job (`[Queue("content-generation")]`, `[AutomaticRetry(Attempts = 1)]`). Registered as `AddScoped<RequirementIngestionJob>()` with `AddHttpClient<RequirementIngestionJob>()` for HTTP access. PDF extraction reuses existing `IPdfExtractionService` (PdfPig). Claude extraction uses Claude Sonnet via direct HTTP (same pattern as `RegulatoryScoreService`). Error handling: never throws from job — catches all exceptions, logs, and exits gracefully. Partial success: saves successfully parsed items as drafts, logs failed items. Retry on invalid JSON once with stricter prompt
 
 ---
 
-*Last Updated: March 17, 2026*
+*Last Updated: March 18, 2026*
 *Architecture: Modular Monolith with Clean Architecture*

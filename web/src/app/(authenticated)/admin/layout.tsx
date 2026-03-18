@@ -13,6 +13,7 @@ const adminNavItems = [
   { href: "/admin/settings", label: "Settings", superUserOnly: false, tenantScoped: true, permissions: ["Learnings.Admin", "Core.ManageUsers"] },
   { href: "/admin/lesson-parser", label: "Lesson Parser", superUserOnly: false, tenantScoped: true, permissions: ["LessonParser.Use"] },
   { href: "/admin/tenants", label: "Tenant Management", superUserOnly: true, tenantScoped: false },
+  { href: "/admin/regulatory", label: "Regulatory", superUserOnly: true, tenantScoped: false },
 ];
 
 const corePermissions = [

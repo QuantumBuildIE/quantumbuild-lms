@@ -125,6 +125,7 @@ builder.Services.AddScoped<TranslationValidationJob>();
 builder.Services.AddScoped<DailyTranslationScanJob>();
 builder.Services.AddScoped<ExpiredSessionCleanupJob>();
 builder.Services.AddScoped<LessonParseJob>();
+builder.Services.AddScoped<RequirementIngestionJob>();
 
 // Add Hangfire with PostgreSQL storage
 builder.Services.AddHangfire(config => config
@@ -404,6 +405,7 @@ static async Task SeedToolboxTalksDataAsync(IServiceProvider serviceProvider)
         await SafetyGlossarySeedData.SeedAsync(context, logger);
         await SectorSeedData.SeedAsync(context, logger);
         await RegulatoryProfileSeedData.SeedAsync(context, logger);
+        await RegulatoryRequirementSeedData.SeedAsync(context, logger);
         logger.LogInformation("Learnings module seeding completed");
     }
     catch (Exception ex)

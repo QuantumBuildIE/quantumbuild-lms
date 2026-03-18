@@ -34,6 +34,8 @@ public class RegulatoryDocumentConfiguration : IEntityTypeConfiguration<Regulato
             .IsRequired()
             .HasDefaultValue(true);
 
+        builder.Property(e => e.LastIngestedAt);
+
         // Audit fields
         builder.Property(e => e.CreatedAt)
             .IsRequired();

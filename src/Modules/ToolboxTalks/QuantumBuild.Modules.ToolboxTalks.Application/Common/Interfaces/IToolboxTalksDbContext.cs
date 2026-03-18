@@ -63,5 +63,9 @@ public interface IToolboxTalksDbContext
     // Regulatory score entities
     DbSet<ValidationRegulatoryScore> ValidationRegulatoryScores { get; }
 
+    // Regulatory requirement entities
+    DbSet<RegulatoryRequirement> RegulatoryRequirements { get; }
+    DbSet<RegulatoryRequirementMapping> RegulatoryRequirementMappings { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

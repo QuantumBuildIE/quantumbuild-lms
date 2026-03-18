@@ -22,6 +22,8 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Sectors;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.ContentCreation;
+using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Ingestion;
+using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure;
 
@@ -220,6 +222,15 @@ public static class ServiceCollectionExtensions
             client.Timeout = TimeSpan.FromMinutes(3); // 3 minutes for content parsing
         });
         services.AddScoped<IContentCreationSessionService, ContentCreationSessionService>();
+
+        // Register requirement ingestion service (AI-powered regulatory requirement extraction)
+        services.AddScoped<IRequirementIngestionService, RequirementIngestionService>();
+
+        // Register requirement ingestion job HttpClient (fetches web pages + calls Claude API)
+        services.AddHttpClient<RequirementIngestionJob>(client =>
+        {
+            client.Timeout = TimeSpan.FromMinutes(5); // 5 minutes for document fetch + AI extraction
+        });
 
         // Note: SignalR hubs are registered in Program.cs with app.MapHub<>()
         //   - SubtitleProcessingHub: /api/hubs/subtitle-processing

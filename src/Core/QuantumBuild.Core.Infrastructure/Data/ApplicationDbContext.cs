@@ -100,6 +100,8 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
     public DbSet<RegulatoryProfile> RegulatoryProfiles => Set<RegulatoryProfile>();
     public DbSet<RegulatoryCriteria> RegulatoryCriteria => Set<RegulatoryCriteria>();
     public DbSet<ValidationRegulatoryScore> ValidationRegulatoryScores => Set<ValidationRegulatoryScore>();
+    public DbSet<RegulatoryRequirement> RegulatoryRequirements => Set<RegulatoryRequirement>();
+    public DbSet<RegulatoryRequirementMapping> RegulatoryRequirementMappings => Set<RegulatoryRequirementMapping>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -249,6 +251,8 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.ApplyConfiguration(new RegulatoryProfileConfiguration());
         modelBuilder.ApplyConfiguration(new RegulatoryCriteriaConfiguration());
         modelBuilder.ApplyConfiguration(new ValidationRegulatoryScoreConfiguration());
+        modelBuilder.ApplyConfiguration(new RegulatoryRequirementConfiguration());
+        modelBuilder.ApplyConfiguration(new RegulatoryRequirementMappingConfiguration());
 
         // Apply global query filters - Core entities
         // BypassTenantFilter allows SuperUser to see all tenants' data when no tenant is selected
@@ -259,11 +263,12 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.Entity<SupervisorAssignment>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<TenantModule>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<TenantSector>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
+        modelBuilder.Entity<RegulatoryRequirementMapping>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<DpaAcceptance>().HasQueryFilter(e => !e.IsDeleted);
 
         // Note: Toolbox Talks query filters are defined in entity configurations
         // TenantEntity-based: ToolboxTalk, ToolboxTalkCourse, ToolboxTalkSchedule, ScheduledTalk, ToolboxTalkTranslation, ToolboxTalkVideoTranslation, ToolboxTalkCertificate, SubtitleProcessingJob, ToolboxTalkSlide, TranslationValidationRun, ContentCreationSession, ValidationRegulatoryScore
-        // BaseEntity-based (not tenant-scoped): ToolboxTalkSlideshowTranslation, SafetyGlossary, SafetyGlossaryTerm, RegulatoryBody, RegulatoryDocument, RegulatoryProfile, RegulatoryCriteria
+        // BaseEntity-based (not tenant-scoped): ToolboxTalkSlideshowTranslation, SafetyGlossary, SafetyGlossaryTerm, RegulatoryBody, RegulatoryDocument, RegulatoryProfile, RegulatoryCriteria, RegulatoryRequirement
         // BaseEntity-based (not tenant-scoped): ToolboxTalkSection, ToolboxTalkQuestion, ToolboxTalkCourseItem, ToolboxTalkCourseTranslation,
         //   ToolboxTalkScheduleAssignment, ScheduledTalkSectionProgress, ScheduledTalkQuizAttempt, ScheduledTalkCompletion, ToolboxTalkSettings, SubtitleTranslation, ToolboxTalkSlideTranslation, TranslationValidationResult
 

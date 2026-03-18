@@ -22,6 +22,11 @@ public class RegulatoryDocument : BaseEntity
 
     public bool IsActive { get; set; } = true;
 
+    /// <summary>
+    /// Timestamp of the last successful AI ingestion of requirements from this document.
+    /// </summary>
+    public DateTimeOffset? LastIngestedAt { get; set; }
+
     // Navigation properties
     public RegulatoryBody RegulatoryBody { get; set; } = null!;
     public ICollection<RegulatoryProfile> Profiles { get; set; } = new List<RegulatoryProfile>();
