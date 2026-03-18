@@ -43,11 +43,19 @@ export default function AdminLayout({
   }, [hasCorePermission, router]);
 
   // Redirect SU to /admin/tenants if navigating to a tenant-scoped page without a tenant selected
+  const nonTenantScopedPaths = useMemo(
+    () => adminNavItems.filter(item => !item.tenantScoped).map(item => item.href),
+    []
+  );
+
   useEffect(() => {
-    if (isSuperUser && !activeTenantId && !pathname.startsWith("/admin/tenants")) {
+    const isNonTenantScoped = nonTenantScopedPaths.some(path =>
+      pathname.startsWith(path)
+    );
+    if (isSuperUser && !activeTenantId && !isNonTenantScoped) {
       router.replace("/admin/tenants");
     }
-  }, [isSuperUser, activeTenantId, pathname, router]);
+  }, [isSuperUser, activeTenantId, pathname, router, nonTenantScopedPaths]);
 
   const isSupervisorOnly =
     !isSuperUser &&
