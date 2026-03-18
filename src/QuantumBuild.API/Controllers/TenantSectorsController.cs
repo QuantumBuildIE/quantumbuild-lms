@@ -9,7 +9,7 @@ namespace QuantumBuild.API.Controllers;
 
 [ApiController]
 [Route("api/tenants/{tenantId:guid}/sectors")]
-[Authorize(Policy = "Tenant.Manage")]
+[Authorize]
 public class TenantSectorsController(
     ITenantSectorService tenantSectorService,
     IValidator<AssignTenantSectorRequest> validator,
@@ -21,7 +21,6 @@ public class TenantSectorsController(
     /// SuperUsers can read any tenant's sectors.
     /// </summary>
     [HttpGet]
-    [Authorize]
     [ProducesResponseType(typeof(List<TenantSectorDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetTenantSectors(Guid tenantId, CancellationToken cancellationToken)
@@ -37,6 +36,7 @@ public class TenantSectorsController(
     /// Assign a sector to a tenant (restore-on-reassign if previously soft-deleted)
     /// </summary>
     [HttpPost]
+    [Authorize(Policy = "Tenant.Manage")]
     [ProducesResponseType(typeof(TenantSectorDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
@@ -70,6 +70,7 @@ public class TenantSectorsController(
     /// Remove a sector from a tenant (soft delete)
     /// </summary>
     [HttpDelete("{sectorId:guid}")]
+    [Authorize(Policy = "Tenant.Manage")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -94,6 +95,7 @@ public class TenantSectorsController(
     /// Set a sector as the default for a tenant
     /// </summary>
     [HttpPut("{sectorId:guid}/set-default")]
+    [Authorize(Policy = "Tenant.Manage")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> SetDefault(Guid tenantId, Guid sectorId, CancellationToken cancellationToken)
@@ -115,7 +117,6 @@ public class TenantSectorsController(
     /// SuperUsers can read any tenant's default sector.
     /// </summary>
     [HttpGet("default")]
-    [Authorize]
     [ProducesResponseType(typeof(TenantSectorDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
