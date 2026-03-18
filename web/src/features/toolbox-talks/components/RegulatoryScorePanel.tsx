@@ -18,6 +18,7 @@ import {
   useRegulatoryScoreHistory,
   useTriggerRegulatoryScore,
 } from '@/lib/api/toolbox-talks/use-content-creation';
+import { useAvailableSectors } from '@/lib/api/admin/use-tenant-sectors';
 import type {
   ValidationScoreType,
   RegulatoryScoreResultDto,
@@ -149,6 +150,7 @@ export function RegulatoryScorePanel({
   // parentId is used only as a query key identifier — the actual API calls use runId
   const parentId = talkId ?? courseId ?? '';
   const { data: history, isLoading } = useRegulatoryScoreHistory(parentId, runId);
+  const { data: sectors } = useAvailableSectors();
   const scoreMutation = useTriggerRegulatoryScore();
   const [scoringType, setScoringType] = useState<ValidationScoreType | null>(null);
 
@@ -218,11 +220,16 @@ export function RegulatoryScorePanel({
                 ? score.scoreLabel
                 : col.header;
 
-            // Button label
+            // Button label — sector-specific for RegulatoryTranslation when no scores yet
+            const sectorName = sectorKey
+              ? sectors?.find((s) => s.key === sectorKey)?.name ?? null
+              : null;
             const buttonLabel =
               col.scoreType === 'RegulatoryTranslation' && regRunCount > 0 && col.rerunLabel
                 ? col.rerunLabel(regRunCount)
-                : col.buttonLabel;
+                : col.scoreType === 'RegulatoryTranslation' && sectorName
+                  ? `Calculate ${sectorName} Score`
+                  : col.buttonLabel;
 
             return (
               <ScoreColumn
