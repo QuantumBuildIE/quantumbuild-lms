@@ -504,6 +504,63 @@ public class TranslationValidationController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// List validation runs for a course, paginated, newest first
+    /// </summary>
+    [HttpGet("/api/toolbox-talks/courses/{courseId:guid}/validation/runs")]
+    [ProducesResponseType(typeof(PaginatedList<ValidationRunListDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetCourseRuns(
+        Guid courseId,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var tenantId = _currentUserService.TenantId;
+
+            var courseExists = await _dbContext.ToolboxTalkCourses
+                .AnyAsync(c => c.Id == courseId && c.TenantId == tenantId, cancellationToken);
+
+            if (!courseExists)
+                return NotFound(new { message = "Course not found" });
+
+            var query = _dbContext.TranslationValidationRuns
+                .Where(r => r.CourseId == courseId && r.TenantId == tenantId)
+                .OrderByDescending(r => r.CreatedAt)
+                .Select(r => new ValidationRunListDto
+                {
+                    Id = r.Id,
+                    LanguageCode = r.LanguageCode,
+                    SectorKey = r.SectorKey,
+                    OverallScore = r.OverallScore,
+                    OverallOutcome = r.OverallOutcome,
+                    SafetyVerdict = r.SafetyVerdict,
+                    Status = r.Status,
+                    TotalSections = r.TotalSections,
+                    PassedSections = r.PassedSections,
+                    ReviewSections = r.ReviewSections,
+                    FailedSections = r.FailedSections,
+                    PassThreshold = r.PassThreshold,
+                    AuditReportUrl = r.AuditReportUrl,
+                    StartedAt = r.StartedAt,
+                    CompletedAt = r.CompletedAt,
+                    CreatedAt = r.CreatedAt
+                });
+
+            var result = await PaginatedList<ValidationRunListDto>.CreateAsync(
+                query, pageNumber, pageSize);
+
+            return Ok(Result.Ok(result));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving validation runs for course {CourseId}", courseId);
+            return StatusCode(500, Result.Fail("Error retrieving validation runs"));
+        }
+    }
+
     #region Private Helpers
 
     private async Task<TranslationValidationResult?> GetValidationResultAsync(

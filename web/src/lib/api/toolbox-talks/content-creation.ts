@@ -285,6 +285,19 @@ export async function getValidationRuns(
 }
 
 /**
+ * List validation runs for a course
+ */
+export async function getCourseValidationRuns(
+  courseId: string
+): Promise<ValidationRunSummary[]> {
+  const response = await apiClient.get<{
+    success: boolean;
+    data: { items: ValidationRunSummary[] };
+  }>(`/toolbox-talks/courses/${courseId}/validation/runs`);
+  return response.data.data.items;
+}
+
+/**
  * Delete (soft) a validation run
  */
 export async function deleteValidationRun(

@@ -91,6 +91,10 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
   }
 
   const stats = talk.completionStats;
+  // Hide Validation tab for section talks that are part of a course — validation runs
+  // are associated with the course, not individual section talks.
+  // TODO: Replace description check with a proper isPartOfCourse field on the DTO
+  const isPartOfCourse = talk.description?.startsWith('Part of course:') ?? false;
 
   return (
     <div className="space-y-6">
@@ -218,7 +222,9 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
       <Tabs defaultValue="overview">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="validation">Validation</TabsTrigger>
+          {!isPartOfCourse && (
+            <TabsTrigger value="validation">Validation</TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6 mt-4">
@@ -428,9 +434,11 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
           )}
         </TabsContent>
 
-        <TabsContent value="validation" className="mt-4">
-          <ValidationHistoryTab talkId={talkId} basePath={basePath} />
-        </TabsContent>
+        {!isPartOfCourse && (
+          <TabsContent value="validation" className="mt-4">
+            <ValidationHistoryTab talkId={talkId} basePath={basePath} />
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* Delete confirmation dialog */}

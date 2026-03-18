@@ -1532,6 +1532,28 @@ public class ContentCreationSessionService : IContentCreationSessionService
         _dbContext.ToolboxTalkCourses.Add(course);
         await SaveWithCodeRetryAsync(() => courseTalks.ToArray(), tenantId, cancellationToken);
 
+        // Reassociate validation runs from draft talk to course
+        if (session.OutputTalkId.HasValue)
+        {
+            var validationRuns = await _dbContext.TranslationValidationRuns
+                .Where(r => r.ToolboxTalkId == session.OutputTalkId.Value && r.TenantId == tenantId)
+                .ToListAsync(cancellationToken);
+
+            foreach (var run in validationRuns)
+            {
+                run.CourseId = course.Id;
+                run.ToolboxTalkId = null;
+            }
+
+            if (validationRuns.Count > 0)
+            {
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                _logger.LogInformation(
+                    "[ContentCreationSession] Reassociated {Count} validation run(s) from draft talk {DraftTalkId} to course {CourseId}",
+                    validationRuns.Count, session.OutputTalkId.Value, course.Id);
+            }
+        }
+
         // Delete the orphaned draft talk — only for non-Video input modes
         // Video mode repurposes the draft talk as the "Full Video" course item instead
         if (session.OutputTalkId.HasValue && session.InputMode != InputMode.Video)

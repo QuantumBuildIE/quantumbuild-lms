@@ -28,6 +28,7 @@ import {
 import { DeleteConfirmationDialog } from '@/components/shared/delete-confirmation-dialog';
 import {
   useValidationRuns,
+  useCourseValidationRuns,
   useDeleteValidationRun,
   useDownloadValidationReport,
   useGenerateValidationReport,
@@ -60,24 +61,30 @@ function SafetyIcon({ verdict }: { verdict: ValidationOutcome | null }) {
 // ============================================
 
 interface ValidationHistoryTabProps {
-  talkId: string;
+  talkId?: string;
+  courseId?: string;
   basePath?: string;
 }
 
 export function ValidationHistoryTab({
   talkId,
+  courseId,
   basePath = '/admin/toolbox-talks/talks',
 }: ValidationHistoryTabProps) {
   const router = useRouter();
   const [deleteRunId, setDeleteRunId] = useState<string | null>(null);
 
-  const { data: runs, isLoading } = useValidationRuns(talkId);
+  const talkRunsQuery = useValidationRuns(talkId ?? null);
+  const courseRunsQuery = useCourseValidationRuns(courseId ?? null);
+  const activeQuery = courseId ? courseRunsQuery : talkRunsQuery;
+  const { data: runs, isLoading } = activeQuery;
+
   const deleteMutation = useDeleteValidationRun();
   const downloadMutation = useDownloadValidationReport();
   const generateReportMutation = useGenerateValidationReport();
 
   const handleDelete = async () => {
-    if (!deleteRunId) return;
+    if (!deleteRunId || !talkId) return;
     try {
       await deleteMutation.mutateAsync({ talkId, runId: deleteRunId });
       toast.success('Validation run deleted');
@@ -88,6 +95,7 @@ export function ValidationHistoryTab({
   };
 
   const handleDownload = (run: ValidationRunSummary) => {
+    if (!talkId) return;
     downloadMutation.mutate(
       { talkId, runId: run.id },
       {
@@ -97,6 +105,7 @@ export function ValidationHistoryTab({
   };
 
   const handleGenerateReport = (run: ValidationRunSummary) => {
+    if (!talkId) return;
     generateReportMutation.mutate(
       { talkId, runId: run.id },
       {
@@ -193,9 +202,10 @@ export function ValidationHistoryTab({
                       size="icon"
                       className="h-8 w-8"
                       title="View run details"
-                      onClick={() =>
-                        router.push(`${basePath}/${talkId}/validation/${run.id}`)
-                      }
+                      onClick={() => {
+                        const parentId = talkId ?? courseId ?? '';
+                        router.push(`${basePath}/${parentId}/validation/${run.id}`);
+                      }}
                     >
                       <EyeIcon className="h-4 w-4" />
                     </Button>
