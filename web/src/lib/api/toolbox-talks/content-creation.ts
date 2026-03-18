@@ -277,10 +277,11 @@ export async function getValidationRun(
 export async function getValidationRuns(
   talkId: string
 ): Promise<ValidationRunSummary[]> {
-  const response = await apiClient.get<ValidationRunSummary[]>(
-    `/toolbox-talks/${talkId}/validation/runs`
-  );
-  return response.data;
+  const response = await apiClient.get<{
+    success: boolean;
+    data: { items: ValidationRunSummary[] };
+  }>(`/toolbox-talks/${talkId}/validation/runs`);
+  return response.data.data.items;
 }
 
 /**
