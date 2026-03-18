@@ -29,7 +29,8 @@ import type {
 // ============================================
 
 interface RegulatoryScorePanelProps {
-  talkId: string;
+  talkId?: string;
+  courseId?: string;
   runId: string;
   sectorKey: string | null;
   targetLanguage: string;
@@ -139,19 +140,22 @@ function getLatestScore(
 
 export function RegulatoryScorePanel({
   talkId,
+  courseId,
   runId,
   sectorKey,
   targetLanguage,
   hasCompletedSections,
 }: RegulatoryScorePanelProps) {
-  const { data: history, isLoading } = useRegulatoryScoreHistory(talkId, runId);
+  // parentId is used only as a query key identifier — the actual API calls use runId
+  const parentId = talkId ?? courseId ?? '';
+  const { data: history, isLoading } = useRegulatoryScoreHistory(parentId, runId);
   const scoreMutation = useTriggerRegulatoryScore();
   const [scoringType, setScoringType] = useState<ValidationScoreType | null>(null);
 
   const handleScore = (scoreType: ValidationScoreType) => {
     setScoringType(scoreType);
     scoreMutation.mutate(
-      { talkId, runId, scoreType },
+      { talkId: parentId, runId, scoreType },
       {
         onSuccess: () => {
           toast.success('Score assessment completed');

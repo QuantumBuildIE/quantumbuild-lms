@@ -13,6 +13,7 @@ import {
   abandonSession,
   getValidationRun,
   getValidationRuns,
+  getCourseValidationRun,
   getCourseValidationRuns,
   deleteValidationRun,
   downloadValidationReport,
@@ -62,6 +63,8 @@ export const contentCreationKeys = {
     [...contentCreationKeys.all, 'settings', sessionId] as const,
   courseValidationRuns: (courseId: string) =>
     [...contentCreationKeys.all, 'course-validation-runs', courseId] as const,
+  courseValidationRun: (courseId: string, runId: string) =>
+    [...contentCreationKeys.all, 'course-validation', courseId, runId] as const,
   regulatoryScoreHistory: (talkId: string, runId: string) =>
     [...contentCreationKeys.all, 'validation', talkId, runId, 'regulatory-score-history'] as const,
 };
@@ -305,6 +308,21 @@ export function useCourseValidationRuns(courseId: string | null) {
     queryFn: () => getCourseValidationRuns(courseId!),
     enabled: !!courseId,
     staleTime: 30 * 1000,
+  });
+}
+
+/**
+ * Fetch validation run details (course-scoped)
+ */
+export function useCourseValidationRun(
+  courseId: string | null,
+  runId: string | null
+) {
+  return useQuery({
+    queryKey: contentCreationKeys.courseValidationRun(courseId ?? '', runId ?? ''),
+    queryFn: () => getCourseValidationRun(courseId!, runId!),
+    enabled: !!courseId && !!runId,
+    staleTime: 10 * 1000,
   });
 }
 

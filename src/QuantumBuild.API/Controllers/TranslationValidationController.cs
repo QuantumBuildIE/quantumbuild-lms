@@ -561,6 +561,40 @@ public class TranslationValidationController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Get a single validation run (course-scoped) with all its results
+    /// </summary>
+    [HttpGet("/api/toolbox-talks/courses/{courseId:guid}/validation/runs/{runId:guid}")]
+    [ProducesResponseType(typeof(ValidationRunDetailDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetCourseRunById(
+        Guid courseId,
+        Guid runId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var tenantId = _currentUserService.TenantId;
+
+            var run = await _dbContext.TranslationValidationRuns
+                .Include(r => r.Results.OrderBy(res => res.SectionIndex))
+                .FirstOrDefaultAsync(r => r.Id == runId
+                    && r.CourseId == courseId
+                    && r.TenantId == tenantId, cancellationToken);
+
+            if (run == null)
+                return NotFound(new { message = "Validation run not found" });
+
+            var dto = MapToDetailDto(run);
+            return Ok(dto);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving validation run {RunId} for course {CourseId}", runId, courseId);
+            return StatusCode(500, new { message = "Error retrieving validation run" });
+        }
+    }
+
     #region Private Helpers
 
     private async Task<TranslationValidationResult?> GetValidationResultAsync(

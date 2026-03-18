@@ -285,6 +285,19 @@ export async function getValidationRuns(
 }
 
 /**
+ * Get validation run details (course-scoped)
+ */
+export async function getCourseValidationRun(
+  courseId: string,
+  runId: string
+): Promise<ValidationRunDetail> {
+  const response = await apiClient.get<ValidationRunDetail>(
+    `/toolbox-talks/courses/${courseId}/validation/runs/${runId}`
+  );
+  return response.data;
+}
+
+/**
  * List validation runs for a course
  */
 export async function getCourseValidationRuns(

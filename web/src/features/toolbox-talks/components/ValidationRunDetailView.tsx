@@ -12,6 +12,7 @@ import { ValidationSectionCard } from './create-wizard/steps/validate/Validation
 import { RegulatoryScorePanel } from './RegulatoryScorePanel';
 import {
   useValidationRun,
+  useCourseValidationRun,
   useDownloadValidationReport,
 } from '@/lib/api/toolbox-talks/use-content-creation';
 import { toast } from 'sonner';
@@ -22,17 +23,21 @@ import type { ValidationRunDetail } from '@/types/content-creation';
 // ============================================
 
 interface ValidationRunDetailViewProps {
-  talkId: string;
+  talkId?: string;
+  courseId?: string;
   runId: string;
   onBack: () => void;
 }
 
 export function ValidationRunDetailView({
   talkId,
+  courseId,
   runId,
   onBack,
 }: ValidationRunDetailViewProps) {
-  const { data: run, isLoading, error } = useValidationRun(talkId, runId);
+  const talkRunQuery = useValidationRun(talkId ?? null, talkId ? runId : null);
+  const courseRunQuery = useCourseValidationRun(courseId ?? null, courseId ? runId : null);
+  const { data: run, isLoading, error } = courseId ? courseRunQuery : talkRunQuery;
   const downloadMutation = useDownloadValidationReport();
 
   const statusCounts = useMemo(() => {
@@ -100,7 +105,7 @@ export function ValidationRunDetailView({
             <p className="text-sm text-muted-foreground">{completedDate}</p>
           </div>
         </div>
-        {run.auditReportUrl && (
+        {run.auditReportUrl && talkId && (
           <Button
             variant="outline"
             onClick={() =>
@@ -246,6 +251,7 @@ export function ValidationRunDetailView({
       {/* Regulatory Score */}
       <RegulatoryScorePanel
         talkId={talkId}
+        courseId={courseId}
         runId={runId}
         sectorKey={run.sectorKey ?? null}
         targetLanguage={run.languageCode}
