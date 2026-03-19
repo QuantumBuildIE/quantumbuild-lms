@@ -52,50 +52,72 @@ public class InspectionReportService : IInspectionReportService
         GenerateInspectionReportRequest request,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Generating inspection readiness report for sector {SectorKey}", sectorKey);
-
-        // 1. Load compliance checklist data — reuse existing service
-        var checklist = await _mappingService.GetComplianceChecklistAsync(sectorKey, cancellationToken);
-
-        // 2. Load tenant details for organisation name
-        var tenantId = _currentUser.TenantId;
-        var tenant = await _coreDbContext.Tenants
-            .FirstOrDefaultAsync(t => t.Id == tenantId, cancellationToken);
-        var organisationName = tenant?.CompanyName ?? tenant?.Name ?? "Unknown Organisation";
-
-        // 3. Generate PDF
-        var generatedAt = DateTimeOffset.UtcNow;
-        var reportDate = generatedAt.ToString("dd MMMM yyyy");
-        var pdfBytes = GeneratePdf(checklist, request, organisationName, reportDate, generatedAt);
-
-        // 4. Upload to R2
-        var stream = new MemoryStream(pdfBytes);
-        stream.Position = 0;
-        var uploadResult = await _storageService.UploadInspectionReportAsync(
-            tenantId, sectorKey, stream, cancellationToken);
-        await stream.DisposeAsync();
-
-        if (!uploadResult.Success)
+        try
         {
-            _logger.LogError("Failed to upload inspection report: {Error}", uploadResult.ErrorMessage);
-            throw new InvalidOperationException($"Failed to store report: {uploadResult.ErrorMessage}");
+            _logger.LogInformation("Step 1: Loading compliance checklist for sector {SectorKey}", sectorKey);
+
+            // 1. Load compliance checklist data — reuse existing service
+            var checklist = await _mappingService.GetComplianceChecklistAsync(sectorKey, cancellationToken);
+
+            _logger.LogInformation("Step 2: Checklist loaded — {Count} requirements", checklist.TotalRequirements);
+
+            // 2. Load tenant details for organisation name
+            var tenantId = _currentUser.TenantId;
+            var tenant = await _coreDbContext.Tenants
+                .FirstOrDefaultAsync(t => t.Id == tenantId, cancellationToken);
+            var organisationName = tenant?.CompanyName ?? tenant?.Name ?? "Unknown Organisation";
+
+            _logger.LogInformation("Step 3: Tenant loaded — {OrgName}", organisationName);
+
+            // 3. Generate PDF
+            var generatedAt = DateTimeOffset.UtcNow;
+            var reportDate = generatedAt.ToString("dd MMMM yyyy");
+            var pdfBytes = GeneratePdf(checklist, request, organisationName, reportDate, generatedAt);
+
+            _logger.LogInformation("Step 4: PDF generated — {Bytes} bytes", pdfBytes.Length);
+
+            // 4. Upload to R2
+            var stream = new MemoryStream(pdfBytes);
+            stream.Position = 0;
+            var uploadResult = await _storageService.UploadInspectionReportAsync(
+                tenantId, sectorKey, stream, cancellationToken);
+            await stream.DisposeAsync();
+
+            _logger.LogInformation("Step 5: Upload complete — Success={Success}, Url={Url}",
+                uploadResult.Success, uploadResult.PublicUrl);
+
+            if (!uploadResult.Success)
+            {
+                _logger.LogError("Failed to upload inspection report: {Error}", uploadResult.ErrorMessage);
+                throw new InvalidOperationException($"Failed to store report: {uploadResult.ErrorMessage}");
+            }
+
+            _logger.LogInformation("Inspection report uploaded to {Url} ({Size} bytes)",
+                uploadResult.PublicUrl, pdfBytes.Length);
+
+            // 5. Return result
+            return new InspectionReportResultDto(
+                ReportUrl: uploadResult.PublicUrl!,
+                GeneratedAt: generatedAt,
+                SectorName: checklist.SectorName,
+                RegulatoryBody: checklist.RegulatoryBody,
+                CoveragePercentage: checklist.CoveragePercentage,
+                TotalRequirements: checklist.TotalRequirements,
+                CoveredCount: checklist.CoveredCount,
+                PendingCount: checklist.PendingCount,
+                GapCount: checklist.GapCount
+            );
         }
-
-        _logger.LogInformation("Inspection report uploaded to {Url} ({Size} bytes)",
-            uploadResult.PublicUrl, pdfBytes.Length);
-
-        // 5. Return result
-        return new InspectionReportResultDto(
-            ReportUrl: uploadResult.PublicUrl!,
-            GeneratedAt: generatedAt,
-            SectorName: checklist.SectorName,
-            RegulatoryBody: checklist.RegulatoryBody,
-            CoveragePercentage: checklist.CoveragePercentage,
-            TotalRequirements: checklist.TotalRequirements,
-            CoveredCount: checklist.CoveredCount,
-            PendingCount: checklist.PendingCount,
-            GapCount: checklist.GapCount
-        );
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Inspection report generation failed. " +
+                "InnerException: {InnerMessage}. " +
+                "StackTrace: {StackTrace}",
+                ex.InnerException?.Message,
+                ex.ToString());
+            throw;
+        }
     }
 
     private byte[] GeneratePdf(
