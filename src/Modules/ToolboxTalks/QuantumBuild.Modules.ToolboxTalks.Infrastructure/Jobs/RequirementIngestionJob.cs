@@ -204,8 +204,8 @@ public class RequirementIngestionJob
 For each requirement, extract:
 - title: A concise title (max 200 chars) for the training/competency requirement
 - description: A detailed description (max 2000 chars) of what the requirement entails
-- section: The section reference (e.g. ""§7"", ""Section 3"") if identifiable, or null
-- sectionLabel: The section name/label if identifiable, or null
+- section: The HIQA standard number in the format ""Standard X.Y"" (e.g. ""Standard 2.3"", ""Standard 3.1"") if identifiable from the document. Use the standard numbering from the source document — do NOT prefix with ""§"". Set to null if no standard number is identifiable
+- sectionLabel: A short descriptive label for the section (e.g. ""Incident Reporting"", ""MAR Management"") if identifiable, or null
 - principle: The principle reference if identifiable (e.g. ""P2""), or null
 - principleLabel: MUST use one of the exact canonical labels below, or null if no principle applies
 - priority: ""high"" for safety-critical requirements, ""med"" for standard compliance, ""low"" for best-practice/advisory

@@ -481,11 +481,15 @@ public class InspectionReportService : IInspectionReportService
 
                 page.Footer().Column(col =>
                 {
+                    var truncatedOrg = organisationName.Length > 30
+                        ? organisationName[..30] + "..."
+                        : organisationName;
+
                     col.Item().LineHorizontal(1).LineColor(BorderGrey);
                     col.Item().Height(4);
                     col.Item().Row(row =>
                     {
-                        row.RelativeItem().Text($"CertifiedIQ Inspection Readiness Report | {organisationName} | {checklist.SectorName}")
+                        row.RelativeItem().Text($"CertifiedIQ | {truncatedOrg} | {checklist.SectorName}")
                             .FontSize(7).FontColor(TextMuted);
                         row.RelativeItem().AlignCenter().Text(text =>
                         {
