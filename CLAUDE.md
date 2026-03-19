@@ -85,8 +85,8 @@ quantumbuild-lms/
 │   ├── Modules/
 │   │   └── ToolboxTalks/                        # Toolbox Talks Module
 │   │       ├── QuantumBuild.Modules.ToolboxTalks.Domain/
-│   │       │   ├── Entities/                    # 26 entities (includes TransVal)
-│   │       │   └── Enums/                       # 16 enums (includes TransVal)
+│   │       │   ├── Entities/                    # 36 entities (includes TransVal, Regulatory)
+│   │       │   └── Enums/                       # 24 enums (includes TransVal, Regulatory)
 │   │       ├── QuantumBuild.Modules.ToolboxTalks.Application/
 │   │       │   ├── Abstractions/                # Pdf, Storage, Subtitles, Translations, Validation interfaces
 │   │       │   ├── Commands/                    # CQRS commands (17 command handlers)
@@ -98,7 +98,7 @@ quantumbuild-lms/
 │   │       └── QuantumBuild.Modules.ToolboxTalks.Infrastructure/
 │   │           ├── Configuration/               # R2StorageSettings, SubtitleProcessingSettings
 │   │           ├── Hubs/                        # SignalR hubs (ContentGeneration, SubtitleProcessing, TranslationValidation)
-│   │           ├── Jobs/                        # Hangfire background jobs (9 jobs)
+│   │           ├── Jobs/                        # Hangfire background jobs (12 jobs)
 │   │           ├── Persistence/                 # DbContext, Entity Configurations, Seed Data
 │   │           └── Services/                    # AI, Pdf, Storage, Subtitles, Translations, Validation
 │   │
@@ -421,6 +421,10 @@ quantumbuild-lms/
 | PUT | `/{mappingId}/reject` | Reject an AI-suggested mapping | Learnings.Admin |
 | POST | `/confirm-all` | Confirm all suggested mappings for tenant | Learnings.Admin |
 | GET | `/unconfirmed-count?toolboxTalkId=&courseId=` | Count unconfirmed mappings for content | Learnings.Admin |
+| GET | `/compliance/{sectorKey}` | Get compliance checklist for sector | Learnings.Admin |
+| POST | `/manual` | Create manual confirmed mapping (no AI) | Learnings.Admin |
+| GET | `/content-options` | List published talks and courses for mapping dropdown | Learnings.Admin |
+| POST | `/compliance/{sectorKey}/generate-report` | Generate inspection readiness report PDF | Learnings.Admin |
 
 ---
 
@@ -471,9 +475,11 @@ quantumbuild-lms/
 | `/admin/toolbox-talks/reports/skills-matrix` | Skills Matrix (Admin view — all employees × learnings) |
 | `/admin/toolbox-talks/certificates` | Certificate management |
 | `/admin/toolbox-talks/pending-mappings` | Pending requirement mappings review (Learnings.Admin) |
+| `/admin/toolbox-talks/compliance` | Compliance checklist with sector tabs (Learnings.Admin) |
 | `/admin/toolbox-talks/settings` | Module settings (includes glossary management, threshold config) |
 | `/admin/toolbox-talks/talks/[id]/validation` | Validation history tab (list of runs for a talk) |
 | `/admin/toolbox-talks/talks/[id]/validation/[runId]` | Validation run detail (section results, reviewer decisions, report download) |
+| `/admin/toolbox-talks/courses/[id]/validation/[runId]` | Course-level validation run detail |
 
 #### Admin — Core (`/admin/*`)
 | Path | Description |
@@ -681,7 +687,7 @@ Progress updates sent via SignalR hub in real-time.
 
 ---
 
-## Toolbox Talks Module Entities (37 Total)
+## Toolbox Talks Module Entities (36 Total)
 
 ### Content
 1. **ToolboxTalk** — Core entity: code (unique per tenant, max 20 chars, auto-generated from title initials), title, description, category, video, PDF, sections, questions, quiz settings, certificate/refresher options, AI generation state, translations
@@ -849,6 +855,14 @@ cd src/QuantumBuild.API
 dotnet ef migrations add MigrationName --project ../Modules/ToolboxTalks/QuantumBuild.Modules.ToolboxTalks.Infrastructure
 dotnet ef database update
 ```
+
+### Applied Migrations (Session Log)
+| Migration | Description |
+|-----------|-------------|
+| AddRegulatoryRequirements | RegulatoryRequirement + RegulatoryRequirementMapping entities, check constraint, indexes |
+| AddLastIngestedAtToRegulatoryDocument | LastIngestedAt nullable DateTimeOffset on RegulatoryDocument |
+| AddReviewNotesToRegulatoryRequirementMappings | ReviewNotes column on RegulatoryRequirementMapping |
+| FixPrincipleLabelCanonicalForm | Normalise PrincipleLabel to use "&" instead of "and" |
 
 ---
 
@@ -1132,7 +1146,7 @@ Multi-round back-translation consensus engine that validates AI-generated transl
 35. **TenantSector** — Minimum one sector required per tenant. DELETE returns 400 if removing last sector. Restore-on-reassign pattern applies — soft-delete on remove, restore existing record on re-add. `IsDefault` auto-promotes to remaining sector on delete of default. `GetDefaultSectorAsync` logic: `IsDefault` first, single-sector fallback, `null` if multiple with no default (ambiguous)
 36. **Regulatory profile chain** — System-managed: `RegulatoryBody` → `RegulatoryDocument` → `RegulatoryProfile` → `RegulatoryCriteria`. Only `RegulatoryCriteria` supports tenant overrides (nullable TenantId, SafetyGlossary pattern). `CategoryWeightsJson` on `RegulatoryProfile` is a JSON array — deserialise with camelCase `JsonSerializerOptions` (note 23 applies)
 37. **Regulatory Score service** — Three scoring types via `IRegulatoryScoreService`. `RunLabel`: first regulatory run = "Pre-Remediation Baseline", subsequent = "Post-Remediation Pass {n}". Source and Pure runs always labelled "Source Assessment" and "Linguistic Assessment". Critical prompt rule: do not penalise translation for faithfully reflecting source document weaknesses — only penalise translator-introduced problems. All three scoring modes use `claude-sonnet-4-20250514`
-38. **ValidationRun course association** — `TranslationValidationRun` has both `ToolboxTalkId` (nullable) and `CourseId` (nullable). For standalone talks: `ToolboxTalkId` set, `CourseId` null. For course output: wizard `PublishAsCourseAsync` reassociates runs from draft `ToolboxTalkId` to `CourseId` after course is persisted. Validation tab hidden on section talks (detected via description `startsWith "Part of course:"`) — TODO: replace with proper `IsPartOfCourse` field
+38. **ValidationRun course association** — `TranslationValidationRun` has both `ToolboxTalkId` (nullable) and `CourseId` (nullable). For standalone talks: `ToolboxTalkId` set, `CourseId` null. For course output: wizard `PublishAsCourseAsync` reassociates runs from draft `ToolboxTalkId` to `CourseId` after course is persisted. `IsPartOfCourse` (bool, default false) on `ToolboxTalk` entity — set to true by `PublishAsCourseAsync` for section talks (OrderIndex 1+). Full Video talk at OrderIndex 0 remains `IsPartOfCourse = false`. Validation tab hidden on section talks via `talk.isPartOfCourse`
 39. **Wizard sector logic** — Three cases in InputConfigStep: (A) single TenantSector → auto-selected, read-only display, no dropdown; (B) multiple TenantSectors → dropdown showing tenant sectors only, `IsDefault` pre-selected; (C) no TenantSectors → amber warning, optional full sector list shown, does not block progression. `SectorKey` flows through `WizardState` → `CreateSessionRequest` → `ContentCreationSession` → `TranslationValidationRun`
 40. **TenantSectorsController auth pattern** — Class-level `[Authorize]` (any authenticated user). GET endpoints have tenant ID guard: non-SuperUsers may only read their own tenant's sectors. Write endpoints (POST, DELETE, PUT) have method-level `[Authorize(Policy = "Tenant.Manage")]` — SuperUser only. Note: ASP.NET Core `[Authorize]` attributes are additive not overriding — method-level `[Authorize]` does NOT override class-level policy, both must pass. Always move the restrictive policy to the write endpoints individually
 41. **RegulatoryRequirement** — System-managed (`BaseEntity`, no TenantId), seeded from HIQA homecare profile data. `IngestionStatus` gates visibility: only `Approved` requirements are shown to tenants. `IngestionSource` tracks whether the requirement was `Manual` or `Automated` (AI-ingested). FK to `RegulatoryProfile` (Restrict). Seeded after `RegulatoryProfileSeedData` in `Program.cs`
@@ -1151,6 +1165,17 @@ Multi-round back-translation consensus engine that validates AI-generated transl
 54. **Content options endpoint** — `GET /api/toolbox-talks/requirement-mappings/content-options` returns flat list of published talks and active courses for manual mapping dropdown. Courses listed first, then talks
 55. **Compliance checklist validation run resolution** — `GetComplianceChecklistAsync` determines the most recent validation run per mapped content by grouping completed `TranslationValidationRun` records (with `Pass` or `Review` outcome) by `ToolboxTalkId`/`CourseId` and selecting the one with the latest `CompletedAt` date
 56. **Inspection Readiness Report (Feature D)** — `IInspectionReportService` / `InspectionReportService` generates a QuestPDF-based Inspection Readiness Report from compliance checklist data. Flow: reuses `GetComplianceChecklistAsync` for data → loads tenant name from `ICoreDbContext` → generates multi-page PDF (cover, executive summary, per-principle requirement detail, declaration + disclaimer) → uploads to R2 at `inspection-reports/{tenantId}/{sectorKey}/{timestamp}.pdf` → returns download URL. Requires `ResponsiblePersonName` and `ResponsiblePersonRole` — stored in PDF only, not persisted to DB. API: `POST /api/toolbox-talks/requirement-mappings/compliance/{sectorKey}/generate-report` (Learnings.Admin). Frontend: `GenerateReportDialog.tsx` wired to "Generate Inspection Report" button on compliance checklist page. No migration required — reports stored in R2 only
+57. **RegulatoryRequirement canonical forms** — `PrincipleLabel` uses "&" not "and" (e.g., "Rights & Responsibilities" not "Rights and Responsibilities") — enforced in seed data and ingestion prompt. Section format for AI-ingested records uses "Standard X.Y" format (e.g., "Standard 3.1"); manually seeded records use "§N" format (e.g., "§3"). `IngestionStatus` gates visibility: only `Approved` requirements appear in compliance features and mapping jobs
+58. **RegulatoryRequirementMapping field semantics** — `AiReasoning` is AI-only — populated by `RequirementMappingJob`, never overwritten by reviewer actions. `ReviewNotes` stores reviewer feedback on reject — cleared on restore-on-reassign. Rejected mappings are never overwritten by new AI suggestions (job skips them). Check constraint `ck_regulatory_requirement_mappings_talk_or_course` enforces exactly one of `ToolboxTalkId` or `CourseId` — never both, never neither
+59. **Compliance coverage status logic** — **Covered** requires: at least one `Confirmed` mapping + at least one `TranslationValidationRun` with `OverallOutcome` of `Pass` or `Review` on the mapped content. **Pending** = `Suggested` mapping exists (not yet confirmed), OR `Confirmed` mapping exists but no passing validation run. **Gap** = no non-rejected mappings exist. Resolution uses most recent completed validation run per content item grouped by `ToolboxTalkId`/`CourseId`
+60. **RequirementIngestionJob details** — Hangfire fire-and-forget (`[Queue("content-generation")]`, `[AutomaticRetry(Attempts = 1)]`). Flow: fetch URL (PDF via PdfPig `IPdfExtractionService` or HTML via `HttpClient` with HTML tag stripping) → Claude Sonnet extraction → persist as `Draft` → SuperUser review. Duplicate check uses `IgnoreQueryFilters()` to include soft-deleted records. JSON parsed with camelCase options (note 23). Retries Claude once with stricter prompt on invalid JSON. Multiple profiles per document supported (e.g., HSA covers construction + manufacturing — drafts created for all active profiles). `LastIngestedAt` updated on `RegulatoryDocument` after successful ingestion
+61. **RequirementMappingJob trigger paths** — Fire-and-forget from 2 paths in `PublishAsLessonAsync` (direct publish and wizard publish) and 1 path in `PublishAsCourseAsync`. Loads tenant sectors via `TenantSector`, loads approved `RegulatoryRequirement` records matching those sector keys, sends content + requirements to Claude Sonnet for AI mapping analysis. Creates `RegulatoryRequirementMapping` records with `MappingStatus = Suggested`. Restore-on-reassign pattern applies (note 12). Rejected mappings never overwritten by new AI suggestions. Never throws — catches all exceptions, logs, exits gracefully
+62. **Inspection Readiness Report R2 path** — Stored at `{tenantId}/inspection-reports/{sectorKey}/{yyyyMMdd-HHmmss}.pdf`. Footer truncates organisation name at 30 characters. Disclaimer text required on both the compliance checklist page (always-visible blue banner) and the generated PDF report (declaration section). `ResponsiblePersonName` and `ResponsiblePersonRole` stored in PDF only — not persisted to DB
+63. **Compliance Checklist page** — `/admin/toolbox-talks/compliance`, gated by `Learnings.Admin`. Single sector: flat view with no tabs. Multi-sector: tab per sector. Disclaimer banner always visible — not dismissible. Manual mapping via `AddMappingDialog` creates `Confirmed` mapping immediately (no AI, no pending review). "Generate Inspection Report" button opens `GenerateReportDialog` requiring responsible person name and role. Grouped by Principle with collapsible accordion sections, coverage progress bar, principle/status filters
+64. **Admin layout redirect** — `admin/layout.tsx` uses `useMemo`-derived `nonTenantScopedPaths` from nav items where `tenantScoped: false`. SuperUser redirect skips these paths. Adding future non-tenant-scoped pages to nav automatically excludes them from redirect — no code change needed
+65. **TenantSectorsController auth pattern** — Class-level `[Authorize]` (any authenticated user). GET endpoints have tenant ID guard: non-SuperUsers may only read their own tenant's sectors (`ICurrentUserService.TenantId` must match route `tenantId`). Write endpoints have method-level `[Authorize(Policy = "Tenant.Manage")]`. Critical: ASP.NET Core `[Authorize]` attributes are additive — method-level does NOT override class-level, both must pass. Always move restrictive policy to write endpoints individually
+66. **Stream disposal in R2 uploads** — When passing a `MemoryStream` to `PutObjectAsync` in an async HTTP request context, read `stream.Length` BEFORE the upload call. The S3 SDK consumes the stream during upload — accessing any stream property afterwards throws `ObjectDisposedException`. Do not use `using var stream` — manage disposal explicitly with `await stream.DisposeAsync()` after upload completes
+67. **Validation run course association** — `TranslationValidationRun` has both `ToolboxTalkId` (nullable) and `CourseId` (nullable). Standalone talks: `ToolboxTalkId` set, `CourseId` null. Course output: `PublishAsCourseAsync` reassociates runs from draft `ToolboxTalkId` to `CourseId` after course is persisted. `IsPartOfCourse` (bool, default false) on `ToolboxTalk` entity — set to true by `PublishAsCourseAsync` for section talks (OrderIndex 1+). Full Video talk at OrderIndex 0 remains `IsPartOfCourse = false`. Validation tab hidden on section talks via `talk.isPartOfCourse`
 
 ---
 

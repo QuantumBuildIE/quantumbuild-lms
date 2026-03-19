@@ -107,6 +107,8 @@ export interface ToolboxTalk {
   shuffleQuestions: boolean;
   shuffleOptions: boolean;
   useQuestionPool: boolean;
+  // Course membership
+  isPartOfCourse: boolean;
   // Source language
   sourceLanguageCode: string;
   // Auto-assignment settings

@@ -43,6 +43,9 @@ public record ToolboxTalkDto
     public bool ShuffleOptions { get; init; }
     public bool UseQuestionPool { get; init; }
 
+    // Course membership
+    public bool IsPartOfCourse { get; init; }
+
     // Source language
     public string SourceLanguageCode { get; init; } = "en";
 

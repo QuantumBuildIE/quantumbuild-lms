@@ -91,10 +91,7 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
   }
 
   const stats = talk.completionStats;
-  // Hide Validation tab for section talks that are part of a course — validation runs
-  // are associated with the course, not individual section talks.
-  // TODO: Replace description check with a proper isPartOfCourse field on the DTO
-  const isPartOfCourse = talk.description?.startsWith('Part of course:') ?? false;
+  const isPartOfCourse = talk.isPartOfCourse;
 
   return (
     <div className="space-y-6">

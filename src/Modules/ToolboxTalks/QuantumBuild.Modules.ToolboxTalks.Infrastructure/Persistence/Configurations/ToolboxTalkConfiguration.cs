@@ -140,6 +140,11 @@ public class ToolboxTalkConfiguration : IEntityTypeConfiguration<ToolboxTalk>
             .IsRequired()
             .HasDefaultValue(14);
 
+        // Course membership
+        builder.Property(t => t.IsPartOfCourse)
+            .IsRequired()
+            .HasDefaultValue(false);
+
         // Source language for translations
         builder.Property(t => t.SourceLanguageCode)
             .HasMaxLength(10)

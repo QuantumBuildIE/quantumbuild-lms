@@ -82,6 +82,7 @@ public class GetToolboxTalkByIdQueryHandler : IRequestHandler<GetToolboxTalkById
             ShuffleQuestions = talk.ShuffleQuestions,
             ShuffleOptions = talk.ShuffleOptions,
             UseQuestionPool = talk.UseQuestionPool,
+            IsPartOfCourse = talk.IsPartOfCourse,
             AutoAssignToNewEmployees = talk.AutoAssignToNewEmployees,
             AutoAssignDueDays = talk.AutoAssignDueDays,
             SourceLanguageCode = talk.SourceLanguageCode,

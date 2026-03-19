@@ -218,6 +218,13 @@ public class ToolboxTalk : TenantEntity
     public DateTime? SlideshowGeneratedAt { get; set; }
 
     /// <summary>
+    /// Whether this talk is a section-based talk created as part of a course.
+    /// Set to true by PublishAsCourseAsync for section talks (OrderIndex 1+).
+    /// Full Video talks at OrderIndex 0 remain false.
+    /// </summary>
+    public bool IsPartOfCourse { get; set; } = false;
+
+    /// <summary>
     /// The language code of the original content (e.g., "en", "es", "af").
     /// Used as source language for translations.
     /// </summary>

@@ -1437,7 +1437,8 @@ public class ContentCreationSessionService : IContentCreationSessionService
                 Category = request.Category,
                 SourceLanguageCode = request.SourceLanguageCode,
                 Status = ToolboxTalkStatus.Published,
-                IsActive = true
+                IsActive = true,
+                IsPartOfCourse = true
             };
 
             // Each talk gets the section content as a single section

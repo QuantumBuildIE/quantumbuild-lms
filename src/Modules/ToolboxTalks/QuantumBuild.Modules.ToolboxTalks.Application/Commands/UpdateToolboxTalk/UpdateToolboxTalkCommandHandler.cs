@@ -381,6 +381,7 @@ public class UpdateToolboxTalkCommandHandler : IRequestHandler<UpdateToolboxTalk
             ShuffleQuestions = entity.ShuffleQuestions,
             ShuffleOptions = entity.ShuffleOptions,
             UseQuestionPool = entity.UseQuestionPool,
+            IsPartOfCourse = entity.IsPartOfCourse,
             AutoAssignToNewEmployees = entity.AutoAssignToNewEmployees,
             AutoAssignDueDays = entity.AutoAssignDueDays,
             SourceLanguageCode = entity.SourceLanguageCode,
