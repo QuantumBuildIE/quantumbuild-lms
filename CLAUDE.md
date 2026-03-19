@@ -413,6 +413,15 @@ quantumbuild-lms/
 | PUT | `/requirements/{requirementId}` | Update draft without status change | Tenant.Manage |
 | POST | `/documents/{documentId}/approve-all` | Bulk approve all drafts | Tenant.Manage |
 
+#### Requirement Mappings (`/api/toolbox-talks/requirement-mappings`)
+| Method | Endpoint | Description | Permission |
+|--------|----------|-------------|------------|
+| GET | `/pending` | Get pending mappings summary + list | Learnings.Admin |
+| PUT | `/{mappingId}/confirm` | Confirm an AI-suggested mapping | Learnings.Admin |
+| PUT | `/{mappingId}/reject` | Reject an AI-suggested mapping | Learnings.Admin |
+| POST | `/confirm-all` | Confirm all suggested mappings for tenant | Learnings.Admin |
+| GET | `/unconfirmed-count?toolboxTalkId=&courseId=` | Count unconfirmed mappings for content | Learnings.Admin |
+
 ---
 
 ## Frontend Pages
@@ -461,6 +470,7 @@ quantumbuild-lms/
 | `/admin/toolbox-talks/reports/overdue` | Overdue assignments |
 | `/admin/toolbox-talks/reports/skills-matrix` | Skills Matrix (Admin view — all employees × learnings) |
 | `/admin/toolbox-talks/certificates` | Certificate management |
+| `/admin/toolbox-talks/pending-mappings` | Pending requirement mappings review (Learnings.Admin) |
 | `/admin/toolbox-talks/settings` | Module settings (includes glossary management, threshold config) |
 | `/admin/toolbox-talks/talks/[id]/validation` | Validation history tab (list of runs for a talk) |
 | `/admin/toolbox-talks/talks/[id]/validation/[runId]` | Validation run detail (section results, reviewer decisions, report download) |
@@ -782,6 +792,7 @@ Progress updates sent via SignalR hub in real-time.
 | ValidationReportJob | On-demand | Generate audit report PDF (QuestPDF) and upload to R2 |
 | ExpiredSessionCleanupJob | Daily | Clean up expired validation sessions |
 | RequirementIngestionJob | On-demand | AI-powered extraction of regulatory requirements from document URLs (Claude Sonnet) |
+| RequirementMappingJob | On-demand | AI-powered mapping of published content to regulatory requirements (Claude Sonnet), triggered from publish flow |
 
 ---
 
@@ -1130,8 +1141,13 @@ Multi-round back-translation consensus engine that validates AI-generated transl
 44. **Requirement Ingestion Pipeline** — AI-powered extraction of `RegulatoryRequirement` records from regulatory document URLs. Flow: SuperUser triggers ingestion via `POST /api/regulatory/documents/{id}/ingest` → `RequirementIngestionJob` (Hangfire, `content-generation` queue) fetches document text (PDF via `IPdfExtractionService.ExtractTextFromUrlAsync`, web pages via `HttpClient` + HTML stripping) → sends to Claude Sonnet for structured extraction → persists as `Draft` requirements → SuperUser reviews/edits/approves/rejects. `LastIngestedAt` (nullable `DateTimeOffset`) added to `RegulatoryDocument`. Multiple profiles per document: HSA covers both construction and manufacturing — drafts created for all active profiles. Duplicate check uses `IgnoreQueryFilters()` to include soft-deleted records. JSON parsing uses camelCase `JsonSerializerOptions` (note 23). Frontend at `/admin/regulatory` (SuperUser-only nav tab) with list page and detail/ingestion page with inline editing, approve/reject/approve-all actions, and 3-second polling during ingestion
 45. **RegulatoryIngestionController** — SuperUser-only via class-level `[Authorize(Policy = "Tenant.Manage")]`. Routes: `GET /api/regulatory/documents`, `POST .../documents/{id}/ingest`, `GET .../documents/{id}/ingestion-status`, `GET .../documents/{id}/draft-requirements`, `PUT .../requirements/{id}/approve`, `PUT .../requirements/{id}/reject`, `PUT .../requirements/{id}`, `POST .../documents/{id}/approve-all`. No tenant filtering — system-wide records
 46. **RequirementIngestionJob** — Hangfire background job (`[Queue("content-generation")]`, `[AutomaticRetry(Attempts = 1)]`). Registered as `AddScoped<RequirementIngestionJob>()` with `AddHttpClient<RequirementIngestionJob>()` for HTTP access. PDF extraction reuses existing `IPdfExtractionService` (PdfPig). Claude extraction uses Claude Sonnet via direct HTTP (same pattern as `RegulatoryScoreService`). Error handling: never throws from job — catches all exceptions, logs, and exits gracefully. Partial success: saves successfully parsed items as drafts, logs failed items. Retry on invalid JSON once with stricter prompt
+47. **RequirementMappingJob** — Fire-and-forget Hangfire job (`[Queue("content-generation")]`, `[AutomaticRetry(Attempts = 1)]`). Triggered from both `PublishAsLessonAsync` and `PublishAsCourseAsync` in `ContentCreationSessionService` after content is published. Loads training content (talk sections or course with all talk sections), loads approved `RegulatoryRequirement` records matching the tenant's sector keys via `TenantSector`, sends to Claude Sonnet for AI mapping analysis. Creates `RegulatoryRequirementMapping` records with `MappingStatus = Suggested`. Follows restore-on-reassign pattern (note 12) — soft-deleted mappings are restored rather than duplicated. Rejected mappings are never overwritten by new AI suggestions. Never throws — catches all exceptions, logs, exits gracefully. Registered with `AddHttpClient<RequirementMappingJob>()` (5-min timeout)
+48. **RequirementMappingService** — `IRequirementMappingService` / `RequirementMappingService` manages AI-suggested regulatory requirement mappings for tenant admins. All queries scoped to current tenant via `ICurrentUserService.TenantId`. Methods: `GetPendingMappingsAsync` (loads all mappings with summary counts, returns `Suggested` ordered by confidence descending), `ConfirmMappingAsync`, `RejectMappingAsync` (stores rejection notes in `AiReasoning`), `ConfirmAllSuggestedAsync`, `GetUnconfirmedCountAsync` (used by assignment flow warning). Registered as `AddScoped` in `ServiceCollectionExtensions`
+49. **RequirementMappingController** — Tenant admin controller at `api/toolbox-talks/requirement-mappings`, class-level `[Authorize(Policy = "Learnings.Admin")]`. Routes: `GET .../pending` (summary + pending list), `PUT .../{id}/confirm`, `PUT .../{id}/reject`, `POST .../confirm-all`, `GET .../unconfirmed-count?toolboxTalkId=&courseId=`. All endpoints auto-scoped to current tenant
+50. **Assignment warning for unconfirmed mappings** — Both `ScheduleDialog` and `AssignCourseDialog` show a dismissible amber warning banner when the talk/course has unreviewed `Suggested` mappings. Uses `useUnconfirmedMappingCount` hook calling `GET .../unconfirmed-count`. Warning text links to `/admin/toolbox-talks/pending-mappings`. Does not block assignment — advisory only
+51. **Pending Mappings page** — Admin page at `/admin/toolbox-talks/pending-mappings`, gated by `Learnings.Admin` permission. Shows summary stat cards (Suggested/Confirmed/Rejected), "Confirm All" bulk action, and per-mapping cards with content link, requirement details, confidence badge (green ≥80, amber ≥60, red <60), AI reasoning callout, confirm/reject buttons. Nav tab "Mappings" added to admin toolbox-talks layout between Certificates and Settings
 
 ---
 
-*Last Updated: March 18, 2026*
+*Last Updated: March 19, 2026*
 *Architecture: Modular Monolith with Clean Architecture*

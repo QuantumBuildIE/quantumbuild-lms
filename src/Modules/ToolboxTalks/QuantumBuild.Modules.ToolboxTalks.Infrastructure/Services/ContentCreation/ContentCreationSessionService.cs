@@ -1174,6 +1174,11 @@ public class ContentCreationSessionService : IContentCreationSessionService
                 }
 
                 await _dbContext.SaveChangesAsync(cancellationToken);
+
+                // Enqueue AI requirement mapping job (fire-and-forget)
+                BackgroundJob.Enqueue<RequirementMappingJob>(job =>
+                    job.MapRequirementsAsync(tenantId, draftTalk.Id, null, CancellationToken.None));
+
                 return draftTalk.Id;
             }
         }
@@ -1273,6 +1278,10 @@ public class ContentCreationSessionService : IContentCreationSessionService
 
         _dbContext.ToolboxTalks.Add(talk);
         await SaveWithCodeRetryAsync(() => [talk], tenantId, cancellationToken);
+
+        // Enqueue AI requirement mapping job (fire-and-forget)
+        BackgroundJob.Enqueue<RequirementMappingJob>(job =>
+            job.MapRequirementsAsync(tenantId, talk.Id, null, CancellationToken.None));
 
         return talk.Id;
     }
@@ -1561,6 +1570,10 @@ public class ContentCreationSessionService : IContentCreationSessionService
             await DeleteDraftTalkAsync(session.OutputTalkId.Value, cancellationToken);
             session.OutputTalkId = null;
         }
+
+        // Enqueue AI requirement mapping job (fire-and-forget)
+        BackgroundJob.Enqueue<RequirementMappingJob>(job =>
+            job.MapRequirementsAsync(tenantId, null, course.Id, CancellationToken.None));
 
         return course.Id;
     }

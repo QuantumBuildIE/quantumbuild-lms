@@ -36,6 +36,9 @@ public class RegulatoryRequirementMappingConfiguration : IEntityTypeConfiguratio
 
         builder.Property(e => e.ReviewedAt);
 
+        builder.Property(e => e.ReviewNotes)
+            .HasMaxLength(1000);
+
         builder.Property(e => e.TenantId)
             .IsRequired();
 

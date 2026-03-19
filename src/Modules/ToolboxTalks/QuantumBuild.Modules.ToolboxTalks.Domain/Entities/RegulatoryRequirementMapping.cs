@@ -41,6 +41,11 @@ public class RegulatoryRequirementMapping : TenantEntity
 
     public DateTimeOffset? ReviewedAt { get; set; }
 
+    /// <summary>
+    /// Reviewer notes — rejection reason or confirmation comments. Separate from AiReasoning.
+    /// </summary>
+    public string? ReviewNotes { get; set; }
+
     // Navigation properties
     public RegulatoryRequirement RegulatoryRequirement { get; set; } = null!;
     public ToolboxTalk? ToolboxTalk { get; set; }

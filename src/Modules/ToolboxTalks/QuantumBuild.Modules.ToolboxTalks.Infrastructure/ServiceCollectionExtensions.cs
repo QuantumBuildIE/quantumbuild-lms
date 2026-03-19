@@ -17,8 +17,10 @@ using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Slideshow;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Translations;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.ContentCreation;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Mapping;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Sectors;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Mapping;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Sectors;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.ContentCreation;
@@ -230,6 +232,15 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<RequirementIngestionJob>(client =>
         {
             client.Timeout = TimeSpan.FromMinutes(5); // 5 minutes for document fetch + AI extraction
+        });
+
+        // Register requirement mapping service (AI-suggested requirement ↔ content mappings)
+        services.AddScoped<IRequirementMappingService, RequirementMappingService>();
+
+        // Register requirement mapping job HttpClient (calls Claude API for content analysis)
+        services.AddHttpClient<RequirementMappingJob>(client =>
+        {
+            client.Timeout = TimeSpan.FromMinutes(5); // 5 minutes for AI mapping analysis
         });
 
         // Note: SignalR hubs are registered in Program.cs with app.MapHub<>()

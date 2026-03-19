@@ -49,8 +49,9 @@ import type {
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircleIcon } from 'lucide-react';
+import { AlertCircleIcon, AlertTriangle } from 'lucide-react';
 import { FREQUENCY_VALUES, FREQUENCY_OPTIONS } from '@/lib/constants/frequency';
+import { useUnconfirmedMappingCount } from '@/lib/api/admin/use-requirement-mappings';
 
 // ============================================
 // Schema
@@ -107,6 +108,9 @@ export function ScheduleDialog({
 
   // Check if preselected talk is inactive (defensive check)
   const isPreselectedTalkInactive = preselectedTalk && !preselectedTalk.isActive;
+
+  // Check for unconfirmed requirement mappings (warning on assignment)
+  const { data: unconfirmedMappingCount } = useUnconfirmedMappingCount(preselectedTalkId);
 
   // Fetch talks for selection
   const { data: talksData } = useToolboxTalks({ isActive: true, pageSize: 100 });
@@ -250,6 +254,18 @@ export function ScheduleDialog({
                 <AlertCircleIcon className="h-4 w-4" />
                 <AlertDescription>
                   This learning is inactive and cannot be scheduled. Please activate it first or select a different talk.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* Warning for unconfirmed requirement mappings */}
+            {!!unconfirmedMappingCount && unconfirmedMappingCount > 0 && (
+              <Alert className="border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/30">
+                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                <AlertDescription className="text-amber-700 dark:text-amber-400">
+                  This content has {unconfirmedMappingCount} unreviewed regulatory requirement mapping(s). Review them in{' '}
+                  <a href="/admin/toolbox-talks/pending-mappings" className="underline font-medium">Pending Mappings</a>{' '}
+                  before assigning.
                 </AlertDescription>
               </Alert>
             )}

@@ -33,6 +33,9 @@ import { useAssignCourse, useCourseAssignmentPreview } from '@/lib/api/toolbox-t
 import type { CourseAssignmentPreviewDto, EmployeeCourseAssignment } from '@/lib/api/toolbox-talks/course-assignments';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertTriangle } from 'lucide-react';
+import { useUnconfirmedMappingCount } from '@/lib/api/admin/use-requirement-mappings';
 
 interface AssignCourseDialogProps {
   course: { id: string; title: string };
@@ -45,6 +48,7 @@ type Step = 'select' | 'preview';
 export function AssignCourseDialog({ course, open, onOpenChange }: AssignCourseDialogProps) {
   const { data: employees, isLoading: employeesLoading } = useAllEmployees();
   const assignMutation = useAssignCourse();
+  const { data: unconfirmedMappingCount } = useUnconfirmedMappingCount(undefined, course.id);
   const previewMutation = useCourseAssignmentPreview();
 
   const [step, setStep] = useState<Step>('select');
@@ -252,6 +256,18 @@ export function AssignCourseDialog({ course, open, onOpenChange }: AssignCourseD
 
         {step === 'select' ? (
           <div className="space-y-4 py-4">
+            {/* Warning for unconfirmed requirement mappings */}
+            {!!unconfirmedMappingCount && unconfirmedMappingCount > 0 && (
+              <Alert className="border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/30">
+                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                <AlertDescription className="text-amber-700 dark:text-amber-400">
+                  This content has {unconfirmedMappingCount} unreviewed regulatory requirement mapping(s). Review them in{' '}
+                  <a href="/admin/toolbox-talks/pending-mappings" className="underline font-medium">Pending Mappings</a>{' '}
+                  before assigning.
+                </AlertDescription>
+              </Alert>
+            )}
+
             {/* Due Date */}
             <div className="space-y-2">
               <Label>Due Date (optional)</Label>
