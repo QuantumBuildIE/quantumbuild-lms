@@ -34,12 +34,6 @@ import {
   TabsTrigger,
 } from '@/components/ui/tabs';
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import {
   CheckCircle2,
   Clock,
   AlertTriangle,
@@ -54,6 +48,7 @@ import { usePermission, useAuth } from '@/lib/auth/use-auth';
 import { useTenantSectors } from '@/lib/api/admin/use-tenant-sectors';
 import { useComplianceChecklist } from '@/lib/api/admin/use-requirement-mappings';
 import { AddMappingDialog } from '@/features/toolbox-talks/components/AddMappingDialog';
+import { GenerateReportDialog } from '@/features/toolbox-talks/components/GenerateReportDialog';
 import type {
   ComplianceRequirementDto,
 } from '@/types/requirement-mappings';
@@ -239,6 +234,7 @@ function SectorChecklistView({ sectorKey }: { sectorKey: string }) {
   const [principleFilter, setPrincipleFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [mappingTarget, setMappingTarget] = useState<ComplianceRequirementDto | null>(null);
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -387,19 +383,10 @@ function SectorChecklistView({ sectorKey }: { sectorKey: string }) {
         </Select>
 
         <div className="ml-auto">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span>
-                  <Button variant="outline" disabled>
-                    <FileBarChart className="mr-2 h-4 w-4" />
-                    Generate Inspection Report
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>Coming soon</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <Button variant="outline" onClick={() => setReportDialogOpen(true)}>
+            <FileBarChart className="mr-2 h-4 w-4" />
+            Generate Inspection Report
+          </Button>
         </div>
       </div>
 
@@ -450,6 +437,14 @@ function SectorChecklistView({ sectorKey }: { sectorKey: string }) {
         onOpenChange={(open) => { if (!open) setMappingTarget(null); }}
         requirementId={mappingTarget?.id ?? ''}
         requirementTitle={mappingTarget?.title ?? ''}
+      />
+
+      <GenerateReportDialog
+        open={reportDialogOpen}
+        onOpenChange={setReportDialogOpen}
+        sectorKey={sectorKey}
+        sectorName={checklist.sectorName}
+        regulatoryBody={checklist.regulatoryBody}
       />
     </div>
   );

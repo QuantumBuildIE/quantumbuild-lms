@@ -126,3 +126,31 @@ public record ContentOptionDto(
     string Title,
     string Type
 );
+
+// ============================================
+// Inspection Report DTOs
+// ============================================
+
+/// <summary>
+/// Request to generate an inspection readiness report PDF
+/// </summary>
+public record GenerateInspectionReportRequest(
+    string ResponsiblePersonName,
+    string ResponsiblePersonRole,
+    string? AuditPurpose
+);
+
+/// <summary>
+/// Result of inspection report generation with download URL and summary metadata
+/// </summary>
+public record InspectionReportResultDto(
+    string ReportUrl,
+    DateTimeOffset GeneratedAt,
+    string SectorName,
+    string RegulatoryBody,
+    int CoveragePercentage,
+    int TotalRequirements,
+    int CoveredCount,
+    int PendingCount,
+    int GapCount
+);

@@ -15,13 +15,16 @@ namespace QuantumBuild.API.Controllers;
 public class RequirementMappingController : ControllerBase
 {
     private readonly IRequirementMappingService _mappingService;
+    private readonly IInspectionReportService _reportService;
     private readonly ILogger<RequirementMappingController> _logger;
 
     public RequirementMappingController(
         IRequirementMappingService mappingService,
+        IInspectionReportService reportService,
         ILogger<RequirementMappingController> logger)
     {
         _mappingService = mappingService;
+        _reportService = reportService;
         _logger = logger;
     }
 
@@ -211,6 +214,38 @@ public class RequirementMappingController : ControllerBase
         {
             _logger.LogError(ex, "Error retrieving content options");
             return StatusCode(500, new { message = "Error retrieving content options" });
+        }
+    }
+
+    /// <summary>
+    /// Generate an Inspection Readiness Report PDF for the given sector.
+    /// </summary>
+    [HttpPost("compliance/{sectorKey}/generate-report")]
+    [ProducesResponseType(typeof(InspectionReportResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> GenerateInspectionReport(
+        string sectorKey,
+        [FromBody] GenerateInspectionReportRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _reportService.GenerateReportAsync(sectorKey, request, cancellationToken);
+            return Ok(result);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating inspection report for sector {SectorKey}", sectorKey);
+            return StatusCode(500, new { message = "Error generating inspection report" });
         }
     }
 }

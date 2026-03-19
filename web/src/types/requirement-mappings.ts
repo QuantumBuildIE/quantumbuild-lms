@@ -99,3 +99,25 @@ export interface ContentOptionDto {
   title: string;
   type: "Talk" | "Course";
 }
+
+// ============================================
+// Inspection Report Types
+// ============================================
+
+export interface GenerateInspectionReportRequest {
+  responsiblePersonName: string;
+  responsiblePersonRole: string;
+  auditPurpose?: string;
+}
+
+export interface InspectionReportResultDto {
+  reportUrl: string;
+  generatedAt: string;
+  sectorName: string;
+  regulatoryBody: string;
+  coveragePercentage: number;
+  totalRequirements: number;
+  coveredCount: number;
+  pendingCount: number;
+  gapCount: number;
+}

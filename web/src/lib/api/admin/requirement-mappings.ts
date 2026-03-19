@@ -7,6 +7,8 @@ import type {
   ComplianceChecklistDto,
   AddManualMappingRequest,
   ContentOptionDto,
+  GenerateInspectionReportRequest,
+  InspectionReportResultDto,
 } from "@/types/requirement-mappings";
 
 export async function getPendingMappings(): Promise<MappingSummaryDto> {
@@ -77,6 +79,17 @@ export async function addManualMapping(
 export async function getContentOptions(): Promise<ContentOptionDto[]> {
   const response = await apiClient.get<ContentOptionDto[]>(
     "/toolbox-talks/requirement-mappings/content-options"
+  );
+  return response.data;
+}
+
+export async function generateInspectionReport(
+  sectorKey: string,
+  request: GenerateInspectionReportRequest
+): Promise<InspectionReportResultDto> {
+  const response = await apiClient.post<InspectionReportResultDto>(
+    `/toolbox-talks/requirement-mappings/compliance/${encodeURIComponent(sectorKey)}/generate-report`,
+    request
   );
   return response.data;
 }

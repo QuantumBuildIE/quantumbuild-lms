@@ -8,8 +8,12 @@ import {
   getComplianceChecklist,
   addManualMapping,
   getContentOptions,
+  generateInspectionReport,
 } from "./requirement-mappings";
-import type { AddManualMappingRequest } from "@/types/requirement-mappings";
+import type {
+  AddManualMappingRequest,
+  GenerateInspectionReportRequest,
+} from "@/types/requirement-mappings";
 
 export const requirementMappingKeys = {
   pending: () => ["requirement-mappings-pending"] as const,
@@ -106,5 +110,17 @@ export function useAddManualMapping() {
         queryKey: requirementMappingKeys.pending(),
       });
     },
+  });
+}
+
+export function useGenerateInspectionReport() {
+  return useMutation({
+    mutationFn: ({
+      sectorKey,
+      request,
+    }: {
+      sectorKey: string;
+      request: GenerateInspectionReportRequest;
+    }) => generateInspectionReport(sectorKey, request),
   });
 }

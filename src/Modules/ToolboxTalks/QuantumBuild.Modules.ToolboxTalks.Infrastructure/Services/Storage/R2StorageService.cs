@@ -293,6 +293,52 @@ public class R2StorageService : IR2StorageService, IDisposable
 
     #endregion
 
+    #region Inspection Reports
+
+    private const string InspectionReportsFolder = "inspection-reports";
+
+    public async Task<R2UploadResult> UploadInspectionReportAsync(
+        Guid tenantId,
+        string sectorKey,
+        Stream content,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var timestamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
+            var fileName = $"{sectorKey}/{timestamp}.pdf";
+            var key = BuildKey(tenantId, InspectionReportsFolder, fileName);
+
+            _logger.LogInformation("Uploading inspection report to R2: {Key}", key);
+
+            var request = new PutObjectRequest
+            {
+                BucketName = _settings.BucketName,
+                Key = key,
+                InputStream = content,
+                ContentType = "application/pdf",
+                DisablePayloadSigning = true,
+                UseChunkEncoding = false
+            };
+
+            await _s3Client.PutObjectAsync(request, cancellationToken);
+
+            var publicUrl = $"{_settings.PublicUrl.TrimEnd('/')}/{Uri.EscapeDataString(key).Replace("%2F", "/")}";
+
+            _logger.LogInformation("Successfully uploaded inspection report: {Url}", publicUrl);
+
+            return R2UploadResult.SuccessResult(publicUrl, key, content.Length, "application/pdf");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to upload inspection report for tenant {TenantId}, sector {SectorKey}",
+                tenantId, sectorKey);
+            return R2UploadResult.FailureResult($"Inspection report upload failed: {ex.Message}");
+        }
+    }
+
+    #endregion
+
     #region Slide Images
 
     public async Task<R2UploadResult> UploadSlideImageAsync(

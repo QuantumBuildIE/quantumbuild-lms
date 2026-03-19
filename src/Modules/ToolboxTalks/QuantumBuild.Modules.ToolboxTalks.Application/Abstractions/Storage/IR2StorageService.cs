@@ -122,6 +122,16 @@ public interface IR2StorageService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Uploads an inspection readiness report PDF to R2 storage.
+    /// Path: {tenantId}/inspection-reports/{sectorKey}/{timestamp}.pdf
+    /// </summary>
+    Task<R2UploadResult> UploadInspectionReportAsync(
+        Guid tenantId,
+        string sectorKey,
+        Stream content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Generates the public URL for a file in the R2 bucket.
     /// </summary>
     string GeneratePublicUrl(Guid tenantId, string folder, string fileName);

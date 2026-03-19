@@ -237,6 +237,9 @@ public static class ServiceCollectionExtensions
         // Register requirement mapping service (AI-suggested requirement ↔ content mappings)
         services.AddScoped<IRequirementMappingService, RequirementMappingService>();
 
+        // Register inspection readiness report service (QuestPDF generation + R2 storage)
+        services.AddScoped<IInspectionReportService, InspectionReportService>();
+
         // Register requirement mapping job HttpClient (calls Claude API for content analysis)
         services.AddHttpClient<RequirementMappingJob>(client =>
         {
