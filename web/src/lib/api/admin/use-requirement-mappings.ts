@@ -5,12 +5,19 @@ import {
   rejectMapping,
   confirmAllMappings,
   getUnconfirmedCount,
+  getComplianceChecklist,
+  addManualMapping,
+  getContentOptions,
 } from "./requirement-mappings";
+import type { AddManualMappingRequest } from "@/types/requirement-mappings";
 
 export const requirementMappingKeys = {
   pending: () => ["requirement-mappings-pending"] as const,
   unconfirmedCount: (toolboxTalkId?: string, courseId?: string) =>
     ["requirement-mappings-unconfirmed", toolboxTalkId, courseId] as const,
+  complianceChecklist: (sectorKey: string) =>
+    ["requirement-mappings", "compliance", sectorKey] as const,
+  contentOptions: () => ["requirement-mappings", "content-options"] as const,
 };
 
 export function usePendingMappings() {
@@ -67,5 +74,37 @@ export function useUnconfirmedMappingCount(
     queryFn: () => getUnconfirmedCount(toolboxTalkId, courseId),
     enabled: !!(toolboxTalkId || courseId),
     staleTime: 30 * 1000,
+  });
+}
+
+export function useComplianceChecklist(sectorKey: string | undefined) {
+  return useQuery({
+    queryKey: requirementMappingKeys.complianceChecklist(sectorKey ?? ""),
+    queryFn: () => getComplianceChecklist(sectorKey!),
+    enabled: !!sectorKey,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useContentOptions() {
+  return useQuery({
+    queryKey: requirementMappingKeys.contentOptions(),
+    queryFn: () => getContentOptions(),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useAddManualMapping() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (request: AddManualMappingRequest) => addManualMapping(request),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["requirement-mappings", "compliance"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: requirementMappingKeys.pending(),
+      });
+    },
   });
 }

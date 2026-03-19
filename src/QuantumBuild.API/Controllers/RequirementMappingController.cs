@@ -141,4 +141,76 @@ public class RequirementMappingController : ControllerBase
             return StatusCode(500, new { message = "Error getting unconfirmed count" });
         }
     }
+
+    /// <summary>
+    /// Get the compliance checklist for a specific sector.
+    /// Validates that the tenant has this sector configured.
+    /// </summary>
+    [HttpGet("compliance/{sectorKey}")]
+    [ProducesResponseType(typeof(ComplianceChecklistDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> GetComplianceChecklist(
+        string sectorKey,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var checklist = await _mappingService.GetComplianceChecklistAsync(sectorKey, cancellationToken);
+            return Ok(checklist);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving compliance checklist for sector {SectorKey}", sectorKey);
+            return StatusCode(500, new { message = "Error retrieving compliance checklist" });
+        }
+    }
+
+    /// <summary>
+    /// Create a manual (non-AI) requirement mapping, immediately confirmed.
+    /// </summary>
+    [HttpPost("manual")]
+    [ProducesResponseType(typeof(PendingMappingDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> AddManualMapping(
+        [FromBody] AddManualMappingRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _mappingService.AddManualMappingAsync(request, cancellationToken);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating manual mapping");
+            return StatusCode(500, new { message = "Error creating manual mapping" });
+        }
+    }
+
+    /// <summary>
+    /// Get available talks and courses for manual mapping selection.
+    /// </summary>
+    [HttpGet("content-options")]
+    [ProducesResponseType(typeof(List<ContentOptionDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetContentOptions(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var options = await _mappingService.GetContentOptionsAsync(cancellationToken);
+            return Ok(options);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving content options");
+            return StatusCode(500, new { message = "Error retrieving content options" });
+        }
+    }
 }

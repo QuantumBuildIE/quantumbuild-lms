@@ -4,6 +4,9 @@ import type {
   PendingMappingDto,
   RejectMappingRequest,
   UnconfirmedCountDto,
+  ComplianceChecklistDto,
+  AddManualMappingRequest,
+  ContentOptionDto,
 } from "@/types/requirement-mappings";
 
 export async function getPendingMappings(): Promise<MappingSummaryDto> {
@@ -50,4 +53,30 @@ export async function getUnconfirmedCount(
     `/toolbox-talks/requirement-mappings/unconfirmed-count?${params.toString()}`
   );
   return response.data.count;
+}
+
+export async function getComplianceChecklist(
+  sectorKey: string
+): Promise<ComplianceChecklistDto> {
+  const response = await apiClient.get<ComplianceChecklistDto>(
+    `/toolbox-talks/requirement-mappings/compliance/${encodeURIComponent(sectorKey)}`
+  );
+  return response.data;
+}
+
+export async function addManualMapping(
+  request: AddManualMappingRequest
+): Promise<PendingMappingDto> {
+  const response = await apiClient.post<PendingMappingDto>(
+    "/toolbox-talks/requirement-mappings/manual",
+    request
+  );
+  return response.data;
+}
+
+export async function getContentOptions(): Promise<ContentOptionDto[]> {
+  const response = await apiClient.get<ContentOptionDto[]>(
+    "/toolbox-talks/requirement-mappings/content-options"
+  );
+  return response.data;
 }
