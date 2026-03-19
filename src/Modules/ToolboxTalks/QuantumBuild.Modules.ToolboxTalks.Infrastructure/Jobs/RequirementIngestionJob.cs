@@ -207,9 +207,17 @@ For each requirement, extract:
 - section: The section reference (e.g. ""§7"", ""Section 3"") if identifiable, or null
 - sectionLabel: The section name/label if identifiable, or null
 - principle: The principle reference if identifiable (e.g. ""P2""), or null
-- principleLabel: The principle name if identifiable, or null
+- principleLabel: MUST use one of the exact canonical labels below, or null if no principle applies
 - priority: ""high"" for safety-critical requirements, ""med"" for standard compliance, ""low"" for best-practice/advisory
 - displayOrder: Sequential numbering starting from 1
+
+CANONICAL PRINCIPLE LABELS (use these exact strings — do not paraphrase or reword):
+- P2 — ""Safety & Wellbeing""
+- P3 — ""Responsiveness""
+- P4 — ""Accountability""
+
+If the document uses different wording (e.g. ""Safety and Wellbeing""), map it to the canonical label above.
+If the principle does not match any of these, set principleLabel to the document's exact text.
 
 IMPORTANT RULES:
 - Extract ONLY requirements related to staff training, competency, skills, or compliance obligations

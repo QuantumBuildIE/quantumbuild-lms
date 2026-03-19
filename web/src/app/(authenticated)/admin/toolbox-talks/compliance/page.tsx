@@ -55,9 +55,7 @@ import { useTenantSectors } from '@/lib/api/admin/use-tenant-sectors';
 import { useComplianceChecklist } from '@/lib/api/admin/use-requirement-mappings';
 import { AddMappingDialog } from '@/features/toolbox-talks/components/AddMappingDialog';
 import type {
-  ComplianceChecklistDto,
   ComplianceRequirementDto,
-  CompliancePrincipleGroupDto,
 } from '@/types/requirement-mappings';
 
 // ============================================
@@ -113,8 +111,13 @@ function ValidationScoreChip({ score, outcome }: { score: number; outcome: strin
 // Requirement Row
 // ============================================
 
-function RequirementRow({ requirement }: { requirement: ComplianceRequirementDto }) {
-  const [addDialogOpen, setAddDialogOpen] = useState(false);
+function RequirementRow({
+  requirement,
+  onAddMapping,
+}: {
+  requirement: ComplianceRequirementDto;
+  onAddMapping: (req: ComplianceRequirementDto) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
 
   const coveredMapping = requirement.mappings.find(
@@ -130,109 +133,100 @@ function RequirementRow({ requirement }: { requirement: ComplianceRequirementDto
       : `/admin/toolbox-talks/courses/${contentId}/edit`;
 
   return (
-    <>
-      <Card>
-        <CardContent className="pt-5 pb-4">
-          <div className="flex items-start justify-between gap-4">
-            {/* Left side */}
-            <div className="flex-1 min-w-0 space-y-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h4 className="font-medium text-sm">{requirement.title}</h4>
-                <PriorityBadge priority={requirement.priority} />
-                {requirement.principle && (
-                  <Badge variant="outline" className="text-xs">
-                    {requirement.principle}
-                    {requirement.principleLabel ? ` — ${requirement.principleLabel}` : ''}
-                  </Badge>
+    <Card>
+      <CardContent className="pt-5 pb-4">
+        <div className="flex items-start justify-between gap-4">
+          {/* Left side */}
+          <div className="flex-1 min-w-0 space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h4 className="font-medium text-sm">{requirement.title}</h4>
+              <PriorityBadge priority={requirement.priority} />
+              {requirement.principle && (
+                <Badge variant="outline" className="text-xs">
+                  {requirement.principle}
+                  {requirement.principleLabel ? ` — ${requirement.principleLabel}` : ''}
+                </Badge>
+              )}
+            </div>
+            <p
+              className={`text-sm text-muted-foreground ${!expanded ? 'line-clamp-2' : ''}`}
+            >
+              {requirement.description}
+            </p>
+            {requirement.description.length > 150 && (
+              <button
+                className="text-xs text-primary hover:underline"
+                onClick={() => setExpanded(!expanded)}
+              >
+                {expanded ? 'Show less' : 'Show more'}
+              </button>
+            )}
+
+            {/* Mapping details */}
+            {requirement.coverageStatus === 'Covered' && coveredMapping && (
+              <div className="flex items-center gap-2 pt-1 text-sm">
+                {coveredMapping.contentType === 'Talk' ? (
+                  <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                ) : (
+                  <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
+                )}
+                <Link
+                  href={contentHref(coveredMapping.contentId, coveredMapping.contentType)}
+                  className="hover:underline text-primary"
+                >
+                  {coveredMapping.contentTitle}
+                </Link>
+                {coveredMapping.validationScore != null && coveredMapping.validationOutcome && (
+                  <ValidationScoreChip
+                    score={coveredMapping.validationScore}
+                    outcome={coveredMapping.validationOutcome}
+                  />
+                )}
+                {coveredMapping.validationDate && (
+                  <span className="text-xs text-muted-foreground">
+                    {format(new Date(coveredMapping.validationDate), 'dd MMM yyyy')}
+                  </span>
                 )}
               </div>
-              <p
-                className={`text-sm text-muted-foreground ${!expanded ? 'line-clamp-2' : ''}`}
-              >
-                {requirement.description}
-              </p>
-              {requirement.description.length > 150 && (
-                <button
+            )}
+
+            {requirement.coverageStatus === 'Pending' && pendingMapping && (
+              <div className="flex items-center gap-2 pt-1 text-sm">
+                {pendingMapping.contentType === 'Talk' ? (
+                  <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                ) : (
+                  <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
+                )}
+                <span className="text-muted-foreground">
+                  {pendingMapping.contentTitle}
+                </span>
+                <Link
+                  href="/admin/toolbox-talks/pending-mappings"
                   className="text-xs text-primary hover:underline"
-                  onClick={() => setExpanded(!expanded)}
                 >
-                  {expanded ? 'Show less' : 'Show more'}
-                </button>
-              )}
-
-              {/* Mapping details */}
-              {requirement.coverageStatus === 'Covered' && coveredMapping && (
-                <div className="flex items-center gap-2 pt-1 text-sm">
-                  {coveredMapping.contentType === 'Talk' ? (
-                    <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                  ) : (
-                    <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
-                  )}
-                  <Link
-                    href={contentHref(coveredMapping.contentId, coveredMapping.contentType)}
-                    className="hover:underline text-primary"
-                  >
-                    {coveredMapping.contentTitle}
-                  </Link>
-                  {coveredMapping.validationScore != null && coveredMapping.validationOutcome && (
-                    <ValidationScoreChip
-                      score={coveredMapping.validationScore}
-                      outcome={coveredMapping.validationOutcome}
-                    />
-                  )}
-                  {coveredMapping.validationDate && (
-                    <span className="text-xs text-muted-foreground">
-                      {format(new Date(coveredMapping.validationDate), 'dd MMM yyyy')}
-                    </span>
-                  )}
-                </div>
-              )}
-
-              {requirement.coverageStatus === 'Pending' && pendingMapping && (
-                <div className="flex items-center gap-2 pt-1 text-sm">
-                  {pendingMapping.contentType === 'Talk' ? (
-                    <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                  ) : (
-                    <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
-                  )}
-                  <span className="text-muted-foreground">
-                    {pendingMapping.contentTitle}
-                  </span>
-                  <Link
-                    href="/admin/toolbox-talks/pending-mappings"
-                    className="text-xs text-primary hover:underline"
-                  >
-                    Review Mapping
-                  </Link>
-                </div>
-              )}
-            </div>
-
-            {/* Right side */}
-            <div className="flex items-center gap-2 shrink-0">
-              <CoverageStatusBadge status={requirement.coverageStatus} />
-              {requirement.coverageStatus === 'Gap' && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setAddDialogOpen(true)}
-                >
-                  <Plus className="mr-1 h-3.5 w-3.5" />
-                  Add Mapping
-                </Button>
-              )}
-            </div>
+                  Review Mapping
+                </Link>
+              </div>
+            )}
           </div>
-        </CardContent>
-      </Card>
 
-      <AddMappingDialog
-        open={addDialogOpen}
-        onOpenChange={setAddDialogOpen}
-        requirementId={requirement.id}
-        requirementTitle={requirement.title}
-      />
-    </>
+          {/* Right side */}
+          <div className="flex items-center gap-2 shrink-0">
+            <CoverageStatusBadge status={requirement.coverageStatus} />
+            {requirement.coverageStatus === 'Gap' && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => onAddMapping(requirement)}
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" />
+                Add Mapping
+              </Button>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -244,6 +238,7 @@ function SectorChecklistView({ sectorKey }: { sectorKey: string }) {
   const { data: checklist, isLoading } = useComplianceChecklist(sectorKey);
   const [principleFilter, setPrincipleFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [mappingTarget, setMappingTarget] = useState<ComplianceRequirementDto | null>(null);
 
   if (isLoading) {
     return (
@@ -430,7 +425,11 @@ function SectorChecklistView({ sectorKey }: { sectorKey: string }) {
             <AccordionContent className="px-2 pb-3">
               <div className="space-y-2">
                 {group.requirements.map((req) => (
-                  <RequirementRow key={req.id} requirement={req} />
+                  <RequirementRow
+                    key={req.id}
+                    requirement={req}
+                    onAddMapping={setMappingTarget}
+                  />
                 ))}
               </div>
             </AccordionContent>
@@ -445,6 +444,13 @@ function SectorChecklistView({ sectorKey }: { sectorKey: string }) {
           </p>
         </Card>
       )}
+
+      <AddMappingDialog
+        open={!!mappingTarget}
+        onOpenChange={(open) => { if (!open) setMappingTarget(null); }}
+        requirementId={mappingTarget?.id ?? ''}
+        requirementTitle={mappingTarget?.title ?? ''}
+      />
     </div>
   );
 }
