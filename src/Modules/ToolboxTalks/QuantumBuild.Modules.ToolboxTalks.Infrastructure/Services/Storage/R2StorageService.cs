@@ -305,6 +305,9 @@ public class R2StorageService : IR2StorageService, IDisposable
     {
         try
         {
+            // Read length BEFORE the upload consumes the stream
+            var contentLength = content.Length;
+
             var timestamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
             var fileName = $"{sectorKey}/{timestamp}.pdf";
             var key = BuildKey(tenantId, InspectionReportsFolder, fileName);
@@ -327,7 +330,7 @@ public class R2StorageService : IR2StorageService, IDisposable
 
             _logger.LogInformation("Successfully uploaded inspection report: {Url}", publicUrl);
 
-            return R2UploadResult.SuccessResult(publicUrl, key, content.Length, "application/pdf");
+            return R2UploadResult.SuccessResult(publicUrl, key, contentLength, "application/pdf");
         }
         catch (Exception ex)
         {
