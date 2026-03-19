@@ -69,9 +69,11 @@ public class InspectionReportService : IInspectionReportService
         var pdfBytes = GeneratePdf(checklist, request, organisationName, reportDate, generatedAt);
 
         // 4. Upload to R2
-        using var stream = new MemoryStream(pdfBytes);
+        var stream = new MemoryStream(pdfBytes);
+        stream.Position = 0;
         var uploadResult = await _storageService.UploadInspectionReportAsync(
             tenantId, sectorKey, stream, cancellationToken);
+        await stream.DisposeAsync();
 
         if (!uploadResult.Success)
         {
