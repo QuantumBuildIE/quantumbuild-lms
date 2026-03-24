@@ -30,6 +30,7 @@ import {
   Copy,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import axios from 'axios';
 import {
   useGlossarySectors,
   useGlossarySector,
@@ -84,6 +85,7 @@ export function SafetyGlossarySection() {
             <SectorRow
               key={sector.id}
               sector={sector}
+              allSectors={sectors}
               isExpanded={expandedSector === sector.sectorKey}
               onToggle={() =>
                 setExpandedSector(
@@ -108,10 +110,12 @@ export function SafetyGlossarySection() {
 
 function SectorRow({
   sector,
+  allSectors,
   isExpanded,
   onToggle,
 }: {
   sector: GlossarySectorListItem;
+  allSectors: GlossarySectorListItem[];
   isExpanded: boolean;
   onToggle: () => void;
 }) {
@@ -121,6 +125,9 @@ function SectorRow({
   const [editIcon, setEditIcon] = useState(sector.sectorIcon ?? '');
   const updateSectorMutation = useUpdateGlossarySector();
 
+  const overrideExists = sector.isSystemDefault &&
+    allSectors.some(s => !s.isSystemDefault && s.sectorKey === sector.sectorKey);
+
   const handleCreateOverride = async () => {
     try {
       await createOverrideMutation.mutateAsync({
@@ -129,8 +136,12 @@ function SectorRow({
         sectorIcon: sector.sectorIcon ?? undefined,
       });
       toast.success('Tenant override created');
-    } catch {
-      toast.error('Failed to create override');
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 409) {
+        toast.error('An override for this sector already exists — scroll down to edit it.');
+      } else {
+        toast.error('Failed to create override');
+      }
     }
   };
 
@@ -172,18 +183,22 @@ function SectorRow({
         </div>
         <div className="flex items-center gap-2">
           {sector.isSystemDefault && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleCreateOverride();
-              }}
-              disabled={createOverrideMutation.isPending}
-            >
-              <Copy className="h-3.5 w-3.5 mr-1" />
-              Create Override
-            </Button>
+            overrideExists ? (
+              <span className="text-xs text-muted-foreground px-2">Override exists</span>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCreateOverride();
+                }}
+                disabled={createOverrideMutation.isPending}
+              >
+                <Copy className="h-3.5 w-3.5 mr-1" />
+                Create Override
+              </Button>
+            )
           )}
           {!sector.isSystemDefault && (
             <Button
