@@ -11,7 +11,7 @@ namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Persistence.Seed;
 public static class SafetyGlossarySeedData
 {
     /// <summary>
-    /// Seed all 5 default safety glossary sectors with their terms
+    /// Seed all 6 default safety glossary sectors with their terms (including general fallback)
     /// </summary>
     public static async Task SeedAsync(DbContext context, ILogger logger)
     {
@@ -49,6 +49,11 @@ public static class SafetyGlossarySeedData
         var manufacturingGlossary = CreateGlossary("manufacturing", "Manufacturing", "\U0001F3ED", now);
         glossaries.Add(manufacturingGlossary);
         terms.AddRange(CreateManufacturingTerms(manufacturingGlossary.Id, now));
+
+        // ── General (cross-sector fallback) ──
+        var generalGlossary = CreateGlossary("general", "General", "🛡️", now);
+        glossaries.Add(generalGlossary);
+        terms.AddRange(CreateGeneralTerms(generalGlossary.Id, now));
 
         await context.Set<SafetyGlossary>().AddRangeAsync(glossaries);
         await context.Set<SafetyGlossaryTerm>().AddRangeAsync(terms);
@@ -221,6 +226,56 @@ public static class SafetyGlossarySeedData
                 """{"fr":"ne pas contourner","pl":"nie omijać","ro":"nu ocoliți","uk":"не обходити","pt":"não contornar","es":"no eludir","lt":"neapeinant","de":"nicht überbrücken","lv":"neapiet"}""", now),
             CreateTerm(glossaryId, "hazardous substance", "hazard", true,
                 """{"fr":"substance dangereuse","pl":"substancja niebezpieczna","ro":"substanță periculoasă","uk":"небезпечна речовина","pt":"substância perigosa","es":"sustancia peligrosa","lt":"pavojinga medžiaga","de":"Gefahrstoff","lv":"bīstama viela"}""", now),
+        ];
+    }
+
+    private static List<SafetyGlossaryTerm> CreateGeneralTerms(Guid glossaryId, DateTime now)
+    {
+        return
+        [
+            // Emergency terms
+            CreateTerm(glossaryId, "emergency", "emergency", true,
+                """{"fr":"urgence","pl":"nagły wypadek","ro":"urgență","uk":"надзвичайна ситуація","pt":"emergência","es":"emergencia","lt":"avarija","de":"Notfall","lv":"ārkārtas situācija"}""", now),
+            CreateTerm(glossaryId, "emergency exit", "emergency", true,
+                """{"fr":"sortie de secours","pl":"wyjście awaryjne","ro":"ieșire de urgență","uk":"аварійний вихід","pt":"saída de emergência","es":"salida de emergencia","lt":"avarinis išėjimas","de":"Notausgang","lv":"avārijas izeja"}""", now),
+            CreateTerm(glossaryId, "emergency procedure", "emergency", true,
+                """{"fr":"procédure d'urgence","pl":"procedura awaryjna","ro":"procedură de urgență","uk":"аварійна процедура","pt":"procedimento de emergência","es":"procedimiento de emergencia","lt":"avarinė procedūra","de":"Notfallverfahren","lv":"ārkārtas procedūra"}""", now),
+            CreateTerm(glossaryId, "evacuation", "emergency", true,
+                """{"fr":"évacuation","pl":"ewakuacja","ro":"evacuare","uk":"евакуація","pt":"evacuação","es":"evacuación","lt":"evakuacija","de":"Evakuierung","lv":"evakuācija"}""", now),
+
+            // Prohibition terms
+            CreateTerm(glossaryId, "do not", "prohibition", true,
+                """{"fr":"ne pas","pl":"nie","ro":"nu","uk":"не","pt":"não","es":"no","lt":"ne","de":"nicht","lv":"ne"}""", now),
+            CreateTerm(glossaryId, "do not enter", "prohibition", true,
+                """{"fr":"ne pas entrer","pl":"nie wchodzić","ro":"nu intrați","uk":"не входити","pt":"não entrar","es":"no entrar","lt":"neiti","de":"nicht betreten","lv":"neieiet"}""", now),
+            CreateTerm(glossaryId, "must not", "prohibition", true,
+                """{"fr":"ne doit pas","pl":"nie wolno","ro":"nu trebuie","uk":"не повинен","pt":"não deve","es":"no debe","lt":"neturi","de":"darf nicht","lv":"nedrīkst"}""", now),
+            CreateTerm(glossaryId, "prohibited", "prohibition", true,
+                """{"fr":"interdit","pl":"zabronione","ro":"interzis","uk":"заборонено","pt":"proibido","es":"prohibido","lt":"draudžiama","de":"verboten","lv":"aizliegts"}""", now),
+
+            // Hazard terms
+            CreateTerm(glossaryId, "warning", "hazard", true,
+                """{"fr":"avertissement","pl":"ostrzeżenie","ro":"avertisment","uk":"попередження","pt":"aviso","es":"advertencia","lt":"įspėjimas","de":"Warnung","lv":"brīdinājums"}""", now),
+            CreateTerm(glossaryId, "danger", "hazard", true,
+                """{"fr":"danger","pl":"niebezpieczeństwo","ro":"pericol","uk":"небезпека","pt":"perigo","es":"peligro","lt":"pavojus","de":"Gefahr","lv":"bīstami"}""", now),
+            CreateTerm(glossaryId, "hazard", "hazard", true,
+                """{"fr":"risque","pl":"zagrożenie","ro":"pericol","uk":"небезпека","pt":"perigo","es":"peligro","lt":"pavojus","de":"Gefährdung","lv":"apdraudējums"}""", now),
+            CreateTerm(glossaryId, "caution", "hazard", true,
+                """{"fr":"attention","pl":"uwaga","ro":"atenție","uk":"обережно","pt":"cuidado","es":"precaución","lt":"atsargiai","de":"Vorsicht","lv":"uzmanību"}""", now),
+
+            // Regulatory terms
+            CreateTerm(glossaryId, "risk assessment", "regulatory", true,
+                """{"fr":"évaluation des risques","pl":"ocena ryzyka","ro":"evaluarea riscurilor","uk":"оцінка ризиків","pt":"avaliação de riscos","es":"evaluación de riesgos","lt":"rizikos vertinimas","de":"Risikobeurteilung","lv":"riska novērtējums"}""", now),
+
+            // Equipment terms
+            CreateTerm(glossaryId, "personal protective equipment", "equipment", true,
+                """{"fr":"équipement de protection individuelle","pl":"środki ochrony indywidualnej","ro":"echipament individual de protecție","uk":"засоби індивідуального захисту","pt":"equipamento de proteção individual","es":"equipo de protección personal","lt":"asmeninės apsaugos priemonės","de":"persönliche Schutzausrüstung","lv":"individuālie aizsardzības līdzekļi"}""", now),
+            CreateTerm(glossaryId, "PPE", "equipment", true,
+                """{"fr":"EPI","pl":"ŚOI","ro":"EIP","uk":"ЗІЗ","pt":"EPI","es":"EPI","lt":"AAP","de":"PSA","lv":"IAL"}""", now),
+
+            // Procedure terms
+            CreateTerm(glossaryId, "first aid", "procedure", true,
+                """{"fr":"premiers secours","pl":"pierwsza pomoc","ro":"prim ajutor","uk":"перша допомога","pt":"primeiros socorros","es":"primeros auxilios","lt":"pirmoji pagalba","de":"Erste Hilfe","lv":"pirmā palīdzība"}""", now),
         ];
     }
 }
