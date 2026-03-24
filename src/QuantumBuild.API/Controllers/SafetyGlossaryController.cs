@@ -58,7 +58,7 @@ public class SafetyGlossaryController : ControllerBase
                 .OrderBy(g => g.SectorName)
                 .ToListAsync(cancellationToken);
 
-            return Ok(Result.Ok(sectors));
+            return Ok(sectors);
         }
         catch (Exception ex)
         {
