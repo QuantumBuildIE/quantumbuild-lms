@@ -522,13 +522,17 @@ public class SafetyGlossaryController : ControllerBase
             if (glossary.TenantId == null)
                 return StatusCode(403, new { message = "Cannot modify system default glossaries" });
 
-            // Load existing terms for duplicate check
+            // Load existing terms (including soft-deleted) for duplicate check + restore-on-reassign
             var existingTerms = await _dbContext.SafetyGlossaryTerms
+                .IgnoreQueryFilters()
                 .Where(t => t.GlossaryId == id)
-                .Select(t => t.EnglishTerm.ToLower())
                 .ToListAsync(cancellationToken);
 
-            var existingSet = new HashSet<string>(existingTerms);
+            var activeTerms = new HashSet<string>(
+                existingTerms.Where(t => !t.IsDeleted).Select(t => t.EnglishTerm.ToLower()));
+            var deletedTerms = existingTerms
+                .Where(t => t.IsDeleted)
+                .ToDictionary(t => t.EnglishTerm.ToLower(), t => t);
 
             // Read CSV content
             string content;
@@ -605,8 +609,9 @@ public class SafetyGlossaryController : ControllerBase
                     continue;
                 }
 
-                // Duplicate check (case-insensitive)
-                if (existingSet.Contains(englishTerm.ToLower()))
+                // Skip active duplicates (case-insensitive)
+                var termKey = englishTerm.ToLower();
+                if (activeTerms.Contains(termKey))
                 {
                     skipped++;
                     continue;
@@ -629,17 +634,29 @@ public class SafetyGlossaryController : ControllerBase
 
                 var translationsJson = JsonSerializer.Serialize(translations);
 
-                _dbContext.SafetyGlossaryTerms.Add(new SafetyGlossaryTerm
+                // Restore-on-reassign: revive soft-deleted term with updated fields
+                if (deletedTerms.TryGetValue(termKey, out var deletedTerm))
                 {
-                    Id = Guid.NewGuid(),
-                    GlossaryId = id,
-                    EnglishTerm = englishTerm,
-                    Category = category.ToLower(),
-                    IsCritical = isCritical,
-                    Translations = translationsJson
-                });
+                    deletedTerm.IsDeleted = false;
+                    deletedTerm.Category = category.ToLower();
+                    deletedTerm.IsCritical = isCritical;
+                    deletedTerm.Translations = translationsJson;
+                    deletedTerms.Remove(termKey);
+                }
+                else
+                {
+                    _dbContext.SafetyGlossaryTerms.Add(new SafetyGlossaryTerm
+                    {
+                        Id = Guid.NewGuid(),
+                        GlossaryId = id,
+                        EnglishTerm = englishTerm,
+                        Category = category.ToLower(),
+                        IsCritical = isCritical,
+                        Translations = translationsJson
+                    });
+                }
 
-                existingSet.Add(englishTerm.ToLower());
+                activeTerms.Add(termKey);
                 imported++;
             }
 
