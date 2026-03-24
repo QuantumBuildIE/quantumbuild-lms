@@ -152,6 +152,11 @@ public static class RegulatoryProfileSeedData
                 "RSA Regulatory Score", "RSA Inspection Export",
                 "Driver hours, tachograph, load limits, vehicle inspection requirements",
                 "[{\"Key\":\"TERMINOLOGY_CONSISTENCY\",\"Label\":\"Terminology Consistency\",\"Weight\":1.5},{\"Key\":\"PROFESSIONAL_REGISTER\",\"Label\":\"Professional Register\",\"Weight\":1.0},{\"Key\":\"SAFETY_CRITICAL_LANGUAGE\",\"Label\":\"Safety-Critical Language\",\"Weight\":1.5},{\"Key\":\"REGULATORY_COMPLETENESS\",\"Label\":\"Regulatory Completeness\",\"Weight\":1.5},{\"Key\":\"GRAMMATICAL_ACCURACY\",\"Label\":\"Grammatical Accuracy\",\"Weight\":1.0},{\"Key\":\"NATURALNESS_FLUENCY\",\"Label\":\"Naturalness & Fluency\",\"Weight\":0.5}]"),
+
+            ("HIQA", "healthcare",
+                "HIQA Regulatory Score", "HIQA Inspection Export",
+                "Clinical governance, patient safety, infection control, medication management",
+                "[{\"Key\":\"TERMINOLOGY_CONSISTENCY\",\"Label\":\"Terminology Consistency\",\"Weight\":1.5},{\"Key\":\"PROFESSIONAL_REGISTER\",\"Label\":\"Professional Register\",\"Weight\":1.0},{\"Key\":\"SAFETY_CRITICAL_LANGUAGE\",\"Label\":\"Safety-Critical Language\",\"Weight\":1.5},{\"Key\":\"REGULATORY_COMPLETENESS\",\"Label\":\"Regulatory Completeness\",\"Weight\":1.0},{\"Key\":\"GRAMMATICAL_ACCURACY\",\"Label\":\"Grammatical Accuracy\",\"Weight\":1.0},{\"Key\":\"NATURALNESS_FLUENCY\",\"Label\":\"Naturalness & Fluency\",\"Weight\":1.0}]"),
         };
 
         var newProfiles = new List<RegulatoryProfile>();

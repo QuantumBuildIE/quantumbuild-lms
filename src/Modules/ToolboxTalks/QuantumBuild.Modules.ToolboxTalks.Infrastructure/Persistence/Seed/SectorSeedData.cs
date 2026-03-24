@@ -26,6 +26,7 @@ public static class SectorSeedData
             ("manufacturing", "Manufacturing", "\U0001F3ED", 3),
             ("transport", "Transport", "\U0001F69A", 4),
             ("food_hospitality", "Food & Hospitality", "\U0001F37D\uFE0F", 5),
+            ("healthcare", "Healthcare", "\U0001F3E5", 6),
         };
 
         foreach (var (key, name, icon, displayOrder) in seedSectors)

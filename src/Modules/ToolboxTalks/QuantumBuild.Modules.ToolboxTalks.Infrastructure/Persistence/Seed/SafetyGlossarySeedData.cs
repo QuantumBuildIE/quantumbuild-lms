@@ -11,7 +11,7 @@ namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Persistence.Seed;
 public static class SafetyGlossarySeedData
 {
     /// <summary>
-    /// Seed all 6 default safety glossary sectors with their terms (including general fallback)
+    /// Seed all 7 default safety glossary sectors with their terms (including general fallback)
     /// </summary>
     public static async Task SeedAsync(DbContext context, ILogger logger)
     {
@@ -33,6 +33,7 @@ public static class SafetyGlossarySeedData
             ("transport", "Transport", "\U0001F69B", CreateTransportTerms),
             ("manufacturing", "Manufacturing", "\U0001F3ED", CreateManufacturingTerms),
             ("general", "General", "🛡️", CreateGeneralTerms),
+            ("healthcare", "Healthcare", "\U0001F3E5", CreateHealthcareTerms),
         };
 
         foreach (var (key, name, icon, termFactory) in seedDefinitions)
@@ -222,6 +223,50 @@ public static class SafetyGlossarySeedData
                 """{"fr":"ne pas contourner","pl":"nie omijać","ro":"nu ocoliți","uk":"не обходити","pt":"não contornar","es":"no eludir","lt":"neapeinant","de":"nicht überbrücken","lv":"neapiet"}""", now),
             CreateTerm(glossaryId, "hazardous substance", "hazard", true,
                 """{"fr":"substance dangereuse","pl":"substancja niebezpieczna","ro":"substanță periculoasă","uk":"небезпечна речовина","pt":"substância perigosa","es":"sustancia peligrosa","lt":"pavojinga medžiaga","de":"Gefahrstoff","lv":"bīstama viela"}""", now),
+        ];
+    }
+
+    private static List<SafetyGlossaryTerm> CreateHealthcareTerms(Guid glossaryId, DateTime now)
+    {
+        return
+        [
+            // Emergency
+            CreateTerm(glossaryId, "do not resuscitate", "emergency", true,
+                """{"fr":"ne pas réanimer","pl":"nie reanimować","ro":"nu resuscitați","uk":"не реанімувати","pt":"não reanimar","es":"no reanimar","lt":"nereanimuoti","de":"nicht wiederbeleben","lv":"nereanimēt"}""", now),
+
+            // Procedure
+            CreateTerm(glossaryId, "medication administration", "procedure", true,
+                """{"fr":"administration de médicaments","pl":"podawanie leków","ro":"administrarea medicamentelor","uk":"введення ліків","pt":"administração de medicação","es":"administración de medicación","lt":"vaistų skyrimas","de":"Medikamentengabe","lv":"zāļu ievadīšana"}""", now),
+            CreateTerm(glossaryId, "infection control", "procedure", true,
+                """{"fr":"contrôle des infections","pl":"kontrola zakażeń","ro":"controlul infecțiilor","uk":"інфекційний контроль","pt":"controlo de infeções","es":"control de infecciones","lt":"infekcijų kontrolė","de":"Infektionskontrolle","lv":"infekciju kontrole"}""", now),
+            CreateTerm(glossaryId, "manual handling", "procedure", true,
+                """{"fr":"manutention manuelle","pl":"ręczne przemieszczanie","ro":"manipulare manuală","uk":"ручне переміщення","pt":"movimentação manual","es":"manipulación manual","lt":"rankinis krovimas","de":"manuelle Handhabung","lv":"manuāla pārvietošana"}""", now),
+            CreateTerm(glossaryId, "sharps disposal", "procedure", true,
+                """{"fr":"élimination des objets tranchants","pl":"utylizacja ostrych odpadów","ro":"eliminarea obiectelor ascuțite","uk":"утилізація гострих предметів","pt":"eliminação de objetos cortantes","es":"eliminación de objetos punzantes","lt":"aštrių daiktų šalinimas","de":"Entsorgung scharfer Gegenstände","lv":"aso priekšmetu likvidēšana"}""", now),
+            CreateTerm(glossaryId, "hand hygiene", "procedure", true,
+                """{"fr":"hygiène des mains","pl":"higiena rąk","ro":"igiena mâinilor","uk":"гігієна рук","pt":"higiene das mãos","es":"higiene de manos","lt":"rankų higiena","de":"Händehygiene","lv":"roku higiēna"}""", now),
+            CreateTerm(glossaryId, "isolation precautions", "procedure", true,
+                """{"fr":"précautions d'isolement","pl":"środki ostrożności izolacyjne","ro":"precauții de izolare","uk":"заходи ізоляції","pt":"precauções de isolamento","es":"precauciones de aislamiento","lt":"izoliacijos atsargumo priemonės","de":"Isolationsmaßnahmen","lv":"izolācijas piesardzības pasākumi"}""", now),
+
+            // Regulatory
+            CreateTerm(glossaryId, "patient safety", "regulatory", true,
+                """{"fr":"sécurité des patients","pl":"bezpieczeństwo pacjenta","ro":"siguranța pacientului","uk":"безпека пацієнта","pt":"segurança do paciente","es":"seguridad del paciente","lt":"pacientų sauga","de":"Patientensicherheit","lv":"pacientu drošība"}""", now),
+            CreateTerm(glossaryId, "clinical governance", "regulatory", true,
+                """{"fr":"gouvernance clinique","pl":"zarządzanie kliniczne","ro":"guvernanță clinică","uk":"клінічне управління","pt":"governança clínica","es":"gobernanza clínica","lt":"klinikinis valdymas","de":"klinische Governance","lv":"klīniskā pārvaldība"}""", now),
+            CreateTerm(glossaryId, "safeguarding", "regulatory", true,
+                """{"fr":"protection","pl":"ochrona","ro":"protecție","uk":"захист","pt":"salvaguarda","es":"salvaguarda","lt":"apsauga","de":"Schutzmaßnahmen","lv":"aizsardzība"}""", now),
+            CreateTerm(glossaryId, "HIQA", "regulatory", true,
+                """{"fr":"HIQA","pl":"HIQA","ro":"HIQA","uk":"HIQA","pt":"HIQA","es":"HIQA","lt":"HIQA","de":"HIQA","lv":"HIQA"}""", now),
+            CreateTerm(glossaryId, "consent", "regulatory", true,
+                """{"fr":"consentement","pl":"zgoda","ro":"consimțământ","uk":"згода","pt":"consentimento","es":"consentimiento","lt":"sutikimas","de":"Einwilligung","lv":"piekrišana"}""", now),
+            CreateTerm(glossaryId, "duty of care", "regulatory", true,
+                """{"fr":"devoir de diligence","pl":"obowiązek staranności","ro":"obligația de îngrijire","uk":"обов'язок піклування","pt":"dever de cuidado","es":"deber de cuidado","lt":"rūpestingumo pareiga","de":"Sorgfaltspflicht","lv":"pienākums rūpēties"}""", now),
+
+            // Equipment
+            CreateTerm(glossaryId, "personal protective equipment", "equipment", true,
+                """{"fr":"équipement de protection individuelle","pl":"środki ochrony indywidualnej","ro":"echipament individual de protecție","uk":"засоби індивідуального захисту","pt":"equipamento de proteção individual","es":"equipo de protección personal","lt":"asmeninės apsaugos priemonės","de":"persönliche Schutzausrüstung","lv":"individuālie aizsardzības līdzekļi"}""", now),
+            CreateTerm(glossaryId, "PPE", "equipment", true,
+                """{"fr":"EPI","pl":"ŚOI","ro":"EIP","uk":"ЗІЗ","pt":"EPI","es":"EPI","lt":"AAP","de":"PSA","lv":"IAL"}""", now),
         ];
     }
 
