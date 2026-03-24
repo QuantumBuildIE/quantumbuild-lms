@@ -34,7 +34,10 @@ public class ContentTranslationService : IContentTranslationService
         string targetLanguage,
         bool isHtml = false,
         CancellationToken cancellationToken = default,
-        string? sourceLanguage = null)
+        string? sourceLanguage = null,
+        string? sectorKey = null,
+        bool isSafetyCritical = false,
+        IEnumerable<GlossaryTermInstruction>? glossaryTerms = null)
     {
         var source = sourceLanguage ?? "English";
 
@@ -48,13 +51,19 @@ public class ContentTranslationService : IContentTranslationService
 
         try
         {
+            var useTiered = sectorKey != null || isSafetyCritical || glossaryTerms != null;
+
             _logger.LogInformation(
                 "[DEBUG] ContentTranslationService.TranslateTextAsync called. " +
-                "SourceLanguage: {SourceLanguage}, TargetLanguage: {Language}, IsHtml: {IsHtml}, TextLength: {TextLength}, TextPreview: {Preview}",
+                "SourceLanguage: {SourceLanguage}, TargetLanguage: {Language}, IsHtml: {IsHtml}, TextLength: {TextLength}, " +
+                "Tiered: {Tiered}, SectorKey: {SectorKey}, SafetyCritical: {SafetyCritical}, TextPreview: {Preview}",
                 source, targetLanguage, isHtml, text.Length,
+                useTiered, sectorKey ?? "(none)", isSafetyCritical,
                 text.Length > 80 ? text.Substring(0, 80) + "..." : text);
 
-            var prompt = TranslationPrompts.BuildContentTranslationPrompt(text, source, targetLanguage, isHtml);
+            var prompt = useTiered
+                ? TranslationPrompts.BuildTranslationPrompt(text, source, targetLanguage, isHtml, sectorKey, isSafetyCritical, glossaryTerms)
+                : TranslationPrompts.BuildGenericTranslationPrompt(text, source, targetLanguage, isHtml);
             var translatedText = await CallClaudeApiAsync(prompt, cancellationToken);
 
             if (string.IsNullOrWhiteSpace(translatedText))
@@ -142,7 +151,10 @@ public class ContentTranslationService : IContentTranslationService
         IEnumerable<TranslationItem> items,
         string targetLanguage,
         CancellationToken cancellationToken = default,
-        string? sourceLanguage = null)
+        string? sourceLanguage = null,
+        string? sectorKey = null,
+        bool isSafetyCritical = false,
+        IEnumerable<GlossaryTermInstruction>? glossaryTerms = null)
     {
         var source = sourceLanguage ?? "English";
         var itemsList = items.ToList();
@@ -155,7 +167,7 @@ public class ContentTranslationService : IContentTranslationService
         {
             _logger.LogInformation("Translating batch of {Count} items from {Source} to {Language}", itemsList.Count, source, targetLanguage);
 
-            var prompt = TranslationPrompts.BuildBatchTranslationPrompt(itemsList, source, targetLanguage);
+            var prompt = TranslationPrompts.BuildBatchTranslationPrompt(itemsList, source, targetLanguage, sectorKey, isSafetyCritical, glossaryTerms);
             var responseText = await CallClaudeApiAsync(prompt, cancellationToken);
 
             var results = ParseBatchResponse(responseText, itemsList);

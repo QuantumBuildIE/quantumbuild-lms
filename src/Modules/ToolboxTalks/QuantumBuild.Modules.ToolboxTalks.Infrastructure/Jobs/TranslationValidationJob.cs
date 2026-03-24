@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Translations;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Application.Prompts;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services.Subtitles;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Hubs;
@@ -26,6 +27,7 @@ public class TranslationValidationJob
     private readonly IHubContext<TranslationValidationHub> _hubContext;
     private readonly IContentTranslationService _contentTranslationService;
     private readonly ILanguageCodeService _languageCodeService;
+    private readonly ISafetyClassificationService _safetyClassificationService;
     private readonly ILogger<TranslationValidationJob> _logger;
 
     public TranslationValidationJob(
@@ -34,6 +36,7 @@ public class TranslationValidationJob
         IHubContext<TranslationValidationHub> hubContext,
         IContentTranslationService contentTranslationService,
         ILanguageCodeService languageCodeService,
+        ISafetyClassificationService safetyClassificationService,
         ILogger<TranslationValidationJob> logger)
     {
         _validationService = validationService;
@@ -41,6 +44,7 @@ public class TranslationValidationJob
         _hubContext = hubContext;
         _contentTranslationService = contentTranslationService;
         _languageCodeService = languageCodeService;
+        _safetyClassificationService = safetyClassificationService;
         _logger = logger;
     }
 
@@ -320,8 +324,10 @@ public class TranslationValidationJob
                 run.ToolboxTalkId, run.LanguageCode);
 
             // Generate translations inline (creation wizard flow — translations don't exist yet)
+            // Pass sectorKey from the validation run for tiered prompt quality
             translation = await GenerateTranslationForSectionsAsync(
-                run.ToolboxTalkId.Value, tenantId, run.LanguageCode, originalSections, cancellationToken);
+                run.ToolboxTalkId.Value, tenantId, run.LanguageCode, originalSections,
+                run.SectorKey, run.SourceLanguage, cancellationToken);
 
             if (string.IsNullOrWhiteSpace(translation))
             {
@@ -567,21 +573,37 @@ public class TranslationValidationJob
     /// <summary>
     /// Generates translations for sections when they don't exist yet (creation wizard flow).
     /// Creates a ToolboxTalkTranslation record and returns the TranslatedSections JSON.
+    /// Uses tiered prompts when sectorKey is available for compliance-quality translations.
     /// </summary>
     private async Task<string?> GenerateTranslationForSectionsAsync(
         Guid talkId,
         Guid tenantId,
         string languageCode,
         List<OriginalSectionInfo> originalSections,
+        string? sectorKey,
+        string? sourceLanguage,
         CancellationToken cancellationToken)
     {
         try
         {
             var languageName = await _languageCodeService.GetLanguageNameAsync(languageCode);
+            var source = sourceLanguage ?? "English";
 
             _logger.LogInformation(
-                "Generating translations for {Count} sections to {Language} ({Code})",
-                originalSections.Count, languageName, languageCode);
+                "Generating translations for {Count} sections to {Language} ({Code}), SectorKey: {SectorKey}",
+                originalSections.Count, languageName, languageCode, sectorKey ?? "(none)");
+
+            // Load glossary terms for this sector + language (once, before section loop)
+            List<GlossaryTermInstruction> glossaryInstructions = new();
+            if (!string.IsNullOrEmpty(sectorKey))
+            {
+                glossaryInstructions = await LoadGlossaryTermsAsync(
+                    sectorKey, tenantId, languageCode, cancellationToken);
+
+                _logger.LogInformation(
+                    "Loaded {Count} glossary term instructions for sector {Sector}, language {Lang}",
+                    glossaryInstructions.Count, sectorKey, languageCode);
+            }
 
             var translatedSections = new List<object>();
 
@@ -591,11 +613,30 @@ public class TranslationValidationJob
                 var title = section.Title;
                 var content = section.Content;
 
-                var titleResult = await _contentTranslationService.TranslateTextAsync(
-                    title, languageName, false, cancellationToken);
+                // Classify safety criticality before translation
+                var isSafetyCritical = false;
+                if (!string.IsNullOrEmpty(sectorKey))
+                {
+                    var classification = await _safetyClassificationService.ClassifyAsync(
+                        content, sectorKey, languageCode, cancellationToken);
+                    isSafetyCritical = classification.IsSafetyCritical;
+                }
 
+                // Section title: sector-aware but not safety-critical, no glossary
+                var titleResult = await _contentTranslationService.TranslateTextAsync(
+                    title, languageName, false, cancellationToken,
+                    sourceLanguage: source,
+                    sectorKey: sectorKey,
+                    isSafetyCritical: false,
+                    glossaryTerms: null);
+
+                // Section content: full tiered prompt with safety + glossary
                 var contentResult = await _contentTranslationService.TranslateTextAsync(
-                    content, languageName, true, cancellationToken);
+                    content, languageName, true, cancellationToken,
+                    sourceLanguage: source,
+                    sectorKey: sectorKey,
+                    isSafetyCritical: isSafetyCritical,
+                    glossaryTerms: glossaryInstructions);
 
                 if (titleResult.Success && contentResult.Success)
                 {
@@ -629,7 +670,7 @@ public class TranslationValidationJob
             if (talk != null)
             {
                 var titleTranslation = await _contentTranslationService.TranslateTextAsync(
-                    talk.Title, languageName, false, cancellationToken);
+                    talk.Title, languageName, false, cancellationToken, sectorKey: sectorKey);
                 if (titleTranslation.Success)
                     translatedTitle = titleTranslation.TranslatedContent;
 
@@ -637,7 +678,7 @@ public class TranslationValidationJob
                 if (!string.IsNullOrWhiteSpace(talk.Description))
                 {
                     var descResult = await _contentTranslationService.TranslateTextAsync(
-                        talk.Description, languageName, false, cancellationToken);
+                        talk.Description, languageName, false, cancellationToken, sectorKey: sectorKey);
                     if (descResult.Success)
                         translatedDescription = descResult.TranslatedContent;
                 }
@@ -656,9 +697,9 @@ public class TranslationValidationJob
                 var translatedQuestions = new List<object>();
                 foreach (var q in questions)
                 {
-                    // Translate question text
+                    // Translate question text — sector-aware for compliance terminology
                     var qTextResult = await _contentTranslationService.TranslateTextAsync(
-                        q.QuestionText, languageName, false, cancellationToken);
+                        q.QuestionText, languageName, false, cancellationToken, sectorKey: sectorKey);
                     var translatedQuestionText = qTextResult.Success
                         ? qTextResult.TranslatedContent
                         : q.QuestionText;
@@ -674,7 +715,7 @@ public class TranslationValidationJob
                             foreach (var option in options)
                             {
                                 var optResult = await _contentTranslationService.TranslateTextAsync(
-                                    option, languageName, false, cancellationToken);
+                                    option, languageName, false, cancellationToken, sectorKey: sectorKey);
                                 translatedOptions.Add(optResult.Success ? optResult.TranslatedContent : option);
                             }
                         }
@@ -736,6 +777,62 @@ public class TranslationValidationJob
                 talkId, languageCode);
             return null;
         }
+    }
+
+    /// <summary>
+    /// Loads glossary terms for a sector + language, preferring tenant overrides over system defaults.
+    /// Returns GlossaryTermInstruction list for terms that have a translation for the target language.
+    /// </summary>
+    private async Task<List<GlossaryTermInstruction>> LoadGlossaryTermsAsync(
+        string sectorKey,
+        Guid tenantId,
+        string languageCode,
+        CancellationToken cancellationToken)
+    {
+        // Load all matching glossary terms — tenant-specific and system defaults
+        var terms = await _dbContext.SafetyGlossaryTerms
+            .IgnoreQueryFilters()
+            .Include(t => t.Glossary)
+            .Where(t => !t.IsDeleted
+                && !t.Glossary.IsDeleted
+                && t.Glossary.SectorKey == sectorKey
+                && (t.Glossary.TenantId == tenantId || t.Glossary.TenantId == null))
+            .ToListAsync(cancellationToken);
+
+        // Prefer tenant override over system default for each English term
+        var grouped = terms.GroupBy(t => t.EnglishTerm.ToLowerInvariant());
+        var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+        var instructions = new List<GlossaryTermInstruction>();
+
+        foreach (var group in grouped)
+        {
+            var term = group.FirstOrDefault(t => t.Glossary.TenantId == tenantId)
+                       ?? group.First();
+
+            if (string.IsNullOrWhiteSpace(term.Translations))
+                continue;
+
+            try
+            {
+                var translations = JsonSerializer.Deserialize<Dictionary<string, string>>(
+                    term.Translations, options);
+
+                if (translations != null
+                    && translations.TryGetValue(languageCode, out var translated)
+                    && !string.IsNullOrWhiteSpace(translated))
+                {
+                    instructions.Add(new GlossaryTermInstruction(term.EnglishTerm, translated));
+                }
+            }
+            catch (JsonException)
+            {
+                _logger.LogDebug(
+                    "Failed to parse Translations JSON for glossary term {TermId} '{Term}'",
+                    term.Id, term.EnglishTerm);
+            }
+        }
+
+        return instructions;
     }
 
     /// <summary>

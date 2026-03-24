@@ -1,51 +1,48 @@
+using QuantumBuild.Modules.ToolboxTalks.Application.Prompts;
+
 namespace QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Translations;
 
 /// <summary>
 /// Service for translating general content (text, HTML) using AI translation.
 /// Different from ITranslationService which is specific to SRT subtitles.
+/// Supports tiered prompts: pass sectorKey/isSafetyCritical/glossaryTerms for compliance content.
 /// </summary>
 public interface IContentTranslationService
 {
     /// <summary>
     /// Translates plain text or HTML content to the target language.
+    /// When sectorKey, isSafetyCritical, or glossaryTerms are provided, uses the tiered prompt system.
     /// </summary>
-    /// <param name="text">The text to translate</param>
-    /// <param name="targetLanguage">Target language name (e.g., "Polish", "Romanian")</param>
-    /// <param name="isHtml">If true, preserves HTML tags while translating text content</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <param name="sourceLanguage">Source language name (e.g., "English", "Afrikaans"). Defaults to "English" if null.</param>
-    /// <returns>Translation result with translated content</returns>
     Task<ContentTranslationResult> TranslateTextAsync(
         string text,
         string targetLanguage,
         bool isHtml = false,
         CancellationToken cancellationToken = default,
-        string? sourceLanguage = null);
+        string? sourceLanguage = null,
+        string? sectorKey = null,
+        bool isSafetyCritical = false,
+        IEnumerable<GlossaryTermInstruction>? glossaryTerms = null);
 
     /// <summary>
     /// Sends a custom prompt directly to the AI without wrapping it in translation instructions.
     /// Use this when you've already constructed the full prompt (e.g., slideshow JSON translation).
     /// </summary>
-    /// <param name="prompt">The complete prompt to send to the AI</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Translation result with the AI response</returns>
     Task<ContentTranslationResult> SendCustomPromptAsync(
         string prompt,
         CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Translates multiple items in a batch for efficiency.
+    /// When sectorKey, isSafetyCritical, or glossaryTerms are provided, uses the tiered prompt system.
     /// </summary>
-    /// <param name="items">Items to translate with their context</param>
-    /// <param name="targetLanguage">Target language name</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <param name="sourceLanguage">Source language name. Defaults to "English" if null.</param>
-    /// <returns>Translation results keyed by item index</returns>
     Task<BatchTranslationResult> TranslateBatchAsync(
         IEnumerable<TranslationItem> items,
         string targetLanguage,
         CancellationToken cancellationToken = default,
-        string? sourceLanguage = null);
+        string? sourceLanguage = null,
+        string? sectorKey = null,
+        bool isSafetyCritical = false,
+        IEnumerable<GlossaryTermInstruction>? glossaryTerms = null);
 }
 
 /// <summary>
