@@ -15,45 +15,41 @@ public static class SafetyGlossarySeedData
     /// </summary>
     public static async Task SeedAsync(DbContext context, ILogger logger)
     {
-        if (await context.Set<SafetyGlossary>().IgnoreQueryFilters().AnyAsync(g => g.TenantId == null))
-        {
-            logger.LogInformation("System safety glossaries already exist, skipping");
-            return;
-        }
+        var existingSectorKeys = await context.Set<SafetyGlossary>()
+            .IgnoreQueryFilters()
+            .Where(g => g.TenantId == null)
+            .Select(g => g.SectorKey)
+            .ToListAsync();
 
         var now = DateTime.UtcNow;
         var glossaries = new List<SafetyGlossary>();
         var terms = new List<SafetyGlossaryTerm>();
 
-        // ── Food & Hospitality ──
-        var foodGlossary = CreateGlossary("food_hospitality", "Food & Hospitality", "\U0001F374", now);
-        glossaries.Add(foodGlossary);
-        terms.AddRange(CreateFoodHospitalityTerms(foodGlossary.Id, now));
+        var seedDefinitions = new (string Key, string Name, string Icon, Func<Guid, DateTime, List<SafetyGlossaryTerm>> TermFactory)[]
+        {
+            ("food_hospitality", "Food & Hospitality", "\U0001F374", CreateFoodHospitalityTerms),
+            ("construction", "Construction", "\U0001F3D7\uFE0F", CreateConstructionTerms),
+            ("homecare", "Homecare", "\U0001F3E0", CreateHomecareTerms),
+            ("transport", "Transport", "\U0001F69B", CreateTransportTerms),
+            ("manufacturing", "Manufacturing", "\U0001F3ED", CreateManufacturingTerms),
+            ("general", "General", "🛡️", CreateGeneralTerms),
+        };
 
-        // ── Construction ──
-        var constructionGlossary = CreateGlossary("construction", "Construction", "\U0001F3D7\uFE0F", now);
-        glossaries.Add(constructionGlossary);
-        terms.AddRange(CreateConstructionTerms(constructionGlossary.Id, now));
+        foreach (var (key, name, icon, termFactory) in seedDefinitions)
+        {
+            if (existingSectorKeys.Contains(key))
+                continue;
 
-        // ── Homecare ──
-        var homecareGlossary = CreateGlossary("homecare", "Homecare", "\U0001F3E0", now);
-        glossaries.Add(homecareGlossary);
-        terms.AddRange(CreateHomecareTerms(homecareGlossary.Id, now));
+            var glossary = CreateGlossary(key, name, icon, now);
+            glossaries.Add(glossary);
+            terms.AddRange(termFactory(glossary.Id, now));
+        }
 
-        // ── Transport ──
-        var transportGlossary = CreateGlossary("transport", "Transport", "\U0001F69B", now);
-        glossaries.Add(transportGlossary);
-        terms.AddRange(CreateTransportTerms(transportGlossary.Id, now));
-
-        // ── Manufacturing ──
-        var manufacturingGlossary = CreateGlossary("manufacturing", "Manufacturing", "\U0001F3ED", now);
-        glossaries.Add(manufacturingGlossary);
-        terms.AddRange(CreateManufacturingTerms(manufacturingGlossary.Id, now));
-
-        // ── General (cross-sector fallback) ──
-        var generalGlossary = CreateGlossary("general", "General", "🛡️", now);
-        glossaries.Add(generalGlossary);
-        terms.AddRange(CreateGeneralTerms(generalGlossary.Id, now));
+        if (glossaries.Count == 0)
+        {
+            logger.LogInformation("All system safety glossaries already exist, skipping");
+            return;
+        }
 
         await context.Set<SafetyGlossary>().AddRangeAsync(glossaries);
         await context.Set<SafetyGlossaryTerm>().AddRangeAsync(terms);
