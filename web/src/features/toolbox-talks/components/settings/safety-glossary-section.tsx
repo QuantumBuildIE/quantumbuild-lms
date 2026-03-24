@@ -277,7 +277,7 @@ function SectorTerms({
 }) {
   const { data: detail, isLoading } = useGlossarySector(sectorKey);
   const [showAddForm, setShowAddForm] = useState(false);
-  const importMutation = useImportGlossaryTerms(sectorId);
+  const importMutation = useImportGlossaryTerms(sectorId, sectorKey);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {

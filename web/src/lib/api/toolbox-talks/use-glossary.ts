@@ -104,13 +104,17 @@ export function useDeleteGlossaryTerm() {
   });
 }
 
-export function useImportGlossaryTerms(glossaryId: string) {
+export function useImportGlossaryTerms(glossaryId: string, sectorKey: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (file: File) => importGlossaryTerms(glossaryId, file),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: GLOSSARY_SECTORS_KEY });
+    onSuccess: async () => {
+      // Refetch both: sectors list (term count) and sector detail (term list)
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: GLOSSARY_SECTORS_KEY, exact: true }),
+        queryClient.refetchQueries({ queryKey: [...GLOSSARY_SECTORS_KEY, sectorKey], exact: true }),
+      ]);
     },
   });
 }
