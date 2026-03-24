@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,6 +28,9 @@ import {
   Save,
   X,
   Copy,
+  Upload,
+  Download,
+  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
@@ -39,6 +42,7 @@ import {
   useCreateGlossaryTerm,
   useUpdateGlossaryTerm,
   useDeleteGlossaryTerm,
+  useImportGlossaryTerms,
 } from '@/lib/api/toolbox-talks/use-glossary';
 import type {
   GlossarySectorListItem,
@@ -273,6 +277,50 @@ function SectorTerms({
 }) {
   const { data: detail, isLoading } = useGlossarySector(sectorKey);
   const [showAddForm, setShowAddForm] = useState(false);
+  const importMutation = useImportGlossaryTerms(sectorId);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Reset input so the same file can be re-selected
+    e.target.value = '';
+
+    if (file.size > 1024 * 1024) {
+      toast.error('File too large. Maximum size is 1MB.');
+      return;
+    }
+
+    try {
+      const result = await importMutation.mutateAsync(file);
+      const parts: string[] = [];
+      if (result.imported > 0) parts.push(`Imported ${result.imported} term${result.imported !== 1 ? 's' : ''}`);
+      if (result.skipped > 0) parts.push(`${result.skipped} skipped`);
+      if (result.errors.length > 0) parts.push(`${result.errors.length} error${result.errors.length !== 1 ? 's' : ''}`);
+      toast.success(parts.join('. ') + '.');
+      if (result.errors.length > 0) {
+        result.errors.slice(0, 5).forEach((err) => toast.error(err));
+      }
+    } catch {
+      toast.error('Failed to import terms');
+    }
+  };
+
+  const handleDownloadTemplate = () => {
+    const csv = [
+      'english_term,category,is_critical,fr,pl,ro,uk,pt,es,lt,de,lv',
+      'example term,equipment,true,,,,,,,,,',
+      'another term,procedure,false,,,,,,,,,',
+    ].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'glossary-import-template.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   if (isLoading) {
     return (
@@ -310,7 +358,7 @@ function SectorTerms({
           </p>
         )}
 
-        {/* Add term button */}
+        {/* Add term / Import buttons */}
         {!isSystemDefault && (
           <>
             <Separator />
@@ -320,15 +368,45 @@ function SectorTerms({
                 onClose={() => setShowAddForm(false)}
               />
             ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowAddForm(true)}
-                className="w-full"
-              >
-                <Plus className="h-3.5 w-3.5 mr-1" />
-                Add Term
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowAddForm(true)}
+                  className="flex-1"
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1" />
+                  Add Term
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={importMutation.isPending}
+                >
+                  {importMutation.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                  ) : (
+                    <Upload className="h-3.5 w-3.5 mr-1" />
+                  )}
+                  {importMutation.isPending ? 'Importing...' : 'Import CSV'}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleDownloadTemplate}
+                >
+                  <Download className="h-3.5 w-3.5 mr-1" />
+                  Template
+                </Button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv"
+                  onChange={handleImportFile}
+                  className="hidden"
+                />
+              </div>
             )}
           </>
         )}

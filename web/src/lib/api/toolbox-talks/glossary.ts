@@ -7,6 +7,7 @@ import type {
   CreateTermRequest,
   UpdateTermRequest,
   GlossaryTermDto,
+  ImportTermsResultDto,
 } from '@/types/validation';
 
 // ============================================
@@ -68,4 +69,19 @@ export async function updateGlossaryTerm(
 
 export async function deleteGlossaryTerm(termId: string): Promise<void> {
   await apiClient.delete(`/toolbox-talks/glossary/terms/${termId}`);
+}
+
+export async function importGlossaryTerms(
+  glossaryId: string,
+  file: File
+): Promise<ImportTermsResultDto> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await apiClient.post<ImportTermsResultDto>(
+    `/toolbox-talks/glossary/sectors/${glossaryId}/terms/import`,
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  );
+  return response.data;
 }

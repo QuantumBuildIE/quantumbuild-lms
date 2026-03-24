@@ -52,3 +52,9 @@ export interface UpdateTermRequest {
   isCritical: boolean;
   translations: string; // JSON string
 }
+
+export interface ImportTermsResultDto {
+  imported: number;
+  skipped: number;
+  errors: string[];
+}

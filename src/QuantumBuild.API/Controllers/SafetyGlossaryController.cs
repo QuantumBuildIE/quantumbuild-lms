@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -434,6 +435,183 @@ public class SafetyGlossaryController : ControllerBase
         {
             _logger.LogError(ex, "Error deleting term {TermId}", id);
             return StatusCode(500, new { message = "Error deleting term" });
+        }
+    }
+
+    /// <summary>
+    /// Bulk import glossary terms from a CSV file
+    /// </summary>
+    [HttpPost("sectors/{id:guid}/terms/import")]
+    [Authorize(Policy = "Learnings.Admin")]
+    [ProducesResponseType(typeof(ImportTermsResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [RequestSizeLimit(1_048_576)] // 1MB
+    public async Task<IActionResult> ImportTerms(
+        Guid id,
+        IFormFile file,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var tenantId = _currentUserService.TenantId;
+
+            if (file == null || file.Length == 0)
+                return BadRequest(new { message = "A CSV file is required" });
+
+            var glossary = await _dbContext.SafetyGlossaries
+                .FirstOrDefaultAsync(g => g.Id == id
+                    && (g.TenantId == tenantId || g.TenantId == null),
+                    cancellationToken);
+
+            if (glossary == null)
+                return NotFound(new { message = "Sector not found" });
+
+            if (glossary.TenantId == null)
+                return StatusCode(403, new { message = "Cannot modify system default glossaries" });
+
+            // Load existing terms for duplicate check
+            var existingTerms = await _dbContext.SafetyGlossaryTerms
+                .Where(t => t.GlossaryId == id)
+                .Select(t => t.EnglishTerm.ToLower())
+                .ToListAsync(cancellationToken);
+
+            var existingSet = new HashSet<string>(existingTerms);
+
+            // Read CSV content
+            string content;
+            using (var reader = new StreamReader(file.OpenReadStream()))
+            {
+                content = await reader.ReadToEndAsync(cancellationToken);
+            }
+
+            var lines = content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+            if (lines.Length < 2)
+                return BadRequest(new { message = "CSV file must contain a header row and at least one data row" });
+
+            // Validate header
+            var header = lines[0].Trim().TrimEnd('\r');
+            var expectedHeader = "english_term,category,is_critical,fr,pl,ro,uk,pt,es,lt,de,lv";
+            if (!string.Equals(header, expectedHeader, StringComparison.OrdinalIgnoreCase))
+                return BadRequest(new { message = $"Invalid CSV header. Expected: {expectedHeader}" });
+
+            var dataLines = lines.Skip(1).ToArray();
+
+            if (dataLines.Length > 500)
+                return BadRequest(new { message = "Maximum 500 rows per import" });
+
+            var validCategories = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                { "equipment", "regulatory", "procedure", "prohibition", "hazard", "emergency" };
+
+            var languageCodes = new[] { "fr", "pl", "ro", "uk", "pt", "es", "lt", "de", "lv" };
+
+            var imported = 0;
+            var skipped = 0;
+            var errors = new List<string>();
+
+            for (var i = 0; i < dataLines.Length; i++)
+            {
+                var line = dataLines[i].Trim().TrimEnd('\r');
+                if (string.IsNullOrWhiteSpace(line))
+                    continue;
+
+                var rowNumber = i + 2; // 1-indexed, skip header
+                var fields = line.Split(',');
+
+                if (fields.Length < 3)
+                {
+                    errors.Add($"Row {rowNumber}: insufficient columns (need at least english_term, category, is_critical)");
+                    continue;
+                }
+
+                var englishTerm = fields[0].Trim();
+                var category = fields[1].Trim();
+                var isCriticalStr = fields[2].Trim();
+
+                if (string.IsNullOrWhiteSpace(englishTerm))
+                {
+                    errors.Add($"Row {rowNumber}: missing english_term");
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(category))
+                {
+                    errors.Add($"Row {rowNumber}: missing category");
+                    continue;
+                }
+
+                if (!validCategories.Contains(category))
+                {
+                    errors.Add($"Row {rowNumber}: invalid category '{category}' (must be equipment/regulatory/procedure/prohibition/hazard/emergency)");
+                    continue;
+                }
+
+                if (!bool.TryParse(isCriticalStr, out var isCritical))
+                {
+                    errors.Add($"Row {rowNumber}: invalid is_critical value '{isCriticalStr}' (must be true/false)");
+                    continue;
+                }
+
+                // Duplicate check (case-insensitive)
+                if (existingSet.Contains(englishTerm.ToLower()))
+                {
+                    skipped++;
+                    continue;
+                }
+
+                // Build translations JSON from language columns
+                var translations = new Dictionary<string, string>();
+                for (var j = 0; j < languageCodes.Length; j++)
+                {
+                    var fieldIndex = j + 3;
+                    if (fieldIndex < fields.Length)
+                    {
+                        var value = fields[fieldIndex].Trim();
+                        if (!string.IsNullOrWhiteSpace(value))
+                        {
+                            translations[languageCodes[j]] = value;
+                        }
+                    }
+                }
+
+                var translationsJson = JsonSerializer.Serialize(translations);
+
+                _dbContext.SafetyGlossaryTerms.Add(new SafetyGlossaryTerm
+                {
+                    Id = Guid.NewGuid(),
+                    GlossaryId = id,
+                    EnglishTerm = englishTerm,
+                    Category = category.ToLower(),
+                    IsCritical = isCritical,
+                    Translations = translationsJson
+                });
+
+                existingSet.Add(englishTerm.ToLower());
+                imported++;
+            }
+
+            if (imported > 0)
+            {
+                await _dbContext.SaveChangesAsync(cancellationToken);
+            }
+
+            _logger.LogInformation(
+                "CSV import for glossary {GlossaryId}: {Imported} imported, {Skipped} skipped, {Errors} errors",
+                id, imported, skipped, errors.Count);
+
+            return Ok(new ImportTermsResultDto
+            {
+                Imported = imported,
+                Skipped = skipped,
+                Errors = errors
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error importing terms to glossary {GlossaryId}", id);
+            return StatusCode(500, new { message = "Error importing terms" });
         }
     }
 }

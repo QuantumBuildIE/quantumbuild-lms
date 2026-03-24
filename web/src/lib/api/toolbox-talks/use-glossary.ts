@@ -7,6 +7,7 @@ import {
   createGlossaryTerm,
   updateGlossaryTerm,
   deleteGlossaryTerm,
+  importGlossaryTerms,
 } from './glossary';
 import type {
   CreateSectorRequest,
@@ -97,6 +98,17 @@ export function useDeleteGlossaryTerm() {
 
   return useMutation({
     mutationFn: (termId: string) => deleteGlossaryTerm(termId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: GLOSSARY_SECTORS_KEY });
+    },
+  });
+}
+
+export function useImportGlossaryTerms(glossaryId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (file: File) => importGlossaryTerms(glossaryId, file),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: GLOSSARY_SECTORS_KEY });
     },
