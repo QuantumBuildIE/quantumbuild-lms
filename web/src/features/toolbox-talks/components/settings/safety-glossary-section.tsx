@@ -90,10 +90,10 @@ export function SafetyGlossarySection() {
               key={sector.id}
               sector={sector}
               allSectors={sectors}
-              isExpanded={expandedSector === sector.sectorKey}
+              isExpanded={expandedSector === sector.id}
               onToggle={() =>
                 setExpandedSector(
-                  expandedSector === sector.sectorKey ? null : sector.sectorKey
+                  expandedSector === sector.id ? null : sector.id
                 )
               }
             />
@@ -256,7 +256,7 @@ function SectorRow({
 
       {/* Expanded terms */}
       {isExpanded && (
-        <SectorTerms sectorKey={sector.sectorKey} sectorId={sector.id} isSystemDefault={sector.isSystemDefault} />
+        <SectorTerms glossaryId={sector.id} isSystemDefault={sector.isSystemDefault} />
       )}
     </div>
   );
@@ -267,17 +267,15 @@ function SectorRow({
 // ============================================
 
 function SectorTerms({
-  sectorKey,
-  sectorId,
+  glossaryId,
   isSystemDefault,
 }: {
-  sectorKey: string;
-  sectorId: string;
+  glossaryId: string;
   isSystemDefault: boolean;
 }) {
-  const { data: detail, isLoading } = useGlossarySector(sectorKey);
+  const { data: detail, isLoading } = useGlossarySector(glossaryId);
   const [showAddForm, setShowAddForm] = useState(false);
-  const importMutation = useImportGlossaryTerms(sectorId, sectorKey);
+  const importMutation = useImportGlossaryTerms(glossaryId);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -364,7 +362,7 @@ function SectorTerms({
             <Separator />
             {showAddForm ? (
               <AddTermForm
-                sectorId={sectorId}
+                sectorId={glossaryId}
                 onClose={() => setShowAddForm(false)}
               />
             ) : (

@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   getGlossarySectors,
-  getGlossarySector,
+  getGlossarySectorById,
   createGlossarySector,
   updateGlossarySector,
   createGlossaryTerm,
@@ -34,11 +34,11 @@ export function useGlossarySectors() {
   });
 }
 
-export function useGlossarySector(key: string, enabled = true) {
+export function useGlossarySector(id: string, enabled = true) {
   return useQuery({
-    queryKey: [...GLOSSARY_SECTORS_KEY, key],
-    queryFn: () => getGlossarySector(key),
-    enabled: !!key && enabled,
+    queryKey: [...GLOSSARY_SECTORS_KEY, 'by-id', id],
+    queryFn: () => getGlossarySectorById(id),
+    enabled: !!id && enabled,
   });
 }
 
@@ -104,7 +104,7 @@ export function useDeleteGlossaryTerm() {
   });
 }
 
-export function useImportGlossaryTerms(glossaryId: string, sectorKey: string) {
+export function useImportGlossaryTerms(glossaryId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -113,7 +113,7 @@ export function useImportGlossaryTerms(glossaryId: string, sectorKey: string) {
       // Refetch both: sectors list (term count) and sector detail (term list)
       await Promise.all([
         queryClient.refetchQueries({ queryKey: GLOSSARY_SECTORS_KEY, exact: true }),
-        queryClient.refetchQueries({ queryKey: [...GLOSSARY_SECTORS_KEY, sectorKey], exact: true }),
+        queryClient.refetchQueries({ queryKey: [...GLOSSARY_SECTORS_KEY, 'by-id', glossaryId], exact: true }),
       ]);
     },
   });

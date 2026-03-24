@@ -85,7 +85,7 @@ public class SafetyGlossaryController : ControllerBase
                 .Include(g => g.Terms.OrderBy(t => t.EnglishTerm))
                 .Where(g => g.SectorKey == key && (g.TenantId == tenantId || g.TenantId == null))
                 .Where(g => g.IsActive)
-                .OrderByDescending(g => g.TenantId) // tenant-specific first (non-null)
+                .OrderByDescending(g => g.TenantId.HasValue) // tenant-specific first (non-null)
                 .FirstOrDefaultAsync(cancellationToken);
 
             if (glossary == null)
@@ -114,6 +114,57 @@ public class SafetyGlossaryController : ControllerBase
         {
             _logger.LogError(ex, "Error retrieving sector {Key}", key);
             return StatusCode(500, new { message = "Error retrieving sector" });
+        }
+    }
+
+    /// <summary>
+    /// Get a sector with all its terms by glossary ID
+    /// </summary>
+    [HttpGet("sectors/by-id/{id:guid}")]
+    [ProducesResponseType(typeof(GlossarySectorDetailDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetSectorById(Guid id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var tenantId = _currentUserService.TenantId;
+
+            var glossary = await _dbContext.SafetyGlossaries
+                .Include(g => g.Terms.OrderBy(t => t.EnglishTerm))
+                .Where(g => g.Id == id && g.IsActive)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (glossary == null)
+                return NotFound(new { message = "Glossary not found" });
+
+            // Must belong to current tenant or be a system default
+            if (glossary.TenantId != null && glossary.TenantId != tenantId)
+                return StatusCode(403, new { message = "Access denied" });
+
+            var dto = new GlossarySectorDetailDto
+            {
+                Id = glossary.Id,
+                SectorKey = glossary.SectorKey,
+                SectorName = glossary.SectorName,
+                SectorIcon = glossary.SectorIcon,
+                IsSystemDefault = glossary.TenantId == null,
+                Terms = glossary.Terms.Select(t => new GlossaryTermDto
+                {
+                    Id = t.Id,
+                    EnglishTerm = t.EnglishTerm,
+                    Category = t.Category,
+                    IsCritical = t.IsCritical,
+                    Translations = t.Translations
+                }).ToList()
+            };
+
+            return Ok(dto);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving glossary {GlossaryId}", id);
+            return StatusCode(500, new { message = "Error retrieving glossary" });
         }
     }
 

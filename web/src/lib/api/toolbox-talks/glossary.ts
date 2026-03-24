@@ -28,6 +28,13 @@ export async function getGlossarySector(key: string): Promise<GlossarySectorDeta
   return response.data;
 }
 
+export async function getGlossarySectorById(id: string): Promise<GlossarySectorDetail> {
+  const response = await apiClient.get<GlossarySectorDetail>(
+    `/toolbox-talks/glossary/sectors/by-id/${id}`
+  );
+  return response.data;
+}
+
 export async function createGlossarySector(
   request: CreateSectorRequest
 ): Promise<GlossarySectorDetail> {
