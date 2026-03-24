@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/accordion';
 import { Slideshow } from './Slideshow';
 import { HtmlSlideshow } from './HtmlSlideshow';
+import { VideoPlayer } from './VideoPlayer';
 import {
   useToolboxTalkPreview,
   useToolboxTalkPreviewSlides,
@@ -70,6 +71,9 @@ export function PreviewModal({ open, onOpenChange, talk }: PreviewModalProps) {
     previewLanguage,
     open && (talk.hasSlideshow || !!preview?.hasSlideshow)
   );
+
+  // No-op progress handler — preview mode doesn't track watch progress
+  const handlePreviewProgress = useCallback(async () => {}, []);
 
   // Build language options: source language + available translations
   const sourceCode = talk.sourceLanguageCode || 'en';
@@ -139,6 +143,19 @@ export function PreviewModal({ open, onOpenChange, talk }: PreviewModalProps) {
                 )}
               </div>
             </div>
+
+            {/* Video Player */}
+            {talk.videoUrl && (
+              <VideoPlayer
+                videoUrl={talk.videoUrl}
+                videoSource={talk.videoSource}
+                minimumWatchPercent={0}
+                currentWatchPercent={0}
+                onProgressUpdate={handlePreviewProgress}
+                toolboxTalkId={talk.id}
+                preferredLanguageCode={previewLanguage}
+              />
+            )}
 
             {/* HTML Slideshow (preferred) */}
             {slideshowHtmlData?.html && (
