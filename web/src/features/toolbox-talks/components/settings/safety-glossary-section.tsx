@@ -392,13 +392,11 @@ function TermRow({
         </div>
         <div>
           <label className="text-xs font-medium text-muted-foreground mb-1 block">
-            Translations (JSON)
+            Translations
           </label>
-          <Input
+          <TranslationFields
             value={editTranslations}
-            onChange={(e) => setEditTranslations(e.target.value)}
-            placeholder='{"pl":"...", "ro":"..."}'
-            className="font-mono text-xs"
+            onChange={setEditTranslations}
           />
         </div>
         <div className="flex gap-2 justify-end">
@@ -515,14 +513,6 @@ function AddTermForm({
       return;
     }
 
-    // Validate JSON
-    try {
-      JSON.parse(translations);
-    } catch {
-      toast.error('Translations must be valid JSON');
-      return;
-    }
-
     try {
       await createMutation.mutateAsync({
         sectorId,
@@ -564,13 +554,11 @@ function AddTermForm({
       </div>
       <div>
         <label className="text-xs font-medium text-muted-foreground mb-1 block">
-          Translations (JSON)
+          Translations
         </label>
-        <Input
+        <TranslationFields
           value={translations}
-          onChange={(e) => setTranslations(e.target.value)}
-          placeholder='{"pl":"...", "ro":"..."}'
-          className="font-mono text-xs"
+          onChange={setTranslations}
         />
       </div>
       <div className="flex gap-2 justify-end">
@@ -586,6 +574,76 @@ function AddTermForm({
           Cancel
         </Button>
       </div>
+    </div>
+  );
+}
+
+// ============================================
+// Translation Language Grid
+// ============================================
+
+const SUPPORTED_LANGUAGES = [
+  { code: 'fr', name: 'French', flag: '🇫🇷' },
+  { code: 'pl', name: 'Polish', flag: '🇵🇱' },
+  { code: 'ro', name: 'Romanian', flag: '🇷🇴' },
+  { code: 'uk', name: 'Ukrainian', flag: '🇺🇦' },
+  { code: 'pt', name: 'Portuguese', flag: '🇵🇹' },
+  { code: 'es', name: 'Spanish', flag: '🇪🇸' },
+  { code: 'lt', name: 'Lithuanian', flag: '🇱🇹' },
+  { code: 'de', name: 'German', flag: '🇩🇪' },
+  { code: 'lv', name: 'Latvian', flag: '🇱🇻' },
+] as const;
+
+function parseTranslationsToRecord(json: string): Record<string, string> {
+  try {
+    const parsed = JSON.parse(json);
+    if (typeof parsed === 'object' && parsed !== null) {
+      return parsed as Record<string, string>;
+    }
+  } catch {
+    // malformed JSON — default all fields to empty
+  }
+  return {};
+}
+
+function serialiseTranslations(values: Record<string, string>): string {
+  const filtered: Record<string, string> = {};
+  for (const [key, val] of Object.entries(values)) {
+    if (val.trim()) {
+      filtered[key] = val.trim();
+    }
+  }
+  return JSON.stringify(filtered);
+}
+
+function TranslationFields({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (json: string) => void;
+}) {
+  const parsed = parseTranslationsToRecord(value);
+
+  const handleFieldChange = (code: string, fieldValue: string) => {
+    const updated = { ...parseTranslationsToRecord(value), [code]: fieldValue };
+    onChange(serialiseTranslations(updated));
+  };
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      {SUPPORTED_LANGUAGES.map(({ code, name, flag }) => (
+        <div key={code}>
+          <label className="text-xs font-medium text-muted-foreground mb-1 block">
+            {flag} {name}
+          </label>
+          <Input
+            value={parsed[code] ?? ''}
+            onChange={(e) => handleFieldChange(code, e.target.value)}
+            placeholder={`Translation in ${name}...`}
+          />
+        </div>
+      ))}
     </div>
   );
 }
