@@ -10,6 +10,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Commands.GenerateContentTran
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services.Subtitles;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Sectors;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Hubs;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
@@ -30,6 +31,7 @@ public class ContentGenerationJob
     private readonly ISender _sender;
     private readonly ILanguageCodeService _languageCodeService;
     private readonly ISlideshowGenerationService _slideshowGenerationService;
+    private readonly ITenantSectorService _tenantSectorService;
     private readonly ILogger<ContentGenerationJob> _logger;
 
     public ContentGenerationJob(
@@ -40,6 +42,7 @@ public class ContentGenerationJob
         ISender sender,
         ILanguageCodeService languageCodeService,
         ISlideshowGenerationService slideshowGenerationService,
+        ITenantSectorService tenantSectorService,
         ILogger<ContentGenerationJob> logger)
     {
         _generationService = generationService;
@@ -49,6 +52,7 @@ public class ContentGenerationJob
         _sender = sender;
         _languageCodeService = languageCodeService;
         _slideshowGenerationService = slideshowGenerationService;
+        _tenantSectorService = tenantSectorService;
         _logger = logger;
     }
 
@@ -564,16 +568,29 @@ public class ContentGenerationJob
                 "[DEBUG] Dispatching GenerateContentTranslationsCommand for {Count} languages: {Languages}",
                 languageNames.Count, string.Join(", ", languageNames));
 
-            // TODO: Pass sector context for tiered translation prompts.
-            // ContentGenerationJob has no access to ContentCreationSession or ITenantSectorService.
-            // Injecting ITenantSectorService here would add a DB query per auto-translation run.
-            // For now, sector-aware translations are handled by MissingTranslationsJob and the wizard flow.
+            // Look up tenant's default sector for tiered translation prompts
+            string? sectorKey = null;
+            try
+            {
+                var defaultSector = await _tenantSectorService.GetDefaultSectorAsync(tenantId, cancellationToken);
+                sectorKey = defaultSector?.SectorKey;
+                _logger.LogInformation(
+                    "ContentGenerationJob resolved sector for tenant {TenantId}: {SectorKey}",
+                    tenantId, sectorKey ?? "(none)");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "ContentGenerationJob failed to resolve default sector for tenant {TenantId}. Proceeding without sector context.",
+                    tenantId);
+            }
+
             var command = new GenerateContentTranslationsCommand
             {
                 ToolboxTalkId = toolboxTalkId,
                 TenantId = tenantId,
                 TargetLanguages = languageNames,
-                SectorKey = null
+                SectorKey = sectorKey
             };
 
             var translationResult = await _sender.Send(command, cancellationToken);

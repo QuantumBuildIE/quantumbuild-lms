@@ -26,6 +26,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Services;
 using QuantumBuild.Modules.ToolboxTalks.Application.Features.Certificates.DTOs;
 using QuantumBuild.Modules.ToolboxTalks.Application.Features.Certificates.Queries;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Storage;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Sectors;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 using System.ComponentModel.DataAnnotations;
@@ -51,6 +52,7 @@ public class ToolboxTalksController : ControllerBase
     private readonly IR2StorageService _r2StorageService;
     private readonly ISlideshowGenerationService _slideshowGenerationService;
     private readonly ISupervisorAssignmentService _supervisorAssignmentService;
+    private readonly ITenantSectorService _tenantSectorService;
     private readonly UserManager<User> _userManager;
     private readonly ILogger<ToolboxTalksController> _logger;
 
@@ -64,6 +66,7 @@ public class ToolboxTalksController : ControllerBase
         IR2StorageService r2StorageService,
         ISlideshowGenerationService slideshowGenerationService,
         ISupervisorAssignmentService supervisorAssignmentService,
+        ITenantSectorService tenantSectorService,
         UserManager<User> userManager,
         ILogger<ToolboxTalksController> logger)
     {
@@ -76,6 +79,7 @@ public class ToolboxTalksController : ControllerBase
         _r2StorageService = r2StorageService;
         _slideshowGenerationService = slideshowGenerationService;
         _supervisorAssignmentService = supervisorAssignmentService;
+        _tenantSectorService = tenantSectorService;
         _userManager = userManager;
         _logger = logger;
     }
@@ -1070,16 +1074,26 @@ public class ToolboxTalksController : ControllerBase
                 return BadRequest(new { error = "At least one language is required" });
             }
 
-            // TODO: Pass sector context for tiered translation prompts.
-            // Controller doesn't have ITenantSectorService injected. This endpoint is used for
-            // manual "generate translations" from the admin UI — sector context could be added
-            // by injecting ITenantSectorService and calling GetDefaultSectorAsync.
+            // Look up tenant's default sector for tiered translation prompts
+            string? sectorKey = null;
+            try
+            {
+                var defaultSector = await _tenantSectorService.GetDefaultSectorAsync(_currentUserService.TenantId);
+                sectorKey = defaultSector?.SectorKey;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Failed to resolve default sector for tenant {TenantId}. Proceeding without sector context.",
+                    _currentUserService.TenantId);
+            }
+
             var command = new GenerateContentTranslationsCommand
             {
                 ToolboxTalkId = id,
                 TenantId = _currentUserService.TenantId,
                 TargetLanguages = request.Languages,
-                SectorKey = null
+                SectorKey = sectorKey
             };
 
             var result = await _mediator.Send(command);
