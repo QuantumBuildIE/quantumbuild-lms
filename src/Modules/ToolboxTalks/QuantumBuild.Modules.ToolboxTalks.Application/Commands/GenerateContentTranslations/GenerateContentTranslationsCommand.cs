@@ -21,6 +21,13 @@ public record GenerateContentTranslationsCommand : IRequest<GenerateContentTrans
     /// Target languages to translate to (language names, e.g., "Polish", "Romanian")
     /// </summary>
     public List<string> TargetLanguages { get; init; } = new();
+
+    /// <summary>
+    /// Optional sector key for tiered translation prompts (e.g., "construction", "homecare").
+    /// When provided, translations use sector-specific terminology rules (Tier 2).
+    /// Nullable because some dispatch sites may not have sector context available.
+    /// </summary>
+    public string? SectorKey { get; init; }
 }
 
 /// <summary>

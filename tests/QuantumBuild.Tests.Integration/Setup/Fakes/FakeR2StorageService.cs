@@ -173,6 +173,19 @@ public class FakeR2StorageService : IR2StorageService
         return Task.CompletedTask;
     }
 
+    public Task<R2UploadResult> UploadInspectionReportAsync(
+        Guid tenantId,
+        string sectorKey,
+        Stream content,
+        CancellationToken cancellationToken = default)
+    {
+        var key = $"{tenantId}/inspection-reports/{sectorKey}/{DateTime.UtcNow:yyyyMMdd-HHmmss}.pdf";
+        var bytes = ReadStream(content);
+        _files[key] = bytes;
+        return Task.FromResult(R2UploadResult.SuccessResult(
+            $"https://fake-r2.test/{key}", key, bytes.Length, "application/pdf"));
+    }
+
     public string GeneratePublicUrl(Guid tenantId, string folder, string fileName)
     {
         return $"https://fake-r2.test/{tenantId}/{folder}/{fileName}";

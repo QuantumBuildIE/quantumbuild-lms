@@ -7,6 +7,7 @@ using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.GenerateContentTranslations;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services.Subtitles;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Sectors;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Hubs;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
@@ -27,6 +28,7 @@ public class MissingTranslationsJob
     private readonly ISender _sender;
     private readonly ILanguageCodeService _languageCodeService;
     private readonly ISubtitleProcessingOrchestrator _subtitleOrchestrator;
+    private readonly ITenantSectorService _tenantSectorService;
     private readonly IHubContext<ContentGenerationHub> _hubContext;
     private readonly ILogger<MissingTranslationsJob> _logger;
 
@@ -36,6 +38,7 @@ public class MissingTranslationsJob
         ISender sender,
         ILanguageCodeService languageCodeService,
         ISubtitleProcessingOrchestrator subtitleOrchestrator,
+        ITenantSectorService tenantSectorService,
         IHubContext<ContentGenerationHub> hubContext,
         ILogger<MissingTranslationsJob> logger)
     {
@@ -44,6 +47,7 @@ public class MissingTranslationsJob
         _sender = sender;
         _languageCodeService = languageCodeService;
         _subtitleOrchestrator = subtitleOrchestrator;
+        _tenantSectorService = tenantSectorService;
         _hubContext = hubContext;
         _logger = logger;
     }
@@ -169,11 +173,29 @@ public class MissingTranslationsJob
             "Translating", 50,
             $"Generating {missingLanguageNames.Count} missing content translation(s)...");
 
+        // Look up tenant's default sector for tiered translation prompts (single DB query)
+        string? sectorKey = null;
+        try
+        {
+            var defaultSector = await _tenantSectorService.GetDefaultSectorAsync(tenantId, cancellationToken);
+            sectorKey = defaultSector?.SectorKey;
+            _logger.LogInformation(
+                "MissingTranslationsJob resolved sector for tenant {TenantId}: {SectorKey}",
+                tenantId, sectorKey ?? "(none)");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "MissingTranslationsJob failed to resolve default sector for tenant {TenantId}. Proceeding without sector context.",
+                tenantId);
+        }
+
         var command = new GenerateContentTranslationsCommand
         {
             ToolboxTalkId = toolboxTalkId,
             TenantId = tenantId,
-            TargetLanguages = missingLanguageNames
+            TargetLanguages = missingLanguageNames,
+            SectorKey = sectorKey
         };
 
         var result = await _sender.Send(command, cancellationToken);

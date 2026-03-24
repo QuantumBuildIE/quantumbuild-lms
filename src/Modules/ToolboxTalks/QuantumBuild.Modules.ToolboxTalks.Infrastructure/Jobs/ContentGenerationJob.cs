@@ -564,11 +564,16 @@ public class ContentGenerationJob
                 "[DEBUG] Dispatching GenerateContentTranslationsCommand for {Count} languages: {Languages}",
                 languageNames.Count, string.Join(", ", languageNames));
 
+            // TODO: Pass sector context for tiered translation prompts.
+            // ContentGenerationJob has no access to ContentCreationSession or ITenantSectorService.
+            // Injecting ITenantSectorService here would add a DB query per auto-translation run.
+            // For now, sector-aware translations are handled by MissingTranslationsJob and the wizard flow.
             var command = new GenerateContentTranslationsCommand
             {
                 ToolboxTalkId = toolboxTalkId,
                 TenantId = tenantId,
-                TargetLanguages = languageNames
+                TargetLanguages = languageNames,
+                SectorKey = null
             };
 
             var translationResult = await _sender.Send(command, cancellationToken);

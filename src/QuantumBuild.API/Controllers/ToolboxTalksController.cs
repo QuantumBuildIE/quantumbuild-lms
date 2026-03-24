@@ -1070,11 +1070,16 @@ public class ToolboxTalksController : ControllerBase
                 return BadRequest(new { error = "At least one language is required" });
             }
 
+            // TODO: Pass sector context for tiered translation prompts.
+            // Controller doesn't have ITenantSectorService injected. This endpoint is used for
+            // manual "generate translations" from the admin UI — sector context could be added
+            // by injecting ITenantSectorService and calling GetDefaultSectorAsync.
             var command = new GenerateContentTranslationsCommand
             {
                 ToolboxTalkId = id,
                 TenantId = _currentUserService.TenantId,
-                TargetLanguages = request.Languages
+                TargetLanguages = request.Languages,
+                SectorKey = null
             };
 
             var result = await _mediator.Send(command);
