@@ -145,11 +145,11 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
     try {
       const raw = JSON.parse(session.parsedSectionsJson);
       const parsed = normalizeSections(raw);
-      const outputType = session.outputType ?? (parsed.length >= 3 ? 'Course' : 'Lesson');
+      const outputType = session.outputType ?? 'Lesson';
 
       updateState({
         parsedSections: parsed,
-        suggestedOutputType: parsed.length >= 3 ? 'Course' : 'Lesson',
+        suggestedOutputType: 'Lesson' as OutputType,
         selectedOutputType: state.selectedOutputType ?? outputType,
       });
 
@@ -237,7 +237,7 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
     try {
       const raw = JSON.parse(sectionsJson);
       const parsed = normalizeSections(raw);
-      const suggested: OutputType = parsed.length >= 3 ? 'Course' : 'Lesson';
+      const suggested: OutputType = 'Lesson';
 
       updateState({
         parsedSections: parsed,

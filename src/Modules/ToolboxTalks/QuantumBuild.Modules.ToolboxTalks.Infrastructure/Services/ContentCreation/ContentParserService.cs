@@ -143,7 +143,8 @@ public class ContentParserService : IContentParserService
 
     public OutputType SuggestOutputType(int sectionCount)
     {
-        return sectionCount >= CourseThreshold ? OutputType.Course : OutputType.Lesson;
+        // Always default to Lesson — user can manually switch to Course if desired
+        return OutputType.Lesson;
     }
 
     private static string BuildParsePrompt(string rawText, string sourceHint)
