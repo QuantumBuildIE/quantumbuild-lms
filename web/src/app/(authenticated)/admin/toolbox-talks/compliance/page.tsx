@@ -265,17 +265,18 @@ function SectorChecklistView({ sectorKey }: { sectorKey: string }) {
     );
   }
 
-  // Get unique principles for filter
-  const principles = checklist.principleGroups.map((g) => ({
-    value: g.principle,
-    label: g.principle
-      ? `${g.principle}${g.principleLabel ? ` — ${g.principleLabel}` : ''}`
-      : 'Uncategorised',
-  }));
+  // Get unique principles for filter — filter out null/empty to avoid Radix Select crash
+  const principles = checklist.principleGroups
+    .filter((g) => g.principle)
+    .map((g) => ({
+      value: g.principle,
+      label: `${g.principle}${g.principleLabel ? ` — ${g.principleLabel}` : ''}`,
+    }));
+  const hasUncategorised = checklist.principleGroups.some((g) => !g.principle);
 
   // Filter groups
   const filteredGroups = checklist.principleGroups
-    .filter((g) => principleFilter === 'all' || g.principle === principleFilter)
+    .filter((g) => principleFilter === 'all' || (principleFilter === '__uncategorised__' ? !g.principle : g.principle === principleFilter))
     .map((group) => ({
       ...group,
       requirements:
@@ -367,6 +368,9 @@ function SectorChecklistView({ sectorKey }: { sectorKey: string }) {
                 {p.label}
               </SelectItem>
             ))}
+            {hasUncategorised && (
+              <SelectItem value="__uncategorised__">Uncategorised</SelectItem>
+            )}
           </SelectContent>
         </Select>
 
@@ -391,9 +395,9 @@ function SectorChecklistView({ sectorKey }: { sectorKey: string }) {
       </div>
 
       {/* Requirements grouped by principle */}
-      <Accordion type="multiple" defaultValue={filteredGroups.map((g) => g.principle)} className="space-y-2">
+      <Accordion type="multiple" defaultValue={filteredGroups.map((g) => g.principle || '__uncategorised__')} className="space-y-2">
         {filteredGroups.map((group) => (
-          <AccordionItem key={group.principle} value={group.principle} className="border rounded-lg px-1">
+          <AccordionItem key={group.principle || '__uncategorised__'} value={group.principle || '__uncategorised__'} className="border rounded-lg px-1">
             <AccordionTrigger className="hover:no-underline px-3">
               <div className="flex items-center gap-3">
                 <span className="font-medium">

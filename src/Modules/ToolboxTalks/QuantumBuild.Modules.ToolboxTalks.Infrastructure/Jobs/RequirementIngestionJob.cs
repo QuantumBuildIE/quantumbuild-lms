@@ -204,10 +204,10 @@ public class RequirementIngestionJob
 For each requirement, extract:
 - title: A concise title (max 200 chars) for the training/competency requirement
 - description: A detailed description (max 2000 chars) of what the requirement entails
-- section: The HIQA standard number in the format ""Standard X.Y"" (e.g. ""Standard 2.3"", ""Standard 3.1"") if identifiable from the document. Use the standard numbering from the source document — do NOT prefix with ""§"". Set to null if no standard number is identifiable
-- sectionLabel: A short descriptive label for the section (e.g. ""Incident Reporting"", ""MAR Management"") if identifiable, or null
-- principle: The principle reference if identifiable (e.g. ""P2""), or null
-- principleLabel: MUST use one of the exact canonical labels below, or null if no principle applies
+- section: The section or article reference from the document (e.g. ""Standard 2.3"", ""Article 4"", ""§7""). Use the standard numbering from the source document. If not explicitly stated, use the document section heading or ""General"". This field is MANDATORY — never return null or omit it
+- sectionLabel: A short descriptive label for the section (e.g. ""Incident Reporting"", ""Staff Training"", ""MAR Management""). Derive from context if not explicit. This field is MANDATORY — never return null or omit it
+- principle: A short category label grouping this requirement (e.g. ""P2"", ""Staff Competency"", ""Food Safety Management""). If not explicitly stated in the document, infer from the requirement's subject matter. This field is MANDATORY — never return null or omit it
+- principleLabel: The full description of the principle category. MUST use one of the exact canonical labels below when applicable, or derive a descriptive label from the requirement's subject matter
 - priority: ""high"" for safety-critical requirements, ""med"" for standard compliance, ""low"" for best-practice/advisory
 - displayOrder: Sequential numbering starting from 1
 
@@ -223,6 +223,7 @@ IMPORTANT RULES:
 - Extract ONLY requirements related to staff training, competency, skills, or compliance obligations
 - Do NOT include general policy statements, organisational structure requirements, or non-training items
 - Each requirement should be actionable as a training topic
+- The fields section, sectionLabel, principle, and principleLabel are ALL MANDATORY — never return null or omit them. If the document does not explicitly state them, infer reasonable values from the requirement's context and subject matter
 - Respond ONLY with a valid JSON array — no preamble, no markdown, no explanation
 
 DOCUMENT TEXT:
