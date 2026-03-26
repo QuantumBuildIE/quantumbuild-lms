@@ -78,12 +78,13 @@ export function useMyCompletedToolboxTalks(params?: Omit<GetMyToolboxTalksParams
   });
 }
 
-export function useMyTrainingSummary() {
+export function useMyTrainingSummary(enabled: boolean = true) {
   return useQuery({
     queryKey: [...MY_TOOLBOX_TALKS_KEY, 'summary'],
     queryFn: getMyTrainingSummary,
     staleTime: 5 * 60 * 1000, // 5 minutes
     refetchOnWindowFocus: true,
+    enabled,
   });
 }
 

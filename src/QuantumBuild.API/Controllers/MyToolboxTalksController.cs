@@ -73,7 +73,7 @@ public class MyToolboxTalksController : ControllerBase
             var employeeId = GetCurrentEmployeeId();
             if (employeeId == null)
             {
-                return BadRequest(new { message = "No employee record associated with current user" });
+                return Ok(Result.Ok(new PaginatedList<MyToolboxTalkListDto>(new List<MyToolboxTalkListDto>(), 0, pageNumber, pageSize)));
             }
 
             var query = new GetMyToolboxTalksQuery
@@ -407,7 +407,7 @@ public class MyToolboxTalksController : ControllerBase
             var employeeId = GetCurrentEmployeeId();
             if (employeeId == null)
             {
-                return BadRequest(new { message = "No employee record associated with current user" });
+                return Ok(Result.Ok(new PaginatedList<MyToolboxTalkListDto>(new List<MyToolboxTalkListDto>(), 0, pageNumber, pageSize)));
             }
 
             var query = new GetMyToolboxTalksQuery
@@ -444,7 +444,7 @@ public class MyToolboxTalksController : ControllerBase
             var employeeId = GetCurrentEmployeeId();
             if (employeeId == null)
             {
-                return BadRequest(new { message = "No employee record associated with current user" });
+                return Ok(Result.Ok(new PaginatedList<MyToolboxTalkListDto>(new List<MyToolboxTalkListDto>(), 0, pageNumber, pageSize)));
             }
 
             var query = new GetMyToolboxTalksQuery
@@ -481,7 +481,7 @@ public class MyToolboxTalksController : ControllerBase
             var employeeId = GetCurrentEmployeeId();
             if (employeeId == null)
             {
-                return BadRequest(new { message = "No employee record associated with current user" });
+                return Ok(Result.Ok(new PaginatedList<MyToolboxTalkListDto>(new List<MyToolboxTalkListDto>(), 0, pageNumber, pageSize)));
             }
 
             var query = new GetMyToolboxTalksQuery
@@ -518,7 +518,7 @@ public class MyToolboxTalksController : ControllerBase
             var employeeId = GetCurrentEmployeeId();
             if (employeeId == null)
             {
-                return BadRequest(new { message = "No employee record associated with current user" });
+                return Ok(Result.Ok(new PaginatedList<MyToolboxTalkListDto>(new List<MyToolboxTalkListDto>(), 0, pageNumber, pageSize)));
             }
 
             var query = new GetMyToolboxTalksQuery
@@ -868,7 +868,7 @@ public class MyToolboxTalksController : ControllerBase
             var employeeId = GetCurrentEmployeeId();
             if (employeeId == null)
             {
-                return BadRequest(new { message = "No employee record associated with current user" });
+                return Ok(Result.Ok(new List<ToolboxTalkCourseAssignmentDto>()));
             }
 
             var query = new GetEmployeeCourseAssignmentsQuery

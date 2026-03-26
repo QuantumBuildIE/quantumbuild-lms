@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { AlertTriangle, Info, X, ArrowRight } from "lucide-react";
 import { useMyTrainingSummary } from "@/lib/api/toolbox-talks/use-my-toolbox-talks";
-import { useIsSuperUser } from "@/lib/auth/use-auth";
+import { useAuth, useIsSuperUser } from "@/lib/auth/use-auth";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -17,8 +17,9 @@ interface DismissedState {
 }
 
 export function PendingTrainingBanner() {
-  const { data: trainingSummary, isLoading } = useMyTrainingSummary();
+  const { user } = useAuth();
   const isSuperUser = useIsSuperUser();
+  const { data: trainingSummary, isLoading } = useMyTrainingSummary(!!user?.employeeId);
   const [isDismissed, setIsDismissed] = useState(true); // Start dismissed to prevent flash
 
   useEffect(() => {

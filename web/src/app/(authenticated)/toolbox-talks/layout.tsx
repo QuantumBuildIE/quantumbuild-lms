@@ -43,6 +43,13 @@ export default function ToolboxTalksLayout({
     }
   }, [isSuperUser, router]);
 
+  // Admin-only users (no employee record) can't use the employee portal — redirect to admin
+  useEffect(() => {
+    if (!isSuperUser && user && !user.employeeId) {
+      router.replace("/admin/toolbox-talks");
+    }
+  }, [isSuperUser, user, router]);
+
   const isActive = (href: string, exact?: boolean) => {
     if (exact) {
       return pathname === href;

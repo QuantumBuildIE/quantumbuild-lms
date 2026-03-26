@@ -21,7 +21,7 @@ export function TopNav() {
   const router = useRouter();
   const { user, logout } = useAuth();
   const isSuperUser = user?.isSuperUser ?? false;
-  const { data: trainingSummary } = useMyTrainingSummary();
+  const { data: trainingSummary } = useMyTrainingSummary(!!user?.employeeId);
   const hasAdminAccess = useHasAnyPermission([
     "Core.ManageEmployees",
     "Core.ManageUsers",
@@ -52,7 +52,7 @@ export function TopNav() {
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-14 items-center justify-between px-4">
-        <Link href={isSuperUser ? "/admin/tenants" : "/toolbox-talks"} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+        <Link href={isSuperUser ? "/admin/tenants" : user?.employeeId ? "/toolbox-talks" : "/admin/toolbox-talks"} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
           <div className="flex items-center gap-2">
             <svg viewBox="0 0 46 46" fill="none" className="w-8 h-8">
               <circle cx="23" cy="23" r="21" fill="#4d8eff" fillOpacity="0.1" stroke="#4d8eff" strokeWidth="1.5" strokeOpacity="0.3"/>
@@ -111,10 +111,10 @@ export function TopNav() {
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <Link href="/toolbox-talks" className="flex items-center justify-between w-full">
+                  <Link href={user?.employeeId ? "/toolbox-talks" : "/admin/toolbox-talks"} className="flex items-center justify-between w-full">
                     <span className="flex items-center">
                       <ClipboardList className="mr-2 h-4 w-4" />
-                      <span>My Learnings</span>
+                      <span>{user?.employeeId ? "My Learnings" : "Learnings Admin"}</span>
                     </span>
                     {pendingTrainingCount > 0 && (
                       <Badge
