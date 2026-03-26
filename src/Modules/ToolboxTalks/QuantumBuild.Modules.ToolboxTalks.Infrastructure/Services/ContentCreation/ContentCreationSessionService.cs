@@ -735,29 +735,42 @@ public class ContentCreationSessionService : IContentCreationSessionService
                     if (slideshowSettings is { GenerateSlideshow: true }
                         && !string.Equals(slideshowSettings.SlideshowSource, "none", StringComparison.OrdinalIgnoreCase))
                     {
-                        // Determine the target talk for slideshow generation
-                        Guid? slideshowTalkId = null;
-
                         if (session.OutputType == OutputType.Lesson)
                         {
-                            slideshowTalkId = session.OutputTalkId;
-                        }
-                        else if (session.OutputType == OutputType.Course && session.InputMode == InputMode.Video)
-                        {
-                            // For Course + Video, the draft talk was repurposed as a standalone video talk
-                            slideshowTalkId = session.OutputTalkId;
-                        }
-                        // For Course + PDF/Text, slideshow doesn't apply to section-based course talks
+                            // Standalone lesson — enqueue slideshow for the single talk
+                            if (session.OutputTalkId.HasValue)
+                            {
+                                BackgroundJob.Enqueue<ContentGenerationJob>(
+                                    job => job.GenerateSlideshowOnlyAsync(
+                                        session.OutputTalkId.Value, tenantId, slideshowSettings.SlideshowSource, CancellationToken.None));
 
-                        if (slideshowTalkId.HasValue)
+                                _logger.LogInformation(
+                                    "[ContentCreationSession] Enqueued slideshow generation for talk {TalkId} with source '{Source}'",
+                                    session.OutputTalkId.Value, slideshowSettings.SlideshowSource);
+                            }
+                        }
+                        else if (session.OutputType == OutputType.Course && session.OutputCourseId.HasValue)
                         {
-                            BackgroundJob.Enqueue<ContentGenerationJob>(
-                                job => job.GenerateSlideshowOnlyAsync(
-                                    slideshowTalkId.Value, tenantId, slideshowSettings.SlideshowSource, CancellationToken.None));
+                            // Course output — enqueue slideshow for each section Learning, skip Full Video talk (OrderIndex 0) in Video mode
+                            // Video mode: Full Video at OrderIndex 0, sections at 1+
+                            // PDF/Text mode: all items are sections starting at OrderIndex 0
+                            var minOrderIndex = session.InputMode == InputMode.Video ? 1 : 0;
+                            var sectionTalkIds = await _dbContext.ToolboxTalkCourseItems
+                                .Where(ci => ci.CourseId == session.OutputCourseId.Value && ci.OrderIndex >= minOrderIndex)
+                                .OrderBy(ci => ci.OrderIndex)
+                                .Select(ci => ci.ToolboxTalkId)
+                                .ToListAsync(cancellationToken);
+
+                            foreach (var sectionTalkId in sectionTalkIds)
+                            {
+                                BackgroundJob.Enqueue<ContentGenerationJob>(
+                                    job => job.GenerateSlideshowOnlyAsync(
+                                        sectionTalkId, tenantId, "sections", CancellationToken.None));
+                            }
 
                             _logger.LogInformation(
-                                "[ContentCreationSession] Enqueued slideshow generation for talk {TalkId} with source '{Source}'",
-                                slideshowTalkId.Value, slideshowSettings.SlideshowSource);
+                                "[ContentCreationSession] Enqueued slideshow generation for {Count} section learnings in course {CourseId}",
+                                sectionTalkIds.Count, session.OutputCourseId.Value);
                         }
                     }
                 }
