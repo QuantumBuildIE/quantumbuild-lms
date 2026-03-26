@@ -1143,15 +1143,19 @@ public class ContentCreationSessionService : IContentCreationSessionService
                 }
 
                 // Re-sync sections from session in case they were edited after validation
+                // Capture old draft section IDs in order BEFORE soft-delete (needed for translation remapping)
                 var existingSections = await _dbContext.ToolboxTalkSections
                     .Where(s => s.ToolboxTalkId == draftTalk.Id)
+                    .OrderBy(s => s.SectionNumber)
                     .ToListAsync(cancellationToken);
+                var oldSectionIds = existingSections.Select(s => s.Id).ToList();
                 foreach (var existing in existingSections)
                     existing.IsDeleted = true;
 
+                var newSectionIds = new List<Guid>();
                 foreach (var parsedSection in sections)
                 {
-                    _dbContext.ToolboxTalkSections.Add(new ToolboxTalkSection
+                    var newSection = new ToolboxTalkSection
                     {
                         Id = Guid.NewGuid(),
                         ToolboxTalkId = draftTalk.Id,
@@ -1159,7 +1163,9 @@ public class ContentCreationSessionService : IContentCreationSessionService
                         Title = parsedSection.Title,
                         Content = parsedSection.Content,
                         RequiresAcknowledgment = true
-                    });
+                    };
+                    _dbContext.ToolboxTalkSections.Add(newSection);
+                    newSectionIds.Add(newSection.Id);
                 }
 
                 // Re-sync quiz settings and questions from session (skip when quiz excluded)
@@ -1184,6 +1190,42 @@ public class ContentCreationSessionService : IContentCreationSessionService
                 else
                 {
                     draftTalk.RequiresQuiz = false;
+                }
+
+                // Remap TranslatedSections JSON on all translation records: replace old draft
+                // section IDs with new published section IDs (same pattern as PublishAsCourseAsync)
+                if (oldSectionIds.Count > 0 && newSectionIds.Count > 0)
+                {
+                    var translations = await _dbContext.ToolboxTalkTranslations
+                        .IgnoreQueryFilters()
+                        .Where(t => t.ToolboxTalkId == draftTalk.Id && !t.IsDeleted)
+                        .ToListAsync(cancellationToken);
+
+                    foreach (var translation in translations)
+                    {
+                        var remappedSections = new List<object>();
+                        for (var i = 0; i < oldSectionIds.Count && i < newSectionIds.Count; i++)
+                        {
+                            var extracted = ExtractTranslatedSectionForId(
+                                translation.TranslatedSections, oldSectionIds[i], newSectionIds[i]);
+                            if (extracted != null)
+                            {
+                                // ExtractTranslatedSectionForId returns a JSON array with one element — parse it out
+                                using var doc = JsonDocument.Parse(extracted);
+                                foreach (var elem in doc.RootElement.EnumerateArray())
+                                    remappedSections.Add(JsonSerializer.Deserialize<object>(elem.GetRawText())!);
+                            }
+                        }
+
+                        translation.TranslatedSections = JsonSerializer.Serialize(remappedSections);
+                    }
+
+                    if (translations.Count > 0)
+                    {
+                        _logger.LogInformation(
+                            "[ContentCreationSession] Remapped TranslatedSections for {Count} translation(s) on talk {TalkId}",
+                            translations.Count, draftTalk.Id);
+                    }
                 }
 
                 await _dbContext.SaveChangesAsync(cancellationToken);
