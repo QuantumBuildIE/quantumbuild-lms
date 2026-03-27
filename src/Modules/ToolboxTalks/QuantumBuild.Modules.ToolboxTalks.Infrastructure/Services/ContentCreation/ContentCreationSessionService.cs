@@ -9,6 +9,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.ContentCreation
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Pdf;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Storage;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Subtitles;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Translations;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services.Subtitles;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
@@ -32,6 +33,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
     private readonly ITranscriptionService _transcriptionService;
     private readonly ISubtitleProcessingOrchestrator _subtitleOrchestrator;
     private readonly ILanguageCodeService _languageCodeService;
+    private readonly IContentTranslationService _contentTranslationService;
     private readonly TranslationValidationSettings _validationSettings;
     private readonly ILogger<ContentCreationSessionService> _logger;
 
@@ -54,6 +56,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
         ITranscriptionService transcriptionService,
         ISubtitleProcessingOrchestrator subtitleOrchestrator,
         ILanguageCodeService languageCodeService,
+        IContentTranslationService contentTranslationService,
         IOptions<TranslationValidationSettings> validationSettings,
         ILogger<ContentCreationSessionService> logger)
     {
@@ -65,6 +68,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
         _transcriptionService = transcriptionService;
         _subtitleOrchestrator = subtitleOrchestrator;
         _languageCodeService = languageCodeService;
+        _contentTranslationService = contentTranslationService;
         _validationSettings = validationSettings.Value;
         _logger = logger;
     }
@@ -1095,6 +1099,10 @@ public class ContentCreationSessionService : IContentCreationSessionService
                 if (titleExists)
                     throw new InvalidOperationException($"A learning with title '{request.Title}' already exists.");
 
+                // Capture old title/description BEFORE update — needed to detect staleness
+                var oldTitle = draftTalk.Title;
+                var oldDescription = draftTalk.Description;
+
                 draftTalk.Title = request.Title;
                 draftTalk.Description = request.Description;
                 draftTalk.Category = request.Category;
@@ -1294,6 +1302,52 @@ public class ContentCreationSessionService : IContentCreationSessionService
                     }
                 }
 
+                // Re-translate title/description if user changed them at publish time
+                var titleChanged = oldTitle != request.Title;
+                var descriptionChanged = oldDescription != request.Description;
+                if (titleChanged || descriptionChanged)
+                {
+                    var allTranslations = await _dbContext.ToolboxTalkTranslations
+                        .IgnoreQueryFilters()
+                        .Where(t => t.ToolboxTalkId == draftTalk.Id && !t.IsDeleted)
+                        .ToListAsync(cancellationToken);
+
+                    foreach (var translation in allTranslations)
+                    {
+                        var languageName = await _languageCodeService.GetLanguageNameAsync(translation.LanguageCode);
+
+                        if (titleChanged)
+                        {
+                            var titleResult = await _contentTranslationService.TranslateTextAsync(
+                                request.Title, languageName, isHtml: false, cancellationToken,
+                                sectorKey: session.SectorKey);
+                            if (titleResult.Success)
+                                translation.TranslatedTitle = titleResult.TranslatedContent;
+                        }
+
+                        if (descriptionChanged && !string.IsNullOrWhiteSpace(request.Description))
+                        {
+                            var descResult = await _contentTranslationService.TranslateTextAsync(
+                                request.Description, languageName, isHtml: false, cancellationToken,
+                                sectorKey: session.SectorKey);
+                            if (descResult.Success)
+                                translation.TranslatedDescription = descResult.TranslatedContent;
+                        }
+                        else if (descriptionChanged)
+                        {
+                            translation.TranslatedDescription = null;
+                        }
+                    }
+
+                    if (allTranslations.Count > 0)
+                    {
+                        _logger.LogInformation(
+                            "[ContentCreationSession] Re-translated {Fields} for {Count} translation(s) on talk {TalkId} due to publish-time edits",
+                            (titleChanged && descriptionChanged) ? "title and description" : titleChanged ? "title" : "description",
+                            allTranslations.Count, draftTalk.Id);
+                    }
+                }
+
                 await _dbContext.SaveChangesAsync(cancellationToken);
 
                 // Enqueue AI requirement mapping job (fire-and-forget)
@@ -1442,8 +1496,18 @@ public class ContentCreationSessionService : IContentCreationSessionService
         List<ToolboxTalkTranslation>? draftTranslations = null;
         List<ToolboxTalkSection>? draftSections = null;
         List<Guid> draftQuestionIds = [];
+        string? draftTitle = null;
+        string? draftDescription = null;
         if (session.OutputTalkId.HasValue)
         {
+            // Capture draft title/description for staleness detection at course-level translations
+            var draftTalkForTitle = await _dbContext.ToolboxTalks
+                .IgnoreQueryFilters()
+                .Where(t => t.Id == session.OutputTalkId.Value && !t.IsDeleted)
+                .Select(t => new { t.Title, t.Description })
+                .FirstOrDefaultAsync(cancellationToken);
+            draftTitle = draftTalkForTitle?.Title;
+            draftDescription = draftTalkForTitle?.Description;
             draftSections = await _dbContext.ToolboxTalkSections
                 .IgnoreQueryFilters()
                 .Where(s => s.ToolboxTalkId == session.OutputTalkId.Value && !s.IsDeleted)
@@ -1695,18 +1759,60 @@ public class ContentCreationSessionService : IContentCreationSessionService
         }
 
         // Create course-level translations from the draft talk translations
+        // Re-translate title/description if user changed them at publish time
+        var courseTitleChanged = draftTitle != null && draftTitle != request.Title;
+        var courseDescriptionChanged = draftDescription != null && draftDescription != request.Description;
+
         if (draftTranslations != null)
         {
             foreach (var draftTranslation in draftTranslations)
             {
+                var translatedTitle = draftTranslation.TranslatedTitle;
+                var translatedDescription = draftTranslation.TranslatedDescription;
+
+                if (courseTitleChanged || courseDescriptionChanged)
+                {
+                    var languageName = await _languageCodeService.GetLanguageNameAsync(draftTranslation.LanguageCode);
+
+                    if (courseTitleChanged)
+                    {
+                        var titleResult = await _contentTranslationService.TranslateTextAsync(
+                            request.Title, languageName, isHtml: false, cancellationToken,
+                            sectorKey: session.SectorKey);
+                        if (titleResult.Success)
+                            translatedTitle = titleResult.TranslatedContent;
+                    }
+
+                    if (courseDescriptionChanged && !string.IsNullOrWhiteSpace(request.Description))
+                    {
+                        var descResult = await _contentTranslationService.TranslateTextAsync(
+                            request.Description, languageName, isHtml: false, cancellationToken,
+                            sectorKey: session.SectorKey);
+                        if (descResult.Success)
+                            translatedDescription = descResult.TranslatedContent;
+                    }
+                    else if (courseDescriptionChanged)
+                    {
+                        translatedDescription = null;
+                    }
+                }
+
                 _dbContext.ToolboxTalkCourseTranslations.Add(new ToolboxTalkCourseTranslation
                 {
                     Id = Guid.NewGuid(),
                     CourseId = course.Id,
                     LanguageCode = draftTranslation.LanguageCode,
-                    TranslatedTitle = draftTranslation.TranslatedTitle,
-                    TranslatedDescription = draftTranslation.TranslatedDescription
+                    TranslatedTitle = translatedTitle,
+                    TranslatedDescription = translatedDescription
                 });
+            }
+
+            if (courseTitleChanged || courseDescriptionChanged)
+            {
+                _logger.LogInformation(
+                    "[ContentCreationSession] Re-translated course {Fields} for {Count} translation(s) on course {CourseId} due to publish-time edits",
+                    (courseTitleChanged && courseDescriptionChanged) ? "title and description" : courseTitleChanged ? "title" : "description",
+                    draftTranslations.Count, course.Id);
             }
         }
 
