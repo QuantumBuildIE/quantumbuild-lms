@@ -318,6 +318,17 @@ public class ContentGenerationJob
                     "Duration: {Duration}ms\n" +
                     "HTML size: {HtmlSize} chars",
                     talkId, stopwatch.ElapsedMilliseconds, slideResult.Data.Length);
+
+                // Enqueue MissingTranslationsJob to translate the new slideshow HTML
+                // into all languages that already have ToolboxTalkTranslation records.
+                // The job detects missing slideshow translations (via Fix 3 logic) and
+                // dispatches GenerateContentTranslationsCommand only for those languages.
+                _logger.LogInformation(
+                    "Enqueuing MissingTranslationsJob to translate slideshow for ToolboxTalk {TalkId}",
+                    talkId);
+
+                BackgroundJob.Enqueue<MissingTranslationsJob>(
+                    job => job.ExecuteAsync(talkId, tenantId, null, CancellationToken.None));
             }
             else
             {
