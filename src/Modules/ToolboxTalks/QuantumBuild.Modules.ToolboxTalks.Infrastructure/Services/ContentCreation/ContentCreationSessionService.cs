@@ -1169,12 +1169,21 @@ public class ContentCreationSessionService : IContentCreationSessionService
                 }
 
                 // Re-sync quiz settings and questions from session (skip when quiz excluded)
+                var oldQuestionIds = new List<Guid>();
+                var newQuestionIds = new List<Guid>();
                 if (session.IncludeQuiz)
                 {
                     SessionQuizSettingsDto? courseQuizSettings = null;
                     if (!string.IsNullOrWhiteSpace(session.QuizSettingsJson))
                         courseQuizSettings = JsonSerializer.Deserialize<SessionQuizSettingsDto>(session.QuizSettingsJson, CamelCaseJson);
                     SyncQuizSettingsToTalk(draftTalk, courseQuizSettings);
+
+                    // Step 1: Capture old question IDs before hard-delete (for translation remapping)
+                    oldQuestionIds = await _dbContext.ToolboxTalkQuestions
+                        .Where(q => q.ToolboxTalkId == draftTalk.Id)
+                        .OrderBy(q => q.QuestionNumber)
+                        .Select(q => q.Id)
+                        .ToListAsync(cancellationToken);
 
                     var existingQuestions = await _dbContext.ToolboxTalkQuestions
                         .Where(q => q.ToolboxTalkId == draftTalk.Id)
@@ -1186,6 +1195,15 @@ public class ContentCreationSessionService : IContentCreationSessionService
                     if (!string.IsNullOrWhiteSpace(session.QuestionsJson))
                         courseQuizQuestions = JsonSerializer.Deserialize<List<SessionQuizQuestionDto>>(session.QuestionsJson, CamelCaseJson);
                     SyncQuizQuestionsToTalk(draftTalk.Id, courseQuizQuestions, session.InputMode);
+
+                    // Step 2: Capture new question IDs after recreation (same order by QuestionNumber)
+                    newQuestionIds = ((DbContext)_dbContext).ChangeTracker
+                        .Entries<ToolboxTalkQuestion>()
+                        .Where(e => e.State == EntityState.Added && e.Entity.ToolboxTalkId == draftTalk.Id)
+                        .Select(e => e.Entity)
+                        .OrderBy(q => q.QuestionNumber)
+                        .Select(q => q.Id)
+                        .ToList();
                 }
                 else
                 {
@@ -1225,6 +1243,54 @@ public class ContentCreationSessionService : IContentCreationSessionService
                         _logger.LogInformation(
                             "[ContentCreationSession] Remapped TranslatedSections for {Count} translation(s) on talk {TalkId}",
                             translations.Count, draftTalk.Id);
+                    }
+                }
+
+                // Step 3: Remap TranslatedQuestions JSON on all translation records — same pattern as sections
+                if (oldQuestionIds.Count > 0 && newQuestionIds.Count > 0)
+                {
+                    if (oldQuestionIds.Count != newQuestionIds.Count)
+                    {
+                        _logger.LogWarning(
+                            "[ContentCreationSession] Quiz question count mismatch during remapping: old={OldCount}, new={NewCount} on talk {TalkId} — skipping question remapping",
+                            oldQuestionIds.Count, newQuestionIds.Count, draftTalk.Id);
+                    }
+                    else
+                    {
+                        var translations = await _dbContext.ToolboxTalkTranslations
+                            .IgnoreQueryFilters()
+                            .Where(t => t.ToolboxTalkId == draftTalk.Id && !t.IsDeleted)
+                            .ToListAsync(cancellationToken);
+
+                        foreach (var translation in translations)
+                        {
+                            if (string.IsNullOrWhiteSpace(translation.TranslatedQuestions))
+                                continue;
+
+                            var remappedQuestions = new List<object>();
+                            for (var i = 0; i < oldQuestionIds.Count; i++)
+                            {
+                                var extracted = ExtractTranslatedQuestionForId(
+                                    translation.TranslatedQuestions, oldQuestionIds[i], newQuestionIds[i]);
+                                if (extracted != null)
+                                {
+                                    using var doc = JsonDocument.Parse(extracted);
+                                    foreach (var elem in doc.RootElement.EnumerateArray())
+                                        remappedQuestions.Add(JsonSerializer.Deserialize<object>(elem.GetRawText())!);
+                                }
+                            }
+
+                            translation.TranslatedQuestions = remappedQuestions.Count > 0
+                                ? JsonSerializer.Serialize(remappedQuestions)
+                                : translation.TranslatedQuestions;
+                        }
+
+                        if (translations.Count > 0)
+                        {
+                            _logger.LogInformation(
+                                "[ContentCreationSession] Remapped TranslatedQuestions for {Count} translation(s) on talk {TalkId}",
+                                translations.Count, draftTalk.Id);
+                        }
                     }
                 }
 
@@ -1632,6 +1698,45 @@ public class ContentCreationSessionService : IContentCreationSessionService
             job.MapRequirementsAsync(tenantId, null, course.Id, CancellationToken.None));
 
         return course.Id;
+    }
+
+    /// <summary>
+    /// Extracts a single question's translated data from the TranslatedQuestions JSON array,
+    /// matching by the old QuestionId, and remaps to the new question's ID.
+    /// Returns a JSON array with a single element, or null if not found.
+    /// Format: [{QuestionId, QuestionText, Options}]
+    /// </summary>
+    private static string? ExtractTranslatedQuestionForId(string translatedQuestionsJson, Guid oldQuestionId, Guid newQuestionId)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(translatedQuestionsJson);
+            foreach (var element in doc.RootElement.EnumerateArray())
+            {
+                if (element.TryGetProperty("QuestionId", out var questionIdProp) &&
+                    questionIdProp.TryGetGuid(out var questionId) &&
+                    questionId == oldQuestionId)
+                {
+                    var questionText = element.TryGetProperty("QuestionText", out var textProp) ? textProp.GetString() : null;
+                    List<string>? options = null;
+                    if (element.TryGetProperty("Options", out var optionsProp) && optionsProp.ValueKind == JsonValueKind.Array)
+                    {
+                        options = new List<string>();
+                        foreach (var opt in optionsProp.EnumerateArray())
+                            options.Add(opt.GetString() ?? string.Empty);
+                    }
+
+                    var remapped = new[] { new { QuestionId = newQuestionId, QuestionText = questionText, Options = options } };
+                    return JsonSerializer.Serialize(remapped);
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // Malformed JSON — skip
+        }
+
+        return null;
     }
 
     /// <summary>
