@@ -71,24 +71,29 @@ public class MissingTranslationsJob
 
         try
         {
-            // Get the source language of the toolbox talk
-            var sourceLanguageCode = await _toolboxTalksDbContext.ToolboxTalks
+            // Get the talk with key fields for completeness checks
+            var talk = await _toolboxTalksDbContext.ToolboxTalks
                 .IgnoreQueryFilters()
                 .Where(t => t.Id == toolboxTalkId && t.TenantId == tenantId && !t.IsDeleted)
-                .Select(t => t.SourceLanguageCode)
-                .FirstOrDefaultAsync(cancellationToken) ?? "en";
+                .Select(t => new { t.SourceLanguageCode, t.RequiresQuiz, t.SlidesGenerated })
+                .FirstOrDefaultAsync(cancellationToken);
 
-            // Get existing translation language codes for this talk
-            var existingLanguageCodes = await _toolboxTalksDbContext.ToolboxTalkTranslations
+            var sourceLanguageCode = talk?.SourceLanguageCode ?? "en";
+            var requiresQuiz = talk?.RequiresQuiz ?? false;
+            var slidesGenerated = talk?.SlidesGenerated ?? false;
+
+            // Get existing translation records (not just language codes) for completeness checks
+            var existingTranslations = await _toolboxTalksDbContext.ToolboxTalkTranslations
                 .IgnoreQueryFilters()
                 .Where(t => t.ToolboxTalkId == toolboxTalkId && t.TenantId == tenantId && !t.IsDeleted)
-                .Select(t => t.LanguageCode)
-                .Distinct()
+                .Select(t => new { t.LanguageCode, t.TranslatedTitle, t.TranslatedSections, t.TranslatedQuestions })
                 .ToListAsync(cancellationToken);
 
+            var existingLanguageCodes = existingTranslations.Select(t => t.LanguageCode).Distinct().ToList();
+
             _logger.LogInformation(
-                "ToolboxTalk {ToolboxTalkId} has existing translations for: {ExistingLanguages}",
-                toolboxTalkId, string.Join(", ", existingLanguageCodes));
+                "ToolboxTalk {ToolboxTalkId} has existing translations for: {ExistingLanguages} (RequiresQuiz={RequiresQuiz}, SlidesGenerated={SlidesGenerated})",
+                toolboxTalkId, string.Join(", ", existingLanguageCodes), requiresQuiz, slidesGenerated);
 
             // Get all required languages from employee preferences (excluding source language)
             var requiredLanguageCodes = await _coreDbContext.Employees
@@ -103,22 +108,97 @@ public class MissingTranslationsJob
                 "Required languages for tenant {TenantId} (excluding source '{Source}'): {RequiredLanguages}",
                 tenantId, sourceLanguageCode, string.Join(", ", requiredLanguageCodes));
 
-            // Compute missing languages
-            var missingLanguageCodes = requiredLanguageCodes
-                .Except(existingLanguageCodes, StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            // Compute languages that need (re-)translation: missing entirely OR incomplete records
+            var languagesNeedingTranslation = new List<string>();
 
-            if (missingLanguageCodes.Count == 0)
+            foreach (var langCode in requiredLanguageCodes)
+            {
+                var existing = existingTranslations
+                    .FirstOrDefault(t => string.Equals(t.LanguageCode, langCode, StringComparison.OrdinalIgnoreCase));
+
+                if (existing == null)
+                {
+                    // No record at all — missing
+                    languagesNeedingTranslation.Add(langCode);
+                    continue;
+                }
+
+                // Check completeness of existing record
+                if (string.IsNullOrEmpty(existing.TranslatedTitle))
+                {
+                    _logger.LogInformation(
+                        "Translation for {Lang} on ToolboxTalk {TalkId} is incomplete: TranslatedTitle is empty",
+                        langCode, toolboxTalkId);
+                    languagesNeedingTranslation.Add(langCode);
+                    continue;
+                }
+
+                if (string.IsNullOrEmpty(existing.TranslatedSections) || existing.TranslatedSections == "[]")
+                {
+                    _logger.LogInformation(
+                        "Translation for {Lang} on ToolboxTalk {TalkId} is incomplete: TranslatedSections is empty",
+                        langCode, toolboxTalkId);
+                    languagesNeedingTranslation.Add(langCode);
+                    continue;
+                }
+
+                if (requiresQuiz && string.IsNullOrEmpty(existing.TranslatedQuestions))
+                {
+                    _logger.LogInformation(
+                        "Translation for {Lang} on ToolboxTalk {TalkId} is incomplete: RequiresQuiz=true but TranslatedQuestions is empty",
+                        langCode, toolboxTalkId);
+                    languagesNeedingTranslation.Add(langCode);
+                    continue;
+                }
+
+                if (requiresQuiz && existing.TranslatedQuestions == "[]")
+                {
+                    _logger.LogInformation(
+                        "Translation for {Lang} on ToolboxTalk {TalkId} is incomplete: RequiresQuiz=true but TranslatedQuestions is empty array",
+                        langCode, toolboxTalkId);
+                    languagesNeedingTranslation.Add(langCode);
+                    continue;
+                }
+            }
+
+            // Separately check slideshow translations when SlidesGenerated is true
+            if (slidesGenerated)
+            {
+                var existingSlideshowLangs = await _toolboxTalksDbContext.ToolboxTalkSlideshowTranslations
+                    .IgnoreQueryFilters()
+                    .Where(st => st.ToolboxTalkId == toolboxTalkId && !st.IsDeleted)
+                    .Select(st => st.LanguageCode)
+                    .Distinct()
+                    .ToListAsync(cancellationToken);
+
+                foreach (var langCode in requiredLanguageCodes)
+                {
+                    if (!existingSlideshowLangs.Contains(langCode, StringComparer.OrdinalIgnoreCase)
+                        && !languagesNeedingTranslation.Contains(langCode, StringComparer.OrdinalIgnoreCase))
+                    {
+                        _logger.LogInformation(
+                            "Translation for {Lang} on ToolboxTalk {TalkId} is incomplete: SlidesGenerated=true but no slideshow translation exists",
+                            langCode, toolboxTalkId);
+                        languagesNeedingTranslation.Add(langCode);
+                    }
+                }
+            }
+
+            if (languagesNeedingTranslation.Count == 0)
             {
                 _logger.LogInformation(
-                    "No missing content translations for ToolboxTalk {ToolboxTalkId}. All required languages are covered.",
+                    "No missing or incomplete content translations for ToolboxTalk {ToolboxTalkId}. All required languages are complete.",
                     toolboxTalkId);
             }
             else
             {
-                // Generate missing content translations (sections, quiz, slideshow HTML)
+                _logger.LogInformation(
+                    "Languages needing translation for ToolboxTalk {ToolboxTalkId}: {Languages}",
+                    toolboxTalkId, string.Join(", ", languagesNeedingTranslation));
+
+                // Generate missing/incomplete content translations (sections, quiz, slideshow HTML)
                 await GenerateMissingContentTranslationsAsync(
-                    toolboxTalkId, tenantId, connectionId, missingLanguageCodes, cancellationToken);
+                    toolboxTalkId, tenantId, connectionId, languagesNeedingTranslation, cancellationToken);
             }
 
             // Generate missing subtitle translations (independent from content translations)
