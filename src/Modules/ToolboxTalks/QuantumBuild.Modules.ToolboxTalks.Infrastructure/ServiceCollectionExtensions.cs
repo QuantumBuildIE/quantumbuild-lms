@@ -26,6 +26,8 @@ using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.ContentCreation;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Ingestion;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
+using Microsoft.Extensions.Logging;
+using QuantumBuild.Core.Application.Http;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure;
 
@@ -77,7 +79,9 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<ITranscriptionService, ElevenLabsTranscriptionService>(client =>
         {
             client.Timeout = TimeSpan.FromMinutes(10); // 10 minutes for video transcription
-        });
+        })
+        .AddPolicyHandler((sp, _) => ResiliencePolicies.GetElevenLabsPolicy(
+            sp.GetRequiredService<ILogger<ElevenLabsTranscriptionService>>()));
         // Claude translation is usually fast but can take time for long subtitle files
         services.AddHttpClient<ITranslationService, ClaudeTranslationService>(client =>
         {
@@ -88,7 +92,9 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<IContentTranslationService, ContentTranslationService>(client =>
         {
             client.Timeout = TimeSpan.FromMinutes(5); // 5 minutes for content translation
-        });
+        })
+        .AddPolicyHandler((sp, _) => ResiliencePolicies.GetClaudePolicy(
+            sp.GetRequiredService<ILogger<ContentTranslationService>>()));
 
         // Translation job scheduler (fire-and-forget Hangfire enqueue, used by cross-module callers)
         services.AddSingleton<ITranslationJobScheduler, TranslationJobScheduler>();
@@ -128,13 +134,17 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<IAiSectionGenerationService, AiSectionGenerationService>(client =>
         {
             client.Timeout = TimeSpan.FromMinutes(3); // 3 minutes for section generation
-        });
+        })
+        .AddPolicyHandler((sp, _) => ResiliencePolicies.GetClaudePolicy(
+            sp.GetRequiredService<ILogger<AiSectionGenerationService>>()));
 
         // Register AI quiz generation service for generating quiz questions from content
         services.AddHttpClient<IAiQuizGenerationService, AiQuizGenerationService>(client =>
         {
             client.Timeout = TimeSpan.FromMinutes(3); // 3 minutes for quiz generation
-        });
+        })
+        .AddPolicyHandler((sp, _) => ResiliencePolicies.GetClaudePolicy(
+            sp.GetRequiredService<ILogger<AiQuizGenerationService>>()));
 
         // Register the full content generation orchestrator service
         // This service coordinates extraction, section generation, and quiz generation
@@ -150,7 +160,9 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<IAiSlideshowGenerationService, AiSlideshowGenerationService>(client =>
         {
             client.Timeout = TimeSpan.FromMinutes(5); // 5 minutes for PDF analysis and HTML generation
-        });
+        })
+        .AddPolicyHandler((sp, _) => ResiliencePolicies.GetClaudePolicy(
+            sp.GetRequiredService<ILogger<AiSlideshowGenerationService>>()));
 
         // Register slideshow generation service (orchestrates PDF download + AI generation)
         services.AddHttpClient<ISlideshowGenerationService, SlideshowGenerationService>(client =>
@@ -167,17 +179,23 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<IDeepLTranslationService, DeepLTranslationService>(client =>
         {
             client.Timeout = TimeSpan.FromMinutes(2); // 2 minutes for back-translation
-        });
+        })
+        .AddPolicyHandler((sp, _) => ResiliencePolicies.GetTransientPolicy(
+            sp.GetRequiredService<ILogger<DeepLTranslationService>>(), "DeepL"));
         // Gemini: Google AI, good for diverse language pairs
         services.AddHttpClient<IGeminiTranslationService, GeminiTranslationService>(client =>
         {
             client.Timeout = TimeSpan.FromMinutes(2); // 2 minutes for back-translation
-        });
+        })
+        .AddPolicyHandler((sp, _) => ResiliencePolicies.GetTransientPolicy(
+            sp.GetRequiredService<ILogger<GeminiTranslationService>>(), "Gemini"));
         // DeepSeek: OpenAI-compatible API, configurable base URL
         services.AddHttpClient<IDeepSeekTranslationService, DeepSeekTranslationService>(client =>
         {
             client.Timeout = TimeSpan.FromMinutes(2); // 2 minutes for back-translation
-        });
+        })
+        .AddPolicyHandler((sp, _) => ResiliencePolicies.GetTransientPolicy(
+            sp.GetRequiredService<ILogger<DeepSeekTranslationService>>(), "DeepSeek"));
 
         // Register translation validation scoring and diff services (pure logic, no HTTP)
         services.AddSingleton<ILexicalScoringService, LexicalScoringService>();
@@ -187,7 +205,9 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<IDialectDetectionService, DialectDetectionService>(client =>
         {
             client.Timeout = TimeSpan.FromMinutes(1); // 1 minute for dialect detection
-        });
+        })
+        .AddPolicyHandler((sp, _) => ResiliencePolicies.GetClaudePolicy(
+            sp.GetRequiredService<ILogger<DialectDetectionService>>()));
 
         // Register safety classification and glossary verification services (scoped — cache per request)
         services.AddScoped<ISafetyClassificationService, SafetyClassificationService>();
@@ -197,7 +217,9 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<IClaudeHaikuBackTranslationService, ClaudeHaikuBackTranslationService>(client =>
         {
             client.Timeout = TimeSpan.FromMinutes(2); // 2 minutes for back-translation
-        });
+        })
+        .AddPolicyHandler((sp, _) => ResiliencePolicies.GetClaudePolicy(
+            sp.GetRequiredService<ILogger<ClaudeHaikuBackTranslationService>>()));
 
         // Register consensus engine (multi-round back-translation scoring)
         services.AddScoped<IConsensusEngine, ConsensusEngine>();
@@ -212,7 +234,9 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<IRegulatoryScoreService, RegulatoryScoreService>(client =>
         {
             client.Timeout = TimeSpan.FromMinutes(3); // 3 minutes for regulatory scoring
-        });
+        })
+        .AddPolicyHandler((sp, _) => ResiliencePolicies.GetClaudePolicy(
+            sp.GetRequiredService<ILogger<RegulatoryScoreService>>()));
 
         // Register sector services (system-wide sector lookup + tenant-sector management)
         services.AddScoped<ISectorService, SectorService>();
@@ -222,7 +246,9 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<IContentParserService, ContentParserService>(client =>
         {
             client.Timeout = TimeSpan.FromMinutes(3); // 3 minutes for content parsing
-        });
+        })
+        .AddPolicyHandler((sp, _) => ResiliencePolicies.GetClaudePolicy(
+            sp.GetRequiredService<ILogger<ContentParserService>>()));
         services.AddScoped<IContentCreationSessionService, ContentCreationSessionService>();
 
         // Register requirement ingestion service (AI-powered regulatory requirement extraction)
@@ -232,7 +258,9 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<RequirementIngestionJob>(client =>
         {
             client.Timeout = TimeSpan.FromMinutes(5); // 5 minutes for document fetch + AI extraction
-        });
+        })
+        .AddPolicyHandler((sp, _) => ResiliencePolicies.GetClaudePolicy(
+            sp.GetRequiredService<ILogger<RequirementIngestionJob>>()));
 
         // Register requirement mapping service (AI-suggested requirement ↔ content mappings)
         services.AddScoped<IRequirementMappingService, RequirementMappingService>();
@@ -244,7 +272,9 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<RequirementMappingJob>(client =>
         {
             client.Timeout = TimeSpan.FromMinutes(5); // 5 minutes for AI mapping analysis
-        });
+        })
+        .AddPolicyHandler((sp, _) => ResiliencePolicies.GetClaudePolicy(
+            sp.GetRequiredService<ILogger<RequirementMappingJob>>()));
 
         // Note: SignalR hubs are registered in Program.cs with app.MapHub<>()
         //   - SubtitleProcessingHub: /api/hubs/subtitle-processing

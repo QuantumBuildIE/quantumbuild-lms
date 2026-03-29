@@ -74,9 +74,17 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
   const [parseLog, setParseLog] = useState<ParseLogEntry[]>([]);
   const [hasParsed, setHasParsed] = useState(false);
   const [isParseFailed, setIsParseFailed] = useState(false);
+  const [isTakingLong, setIsTakingLong] = useState(false);
   const parseTriggered = useRef(false);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollStartRef = useRef<number | null>(null);
+  const slowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
+
+  // Polling timeout: 90 seconds to accommodate Polly retries (3 × 8s backoff)
+  const POLL_TIMEOUT_MS = 90_000;
+  // Show "taking longer than usual" after 15 seconds
+  const SLOW_THRESHOLD_MS = 15_000;
 
   // Derived state
   const sessionStatus = session?.status ?? state.parsedSections.length > 0 ? 'Parsed' : 'Draft';
@@ -132,6 +140,9 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
       }
+      if (slowTimerRef.current) {
+        clearTimeout(slowTimerRef.current);
+      }
     };
   }, []);
 
@@ -169,6 +180,7 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
     if (!state.sessionId) return;
 
     setIsParseFailed(false);
+    setIsTakingLong(false);
     setParseLog([]);
     addLog('Starting content parse...');
     addLog('Parsing document structure...');
@@ -177,11 +189,9 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
       await parseContent.mutateAsync(state.sessionId);
       addLog('Parse request submitted — waiting for results...');
       startPolling();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Parse request failed';
-      addLog(`Error: ${message}`);
+    } catch {
+      addLog('Error: Parse request failed');
       setIsParseFailed(true);
-      toast.error('Parse failed', { description: message });
     }
   }
 
@@ -191,13 +201,35 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
 
   function startPolling() {
     setIsPolling(true);
+    setIsTakingLong(false);
+    pollStartRef.current = Date.now();
 
     if (pollIntervalRef.current) {
       clearInterval(pollIntervalRef.current);
     }
+    if (slowTimerRef.current) {
+      clearTimeout(slowTimerRef.current);
+    }
+
+    // Show "taking longer than usual" after 15 seconds
+    slowTimerRef.current = setTimeout(() => {
+      if (mountedRef.current) {
+        setIsTakingLong(true);
+      }
+    }, SLOW_THRESHOLD_MS);
 
     pollIntervalRef.current = setInterval(async () => {
       if (!mountedRef.current) return;
+
+      // Check polling timeout (90 seconds)
+      const elapsed = Date.now() - (pollStartRef.current ?? Date.now());
+      if (elapsed >= POLL_TIMEOUT_MS) {
+        stopPolling();
+        addLog('Timed out waiting for parse results');
+        setIsParseFailed(true);
+        return;
+      }
+
       try {
         const { data: freshSession } = await refetch();
         if (!mountedRef.current || !freshSession) return;
@@ -211,7 +243,6 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
           stopPolling();
           addLog('Parse failed — the server encountered an error');
           setIsParseFailed(true);
-          toast.error('Content parsing failed');
         }
       } catch {
         // Silently retry on network errors during polling
@@ -221,9 +252,15 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
 
   function stopPolling() {
     setIsPolling(false);
+    setIsTakingLong(false);
+    pollStartRef.current = null;
     if (pollIntervalRef.current) {
       clearInterval(pollIntervalRef.current);
       pollIntervalRef.current = null;
+    }
+    if (slowTimerRef.current) {
+      clearTimeout(slowTimerRef.current);
+      slowTimerRef.current = null;
     }
   }
 
@@ -260,9 +297,10 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
   // ============================================
 
   function handleRetry() {
-    parseTriggered.current = false;
+    // Keep session and uploaded file intact — only clear parse results
     setHasParsed(false);
     setIsParseFailed(false);
+    setIsTakingLong(false);
     updateState({
       parsedSections: [],
       suggestedOutputType: null,
@@ -343,15 +381,24 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
         />
       )}
 
+      {/* Slow-state hint while still polling */}
+      {isParsing && isTakingLong && (
+        <p className="text-sm text-muted-foreground text-center animate-pulse">
+          This is taking longer than usual — still working…
+        </p>
+      )}
+
       {/* Failed state with retry */}
       {isParseFailed && !isParsing && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription className="flex items-center justify-between">
-            <span>Content parsing failed. You can retry or go back to change inputs.</span>
+            <span>
+              We had trouble processing your content. This can happen during high demand. Please try again.
+            </span>
             <Button variant="outline" size="sm" onClick={handleRetry}>
               <RefreshCw className="mr-2 h-3 w-3" />
-              Retry
+              Try Again
             </Button>
           </AlertDescription>
         </Alert>

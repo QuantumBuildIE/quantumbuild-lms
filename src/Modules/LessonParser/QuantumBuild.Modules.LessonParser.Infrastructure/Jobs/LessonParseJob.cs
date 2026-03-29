@@ -44,7 +44,7 @@ public class LessonParseJob
     /// <param name="extractedContent">The extracted text content from the source document</param>
     /// <param name="contentTitle">Title derived from the source document</param>
     /// <param name="connectionId">SignalR connection ID for direct client updates</param>
-    [AutomaticRetry(Attempts = 1)]
+    [AutomaticRetry(Attempts = 3)]
     [Queue("content-generation")]
     public async Task ExecuteAsync(
         Guid parseJobId,

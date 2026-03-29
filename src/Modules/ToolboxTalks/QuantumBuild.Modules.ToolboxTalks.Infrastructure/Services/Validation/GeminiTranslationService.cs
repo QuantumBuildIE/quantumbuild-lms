@@ -14,8 +14,6 @@ namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Validation;
 public class GeminiTranslationService : IGeminiTranslationService
 {
     private const string ProviderName = "Gemini";
-    private const int MaxRetries = 3;
-    private static readonly TimeSpan InitialRetryDelay = TimeSpan.FromSeconds(1);
 
     private readonly HttpClient _httpClient;
     private readonly TranslationValidationSettings _settings;
@@ -49,128 +47,92 @@ public class GeminiTranslationService : IGeminiTranslationService
             return BackTranslationResult.SuccessResult(string.Empty, ProviderName);
         }
 
-        var delay = InitialRetryDelay;
-
-        for (int attempt = 1; attempt <= MaxRetries; attempt++)
+        try
         {
-            try
+            _logger.LogInformation(
+                "Gemini back-translation: {TargetLang} → {SourceLang}",
+                targetLanguage, sourceLanguage);
+
+            var prompt = BuildBackTranslationPrompt(text, sourceLanguage, targetLanguage);
+
+            var requestBody = new
             {
-                _logger.LogInformation(
-                    "Gemini back-translation attempt {Attempt}/{MaxRetries}: {TargetLang} → {SourceLang}",
-                    attempt, MaxRetries, targetLanguage, sourceLanguage);
-
-                var prompt = BuildBackTranslationPrompt(text, sourceLanguage, targetLanguage);
-
-                var requestBody = new
+                contents = new[]
                 {
-                    contents = new[]
+                    new
                     {
-                        new
+                        parts = new[]
                         {
-                            parts = new[]
-                            {
-                                new { text = prompt }
-                            }
+                            new { text = prompt }
                         }
-                    },
-                    generationConfig = new
-                    {
-                        temperature = 0.1,
-                        maxOutputTokens = 4096
                     }
-                };
-
-                var url = $"{_settings.Gemini.BaseUrl}/models/{_settings.Gemini.Model}:generateContent?key={_settings.Gemini.ApiKey}";
-
-                var request = new HttpRequestMessage(HttpMethod.Post, url)
+                },
+                generationConfig = new
                 {
-                    Content = new StringContent(
-                        JsonSerializer.Serialize(requestBody),
-                        Encoding.UTF8,
-                        "application/json")
-                };
-
-                var response = await _httpClient.SendAsync(request, cancellationToken);
-                var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-
-                if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests && attempt < MaxRetries)
-                {
-                    _logger.LogWarning(
-                        "Gemini rate limited on attempt {Attempt}, retrying in {Delay}s",
-                        attempt, delay.TotalSeconds);
-                    await Task.Delay(delay, cancellationToken);
-                    delay *= 2;
-                    continue;
+                    temperature = 0.1,
+                    maxOutputTokens = 4096
                 }
+            };
 
-                if ((int)response.StatusCode >= 500 && attempt < MaxRetries)
-                {
-                    _logger.LogWarning(
-                        "Gemini server error {StatusCode} on attempt {Attempt}, retrying in {Delay}s",
-                        response.StatusCode, attempt, delay.TotalSeconds);
-                    await Task.Delay(delay, cancellationToken);
-                    delay *= 2;
-                    continue;
-                }
+            var url = $"{_settings.Gemini.BaseUrl}/models/{_settings.Gemini.Model}:generateContent?key={_settings.Gemini.ApiKey}";
 
-                if (!response.IsSuccessStatusCode)
-                {
-                    _logger.LogError(
-                        "Gemini API error: {StatusCode} - {Response}",
-                        response.StatusCode, responseBody);
-                    return BackTranslationResult.FailureResult(
-                        $"Gemini API error: {response.StatusCode}", ProviderName);
-                }
-
-                var translatedText = ParseGeminiResponse(responseBody);
-
-                if (string.IsNullOrWhiteSpace(translatedText))
-                {
-                    _logger.LogWarning("Gemini returned empty translation");
-                    return BackTranslationResult.FailureResult(
-                        "Gemini returned empty translation", ProviderName);
-                }
-
-                _logger.LogInformation(
-                    "Gemini back-translation completed: {TargetLang} → {SourceLang}",
-                    targetLanguage, sourceLanguage);
-
-                return BackTranslationResult.SuccessResult(translatedText, ProviderName);
-            }
-            catch (TaskCanceledException) when (cancellationToken.IsCancellationRequested)
+            var request = new HttpRequestMessage(HttpMethod.Post, url)
             {
-                throw;
-            }
-            catch (HttpRequestException ex) when (attempt < MaxRetries)
+                Content = new StringContent(
+                    JsonSerializer.Serialize(requestBody),
+                    Encoding.UTF8,
+                    "application/json")
+            };
+
+            var response = await _httpClient.SendAsync(request, cancellationToken);
+            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
             {
-                _logger.LogWarning(ex,
-                    "Gemini HTTP error on attempt {Attempt}, retrying in {Delay}s",
-                    attempt, delay.TotalSeconds);
-                await Task.Delay(delay, cancellationToken);
-                delay *= 2;
-            }
-            catch (HttpRequestException ex)
-            {
-                _logger.LogError(ex, "Gemini HTTP request failed after {MaxRetries} attempts", MaxRetries);
+                _logger.LogError(
+                    "Gemini API error: {StatusCode} - {Response}",
+                    response.StatusCode, responseBody);
                 return BackTranslationResult.FailureResult(
-                    $"HTTP request failed: {ex.Message}", ProviderName);
+                    $"Gemini API error: {response.StatusCode}", ProviderName);
             }
-            catch (JsonException ex)
+
+            var translatedText = ParseGeminiResponse(responseBody);
+
+            if (string.IsNullOrWhiteSpace(translatedText))
             {
-                _logger.LogError(ex, "Failed to parse Gemini response");
+                _logger.LogWarning("Gemini returned empty translation");
                 return BackTranslationResult.FailureResult(
-                    $"Failed to parse response: {ex.Message}", ProviderName);
+                    "Gemini returned empty translation", ProviderName);
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Gemini back-translation failed");
-                return BackTranslationResult.FailureResult(
-                    $"Back-translation failed: {ex.Message}", ProviderName);
-            }
+
+            _logger.LogInformation(
+                "Gemini back-translation completed: {TargetLang} → {SourceLang}",
+                targetLanguage, sourceLanguage);
+
+            return BackTranslationResult.SuccessResult(translatedText, ProviderName);
         }
-
-        return BackTranslationResult.FailureResult(
-            $"Failed after {MaxRetries} retry attempts", ProviderName);
+        catch (TaskCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "Gemini HTTP request failed");
+            return BackTranslationResult.FailureResult(
+                $"HTTP request failed: {ex.Message}", ProviderName);
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "Failed to parse Gemini response");
+            return BackTranslationResult.FailureResult(
+                $"Failed to parse response: {ex.Message}", ProviderName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Gemini back-translation failed");
+            return BackTranslationResult.FailureResult(
+                $"Back-translation failed: {ex.Message}", ProviderName);
+        }
     }
 
     /// <summary>

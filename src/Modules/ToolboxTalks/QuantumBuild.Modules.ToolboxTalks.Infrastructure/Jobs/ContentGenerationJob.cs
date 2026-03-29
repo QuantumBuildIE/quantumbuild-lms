@@ -64,7 +64,7 @@ public class ContentGenerationJob
     /// <param name="connectionId">Optional SignalR connection ID for direct client updates</param>
     /// <param name="tenantId">The tenant ID (passed explicitly since Hangfire jobs run outside HTTP context)</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    [AutomaticRetry(Attempts = 1)] // Don't retry AI generation - it's expensive
+    [AutomaticRetry(Attempts = 3)]
     [Queue("content-generation")] // Use dedicated queue for resource-intensive jobs
     public async Task ExecuteAsync(
         Guid toolboxTalkId,
@@ -272,7 +272,7 @@ public class ContentGenerationJob
     /// <param name="tenantId">The tenant ID</param>
     /// <param name="slideshowSource">The slideshow source: "sections", "pdf", or "video"</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    [AutomaticRetry(Attempts = 1)]
+    [AutomaticRetry(Attempts = 3)]
     [Queue("content-generation")]
     public async Task GenerateSlideshowOnlyAsync(
         Guid talkId,

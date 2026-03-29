@@ -22,6 +22,7 @@ using QuantumBuild.Modules.LessonParser.Application;
 using QuantumBuild.Modules.LessonParser.Infrastructure;
 using QuantumBuild.Modules.LessonParser.Infrastructure.Hubs;
 using QuantumBuild.Modules.LessonParser.Infrastructure.Jobs;
+using QuantumBuild.Core.Application.Http;
 using QuantumBuild.Modules.LessonParser.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -91,7 +92,9 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient("ClaudeApi", client =>
 {
     client.Timeout = TimeSpan.FromSeconds(30);
-});
+})
+.AddPolicyHandler((sp, _) => ResiliencePolicies.GetClaudePolicy(
+    sp.GetRequiredService<ILogger<Program>>()));
 
 // Register Infrastructure services
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
@@ -304,6 +307,61 @@ await DataSeeder.SeedAsync(app.Services);
 await SeedToolboxTalksDataAsync(app.Services);
 
 // Configure the HTTP request pipeline.
+
+// Global exception handler — returns RFC 9110 Problem Details JSON, never exposes internals
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+        var exceptionFeature = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
+
+        if (exceptionFeature?.Error is { } ex)
+        {
+            logger.LogError(ex, "Unhandled exception on {Method} {Path}", context.Request.Method, context.Request.Path);
+        }
+
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        context.Response.ContentType = "application/problem+json";
+
+        await context.Response.WriteAsJsonAsync(new
+        {
+            type = "https://tools.ietf.org/html/rfc9110#section-15.6.1",
+            title = "An unexpected error occurred",
+            status = 500,
+            detail = "An internal error occurred. Please try again shortly."
+        });
+    });
+});
+
+// Return JSON Problem Details for bare status codes (404, 405, etc.) instead of empty responses
+app.UseStatusCodePages(async context =>
+{
+    var response = context.HttpContext.Response;
+    response.ContentType = "application/problem+json";
+
+    await response.WriteAsJsonAsync(new
+    {
+        type = $"https://tools.ietf.org/html/rfc9110#section-15.{(response.StatusCode >= 500 ? 6 : 5)}.{(response.StatusCode % 100) + 1}",
+        title = response.StatusCode switch
+        {
+            400 => "Bad Request",
+            401 => "Unauthorized",
+            403 => "Forbidden",
+            404 => "Not Found",
+            405 => "Method Not Allowed",
+            _ => "Error"
+        },
+        status = response.StatusCode,
+        detail = response.StatusCode switch
+        {
+            404 => "The requested resource was not found.",
+            405 => "The HTTP method is not allowed for this resource.",
+            _ => "An error occurred."
+        }
+    });
+});
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();

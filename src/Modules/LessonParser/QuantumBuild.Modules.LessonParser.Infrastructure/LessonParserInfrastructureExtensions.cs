@@ -6,6 +6,8 @@ using QuantumBuild.Modules.LessonParser.Application.Abstractions;
 using QuantumBuild.Modules.LessonParser.Application.Common.Interfaces;
 using QuantumBuild.Modules.LessonParser.Infrastructure.Persistence;
 using QuantumBuild.Modules.LessonParser.Infrastructure.Services;
+using Microsoft.Extensions.Logging;
+using QuantumBuild.Core.Application.Http;
 
 namespace QuantumBuild.Modules.LessonParser.Infrastructure;
 
@@ -51,7 +53,9 @@ public static class LessonParserInfrastructureExtensions
             client.Timeout = TimeSpan.FromSeconds(30);
             client.DefaultRequestHeaders.UserAgent.ParseAdd(
                 "Mozilla/5.0 QuantumBuild-LessonParser/1.0");
-        });
+        })
+        .AddPolicyHandler((sp, _) => ResiliencePolicies.GetClaudePolicy(
+            sp.GetRequiredService<ILogger<DocumentExtractorService>>()));
 
         // Register translation queue service (dispatches translations for generated talks)
         services.AddScoped<ITranslationQueueService, TranslationQueueService>();
@@ -60,7 +64,9 @@ public static class LessonParserInfrastructureExtensions
         services.AddHttpClient<ILessonGeneratorService, LessonGeneratorService>(client =>
         {
             client.Timeout = TimeSpan.FromMinutes(5); // 5 minutes for AI content generation
-        });
+        })
+        .AddPolicyHandler((sp, _) => ResiliencePolicies.GetClaudePolicy(
+            sp.GetRequiredService<ILogger<LessonGeneratorService>>()));
 
         return services;
     }

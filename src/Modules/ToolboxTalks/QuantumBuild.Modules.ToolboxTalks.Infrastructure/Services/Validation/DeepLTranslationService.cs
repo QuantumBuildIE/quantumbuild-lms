@@ -14,8 +14,6 @@ namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Validation;
 public class DeepLTranslationService : IDeepLTranslationService
 {
     private const string ProviderName = "DeepL";
-    private const int MaxRetries = 3;
-    private static readonly TimeSpan InitialRetryDelay = TimeSpan.FromSeconds(1);
 
     private readonly HttpClient _httpClient;
     private readonly TranslationValidationSettings _settings;
@@ -147,113 +145,77 @@ public class DeepLTranslationService : IDeepLTranslationService
                 $"Unsupported language pair: {targetLanguage} → {sourceLanguage}", ProviderName);
         }
 
-        var delay = InitialRetryDelay;
-
-        for (int attempt = 1; attempt <= MaxRetries; attempt++)
+        try
         {
-            try
+            _logger.LogInformation(
+                "DeepL back-translation: {TargetLang} → {SourceLang}",
+                targetLanguage, sourceLanguage);
+
+            var formContent = new FormUrlEncodedContent(new Dictionary<string, string>
             {
-                _logger.LogInformation(
-                    "DeepL back-translation attempt {Attempt}/{MaxRetries}: {TargetLang} → {SourceLang}",
-                    attempt, MaxRetries, targetLanguage, sourceLanguage);
+                ["text"] = text,
+                ["source_lang"] = deepLSource,
+                ["target_lang"] = deepLTarget
+            });
 
-                var formContent = new FormUrlEncodedContent(new Dictionary<string, string>
-                {
-                    ["text"] = text,
-                    ["source_lang"] = deepLSource,
-                    ["target_lang"] = deepLTarget
-                });
-
-                var request = new HttpRequestMessage(HttpMethod.Post, $"{_settings.DeepL.BaseUrl}/translate")
-                {
-                    Content = formContent
-                };
-                request.Headers.Add("Authorization", $"DeepL-Auth-Key {_settings.DeepL.ApiKey}");
-
-                var response = await _httpClient.SendAsync(request, cancellationToken);
-                var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-
-                if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests && attempt < MaxRetries)
-                {
-                    _logger.LogWarning(
-                        "DeepL rate limited on attempt {Attempt}, retrying in {Delay}s",
-                        attempt, delay.TotalSeconds);
-                    await Task.Delay(delay, cancellationToken);
-                    delay *= 2;
-                    continue;
-                }
-
-                if ((int)response.StatusCode >= 500 && attempt < MaxRetries)
-                {
-                    _logger.LogWarning(
-                        "DeepL server error {StatusCode} on attempt {Attempt}, retrying in {Delay}s",
-                        response.StatusCode, attempt, delay.TotalSeconds);
-                    await Task.Delay(delay, cancellationToken);
-                    delay *= 2;
-                    continue;
-                }
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    var hint = response.StatusCode == System.Net.HttpStatusCode.Forbidden
-                        ? " (403 Forbidden — this usually means a paid API key is being used with the free-tier URL api-free.deepl.com, or vice versa. Check TranslationValidation__DeepL__BaseUrl: paid keys use https://api.deepl.com/v2, free keys use https://api-free.deepl.com/v2)"
-                        : "";
-                    _logger.LogError(
-                        "DeepL API error: {StatusCode} — BaseUrl={BaseUrl}, ResponseBody={Response}{Hint}",
-                        response.StatusCode, _settings.DeepL.BaseUrl, responseBody, hint);
-                    return BackTranslationResult.FailureResult(
-                        $"DeepL API error: {response.StatusCode}", ProviderName);
-                }
-
-                var translatedText = ParseDeepLResponse(responseBody);
-
-                if (string.IsNullOrWhiteSpace(translatedText))
-                {
-                    _logger.LogWarning("DeepL returned empty translation");
-                    return BackTranslationResult.FailureResult(
-                        "DeepL returned empty translation", ProviderName);
-                }
-
-                _logger.LogInformation(
-                    "DeepL back-translation completed: {TargetLang} → {SourceLang}",
-                    targetLanguage, sourceLanguage);
-
-                return BackTranslationResult.SuccessResult(translatedText, ProviderName);
-            }
-            catch (TaskCanceledException) when (cancellationToken.IsCancellationRequested)
+            var request = new HttpRequestMessage(HttpMethod.Post, $"{_settings.DeepL.BaseUrl}/translate")
             {
-                throw;
-            }
-            catch (HttpRequestException ex) when (attempt < MaxRetries)
+                Content = formContent
+            };
+            request.Headers.Add("Authorization", $"DeepL-Auth-Key {_settings.DeepL.ApiKey}");
+
+            var response = await _httpClient.SendAsync(request, cancellationToken);
+            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
             {
-                _logger.LogWarning(ex,
-                    "DeepL HTTP error on attempt {Attempt}, retrying in {Delay}s",
-                    attempt, delay.TotalSeconds);
-                await Task.Delay(delay, cancellationToken);
-                delay *= 2;
-            }
-            catch (HttpRequestException ex)
-            {
-                _logger.LogError(ex, "DeepL HTTP request failed after {MaxRetries} attempts", MaxRetries);
+                var hint = response.StatusCode == System.Net.HttpStatusCode.Forbidden
+                    ? " (403 Forbidden — this usually means a paid API key is being used with the free-tier URL api-free.deepl.com, or vice versa. Check TranslationValidation__DeepL__BaseUrl: paid keys use https://api.deepl.com/v2, free keys use https://api-free.deepl.com/v2)"
+                    : "";
+                _logger.LogError(
+                    "DeepL API error: {StatusCode} — BaseUrl={BaseUrl}, ResponseBody={Response}{Hint}",
+                    response.StatusCode, _settings.DeepL.BaseUrl, responseBody, hint);
                 return BackTranslationResult.FailureResult(
-                    $"HTTP request failed: {ex.Message}", ProviderName);
+                    $"DeepL API error: {response.StatusCode}", ProviderName);
             }
-            catch (JsonException ex)
+
+            var translatedText = ParseDeepLResponse(responseBody);
+
+            if (string.IsNullOrWhiteSpace(translatedText))
             {
-                _logger.LogError(ex, "Failed to parse DeepL response");
+                _logger.LogWarning("DeepL returned empty translation");
                 return BackTranslationResult.FailureResult(
-                    $"Failed to parse response: {ex.Message}", ProviderName);
+                    "DeepL returned empty translation", ProviderName);
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "DeepL back-translation failed");
-                return BackTranslationResult.FailureResult(
-                    $"Back-translation failed: {ex.Message}", ProviderName);
-            }
+
+            _logger.LogInformation(
+                "DeepL back-translation completed: {TargetLang} → {SourceLang}",
+                targetLanguage, sourceLanguage);
+
+            return BackTranslationResult.SuccessResult(translatedText, ProviderName);
         }
-
-        return BackTranslationResult.FailureResult(
-            $"Failed after {MaxRetries} retry attempts", ProviderName);
+        catch (TaskCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "DeepL HTTP request failed");
+            return BackTranslationResult.FailureResult(
+                $"HTTP request failed: {ex.Message}", ProviderName);
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "Failed to parse DeepL response");
+            return BackTranslationResult.FailureResult(
+                $"Failed to parse response: {ex.Message}", ProviderName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "DeepL back-translation failed");
+            return BackTranslationResult.FailureResult(
+                $"Back-translation failed: {ex.Message}", ProviderName);
+        }
     }
 
     /// <summary>
