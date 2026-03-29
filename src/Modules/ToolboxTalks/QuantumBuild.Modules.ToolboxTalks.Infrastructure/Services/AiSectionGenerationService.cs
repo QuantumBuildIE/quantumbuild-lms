@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Prompts;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
@@ -17,15 +18,18 @@ public class AiSectionGenerationService : IAiSectionGenerationService
 {
     private readonly HttpClient _httpClient;
     private readonly SubtitleProcessingSettings _settings;
+    private readonly IAiUsageLogger _aiUsageLogger;
     private readonly ILogger<AiSectionGenerationService> _logger;
 
     public AiSectionGenerationService(
         HttpClient httpClient,
         IOptions<SubtitleProcessingSettings> settings,
+        IAiUsageLogger aiUsageLogger,
         ILogger<AiSectionGenerationService> logger)
     {
         _httpClient = httpClient;
         _settings = settings.Value;
+        _aiUsageLogger = aiUsageLogger;
         _logger = logger;
     }
 
@@ -35,6 +39,8 @@ public class AiSectionGenerationService : IAiSectionGenerationService
         string combinedContent,
         bool hasVideoContent,
         bool hasPdfContent,
+        Guid tenantId,
+        Guid? userId = null,
         int minimumSections = 7,
         CancellationToken cancellationToken = default)
     {
@@ -107,7 +113,20 @@ public class AiSectionGenerationService : IAiSectionGenerationService
                     TokensUsed: 0);
             }
 
-            var (sections, tokensUsed) = ParseSectionsFromResponse(responseBody, hasVideoContent, hasPdfContent);
+            var parsed = AnthropicResponseParser.Parse(responseBody);
+            var sections = ParseSectionsFromContentText(parsed.ContentText, hasVideoContent, hasPdfContent);
+            var tokensUsed = parsed.InputTokens + parsed.OutputTokens;
+
+            await _aiUsageLogger.LogAsync(
+                tenantId,
+                AiOperationCategory.SectionGeneration,
+                parsed.Model,
+                parsed.InputTokens,
+                parsed.OutputTokens,
+                isSystemCall: false,
+                userId: userId,
+                referenceEntityId: toolboxTalkId,
+                cancellationToken);
 
             if (sections.Count < minimumSections)
             {
@@ -156,45 +175,17 @@ public class AiSectionGenerationService : IAiSectionGenerationService
     }
 
     /// <summary>
-    /// Parses the Claude API response to extract sections.
+    /// Parses the content text from the Claude API response to extract sections.
     /// </summary>
-    private (List<GeneratedSection> sections, int tokensUsed) ParseSectionsFromResponse(
-        string responseBody,
+    private List<GeneratedSection> ParseSectionsFromContentText(
+        string responseText,
         bool hasVideo,
         bool hasPdf)
     {
-        using var jsonDoc = JsonDocument.Parse(responseBody);
-
-        // Extract token usage
-        var tokensUsed = 0;
-        if (jsonDoc.RootElement.TryGetProperty("usage", out var usageEl))
-        {
-            var inputTokens = usageEl.TryGetProperty("input_tokens", out var inputEl) ? inputEl.GetInt32() : 0;
-            var outputTokens = usageEl.TryGetProperty("output_tokens", out var outputEl) ? outputEl.GetInt32() : 0;
-            tokensUsed = inputTokens + outputTokens;
-        }
-
-        // Extract content
-        if (!jsonDoc.RootElement.TryGetProperty("content", out var contentArray))
-        {
-            _logger.LogWarning("No content property found in Claude response");
-            return (new List<GeneratedSection>(), tokensUsed);
-        }
-
-        string? responseText = null;
-        foreach (var item in contentArray.EnumerateArray())
-        {
-            if (item.TryGetProperty("text", out var textEl))
-            {
-                responseText = textEl.GetString();
-                break;
-            }
-        }
-
         if (string.IsNullOrWhiteSpace(responseText))
         {
             _logger.LogWarning("Empty text in Claude response");
-            return (new List<GeneratedSection>(), tokensUsed);
+            return new List<GeneratedSection>();
         }
 
         // Extract JSON array from response (may have markdown code blocks)
@@ -204,7 +195,7 @@ public class AiSectionGenerationService : IAiSectionGenerationService
         if (jsonStart == -1 || jsonEnd == -1 || jsonEnd <= jsonStart)
         {
             _logger.LogWarning("Could not find JSON array in AI response");
-            return (new List<GeneratedSection>(), tokensUsed);
+            return new List<GeneratedSection>();
         }
 
         var jsonContent = responseText.Substring(jsonStart, jsonEnd - jsonStart + 1);
@@ -219,19 +210,17 @@ public class AiSectionGenerationService : IAiSectionGenerationService
         if (rawSections == null || rawSections.Count == 0)
         {
             _logger.LogWarning("No sections parsed from AI response");
-            return (new List<GeneratedSection>(), tokensUsed);
+            return new List<GeneratedSection>();
         }
 
         // Convert raw sections to GeneratedSection with proper ContentSource enum
-        var sections = rawSections
+        return rawSections
             .Select(s => new GeneratedSection(
                 s.SortOrder,
                 s.Title,
                 s.Content,
                 ParseContentSource(s.Source, hasVideo, hasPdf)))
             .ToList();
-
-        return (sections, tokensUsed);
     }
 
     /// <summary>

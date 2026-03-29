@@ -67,5 +67,9 @@ public interface IToolboxTalksDbContext
     DbSet<RegulatoryRequirement> RegulatoryRequirements { get; }
     DbSet<RegulatoryRequirementMapping> RegulatoryRequirementMappings { get; }
 
+    // AI usage tracking entities
+    DbSet<AiUsageLog> AiUsageLogs { get; }
+    DbSet<AiUsageSummary> AiUsageSummaries { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

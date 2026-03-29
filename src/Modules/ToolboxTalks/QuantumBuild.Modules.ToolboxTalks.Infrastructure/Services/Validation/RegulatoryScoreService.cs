@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
@@ -31,17 +32,20 @@ public class RegulatoryScoreService : IRegulatoryScoreService
     private readonly IToolboxTalksDbContext _dbContext;
     private readonly HttpClient _httpClient;
     private readonly SubtitleProcessingSettings _settings;
+    private readonly IAiUsageLogger _aiUsageLogger;
     private readonly ILogger<RegulatoryScoreService> _logger;
 
     public RegulatoryScoreService(
         IToolboxTalksDbContext dbContext,
         HttpClient httpClient,
         IOptions<SubtitleProcessingSettings> settings,
+        IAiUsageLogger aiUsageLogger,
         ILogger<RegulatoryScoreService> logger)
     {
         _dbContext = dbContext;
         _httpClient = httpClient;
         _settings = settings.Value;
+        _aiUsageLogger = aiUsageLogger;
         _logger = logger;
     }
 
@@ -110,11 +114,11 @@ public class RegulatoryScoreService : IRegulatoryScoreService
         var (response, overallScore, verdict, summary, categoryScores) = scoreType switch
         {
             ValidationScoreType.SourceDocument => await ScoreSourceDocumentAsync(
-                results, categoryWeights, criteria, body?.Code, cancellationToken),
+                results, categoryWeights, criteria, body?.Code, run.TenantId, validationRunId, cancellationToken),
             ValidationScoreType.PureTranslation => await ScorePureTranslationAsync(
-                results, cancellationToken),
+                results, run.TenantId, validationRunId, cancellationToken),
             ValidationScoreType.RegulatoryTranslation => await ScoreRegulatoryTranslationAsync(
-                results, categoryWeights, criteria, body?.Code, cancellationToken),
+                results, categoryWeights, criteria, body?.Code, run.TenantId, validationRunId, cancellationToken),
             _ => throw new ArgumentOutOfRangeException(nameof(scoreType))
         };
 
@@ -237,6 +241,8 @@ public class RegulatoryScoreService : IRegulatoryScoreService
             List<CategoryWeight> categoryWeights,
             List<RegulatoryCriteria>? criteria,
             string? bodyCode,
+            Guid tenantId,
+            Guid validationRunId,
             CancellationToken cancellationToken)
     {
         var sectionsText = new StringBuilder();
@@ -282,7 +288,7 @@ public class RegulatoryScoreService : IRegulatoryScoreService
             SUMMARY: [2-3 sentence summary of the assessment]
             """;
 
-        var response = await CallClaudeAsync(prompt, cancellationToken);
+        var response = await CallClaudeAsync(prompt, tenantId, validationRunId, cancellationToken);
         var categoryKeys = categoryWeights.Select(c => c.Key).ToList();
         var parsed = ParseScoreResponse(response, categoryKeys, categoryWeights, "OVERALL_SOURCE_SCORE");
 
@@ -292,6 +298,8 @@ public class RegulatoryScoreService : IRegulatoryScoreService
     private async Task<(string Response, int OverallScore, string Verdict, string Summary, List<CategoryScoreDto> CategoryScores)>
         ScorePureTranslationAsync(
             List<TranslationValidationResult> results,
+            Guid tenantId,
+            Guid validationRunId,
             CancellationToken cancellationToken)
     {
         // Fixed five categories for pure linguistic assessment
@@ -344,7 +352,7 @@ public class RegulatoryScoreService : IRegulatoryScoreService
             SUMMARY: [2-3 sentence summary of the translation quality]
             """;
 
-        var response = await CallClaudeAsync(prompt, cancellationToken);
+        var response = await CallClaudeAsync(prompt, tenantId, validationRunId, cancellationToken);
         var categoryKeys = pureCategories.Select(c => c.Key).ToList();
         var parsed = ParseScoreResponse(response, categoryKeys, pureCategories, "OVERALL_PURE_SCORE");
 
@@ -357,6 +365,8 @@ public class RegulatoryScoreService : IRegulatoryScoreService
             List<CategoryWeight> categoryWeights,
             List<RegulatoryCriteria>? criteria,
             string? bodyCode,
+            Guid tenantId,
+            Guid validationRunId,
             CancellationToken cancellationToken)
     {
         var sectionsText = new StringBuilder();
@@ -406,7 +416,7 @@ public class RegulatoryScoreService : IRegulatoryScoreService
             SUMMARY: [2-3 sentence summary of the regulatory translation assessment]
             """;
 
-        var response = await CallClaudeAsync(prompt, cancellationToken);
+        var response = await CallClaudeAsync(prompt, tenantId, validationRunId, cancellationToken);
         var categoryKeys = categoryWeights.Select(c => c.Key).ToList();
         var parsed = ParseScoreResponse(response, categoryKeys, categoryWeights, responseKey);
 
@@ -417,7 +427,11 @@ public class RegulatoryScoreService : IRegulatoryScoreService
 
     #region Claude API
 
-    private async Task<string> CallClaudeAsync(string prompt, CancellationToken cancellationToken)
+    private async Task<string> CallClaudeAsync(
+        string prompt,
+        Guid tenantId,
+        Guid validationRunId,
+        CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(_settings.Claude.ApiKey))
             throw new InvalidOperationException("Claude API key not configured");
@@ -451,23 +465,20 @@ public class RegulatoryScoreService : IRegulatoryScoreService
             throw new InvalidOperationException($"Claude API error: {response.StatusCode}");
         }
 
-        return ParseClaudeResponseText(responseBody);
-    }
+        var parsed = AnthropicResponseParser.Parse(responseBody);
 
-    private static string ParseClaudeResponseText(string responseBody)
-    {
-        using var jsonDoc = JsonDocument.Parse(responseBody);
+        await _aiUsageLogger.LogAsync(
+            tenantId,
+            AiOperationCategory.RegulatoryScoring,
+            parsed.Model,
+            parsed.InputTokens,
+            parsed.OutputTokens,
+            isSystemCall: false,
+            userId: null,
+            referenceEntityId: validationRunId,
+            cancellationToken);
 
-        if (!jsonDoc.RootElement.TryGetProperty("content", out var contentArray))
-            return string.Empty;
-
-        foreach (var item in contentArray.EnumerateArray())
-        {
-            if (item.TryGetProperty("text", out var textEl))
-                return textEl.GetString() ?? string.Empty;
-        }
-
-        return string.Empty;
+        return parsed.ContentText;
     }
 
     #endregion

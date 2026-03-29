@@ -3,8 +3,10 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using QuantumBuild.Core.Application.Models;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Prompts;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services;
+using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Slideshow;
@@ -17,6 +19,7 @@ public class AiSlideshowGenerationService : IAiSlideshowGenerationService
 {
     private readonly HttpClient _httpClient;
     private readonly SubtitleProcessingSettings _settings;
+    private readonly IAiUsageLogger _aiUsageLogger;
     private readonly ILogger<AiSlideshowGenerationService> _logger;
 
     private static readonly JsonSerializerOptions NullIgnoringJsonOptions = new()
@@ -30,16 +33,21 @@ public class AiSlideshowGenerationService : IAiSlideshowGenerationService
     public AiSlideshowGenerationService(
         HttpClient httpClient,
         IOptions<SubtitleProcessingSettings> settings,
+        IAiUsageLogger aiUsageLogger,
         ILogger<AiSlideshowGenerationService> logger)
     {
         _httpClient = httpClient;
         _settings = settings.Value;
+        _aiUsageLogger = aiUsageLogger;
         _logger = logger;
     }
 
     public async Task<Result<string>> GenerateSlideshowFromPdfAsync(
         byte[] pdfBytes,
         string documentTitle,
+        Guid tenantId,
+        Guid? userId = null,
+        Guid? toolboxTalkId = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -95,7 +103,7 @@ public class AiSlideshowGenerationService : IAiSlideshowGenerationService
 
             // First attempt
             var (html, wasTruncated, error) = await SendAndParseAsync(
-                SerializeBody(prompt), documentTitle, cancellationToken);
+                SerializeBody(prompt), documentTitle, tenantId, userId, toolboxTalkId, cancellationToken);
 
             if (error != null)
                 return Result.Fail<string>(error);
@@ -108,7 +116,7 @@ public class AiSlideshowGenerationService : IAiSlideshowGenerationService
                     documentTitle);
 
                 var (retryHtml, retryTruncated, retryError) = await SendAndParseAsync(
-                    SerializeBody(TruncationRetryPrefix + prompt), documentTitle, cancellationToken);
+                    SerializeBody(TruncationRetryPrefix + prompt), documentTitle, tenantId, userId, toolboxTalkId, cancellationToken);
 
                 if (retryError == null && retryHtml != null)
                 {
@@ -149,6 +157,9 @@ public class AiSlideshowGenerationService : IAiSlideshowGenerationService
     public async Task<Result<string>> GenerateSlideshowFromTranscriptAsync(
         string transcriptText,
         string documentTitle,
+        Guid tenantId,
+        Guid? userId = null,
+        Guid? toolboxTalkId = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -197,7 +208,7 @@ public class AiSlideshowGenerationService : IAiSlideshowGenerationService
 
             // First attempt
             var (html, wasTruncated, error) = await SendAndParseAsync(
-                SerializeBody(prompt), documentTitle, cancellationToken);
+                SerializeBody(prompt), documentTitle, tenantId, userId, toolboxTalkId, cancellationToken);
 
             if (error != null)
                 return Result.Fail<string>(error);
@@ -210,7 +221,7 @@ public class AiSlideshowGenerationService : IAiSlideshowGenerationService
                     documentTitle);
 
                 var (retryHtml, retryTruncated, retryError) = await SendAndParseAsync(
-                    SerializeBody(TruncationRetryPrefix + prompt), documentTitle, cancellationToken);
+                    SerializeBody(TruncationRetryPrefix + prompt), documentTitle, tenantId, userId, toolboxTalkId, cancellationToken);
 
                 if (retryError == null && retryHtml != null)
                 {
@@ -251,6 +262,9 @@ public class AiSlideshowGenerationService : IAiSlideshowGenerationService
     public async Task<Result<string>> GenerateSlideshowFromSectionsAsync(
         IReadOnlyList<(string Title, string Content)> sections,
         string documentTitle,
+        Guid tenantId,
+        Guid? userId = null,
+        Guid? toolboxTalkId = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -318,7 +332,7 @@ public class AiSlideshowGenerationService : IAiSlideshowGenerationService
 
             // First attempt
             var (html, wasTruncated, error) = await SendAndParseAsync(
-                SerializeBody(prompt), documentTitle, cancellationToken);
+                SerializeBody(prompt), documentTitle, tenantId, userId, toolboxTalkId, cancellationToken);
 
             if (error != null)
                 return Result.Fail<string>(error);
@@ -331,7 +345,7 @@ public class AiSlideshowGenerationService : IAiSlideshowGenerationService
                     documentTitle);
 
                 var (retryHtml, retryTruncated, retryError) = await SendAndParseAsync(
-                    SerializeBody(TruncationRetryPrefix + prompt), documentTitle, cancellationToken);
+                    SerializeBody(TruncationRetryPrefix + prompt), documentTitle, tenantId, userId, toolboxTalkId, cancellationToken);
 
                 if (retryError == null && retryHtml != null)
                 {
@@ -372,6 +386,9 @@ public class AiSlideshowGenerationService : IAiSlideshowGenerationService
     private async Task<(string? Html, bool WasTruncated, string? Error)> SendAndParseAsync(
         string jsonContent,
         string documentTitle,
+        Guid tenantId,
+        Guid? userId,
+        Guid? toolboxTalkId,
         CancellationToken cancellationToken)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, $"{_settings.Claude.BaseUrl}/messages");
@@ -391,8 +408,26 @@ public class AiSlideshowGenerationService : IAiSlideshowGenerationService
             return (null, false, $"Claude API error: {response.StatusCode}");
         }
 
-        var (html, stopReason) = ParseApiResponse(responseBody);
-        LogTokenUsage(responseBody);
+        var parsed = AnthropicResponseParser.Parse(responseBody);
+        var html = string.IsNullOrEmpty(parsed.ContentText) ? null : parsed.ContentText;
+
+        // Extract stop_reason separately (not in AnthropicResponseParser)
+        var stopReason = ExtractStopReason(responseBody);
+
+        _logger.LogInformation(
+            "Slideshow generation token usage: input={InputTokens}, output={OutputTokens}, total={TotalTokens}",
+            parsed.InputTokens, parsed.OutputTokens, parsed.InputTokens + parsed.OutputTokens);
+
+        await _aiUsageLogger.LogAsync(
+            tenantId,
+            AiOperationCategory.SlideshowGeneration,
+            parsed.Model,
+            parsed.InputTokens,
+            parsed.OutputTokens,
+            isSystemCall: false,
+            userId: userId,
+            referenceEntityId: toolboxTalkId,
+            cancellationToken);
 
         var wasTruncated = stopReason == "max_tokens";
         if (wasTruncated)
@@ -405,28 +440,12 @@ public class AiSlideshowGenerationService : IAiSlideshowGenerationService
         return (html, wasTruncated, null);
     }
 
-    private (string? Html, string? StopReason) ParseApiResponse(string responseBody)
+    private static string? ExtractStopReason(string responseBody)
     {
         using var jsonDoc = JsonDocument.Parse(responseBody);
-
-        var stopReason = jsonDoc.RootElement.TryGetProperty("stop_reason", out var stopEl)
+        return jsonDoc.RootElement.TryGetProperty("stop_reason", out var stopEl)
             ? stopEl.GetString()
             : null;
-
-        string? html = null;
-        if (jsonDoc.RootElement.TryGetProperty("content", out var contentArray))
-        {
-            foreach (var item in contentArray.EnumerateArray())
-            {
-                if (item.TryGetProperty("text", out var textEl))
-                {
-                    html = textEl.GetString();
-                    break;
-                }
-            }
-        }
-
-        return (html, stopReason);
     }
 
     private Result ValidateHtml(string? html, string documentTitle)
@@ -552,23 +571,4 @@ public class AiSlideshowGenerationService : IAiSlideshowGenerationService
     </script>
     """;
 
-    private void LogTokenUsage(string responseBody)
-    {
-        try
-        {
-            using var jsonDoc = JsonDocument.Parse(responseBody);
-            if (jsonDoc.RootElement.TryGetProperty("usage", out var usageEl))
-            {
-                var inputTokens = usageEl.TryGetProperty("input_tokens", out var inputEl) ? inputEl.GetInt32() : 0;
-                var outputTokens = usageEl.TryGetProperty("output_tokens", out var outputEl) ? outputEl.GetInt32() : 0;
-                _logger.LogInformation(
-                    "Slideshow generation token usage: input={InputTokens}, output={OutputTokens}, total={TotalTokens}",
-                    inputTokens, outputTokens, inputTokens + outputTokens);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to parse token usage from response");
-        }
-    }
 }

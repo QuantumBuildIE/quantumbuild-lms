@@ -103,6 +103,10 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
     public DbSet<RegulatoryRequirement> RegulatoryRequirements => Set<RegulatoryRequirement>();
     public DbSet<RegulatoryRequirementMapping> RegulatoryRequirementMappings => Set<RegulatoryRequirementMapping>();
 
+    // AI usage tracking DbSets
+    public DbSet<AiUsageLog> AiUsageLogs => Set<AiUsageLog>();
+    public DbSet<AiUsageSummary> AiUsageSummaries => Set<AiUsageSummary>();
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         base.OnConfiguring(optionsBuilder);
@@ -253,6 +257,8 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.ApplyConfiguration(new ValidationRegulatoryScoreConfiguration());
         modelBuilder.ApplyConfiguration(new RegulatoryRequirementConfiguration());
         modelBuilder.ApplyConfiguration(new RegulatoryRequirementMappingConfiguration());
+        modelBuilder.ApplyConfiguration(new AiUsageLogConfiguration());
+        modelBuilder.ApplyConfiguration(new AiUsageSummaryConfiguration());
 
         // Apply global query filters - Core entities
         // BypassTenantFilter allows SuperUser to see all tenants' data when no tenant is selected

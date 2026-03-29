@@ -2,8 +2,10 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Subtitles;
 using QuantumBuild.Modules.ToolboxTalks.Application.Prompts;
+using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Subtitles;
@@ -16,15 +18,18 @@ public class ClaudeTranslationService : ITranslationService
 {
     private readonly HttpClient _httpClient;
     private readonly SubtitleProcessingSettings _settings;
+    private readonly IAiUsageLogger _aiUsageLogger;
     private readonly ILogger<ClaudeTranslationService> _logger;
 
     public ClaudeTranslationService(
         HttpClient httpClient,
         IOptions<SubtitleProcessingSettings> settings,
+        IAiUsageLogger aiUsageLogger,
         ILogger<ClaudeTranslationService> logger)
     {
         _httpClient = httpClient;
         _settings = settings.Value;
+        _aiUsageLogger = aiUsageLogger;
         _logger = logger;
     }
 
@@ -34,7 +39,11 @@ public class ClaudeTranslationService : ITranslationService
     public async Task<TranslationResult> TranslateSrtBatchAsync(
         string srtContent,
         string targetLanguage,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Guid tenantId = default,
+        Guid? userId = null,
+        bool isSystemCall = false,
+        Guid? toolboxTalkId = null)
     {
         try
         {
@@ -69,9 +78,20 @@ public class ClaudeTranslationService : ITranslationService
                 return TranslationResult.FailureResult($"Claude API error: {response.StatusCode}");
             }
 
-            var translatedText = ParseTranslationResponse(responseBody);
+            var parsed = AnthropicResponseParser.Parse(responseBody);
 
-            if (string.IsNullOrWhiteSpace(translatedText))
+            await _aiUsageLogger.LogAsync(
+                tenantId,
+                AiOperationCategory.ContentTranslation,
+                parsed.Model,
+                parsed.InputTokens,
+                parsed.OutputTokens,
+                isSystemCall: isSystemCall,
+                userId: userId,
+                referenceEntityId: toolboxTalkId,
+                cancellationToken);
+
+            if (string.IsNullOrWhiteSpace(parsed.ContentText))
             {
                 _logger.LogWarning("Translation returned empty content for {Language}", targetLanguage);
                 return TranslationResult.FailureResult($"Translation to {targetLanguage} returned empty content");
@@ -79,7 +99,7 @@ public class ClaudeTranslationService : ITranslationService
 
             _logger.LogInformation("Translation to {Language} completed", targetLanguage);
 
-            return TranslationResult.SuccessResult(translatedText);
+            return TranslationResult.SuccessResult(parsed.ContentText);
         }
         catch (HttpRequestException ex)
         {
@@ -96,26 +116,5 @@ public class ClaudeTranslationService : ITranslationService
             _logger.LogError(ex, "Translation to {Language} failed", targetLanguage);
             return TranslationResult.FailureResult($"Translation failed: {ex.Message}");
         }
-    }
-
-    /// <summary>
-    /// Parses the Claude API response to extract the translated text.
-    /// </summary>
-    private static string ParseTranslationResponse(string responseBody)
-    {
-        using var jsonDoc = JsonDocument.Parse(responseBody);
-
-        if (!jsonDoc.RootElement.TryGetProperty("content", out var contentArray))
-            return string.Empty;
-
-        foreach (var item in contentArray.EnumerateArray())
-        {
-            if (item.TryGetProperty("text", out var textEl))
-            {
-                return textEl.GetString() ?? string.Empty;
-            }
-        }
-
-        return string.Empty;
     }
 }

@@ -53,7 +53,9 @@ public class ConsensusEngine : IConsensusEngine
         string sourceLanguage,
         string targetLanguage,
         int threshold,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Guid tenantId = default,
+        Guid? toolboxTalkId = null)
     {
         var result = new ConsensusResult();
         var maxRounds = _settings.MaxRounds;
@@ -66,7 +68,8 @@ public class ConsensusEngine : IConsensusEngine
         result.RoundsUsed = 1;
 
         var resultA = await _claudeHaiku.BackTranslateAsync(
-            translatedText, sourceLanguage, targetLanguage, cancellationToken);
+            translatedText, sourceLanguage, targetLanguage, cancellationToken,
+            tenantId: tenantId, toolboxTalkId: toolboxTalkId);
         var resultB = await _deepL.BackTranslateAsync(
             translatedText, sourceLanguage, targetLanguage, cancellationToken);
 

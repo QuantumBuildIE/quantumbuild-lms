@@ -52,15 +52,15 @@ public class SlideshowGenerationService : ISlideshowGenerationService
 
         if (string.Equals(source, "sections", StringComparison.OrdinalIgnoreCase))
         {
-            result = await GenerateFromSectionsAsync(talk, toolboxTalkId, cancellationToken);
+            result = await GenerateFromSectionsAsync(talk, toolboxTalkId, tenantId, cancellationToken);
         }
         else if (string.Equals(source, "video", StringComparison.OrdinalIgnoreCase))
         {
-            result = await GenerateFromVideoTranscriptAsync(talk, toolboxTalkId, cancellationToken);
+            result = await GenerateFromVideoTranscriptAsync(talk, toolboxTalkId, tenantId, cancellationToken);
         }
         else
         {
-            result = await GenerateFromPdfAsync(talk, toolboxTalkId, cancellationToken);
+            result = await GenerateFromPdfAsync(talk, toolboxTalkId, tenantId, cancellationToken);
         }
 
         if (!result.Success || string.IsNullOrWhiteSpace(result.Data))
@@ -100,6 +100,7 @@ public class SlideshowGenerationService : ISlideshowGenerationService
     private async Task<Result<string>> GenerateFromSectionsAsync(
         Domain.Entities.ToolboxTalk talk,
         Guid toolboxTalkId,
+        Guid tenantId,
         CancellationToken cancellationToken)
     {
         var sections = await _context.ToolboxTalkSections
@@ -120,12 +121,13 @@ public class SlideshowGenerationService : ISlideshowGenerationService
             .ToList();
 
         return await _aiService.GenerateSlideshowFromSectionsAsync(
-            sectionPairs, talk.Title, cancellationToken);
+            sectionPairs, talk.Title, tenantId, userId: null, toolboxTalkId: toolboxTalkId, cancellationToken: cancellationToken);
     }
 
     private async Task<Result<string>> GenerateFromPdfAsync(
         Domain.Entities.ToolboxTalk talk,
         Guid toolboxTalkId,
+        Guid tenantId,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(talk.PdfUrl))
@@ -153,12 +155,13 @@ public class SlideshowGenerationService : ISlideshowGenerationService
         }
 
         return await _aiService.GenerateSlideshowFromPdfAsync(
-            pdfBytes, talk.Title, cancellationToken);
+            pdfBytes, talk.Title, tenantId, userId: null, toolboxTalkId: toolboxTalkId, cancellationToken: cancellationToken);
     }
 
     private async Task<Result<string>> GenerateFromVideoTranscriptAsync(
         Domain.Entities.ToolboxTalk talk,
         Guid toolboxTalkId,
+        Guid tenantId,
         CancellationToken cancellationToken)
     {
         // First try ExtractedVideoTranscript on the entity
@@ -188,6 +191,6 @@ public class SlideshowGenerationService : ISlideshowGenerationService
             toolboxTalkId, transcript.Length);
 
         return await _aiService.GenerateSlideshowFromTranscriptAsync(
-            transcript, talk.Title, cancellationToken);
+            transcript, talk.Title, tenantId, userId: null, toolboxTalkId: toolboxTalkId, cancellationToken: cancellationToken);
     }
 }

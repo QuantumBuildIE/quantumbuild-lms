@@ -33,5 +33,7 @@ public interface ITranslationValidationService
         string targetLanguage,
         string? sectorKey,
         int passThreshold,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        Guid tenantId = default,
+        Guid? toolboxTalkId = null);
 }

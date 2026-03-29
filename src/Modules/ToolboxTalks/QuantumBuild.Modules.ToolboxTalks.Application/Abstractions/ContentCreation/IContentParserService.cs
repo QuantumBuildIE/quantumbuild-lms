@@ -13,6 +13,8 @@ public interface IContentParserService
     Task<ContentParseResult> ParseContentAsync(
         string rawText,
         InputMode inputModeHint,
+        Guid tenantId,
+        Guid? userId = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

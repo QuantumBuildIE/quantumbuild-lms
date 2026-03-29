@@ -142,7 +142,9 @@ public class TranslationValidationJob
                         run.LanguageCode,
                         run.SectorKey,
                         run.PassThreshold,
-                        cancellationToken);
+                        cancellationToken,
+                        tenantId: tenantId,
+                        toolboxTalkId: run.ToolboxTalkId);
 
                     results.Add(result);
 
@@ -628,7 +630,10 @@ public class TranslationValidationJob
                     sourceLanguage: source,
                     sectorKey: sectorKey,
                     isSafetyCritical: false,
-                    glossaryTerms: null);
+                    glossaryTerms: null,
+                    tenantId: tenantId,
+                    isSystemCall: true,
+                    toolboxTalkId: talkId);
 
                 // Section content: full tiered prompt with safety + glossary
                 var contentResult = await _contentTranslationService.TranslateTextAsync(
@@ -636,7 +641,10 @@ public class TranslationValidationJob
                     sourceLanguage: source,
                     sectorKey: sectorKey,
                     isSafetyCritical: isSafetyCritical,
-                    glossaryTerms: glossaryInstructions);
+                    glossaryTerms: glossaryInstructions,
+                    tenantId: tenantId,
+                    isSystemCall: true,
+                    toolboxTalkId: talkId);
 
                 if (titleResult.Success && contentResult.Success)
                 {
@@ -670,7 +678,8 @@ public class TranslationValidationJob
             if (talk != null)
             {
                 var titleTranslation = await _contentTranslationService.TranslateTextAsync(
-                    talk.Title, languageName, false, cancellationToken, sectorKey: sectorKey);
+                    talk.Title, languageName, false, cancellationToken, sectorKey: sectorKey,
+                    tenantId: tenantId, isSystemCall: true, toolboxTalkId: talkId);
                 if (titleTranslation.Success)
                     translatedTitle = titleTranslation.TranslatedContent;
 
@@ -678,7 +687,8 @@ public class TranslationValidationJob
                 if (!string.IsNullOrWhiteSpace(talk.Description))
                 {
                     var descResult = await _contentTranslationService.TranslateTextAsync(
-                        talk.Description, languageName, false, cancellationToken, sectorKey: sectorKey);
+                        talk.Description, languageName, false, cancellationToken, sectorKey: sectorKey,
+                        tenantId: tenantId, isSystemCall: true, toolboxTalkId: talkId);
                     if (descResult.Success)
                         translatedDescription = descResult.TranslatedContent;
                 }
@@ -699,7 +709,8 @@ public class TranslationValidationJob
                 {
                     // Translate question text — sector-aware for compliance terminology
                     var qTextResult = await _contentTranslationService.TranslateTextAsync(
-                        q.QuestionText, languageName, false, cancellationToken, sectorKey: sectorKey);
+                        q.QuestionText, languageName, false, cancellationToken, sectorKey: sectorKey,
+                        tenantId: tenantId, isSystemCall: true, toolboxTalkId: talkId);
                     var translatedQuestionText = qTextResult.Success
                         ? qTextResult.TranslatedContent
                         : q.QuestionText;
@@ -715,7 +726,8 @@ public class TranslationValidationJob
                             foreach (var option in options)
                             {
                                 var optResult = await _contentTranslationService.TranslateTextAsync(
-                                    option, languageName, false, cancellationToken, sectorKey: sectorKey);
+                                    option, languageName, false, cancellationToken, sectorKey: sectorKey,
+                                    tenantId: tenantId, isSystemCall: true, toolboxTalkId: talkId);
                                 translatedOptions.Add(optResult.Success ? optResult.TranslatedContent : option);
                             }
                         }

@@ -56,7 +56,9 @@ public class TranslationValidationService : ITranslationValidationService
         string targetLanguage,
         string? sectorKey,
         int passThreshold,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Guid tenantId = default,
+        Guid? toolboxTalkId = null)
     {
         _logger.LogInformation(
             "Validating section {Index} '{Title}' for run {RunId}. " +
@@ -81,7 +83,8 @@ public class TranslationValidationService : ITranslationValidationService
         var consensus = await _consensusEngine.RunAsync(
             originalText, translatedText,
             sourceLanguage, targetLanguage,
-            effectiveThreshold, cancellationToken);
+            effectiveThreshold, cancellationToken,
+            tenantId: tenantId, toolboxTalkId: toolboxTalkId);
 
         // 3. Glossary term verification
         var engineOutcome = consensus.Outcome;

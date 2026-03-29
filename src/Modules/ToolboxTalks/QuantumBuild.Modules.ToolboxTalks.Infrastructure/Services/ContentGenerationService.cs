@@ -181,8 +181,10 @@ public class ContentGenerationService : IContentGenerationService
                 extractionResult.CombinedContent!,
                 extractionResult.VideoContent != null,
                 extractionResult.PdfContent != null,
-                options.MinimumSections,
-                cancellationToken);
+                tenantId: tenantId,
+                userId: _currentUser.UserIdGuid,
+                minimumSections: options.MinimumSections,
+                cancellationToken: cancellationToken);
 
             totalTokens += sectionResult.TokensUsed;
 
@@ -228,8 +230,10 @@ public class ContentGenerationService : IContentGenerationService
                 videoFinalPortion,
                 extractionResult.VideoContent != null,
                 extractionResult.PdfContent != null,
-                options.MinimumQuestions,
-                cancellationToken);
+                tenantId: tenantId,
+                userId: _currentUser.UserIdGuid,
+                minimumQuestions: options.MinimumQuestions,
+                cancellationToken: cancellationToken);
 
             totalTokens += quizResult.TokensUsed;
             hasFinalPortionQuestion = quizResult.HasFinalPortionQuestion;

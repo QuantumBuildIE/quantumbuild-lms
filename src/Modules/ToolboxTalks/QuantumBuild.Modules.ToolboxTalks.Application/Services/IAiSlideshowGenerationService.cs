@@ -19,6 +19,9 @@ public interface IAiSlideshowGenerationService
     Task<Result<string>> GenerateSlideshowFromPdfAsync(
         byte[] pdfBytes,
         string documentTitle,
+        Guid tenantId,
+        Guid? userId = null,
+        Guid? toolboxTalkId = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -26,11 +29,17 @@ public interface IAiSlideshowGenerationService
     /// </summary>
     /// <param name="transcriptText">The video transcript text</param>
     /// <param name="documentTitle">Title to use for the slideshow</param>
+    /// <param name="tenantId">Tenant ID for usage logging</param>
+    /// <param name="userId">User ID for usage logging</param>
+    /// <param name="toolboxTalkId">Toolbox talk ID for usage logging</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Complete HTML string for the slideshow</returns>
     Task<Result<string>> GenerateSlideshowFromTranscriptAsync(
         string transcriptText,
         string documentTitle,
+        Guid tenantId,
+        Guid? userId = null,
+        Guid? toolboxTalkId = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -38,10 +47,16 @@ public interface IAiSlideshowGenerationService
     /// </summary>
     /// <param name="sections">List of (title, content) pairs representing the talk sections</param>
     /// <param name="documentTitle">Title to use for the slideshow</param>
+    /// <param name="tenantId">Tenant ID for usage logging</param>
+    /// <param name="userId">User ID for usage logging</param>
+    /// <param name="toolboxTalkId">Toolbox talk ID for usage logging</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Complete HTML string for the slideshow</returns>
     Task<Result<string>> GenerateSlideshowFromSectionsAsync(
         IReadOnlyList<(string Title, string Content)> sections,
         string documentTitle,
+        Guid tenantId,
+        Guid? userId = null,
+        Guid? toolboxTalkId = null,
         CancellationToken cancellationToken = default);
 }

@@ -834,6 +834,33 @@ Registered in `Program.cs` via `UseExceptionHandler` — returns `application/pr
 
 ---
 
+## AI Usage Logging
+
+All Claude API calls are logged per-tenant to support billing.
+
+**Entities:**
+- `AiUsageLog` (TenantEntity) — raw log, one row per API call, retained for 3 months
+- `AiUsageSummary` (TenantEntity) — daily aggregates, written by AggregateAiUsageJob after raw rows age out
+
+**Key types:**
+- `AiOperationCategory` enum — tags each call with its operation type (ContentParsing, SectionGeneration, QuizGeneration, SlideshowGeneration, ContentTranslation, BackTranslation, RegulatoryScoring, RequirementIngestion, RequirementMapping, LessonGeneration, DialectDetection)
+- `IAiUsageLogger` — scoped service, call LogAsync after every successful Claude API response. Never throws — logging failures are silent.
+- `AnthropicResponseParser` — static utility, use Parse(responseBody) to extract ContentText, InputTokens, OutputTokens, and Model from all Anthropic API responses. Replaces ad-hoc JsonDocument navigation.
+
+**Rules:**
+- Always use AnthropicResponseParser.Parse() instead of manual JsonDocument navigation in any new Claude call site
+- Always call IAiUsageLogger.LogAsync() after every successful Claude response
+- Pass IsSystemCall = true for any call made from a Hangfire background job
+- Pass ReferenceEntityId where the call relates to a specific entity (ToolboxTalkId, CourseId etc.)
+- A logging failure must NEVER fail the AI operation — the try/catch in AiUsageLogger swallows all exceptions
+
+**Aggregation:**
+- AggregateAiUsageJob runs monthly (1st of month, 3am UTC)
+- Aggregates raw rows older than 3 months into daily AiUsageSummary rows
+- Deletes raw rows after successful aggregation in the same transaction
+
+---
+
 ## Cloudflare R2 Storage
 
 Used for storing videos, PDFs, subtitle files, certificate PDFs, and validation report PDFs.

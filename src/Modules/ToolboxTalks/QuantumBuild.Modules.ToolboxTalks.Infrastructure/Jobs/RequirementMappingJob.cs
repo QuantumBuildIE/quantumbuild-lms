@@ -4,10 +4,12 @@ using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
+using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 
@@ -30,17 +32,20 @@ public class RequirementMappingJob
     private readonly IToolboxTalksDbContext _dbContext;
     private readonly HttpClient _httpClient;
     private readonly SubtitleProcessingSettings _settings;
+    private readonly IAiUsageLogger _aiUsageLogger;
     private readonly ILogger<RequirementMappingJob> _logger;
 
     public RequirementMappingJob(
         IToolboxTalksDbContext dbContext,
         HttpClient httpClient,
         IOptions<SubtitleProcessingSettings> settings,
+        IAiUsageLogger aiUsageLogger,
         ILogger<RequirementMappingJob> logger)
     {
         _dbContext = dbContext;
         _httpClient = httpClient;
         _settings = settings.Value;
+        _aiUsageLogger = aiUsageLogger;
         _logger = logger;
     }
 
@@ -79,7 +84,7 @@ public class RequirementMappingJob
                 contentString.Length, requirements.Count);
 
             // Step 3 — Claude mapping
-            var suggestions = await MapViaClaudeAsync(contentString, requirements, cancellationToken);
+            var suggestions = await MapViaClaudeAsync(contentString, requirements, tenantId, toolboxTalkId ?? courseId, cancellationToken);
             if (suggestions == null || suggestions.Count == 0)
             {
                 _logger.LogInformation("Claude returned no mapping suggestions");
@@ -191,12 +196,12 @@ public class RequirementMappingJob
     }
 
     private async Task<List<MappingSuggestion>?> MapViaClaudeAsync(
-        string contentString, List<RegulatoryRequirement> requirements, CancellationToken cancellationToken)
+        string contentString, List<RegulatoryRequirement> requirements, Guid tenantId, Guid? referenceEntityId, CancellationToken cancellationToken)
     {
         var prompt = BuildMappingPrompt(contentString, requirements);
 
         // First attempt
-        var responseText = await CallClaudeAsync(prompt, cancellationToken);
+        var responseText = await CallClaudeAsync(prompt, tenantId, referenceEntityId, cancellationToken);
         var suggestions = TryParseSuggestions(responseText);
         if (suggestions != null) return suggestions;
 
@@ -204,7 +209,7 @@ public class RequirementMappingJob
         _logger.LogWarning("First mapping attempt returned invalid JSON, retrying with stricter prompt");
         var stricterPrompt = prompt + "\n\nIMPORTANT: Your previous response was not valid JSON. You MUST respond with ONLY a JSON array. No text before or after. No markdown code fences. Just the raw JSON array starting with [ and ending with ].";
 
-        responseText = await CallClaudeAsync(stricterPrompt, cancellationToken);
+        responseText = await CallClaudeAsync(stricterPrompt, tenantId, referenceEntityId, cancellationToken);
         suggestions = TryParseSuggestions(responseText);
 
         if (suggestions == null)
@@ -256,7 +261,7 @@ Example format:
 If no requirements are addressed, respond with an empty array: []";
     }
 
-    private async Task<string> CallClaudeAsync(string prompt, CancellationToken cancellationToken)
+    private async Task<string> CallClaudeAsync(string prompt, Guid tenantId, Guid? referenceEntityId, CancellationToken cancellationToken)
     {
         var requestBody = new
         {
@@ -285,23 +290,20 @@ If no requirements are addressed, respond with an empty array: []";
             throw new InvalidOperationException($"Claude API error: {response.StatusCode}");
         }
 
-        return ParseClaudeResponseText(responseBody);
-    }
+        var parsed = AnthropicResponseParser.Parse(responseBody);
 
-    private static string ParseClaudeResponseText(string responseBody)
-    {
-        using var jsonDoc = JsonDocument.Parse(responseBody);
+        await _aiUsageLogger.LogAsync(
+            tenantId,
+            AiOperationCategory.RequirementMapping,
+            parsed.Model,
+            parsed.InputTokens,
+            parsed.OutputTokens,
+            isSystemCall: true,
+            userId: null,
+            referenceEntityId: referenceEntityId,
+            cancellationToken);
 
-        if (!jsonDoc.RootElement.TryGetProperty("content", out var contentArray))
-            return string.Empty;
-
-        foreach (var item in contentArray.EnumerateArray())
-        {
-            if (item.TryGetProperty("text", out var textEl))
-                return textEl.GetString() ?? string.Empty;
-        }
-
-        return string.Empty;
+        return parsed.ContentText;
     }
 
     private List<MappingSuggestion>? TryParseSuggestions(string responseText)

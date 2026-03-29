@@ -4,11 +4,13 @@ using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Pdf;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
+using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 
@@ -31,6 +33,7 @@ public class RequirementIngestionJob
     private readonly IPdfExtractionService _pdfExtractionService;
     private readonly HttpClient _httpClient;
     private readonly SubtitleProcessingSettings _settings;
+    private readonly IAiUsageLogger _aiUsageLogger;
     private readonly ILogger<RequirementIngestionJob> _logger;
 
     public RequirementIngestionJob(
@@ -38,12 +41,14 @@ public class RequirementIngestionJob
         IPdfExtractionService pdfExtractionService,
         HttpClient httpClient,
         IOptions<SubtitleProcessingSettings> settings,
+        IAiUsageLogger aiUsageLogger,
         ILogger<RequirementIngestionJob> logger)
     {
         _dbContext = dbContext;
         _pdfExtractionService = pdfExtractionService;
         _httpClient = httpClient;
         _settings = settings.Value;
+        _aiUsageLogger = aiUsageLogger;
         _logger = logger;
     }
 
@@ -87,7 +92,7 @@ public class RequirementIngestionJob
                 extractedText.Length, regulatoryDocumentId);
 
             // Step 2 — Claude extraction
-            var extractedRequirements = await ExtractRequirementsViaClaudeAsync(extractedText, cancellationToken);
+            var extractedRequirements = await ExtractRequirementsViaClaudeAsync(extractedText, regulatoryDocumentId, cancellationToken);
             if (extractedRequirements == null || extractedRequirements.Count == 0)
             {
                 _logger.LogWarning("No requirements extracted from document {DocumentId}", regulatoryDocumentId);
@@ -171,12 +176,12 @@ public class RequirementIngestionJob
     }
 
     private async Task<List<ExtractedRequirement>?> ExtractRequirementsViaClaudeAsync(
-        string documentText, CancellationToken cancellationToken)
+        string documentText, Guid documentId, CancellationToken cancellationToken)
     {
         var prompt = BuildExtractionPrompt(documentText);
 
         // First attempt
-        var responseText = await CallClaudeAsync(prompt, cancellationToken);
+        var responseText = await CallClaudeAsync(prompt, documentId, cancellationToken);
         var requirements = TryParseRequirements(responseText);
 
         if (requirements != null)
@@ -186,7 +191,7 @@ public class RequirementIngestionJob
         _logger.LogWarning("First extraction attempt returned invalid JSON, retrying with stricter prompt");
         var stricterPrompt = prompt + "\n\nIMPORTANT: Your previous response was not valid JSON. You MUST respond with ONLY a JSON array. No text before or after. No markdown code fences. Just the raw JSON array starting with [ and ending with ].";
 
-        responseText = await CallClaudeAsync(stricterPrompt, cancellationToken);
+        responseText = await CallClaudeAsync(stricterPrompt, documentId, cancellationToken);
         requirements = TryParseRequirements(responseText);
 
         if (requirements == null)
@@ -230,7 +235,7 @@ DOCUMENT TEXT:
 {documentText}";
     }
 
-    private async Task<string> CallClaudeAsync(string prompt, CancellationToken cancellationToken)
+    private async Task<string> CallClaudeAsync(string prompt, Guid documentId, CancellationToken cancellationToken)
     {
         var requestBody = new
         {
@@ -259,23 +264,20 @@ DOCUMENT TEXT:
             throw new InvalidOperationException($"Claude API error: {response.StatusCode}");
         }
 
-        return ParseClaudeResponseText(responseBody);
-    }
+        var parsed = AnthropicResponseParser.Parse(responseBody);
 
-    private static string ParseClaudeResponseText(string responseBody)
-    {
-        using var jsonDoc = JsonDocument.Parse(responseBody);
+        await _aiUsageLogger.LogAsync(
+            Guid.Empty,
+            AiOperationCategory.RequirementIngestion,
+            parsed.Model,
+            parsed.InputTokens,
+            parsed.OutputTokens,
+            isSystemCall: true,
+            userId: null,
+            referenceEntityId: documentId,
+            cancellationToken);
 
-        if (!jsonDoc.RootElement.TryGetProperty("content", out var contentArray))
-            return string.Empty;
-
-        foreach (var item in contentArray.EnumerateArray())
-        {
-            if (item.TryGetProperty("text", out var textEl))
-                return textEl.GetString() ?? string.Empty;
-        }
-
-        return string.Empty;
+        return parsed.ContentText;
     }
 
     private List<ExtractedRequirement>? TryParseRequirements(string responseText)

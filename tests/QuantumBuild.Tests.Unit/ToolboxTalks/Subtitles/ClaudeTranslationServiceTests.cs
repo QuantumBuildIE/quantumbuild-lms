@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Moq.Protected;
 using QuantumBuild.Core.Application.Abstractions.AI;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Subtitles;
 
@@ -18,6 +19,7 @@ public class ClaudeTranslationServiceTests
     private readonly Mock<HttpMessageHandler> _httpMessageHandlerMock;
     private readonly HttpClient _httpClient;
     private readonly Mock<ILogger<ClaudeTranslationService>> _loggerMock;
+    private readonly Mock<IAiUsageLogger> _aiUsageLoggerMock;
     private readonly IOptions<SubtitleProcessingSettings> _settings;
 
     public ClaudeTranslationServiceTests()
@@ -25,6 +27,7 @@ public class ClaudeTranslationServiceTests
         _httpMessageHandlerMock = new Mock<HttpMessageHandler>();
         _httpClient = new HttpClient(_httpMessageHandlerMock.Object);
         _loggerMock = new Mock<ILogger<ClaudeTranslationService>>();
+        _aiUsageLoggerMock = new Mock<IAiUsageLogger>();
 
         var settings = new SubtitleProcessingSettings
         {
@@ -507,7 +510,7 @@ public class ClaudeTranslationServiceTests
 
     private ClaudeTranslationService CreateService()
     {
-        return new ClaudeTranslationService(_httpClient, _settings, _loggerMock.Object);
+        return new ClaudeTranslationService(_httpClient, _settings, _aiUsageLoggerMock.Object, _loggerMock.Object);
     }
 
     private void SetupHttpResponse(HttpStatusCode statusCode, string content)

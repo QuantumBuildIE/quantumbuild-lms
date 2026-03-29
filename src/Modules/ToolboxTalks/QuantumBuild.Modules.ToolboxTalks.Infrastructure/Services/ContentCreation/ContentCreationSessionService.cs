@@ -258,7 +258,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
         try
         {
             var parseResult = await _parserService.ParseContentAsync(
-                rawText, session.InputMode, cancellationToken);
+                rawText, session.InputMode, tenantId, userId: null, cancellationToken);
 
             if (!parseResult.Success)
             {
@@ -839,8 +839,10 @@ public class ContentCreationSessionService : IContentCreationSessionService
                     videoFinalPortionContent: null,
                     hasVideoContent: session.InputMode == Domain.Enums.InputMode.Video,
                     hasPdfContent: session.InputMode == Domain.Enums.InputMode.Pdf,
+                    tenantId: tenantId,
+                    userId: null,
                     minimumQuestions: minimumQuestionsPerSection,
-                    cancellationToken);
+                    cancellationToken: cancellationToken);
 
                 if (result.Success && result.Questions.Count > 0)
                 {
@@ -1320,7 +1322,8 @@ public class ContentCreationSessionService : IContentCreationSessionService
                         {
                             var titleResult = await _contentTranslationService.TranslateTextAsync(
                                 request.Title, languageName, isHtml: false, cancellationToken,
-                                sectorKey: session.SectorKey);
+                                sectorKey: session.SectorKey,
+                                tenantId: tenantId, toolboxTalkId: draftTalk.Id);
                             if (titleResult.Success)
                                 translation.TranslatedTitle = titleResult.TranslatedContent;
                         }
@@ -1329,7 +1332,8 @@ public class ContentCreationSessionService : IContentCreationSessionService
                         {
                             var descResult = await _contentTranslationService.TranslateTextAsync(
                                 request.Description, languageName, isHtml: false, cancellationToken,
-                                sectorKey: session.SectorKey);
+                                sectorKey: session.SectorKey,
+                                tenantId: tenantId, toolboxTalkId: draftTalk.Id);
                             if (descResult.Success)
                                 translation.TranslatedDescription = descResult.TranslatedContent;
                         }
@@ -1778,7 +1782,8 @@ public class ContentCreationSessionService : IContentCreationSessionService
                     {
                         var titleResult = await _contentTranslationService.TranslateTextAsync(
                             request.Title, languageName, isHtml: false, cancellationToken,
-                            sectorKey: session.SectorKey);
+                            sectorKey: session.SectorKey,
+                            tenantId: tenantId, toolboxTalkId: session.OutputTalkId);
                         if (titleResult.Success)
                             translatedTitle = titleResult.TranslatedContent;
                     }
@@ -1787,7 +1792,8 @@ public class ContentCreationSessionService : IContentCreationSessionService
                     {
                         var descResult = await _contentTranslationService.TranslateTextAsync(
                             request.Description, languageName, isHtml: false, cancellationToken,
-                            sectorKey: session.SectorKey);
+                            sectorKey: session.SectorKey,
+                            tenantId: tenantId, toolboxTalkId: session.OutputTalkId);
                         if (descResult.Success)
                             translatedDescription = descResult.TranslatedContent;
                     }

@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Prompts;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
@@ -17,15 +18,18 @@ public class AiQuizGenerationService : IAiQuizGenerationService
 {
     private readonly HttpClient _httpClient;
     private readonly SubtitleProcessingSettings _settings;
+    private readonly IAiUsageLogger _aiUsageLogger;
     private readonly ILogger<AiQuizGenerationService> _logger;
 
     public AiQuizGenerationService(
         HttpClient httpClient,
         IOptions<SubtitleProcessingSettings> settings,
+        IAiUsageLogger aiUsageLogger,
         ILogger<AiQuizGenerationService> logger)
     {
         _httpClient = httpClient;
         _settings = settings.Value;
+        _aiUsageLogger = aiUsageLogger;
         _logger = logger;
     }
 
@@ -36,6 +40,8 @@ public class AiQuizGenerationService : IAiQuizGenerationService
         string? videoFinalPortionContent,
         bool hasVideoContent,
         bool hasPdfContent,
+        Guid tenantId,
+        Guid? userId = null,
         int minimumQuestions = 5,
         CancellationToken cancellationToken = default)
     {
@@ -108,7 +114,20 @@ public class AiQuizGenerationService : IAiQuizGenerationService
                     HasFinalPortionQuestion: false);
             }
 
-            var (questions, tokensUsed) = ParseQuestionsFromResponse(responseBody, hasVideoContent, hasPdfContent);
+            var parsed = AnthropicResponseParser.Parse(responseBody);
+            var questions = ParseQuestionsFromContentText(parsed.ContentText, hasVideoContent, hasPdfContent);
+            var tokensUsed = parsed.InputTokens + parsed.OutputTokens;
+
+            await _aiUsageLogger.LogAsync(
+                tenantId,
+                AiOperationCategory.QuizGeneration,
+                parsed.Model,
+                parsed.InputTokens,
+                parsed.OutputTokens,
+                isSystemCall: false,
+                userId: userId,
+                referenceEntityId: toolboxTalkId,
+                cancellationToken);
 
             // Validate we have at least one final portion question if video was included
             var hasFinalPortionQuestion = questions.Any(q => q.IsFromVideoFinalPortion);
@@ -121,7 +140,7 @@ public class AiQuizGenerationService : IAiQuizGenerationService
 
                 // Request a specific final portion question
                 var additionalResult = await GenerateFinalPortionQuestionAsync(
-                    toolboxTalkId, videoFinalPortionContent, questions.Count + 1, cancellationToken);
+                    toolboxTalkId, videoFinalPortionContent, questions.Count + 1, tenantId, userId, cancellationToken);
 
                 if (additionalResult.question != null)
                 {
@@ -188,6 +207,8 @@ public class AiQuizGenerationService : IAiQuizGenerationService
         Guid toolboxTalkId,
         string finalPortionContent,
         int sortOrder,
+        Guid tenantId,
+        Guid? userId,
         CancellationToken cancellationToken)
     {
         try
@@ -223,7 +244,22 @@ public class AiQuizGenerationService : IAiQuizGenerationService
                 return (null, 0);
             }
 
-            return ParseSingleQuestionFromResponse(responseBody);
+            var parsed = AnthropicResponseParser.Parse(responseBody);
+            var question = ParseSingleQuestionFromContentText(parsed.ContentText);
+            var tokensUsed = parsed.InputTokens + parsed.OutputTokens;
+
+            await _aiUsageLogger.LogAsync(
+                tenantId,
+                AiOperationCategory.QuizGeneration,
+                parsed.Model,
+                parsed.InputTokens,
+                parsed.OutputTokens,
+                isSystemCall: false,
+                userId: userId,
+                referenceEntityId: toolboxTalkId,
+                cancellationToken);
+
+            return (question, tokensUsed);
         }
         catch (Exception ex)
         {
@@ -233,45 +269,17 @@ public class AiQuizGenerationService : IAiQuizGenerationService
     }
 
     /// <summary>
-    /// Parses the Claude API response to extract quiz questions.
+    /// Parses the content text from the Claude API response to extract quiz questions.
     /// </summary>
-    private (List<GeneratedQuizQuestion> questions, int tokensUsed) ParseQuestionsFromResponse(
-        string responseBody,
+    private List<GeneratedQuizQuestion> ParseQuestionsFromContentText(
+        string responseText,
         bool hasVideo,
         bool hasPdf)
     {
-        using var jsonDoc = JsonDocument.Parse(responseBody);
-
-        // Extract token usage
-        var tokensUsed = 0;
-        if (jsonDoc.RootElement.TryGetProperty("usage", out var usageEl))
-        {
-            var inputTokens = usageEl.TryGetProperty("input_tokens", out var inputEl) ? inputEl.GetInt32() : 0;
-            var outputTokens = usageEl.TryGetProperty("output_tokens", out var outputEl) ? outputEl.GetInt32() : 0;
-            tokensUsed = inputTokens + outputTokens;
-        }
-
-        // Extract content
-        if (!jsonDoc.RootElement.TryGetProperty("content", out var contentArray))
-        {
-            _logger.LogWarning("No content property found in Claude response");
-            return (new List<GeneratedQuizQuestion>(), tokensUsed);
-        }
-
-        string? responseText = null;
-        foreach (var item in contentArray.EnumerateArray())
-        {
-            if (item.TryGetProperty("text", out var textEl))
-            {
-                responseText = textEl.GetString();
-                break;
-            }
-        }
-
         if (string.IsNullOrWhiteSpace(responseText))
         {
             _logger.LogWarning("Empty text in Claude response");
-            return (new List<GeneratedQuizQuestion>(), tokensUsed);
+            return new List<GeneratedQuizQuestion>();
         }
 
         // Extract JSON array from response (may have markdown code blocks)
@@ -281,7 +289,7 @@ public class AiQuizGenerationService : IAiQuizGenerationService
         if (jsonStart == -1 || jsonEnd == -1 || jsonEnd <= jsonStart)
         {
             _logger.LogWarning("Could not find JSON array in AI quiz response");
-            return (new List<GeneratedQuizQuestion>(), tokensUsed);
+            return new List<GeneratedQuizQuestion>();
         }
 
         var jsonContent = responseText.Substring(jsonStart, jsonEnd - jsonStart + 1);
@@ -296,11 +304,11 @@ public class AiQuizGenerationService : IAiQuizGenerationService
         if (rawQuestions == null || rawQuestions.Count == 0)
         {
             _logger.LogWarning("No questions parsed from AI response");
-            return (new List<GeneratedQuizQuestion>(), tokensUsed);
+            return new List<GeneratedQuizQuestion>();
         }
 
         // Convert raw questions to GeneratedQuizQuestion with proper ContentSource enum
-        var questions = rawQuestions
+        return rawQuestions
             .Select(q => new GeneratedQuizQuestion(
                 q.SortOrder,
                 q.QuestionText,
@@ -310,47 +318,15 @@ public class AiQuizGenerationService : IAiQuizGenerationService
                 q.IsFromVideoFinalPortion,
                 q.VideoTimestamp))
             .ToList();
-
-        return (questions, tokensUsed);
     }
 
     /// <summary>
-    /// Parses a single question from the Claude API response.
+    /// Parses a single question from the content text of a Claude API response.
     /// </summary>
-    private (GeneratedQuizQuestion? question, int tokensUsed) ParseSingleQuestionFromResponse(string responseBody)
+    private GeneratedQuizQuestion? ParseSingleQuestionFromContentText(string responseText)
     {
-        using var jsonDoc = JsonDocument.Parse(responseBody);
-
-        // Extract token usage
-        var tokensUsed = 0;
-        if (jsonDoc.RootElement.TryGetProperty("usage", out var usageEl))
-        {
-            var inputTokens = usageEl.TryGetProperty("input_tokens", out var inputEl) ? inputEl.GetInt32() : 0;
-            var outputTokens = usageEl.TryGetProperty("output_tokens", out var outputEl) ? outputEl.GetInt32() : 0;
-            tokensUsed = inputTokens + outputTokens;
-        }
-
-        // Extract content
-        if (!jsonDoc.RootElement.TryGetProperty("content", out var contentArray))
-        {
-            _logger.LogWarning("No content property found in Claude response for single question");
-            return (null, tokensUsed);
-        }
-
-        string? responseText = null;
-        foreach (var item in contentArray.EnumerateArray())
-        {
-            if (item.TryGetProperty("text", out var textEl))
-            {
-                responseText = textEl.GetString();
-                break;
-            }
-        }
-
         if (string.IsNullOrWhiteSpace(responseText))
-        {
-            return (null, tokensUsed);
-        }
+            return null;
 
         // Extract JSON object from response
         var jsonStart = responseText.IndexOf('{');
@@ -359,7 +335,7 @@ public class AiQuizGenerationService : IAiQuizGenerationService
         if (jsonStart == -1 || jsonEnd == -1 || jsonEnd <= jsonStart)
         {
             _logger.LogWarning("Could not find JSON object in AI single question response");
-            return (null, tokensUsed);
+            return null;
         }
 
         var jsonContent = responseText.Substring(jsonStart, jsonEnd - jsonStart + 1);
@@ -372,11 +348,9 @@ public class AiQuizGenerationService : IAiQuizGenerationService
         var rawQuestion = JsonSerializer.Deserialize<RawGeneratedQuestion>(jsonContent, options);
 
         if (rawQuestion == null)
-        {
-            return (null, tokensUsed);
-        }
+            return null;
 
-        var question = new GeneratedQuizQuestion(
+        return new GeneratedQuizQuestion(
             rawQuestion.SortOrder,
             rawQuestion.QuestionText,
             rawQuestion.Options ?? new List<string>(),
@@ -384,8 +358,6 @@ public class AiQuizGenerationService : IAiQuizGenerationService
             ContentSource.Video,
             rawQuestion.IsFromVideoFinalPortion,
             rawQuestion.VideoTimestamp);
-
-        return (question, tokensUsed);
     }
 
     /// <summary>

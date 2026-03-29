@@ -10,11 +10,19 @@ public interface IDialectDetectionService
     /// </summary>
     /// <param name="text">The text sample to analyse</param>
     /// <param name="expectedLanguageCode">ISO language code hint (e.g. "pt", "en")</param>
+    /// <param name="tenantId">Tenant ID for AI usage logging</param>
+    /// <param name="userId">User ID for AI usage logging (null for system calls)</param>
+    /// <param name="toolboxTalkId">Reference entity ID for AI usage logging</param>
+    /// <param name="isSystemCall">Whether this is a background/system call</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Dialect detection result</returns>
     Task<DialectDetectionResult> DetectAsync(
         string text,
         string expectedLanguageCode,
+        Guid tenantId,
+        Guid? userId = null,
+        Guid? toolboxTalkId = null,
+        bool isSystemCall = false,
         CancellationToken cancellationToken = default);
 }
 

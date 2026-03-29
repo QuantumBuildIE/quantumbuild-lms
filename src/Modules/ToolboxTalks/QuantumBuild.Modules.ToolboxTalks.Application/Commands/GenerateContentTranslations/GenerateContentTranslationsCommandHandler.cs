@@ -161,7 +161,8 @@ public class GenerateContentTranslationsCommandHandler
             // Translate title (required - skip this language entirely if title fails)
             var titleResult = await _translationService.TranslateTextAsync(
                 toolboxTalk.Title, language, false, cancellationToken, sourceLanguage,
-                sectorKey: sectorKey);
+                sectorKey: sectorKey,
+                tenantId: toolboxTalk.TenantId, isSystemCall: true, toolboxTalkId: toolboxTalk.Id);
 
             if (!titleResult.Success)
             {
@@ -187,7 +188,8 @@ public class GenerateContentTranslationsCommandHandler
             {
                 var descResult = await _translationService.TranslateTextAsync(
                     toolboxTalk.Description, language, false, cancellationToken, sourceLanguage,
-                    sectorKey: sectorKey);
+                    sectorKey: sectorKey,
+                tenantId: toolboxTalk.TenantId, isSystemCall: true, toolboxTalkId: toolboxTalk.Id);
 
                 translation.TranslatedDescription = descResult.Success
                     ? descResult.TranslatedContent
@@ -209,11 +211,13 @@ public class GenerateContentTranslationsCommandHandler
             {
                 var sectionTitleResult = await _translationService.TranslateTextAsync(
                     section.Title, language, false, cancellationToken, sourceLanguage,
-                    sectorKey: sectorKey);
+                    sectorKey: sectorKey,
+                tenantId: toolboxTalk.TenantId, isSystemCall: true, toolboxTalkId: toolboxTalk.Id);
 
                 var sectionContentResult = await _translationService.TranslateTextAsync(
                     section.Content, language, true, cancellationToken, sourceLanguage,
-                    sectorKey: sectorKey);
+                    sectorKey: sectorKey,
+                tenantId: toolboxTalk.TenantId, isSystemCall: true, toolboxTalkId: toolboxTalk.Id);
 
                 if (sectionTitleResult.Success && sectionContentResult.Success)
                 {
@@ -244,7 +248,8 @@ public class GenerateContentTranslationsCommandHandler
             {
                 var questionTextResult = await _translationService.TranslateTextAsync(
                     question.QuestionText, language, false, cancellationToken, sourceLanguage,
-                    sectorKey: sectorKey);
+                    sectorKey: sectorKey,
+                tenantId: toolboxTalk.TenantId, isSystemCall: true, toolboxTalkId: toolboxTalk.Id);
 
                 if (!questionTextResult.Success)
                 {
@@ -271,7 +276,8 @@ public class GenerateContentTranslationsCommandHandler
                             {
                                 var optionResult = await _translationService.TranslateTextAsync(
                                     option, language, false, cancellationToken, sourceLanguage,
-                                    sectorKey: sectorKey);
+                                    sectorKey: sectorKey,
+                tenantId: toolboxTalk.TenantId, isSystemCall: true, toolboxTalkId: toolboxTalk.Id);
                                 if (optionResult.Success)
                                 {
                                     translatedOptions.Add(optionResult.TranslatedContent);
@@ -321,7 +327,8 @@ public class GenerateContentTranslationsCommandHandler
             var emailSubjectResult = await _translationService.TranslateTextAsync(
                 $"Action Required: Complete Learning - {toolboxTalk.Title}",
                 language, false, cancellationToken, sourceLanguage,
-                sectorKey: sectorKey);
+                sectorKey: sectorKey,
+                tenantId: toolboxTalk.TenantId, isSystemCall: true, toolboxTalkId: toolboxTalk.Id);
             translation.EmailSubject = emailSubjectResult.Success
                 ? emailSubjectResult.TranslatedContent
                 : $"Action Required: Complete Learning - {translation.TranslatedTitle}";
@@ -329,7 +336,8 @@ public class GenerateContentTranslationsCommandHandler
             var emailBodyResult = await _translationService.TranslateTextAsync(
                 $"You have been assigned a new learning: {toolboxTalk.Title}. Please complete it by the due date.",
                 language, false, cancellationToken, sourceLanguage,
-                sectorKey: sectorKey);
+                sectorKey: sectorKey,
+                tenantId: toolboxTalk.TenantId, isSystemCall: true, toolboxTalkId: toolboxTalk.Id);
             translation.EmailBody = emailBodyResult.Success
                 ? emailBodyResult.TranslatedContent
                 : $"You have been assigned a new learning: {translation.TranslatedTitle}. Please complete it by the due date.";
@@ -351,7 +359,8 @@ public class GenerateContentTranslationsCommandHandler
 
                 var slideTextResult = await _translationService.TranslateTextAsync(
                     slide.OriginalText!, language, false, cancellationToken, sourceLanguage,
-                    sectorKey: sectorKey);
+                    sectorKey: sectorKey,
+                tenantId: toolboxTalk.TenantId, isSystemCall: true, toolboxTalkId: toolboxTalk.Id);
 
                 if (slideTextResult.Success && !string.IsNullOrEmpty(slideTextResult.TranslatedContent))
                 {
@@ -501,7 +510,8 @@ public class GenerateContentTranslationsCommandHandler
 
                 var result = await _translationService.TranslateTextAsync(
                     textToTranslate, targetLanguageName, false, cancellationToken, sourceLanguageName,
-                    sectorKey: sectorKey);
+                    sectorKey: sectorKey,
+                tenantId: toolboxTalk.TenantId, isSystemCall: true, toolboxTalkId: toolboxTalk.Id);
 
                 if (result.Success && !string.IsNullOrEmpty(result.TranslatedContent))
                 {

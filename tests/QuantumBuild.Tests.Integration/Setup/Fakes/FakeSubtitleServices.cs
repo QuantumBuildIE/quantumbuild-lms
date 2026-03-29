@@ -108,7 +108,11 @@ public class FakeTranslationService : ITranslationService
     public Task<TranslationResult> TranslateSrtBatchAsync(
         string srtContent,
         string targetLanguage,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Guid tenantId = default,
+        Guid? userId = null,
+        bool isSystemCall = false,
+        Guid? toolboxTalkId = null)
     {
         if (_shouldFail)
         {

@@ -2,7 +2,9 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Validation;
+using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Validation;
@@ -18,15 +20,18 @@ public class ClaudeHaikuBackTranslationService : IClaudeHaikuBackTranslationServ
 
     private readonly HttpClient _httpClient;
     private readonly SubtitleProcessingSettings _settings;
+    private readonly IAiUsageLogger _aiUsageLogger;
     private readonly ILogger<ClaudeHaikuBackTranslationService> _logger;
 
     public ClaudeHaikuBackTranslationService(
         HttpClient httpClient,
         IOptions<SubtitleProcessingSettings> settings,
+        IAiUsageLogger aiUsageLogger,
         ILogger<ClaudeHaikuBackTranslationService> logger)
     {
         _httpClient = httpClient;
         _settings = settings.Value;
+        _aiUsageLogger = aiUsageLogger;
         _logger = logger;
     }
 
@@ -35,7 +40,11 @@ public class ClaudeHaikuBackTranslationService : IClaudeHaikuBackTranslationServ
         string text,
         string sourceLanguage,
         string targetLanguage,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Guid tenantId = default,
+        Guid? userId = null,
+        bool isSystemCall = true,
+        Guid? toolboxTalkId = null)
     {
         if (string.IsNullOrWhiteSpace(_settings.Claude.ApiKey))
         {
@@ -92,9 +101,20 @@ public class ClaudeHaikuBackTranslationService : IClaudeHaikuBackTranslationServ
                     $"API error: {response.StatusCode}", ProviderName);
             }
 
-            var backTranslated = ParseClaudeResponse(responseBody);
+            var parsed = AnthropicResponseParser.Parse(responseBody);
 
-            if (string.IsNullOrWhiteSpace(backTranslated))
+            await _aiUsageLogger.LogAsync(
+                tenantId,
+                AiOperationCategory.BackTranslation,
+                parsed.Model,
+                parsed.InputTokens,
+                parsed.OutputTokens,
+                isSystemCall: isSystemCall,
+                userId: userId,
+                referenceEntityId: toolboxTalkId,
+                cancellationToken);
+
+            if (string.IsNullOrWhiteSpace(parsed.ContentText))
             {
                 return BackTranslationResult.FailureResult(
                     "Empty response from Claude Haiku", ProviderName);
@@ -102,9 +122,9 @@ public class ClaudeHaikuBackTranslationService : IClaudeHaikuBackTranslationServ
 
             _logger.LogInformation(
                 "Claude Haiku back-translation complete: {ResultLength} chars",
-                backTranslated.Length);
+                parsed.ContentText.Length);
 
-            return BackTranslationResult.SuccessResult(backTranslated, ProviderName);
+            return BackTranslationResult.SuccessResult(parsed.ContentText, ProviderName);
         }
         catch (OperationCanceledException)
         {
@@ -115,26 +135,5 @@ public class ClaudeHaikuBackTranslationService : IClaudeHaikuBackTranslationServ
             _logger.LogError(ex, "Claude Haiku back-translation failed with {ExType}", ex.GetType().Name);
             return BackTranslationResult.FailureResult($"Exception: {ex.Message}", ProviderName);
         }
-    }
-
-    /// <summary>
-    /// Extracts the text content from a Claude Messages API response.
-    /// </summary>
-    private static string ParseClaudeResponse(string responseBody)
-    {
-        using var jsonDoc = JsonDocument.Parse(responseBody);
-
-        if (!jsonDoc.RootElement.TryGetProperty("content", out var contentArray))
-            return string.Empty;
-
-        foreach (var item in contentArray.EnumerateArray())
-        {
-            if (item.TryGetProperty("text", out var textEl))
-            {
-                return textEl.GetString() ?? string.Empty;
-            }
-        }
-
-        return string.Empty;
     }
 }

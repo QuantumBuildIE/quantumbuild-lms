@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using QuantumBuild.Core.Application.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Pdf;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Storage;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Subtitles;
@@ -267,6 +268,9 @@ public static class ServiceCollectionExtensions
 
         // Register inspection readiness report service (QuestPDF generation + R2 storage)
         services.AddScoped<IInspectionReportService, InspectionReportService>();
+
+        // Register AI usage logger (fire-and-forget token tracking per API call)
+        services.AddScoped<IAiUsageLogger, AiUsageLogger>();
 
         // Register requirement mapping job HttpClient (calls Claude API for content analysis)
         services.AddHttpClient<RequirementMappingJob>(client =>

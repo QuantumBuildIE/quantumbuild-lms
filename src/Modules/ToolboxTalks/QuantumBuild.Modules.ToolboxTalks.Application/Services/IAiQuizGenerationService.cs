@@ -25,6 +25,8 @@ public interface IAiQuizGenerationService
         string? videoFinalPortionContent,
         bool hasVideoContent,
         bool hasPdfContent,
+        Guid tenantId,
+        Guid? userId = null,
         int minimumQuestions = 5,
         CancellationToken cancellationToken = default);
 }

@@ -129,6 +129,7 @@ builder.Services.AddScoped<DailyTranslationScanJob>();
 builder.Services.AddScoped<ExpiredSessionCleanupJob>();
 builder.Services.AddScoped<LessonParseJob>();
 builder.Services.AddScoped<RequirementIngestionJob>();
+builder.Services.AddScoped<AggregateAiUsageJob>();
 
 // Add Hangfire with PostgreSQL storage
 builder.Services.AddHangfire(config => config
@@ -443,6 +444,11 @@ using (var scope = app.Services.CreateScope())
         "expired-session-cleanup",
         job => job.ExecuteAsync(CancellationToken.None),
         Cron.Daily(3, 0)); // 3am UTC daily
+
+    recurringJobManager.AddOrUpdate<AggregateAiUsageJob>(
+        "aggregate-ai-usage",
+        job => job.ExecuteAsync(CancellationToken.None),
+        "0 3 1 * *"); // 1st of each month at 3am UTC
 }
 
 app.Run();

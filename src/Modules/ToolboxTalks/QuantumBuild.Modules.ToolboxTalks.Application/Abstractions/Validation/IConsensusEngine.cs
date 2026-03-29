@@ -87,5 +87,7 @@ public interface IConsensusEngine
         string sourceLanguage,
         string targetLanguage,
         int threshold,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        Guid tenantId = default,
+        Guid? toolboxTalkId = null);
 }

@@ -24,6 +24,8 @@ public interface IAiSectionGenerationService
         string combinedContent,
         bool hasVideoContent,
         bool hasPdfContent,
+        Guid tenantId,
+        Guid? userId = null,
         int minimumSections = 7,
         CancellationToken cancellationToken = default);
 }

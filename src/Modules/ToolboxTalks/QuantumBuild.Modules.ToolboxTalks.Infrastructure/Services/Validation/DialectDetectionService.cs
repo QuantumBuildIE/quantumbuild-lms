@@ -2,7 +2,9 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Validation;
+using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Validation;
@@ -17,15 +19,18 @@ public class DialectDetectionService : IDialectDetectionService
 
     private readonly HttpClient _httpClient;
     private readonly SubtitleProcessingSettings _settings;
+    private readonly IAiUsageLogger _aiUsageLogger;
     private readonly ILogger<DialectDetectionService> _logger;
 
     public DialectDetectionService(
         HttpClient httpClient,
         IOptions<SubtitleProcessingSettings> settings,
+        IAiUsageLogger aiUsageLogger,
         ILogger<DialectDetectionService> logger)
     {
         _httpClient = httpClient;
         _settings = settings.Value;
+        _aiUsageLogger = aiUsageLogger;
         _logger = logger;
     }
 
@@ -33,6 +38,10 @@ public class DialectDetectionService : IDialectDetectionService
     public async Task<DialectDetectionResult> DetectAsync(
         string text,
         string expectedLanguageCode,
+        Guid tenantId,
+        Guid? userId = null,
+        Guid? toolboxTalkId = null,
+        bool isSystemCall = false,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(text))
@@ -47,7 +56,7 @@ public class DialectDetectionService : IDialectDetectionService
                 expectedLanguageCode, text.Length);
 
             var prompt = BuildPrompt(text, expectedLanguageCode);
-            var responseText = await CallClaudeApiAsync(prompt, cancellationToken);
+            var responseText = await CallClaudeApiAsync(prompt, tenantId, userId, toolboxTalkId, isSystemCall, cancellationToken);
 
             if (string.IsNullOrWhiteSpace(responseText))
             {
@@ -100,9 +109,15 @@ public class DialectDetectionService : IDialectDetectionService
 
     /// <summary>
     /// Calls the Claude API (Haiku model) with the given prompt.
-    /// Follows the same pattern as ContentTranslationService.
+    /// Uses AnthropicResponseParser for response extraction and IAiUsageLogger for token tracking.
     /// </summary>
-    private async Task<string> CallClaudeApiAsync(string prompt, CancellationToken cancellationToken)
+    private async Task<string> CallClaudeApiAsync(
+        string prompt,
+        Guid tenantId,
+        Guid? userId,
+        Guid? toolboxTalkId,
+        bool isSystemCall,
+        CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(_settings.Claude.ApiKey))
         {
@@ -143,28 +158,20 @@ public class DialectDetectionService : IDialectDetectionService
             throw new HttpRequestException($"Claude API error: {response.StatusCode} - {responseBody}");
         }
 
-        return ParseClaudeResponse(responseBody);
-    }
+        var parsed = AnthropicResponseParser.Parse(responseBody);
 
-    /// <summary>
-    /// Extracts the text content from a Claude Messages API response.
-    /// </summary>
-    private static string ParseClaudeResponse(string responseBody)
-    {
-        using var jsonDoc = JsonDocument.Parse(responseBody);
+        await _aiUsageLogger.LogAsync(
+            tenantId,
+            AiOperationCategory.DialectDetection,
+            parsed.Model,
+            parsed.InputTokens,
+            parsed.OutputTokens,
+            isSystemCall,
+            userId,
+            toolboxTalkId,
+            cancellationToken);
 
-        if (!jsonDoc.RootElement.TryGetProperty("content", out var contentArray))
-            return string.Empty;
-
-        foreach (var item in contentArray.EnumerateArray())
-        {
-            if (item.TryGetProperty("text", out var textEl))
-            {
-                return textEl.GetString() ?? string.Empty;
-            }
-        }
-
-        return string.Empty;
+        return parsed.ContentText;
     }
 
     /// <summary>

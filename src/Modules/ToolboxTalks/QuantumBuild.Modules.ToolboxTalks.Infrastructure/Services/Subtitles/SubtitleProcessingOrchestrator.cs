@@ -296,7 +296,9 @@ public class SubtitleProcessingOrchestrator : ISubtitleProcessingOrchestrator
                 var batchContent = string.Join("\n\n", batchBlocks);
 
                 var translateResult = await _translationService.TranslateSrtBatchAsync(
-                    batchContent, translation.Language, cancellationToken);
+                    batchContent, translation.Language, cancellationToken,
+                    tenantId: job.TenantId, isSystemCall: true,
+                    toolboxTalkId: job.ToolboxTalkId);
 
                 if (translateResult.Success)
                 {

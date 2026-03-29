@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.ContentCreation;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
@@ -15,6 +16,7 @@ public class ContentParserService : IContentParserService
 {
     private readonly HttpClient _httpClient;
     private readonly SubtitleProcessingSettings _settings;
+    private readonly IAiUsageLogger _aiUsageLogger;
     private readonly ILogger<ContentParserService> _logger;
 
     private const int CourseThreshold = 3;
@@ -22,16 +24,20 @@ public class ContentParserService : IContentParserService
     public ContentParserService(
         HttpClient httpClient,
         IOptions<SubtitleProcessingSettings> settings,
+        IAiUsageLogger aiUsageLogger,
         ILogger<ContentParserService> logger)
     {
         _httpClient = httpClient;
         _settings = settings.Value;
+        _aiUsageLogger = aiUsageLogger;
         _logger = logger;
     }
 
     public async Task<ContentParseResult> ParseContentAsync(
         string rawText,
         InputMode inputModeHint,
+        Guid tenantId,
+        Guid? userId = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -99,8 +105,21 @@ public class ContentParserService : IContentParserService
                     ErrorMessage: $"Claude API error: {response.StatusCode}");
             }
 
-            var (sections, tokensUsed) = ParseSectionsFromResponse(responseBody);
+            var parsed = AnthropicResponseParser.Parse(responseBody);
+            var sections = ParseSectionsFromContentText(parsed.ContentText);
+            var tokensUsed = parsed.InputTokens + parsed.OutputTokens;
             var suggestedType = SuggestOutputType(sections.Count);
+
+            await _aiUsageLogger.LogAsync(
+                tenantId,
+                AiOperationCategory.ContentParsing,
+                parsed.Model,
+                parsed.InputTokens,
+                parsed.OutputTokens,
+                isSystemCall: false,
+                userId: userId,
+                referenceEntityId: null,
+                cancellationToken);
 
             _logger.LogInformation(
                 "[ContentParserService] Parsed {Count} sections ({TokensUsed} tokens), suggested output: {OutputType}",
@@ -181,48 +200,31 @@ public class ContentParserService : IContentParserService
             """;
     }
 
-    private (List<ParsedSection> Sections, int TokensUsed) ParseSectionsFromResponse(string responseBody)
+    private static List<ParsedSection> ParseSectionsFromContentText(string textContent)
     {
-        using var doc = JsonDocument.Parse(responseBody);
-        var root = doc.RootElement;
-
-        var tokensUsed = 0;
-        if (root.TryGetProperty("usage", out var usage))
-        {
-            if (usage.TryGetProperty("input_tokens", out var input))
-                tokensUsed += input.GetInt32();
-            if (usage.TryGetProperty("output_tokens", out var output))
-                tokensUsed += output.GetInt32();
-        }
-
         var sections = new List<ParsedSection>();
 
-        if (root.TryGetProperty("content", out var content) && content.GetArrayLength() > 0)
+        // Extract JSON array from response (may have surrounding text)
+        var jsonStart = textContent.IndexOf('[');
+        var jsonEnd = textContent.LastIndexOf(']');
+
+        if (jsonStart >= 0 && jsonEnd > jsonStart)
         {
-            var textContent = content[0].GetProperty("text").GetString() ?? "";
+            var jsonArray = textContent[jsonStart..(jsonEnd + 1)];
+            using var sectionsDoc = JsonDocument.Parse(jsonArray);
 
-            // Extract JSON array from response (may have surrounding text)
-            var jsonStart = textContent.IndexOf('[');
-            var jsonEnd = textContent.LastIndexOf(']');
-
-            if (jsonStart >= 0 && jsonEnd > jsonStart)
+            foreach (var element in sectionsDoc.RootElement.EnumerateArray())
             {
-                var jsonArray = textContent[jsonStart..(jsonEnd + 1)];
-                using var sectionsDoc = JsonDocument.Parse(jsonArray);
+                var title = element.GetProperty("title").GetString() ?? "Untitled";
+                var sectionContent = element.GetProperty("content").GetString() ?? "";
+                var suggestedOrder = element.TryGetProperty("suggestedOrder", out var order)
+                    ? order.GetInt32()
+                    : sections.Count + 1;
 
-                foreach (var element in sectionsDoc.RootElement.EnumerateArray())
-                {
-                    var title = element.GetProperty("title").GetString() ?? "Untitled";
-                    var sectionContent = element.GetProperty("content").GetString() ?? "";
-                    var suggestedOrder = element.TryGetProperty("suggestedOrder", out var order)
-                        ? order.GetInt32()
-                        : sections.Count + 1;
-
-                    sections.Add(new ParsedSection(title, sectionContent, suggestedOrder));
-                }
+                sections.Add(new ParsedSection(title, sectionContent, suggestedOrder));
             }
         }
 
-        return (sections, tokensUsed);
+        return sections;
     }
 }

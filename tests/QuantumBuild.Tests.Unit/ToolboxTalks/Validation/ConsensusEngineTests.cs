@@ -45,7 +45,7 @@ public class ConsensusEngineTests
     {
         var btA = "Always wear PPE on site";
         var btB = "Always wear PPE on the site";
-        _claudeHaiku.Setup(c => c.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>()))
+        _claudeHaiku.Setup(c => c.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>(), It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<bool>(), It.IsAny<Guid?>()))
             .ReturnsAsync(SuccessBt(btA, "Claude"));
         _deepL.Setup(d => d.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>()))
             .ReturnsAsync(SuccessBt(btB, "DeepL"));
@@ -69,7 +69,7 @@ public class ConsensusEngineTests
         var btA = "Always wear PPE on site";
         var btB = "Put on protective equipment";
         var btC = "Always wear protective equipment on site";
-        _claudeHaiku.Setup(c => c.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>()))
+        _claudeHaiku.Setup(c => c.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>(), It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<bool>(), It.IsAny<Guid?>()))
             .ReturnsAsync(SuccessBt(btA, "Claude"));
         _deepL.Setup(d => d.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>()))
             .ReturnsAsync(SuccessBt(btB, "DeepL"));
@@ -95,7 +95,7 @@ public class ConsensusEngineTests
         var btA = "Wear PPE always";
         var btB = "Use protective gear";
         var btC = "Always use PPE on site";
-        _claudeHaiku.Setup(c => c.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>()))
+        _claudeHaiku.Setup(c => c.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>(), It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<bool>(), It.IsAny<Guid?>()))
             .ReturnsAsync(SuccessBt(btA, "Claude"));
         _deepL.Setup(d => d.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>()))
             .ReturnsAsync(SuccessBt(btB, "DeepL"));
@@ -123,7 +123,7 @@ public class ConsensusEngineTests
     {
         var btA = "Wear PPE";
         var btB = "Use gear";
-        _claudeHaiku.Setup(c => c.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>()))
+        _claudeHaiku.Setup(c => c.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>(), It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<bool>(), It.IsAny<Guid?>()))
             .ReturnsAsync(SuccessBt(btA, "Claude"));
         _deepL.Setup(d => d.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>()))
             .ReturnsAsync(SuccessBt(btB, "DeepL"));
@@ -147,7 +147,7 @@ public class ConsensusEngineTests
     public async Task RunAsync_ProviderAReturnsNull_SkipsGracefully()
     {
         var btB = "Always wear PPE on site";
-        _claudeHaiku.Setup(c => c.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>()))
+        _claudeHaiku.Setup(c => c.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>(), It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<bool>(), It.IsAny<Guid?>()))
             .ReturnsAsync((BackTranslationResult?)null);
         _deepL.Setup(d => d.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>()))
             .ReturnsAsync(SuccessBt(btB, "DeepL"));
@@ -172,7 +172,7 @@ public class ConsensusEngineTests
     public async Task RunAsync_ProviderBReturnsNull_SkipsGracefully()
     {
         var btA = "Always wear PPE on site";
-        _claudeHaiku.Setup(c => c.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>()))
+        _claudeHaiku.Setup(c => c.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>(), It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<bool>(), It.IsAny<Guid?>()))
             .ReturnsAsync(SuccessBt(btA, "Claude"));
         _deepL.Setup(d => d.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>()))
             .ReturnsAsync((BackTranslationResult?)null);
@@ -194,7 +194,7 @@ public class ConsensusEngineTests
     [Fact]
     public async Task RunAsync_AllProvidersReturnNull_ReviewOutcomeWithZeroScores()
     {
-        _claudeHaiku.Setup(c => c.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>()))
+        _claudeHaiku.Setup(c => c.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>(), It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<bool>(), It.IsAny<Guid?>()))
             .ReturnsAsync((BackTranslationResult?)null);
         _deepL.Setup(d => d.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>()))
             .ReturnsAsync((BackTranslationResult?)null);
@@ -217,7 +217,7 @@ public class ConsensusEngineTests
     {
         var btA = "Wear PPE on site";
         var btB = "Wear PPE on site";
-        _claudeHaiku.Setup(c => c.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>()))
+        _claudeHaiku.Setup(c => c.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>(), It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<bool>(), It.IsAny<Guid?>()))
             .ReturnsAsync(SuccessBt(btA, "Claude"));
         _deepL.Setup(d => d.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>()))
             .ReturnsAsync(SuccessBt(btB, "DeepL"));
@@ -238,7 +238,7 @@ public class ConsensusEngineTests
     {
         var btA = "Wear PPE on site";
         var btB = "Wear PPE on site";
-        _claudeHaiku.Setup(c => c.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>()))
+        _claudeHaiku.Setup(c => c.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>(), It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<bool>(), It.IsAny<Guid?>()))
             .ReturnsAsync(SuccessBt(btA, "Claude"));
         _deepL.Setup(d => d.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>()))
             .ReturnsAsync(SuccessBt(btB, "DeepL"));

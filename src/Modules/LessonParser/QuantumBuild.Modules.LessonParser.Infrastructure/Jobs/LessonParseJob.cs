@@ -108,10 +108,14 @@ public class LessonParseJob
             };
 
             // Call the AI lesson generator
+            // Parse CreatedBy as userId Guid for AI usage logging (may be a string user ID)
+            Guid? userId = Guid.TryParse(parseJob.CreatedBy, out var parsedUserId) ? parsedUserId : null;
+
             var result = await _lessonGeneratorService.GenerateFromContentAsync(
                 extraction,
                 parseJob.TenantId,
                 parseJob.CreatedBy,
+                userId,
                 progress,
                 CancellationToken.None);
 

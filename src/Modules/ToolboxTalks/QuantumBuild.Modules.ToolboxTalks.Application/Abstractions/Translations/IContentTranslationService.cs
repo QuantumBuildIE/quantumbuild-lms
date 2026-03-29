@@ -21,7 +21,11 @@ public interface IContentTranslationService
         string? sourceLanguage = null,
         string? sectorKey = null,
         bool isSafetyCritical = false,
-        IEnumerable<GlossaryTermInstruction>? glossaryTerms = null);
+        IEnumerable<GlossaryTermInstruction>? glossaryTerms = null,
+        Guid tenantId = default,
+        Guid? userId = null,
+        bool isSystemCall = false,
+        Guid? toolboxTalkId = null);
 
     /// <summary>
     /// Sends a custom prompt directly to the AI without wrapping it in translation instructions.
@@ -29,7 +33,11 @@ public interface IContentTranslationService
     /// </summary>
     Task<ContentTranslationResult> SendCustomPromptAsync(
         string prompt,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        Guid tenantId = default,
+        Guid? userId = null,
+        bool isSystemCall = false,
+        Guid? toolboxTalkId = null);
 
     /// <summary>
     /// Translates multiple items in a batch for efficiency.
@@ -42,7 +50,11 @@ public interface IContentTranslationService
         string? sourceLanguage = null,
         string? sectorKey = null,
         bool isSafetyCritical = false,
-        IEnumerable<GlossaryTermInstruction>? glossaryTerms = null);
+        IEnumerable<GlossaryTermInstruction>? glossaryTerms = null,
+        Guid tenantId = default,
+        Guid? userId = null,
+        bool isSystemCall = false,
+        Guid? toolboxTalkId = null);
 }
 
 /// <summary>

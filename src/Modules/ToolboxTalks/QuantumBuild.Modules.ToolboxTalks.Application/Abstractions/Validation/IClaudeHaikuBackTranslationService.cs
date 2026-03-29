@@ -20,5 +20,9 @@ public interface IClaudeHaikuBackTranslationService
         string text,
         string sourceLanguage,
         string targetLanguage,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        Guid tenantId = default,
+        Guid? userId = null,
+        bool isSystemCall = true,
+        Guid? toolboxTalkId = null);
 }

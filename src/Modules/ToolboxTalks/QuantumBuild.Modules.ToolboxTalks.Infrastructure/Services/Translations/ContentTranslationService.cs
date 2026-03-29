@@ -2,8 +2,10 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Translations;
 using QuantumBuild.Modules.ToolboxTalks.Application.Prompts;
+using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Translations;
@@ -16,15 +18,18 @@ public class ContentTranslationService : IContentTranslationService
 {
     private readonly HttpClient _httpClient;
     private readonly SubtitleProcessingSettings _settings;
+    private readonly IAiUsageLogger _aiUsageLogger;
     private readonly ILogger<ContentTranslationService> _logger;
 
     public ContentTranslationService(
         HttpClient httpClient,
         IOptions<SubtitleProcessingSettings> settings,
+        IAiUsageLogger aiUsageLogger,
         ILogger<ContentTranslationService> logger)
     {
         _httpClient = httpClient;
         _settings = settings.Value;
+        _aiUsageLogger = aiUsageLogger;
         _logger = logger;
     }
 
@@ -37,7 +42,11 @@ public class ContentTranslationService : IContentTranslationService
         string? sourceLanguage = null,
         string? sectorKey = null,
         bool isSafetyCritical = false,
-        IEnumerable<GlossaryTermInstruction>? glossaryTerms = null)
+        IEnumerable<GlossaryTermInstruction>? glossaryTerms = null,
+        Guid tenantId = default,
+        Guid? userId = null,
+        bool isSystemCall = false,
+        Guid? toolboxTalkId = null)
     {
         var source = sourceLanguage ?? "English";
 
@@ -64,9 +73,20 @@ public class ContentTranslationService : IContentTranslationService
             var prompt = useTiered
                 ? TranslationPrompts.BuildTranslationPrompt(text, source, targetLanguage, isHtml, sectorKey, isSafetyCritical, glossaryTerms)
                 : TranslationPrompts.BuildGenericTranslationPrompt(text, source, targetLanguage, isHtml);
-            var translatedText = await CallClaudeApiAsync(prompt, cancellationToken);
+            var parsed = await CallClaudeApiAsync(prompt, cancellationToken);
 
-            if (string.IsNullOrWhiteSpace(translatedText))
+            await _aiUsageLogger.LogAsync(
+                tenantId,
+                AiOperationCategory.ContentTranslation,
+                parsed.Model,
+                parsed.InputTokens,
+                parsed.OutputTokens,
+                isSystemCall: isSystemCall,
+                userId: userId,
+                referenceEntityId: toolboxTalkId,
+                cancellationToken);
+
+            if (string.IsNullOrWhiteSpace(parsed.ContentText))
             {
                 _logger.LogWarning(
                     "[DEBUG] Claude API returned empty/whitespace translation for {Language}. Input length was {InputLength}",
@@ -77,8 +97,8 @@ public class ContentTranslationService : IContentTranslationService
             _logger.LogInformation(
                 "[DEBUG] Translation to {Language} completed successfully. " +
                 "InputLength: {InputLength}, OutputLength: {OutputLength}",
-                targetLanguage, text.Length, translatedText.Length);
-            return ContentTranslationResult.SuccessResult(translatedText);
+                targetLanguage, text.Length, parsed.ContentText.Length);
+            return ContentTranslationResult.SuccessResult(parsed.ContentText);
         }
         catch (HttpRequestException ex)
         {
@@ -103,7 +123,11 @@ public class ContentTranslationService : IContentTranslationService
     /// <inheritdoc />
     public async Task<ContentTranslationResult> SendCustomPromptAsync(
         string prompt,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Guid tenantId = default,
+        Guid? userId = null,
+        bool isSystemCall = false,
+        Guid? toolboxTalkId = null)
     {
         if (string.IsNullOrWhiteSpace(prompt))
         {
@@ -116,9 +140,20 @@ public class ContentTranslationService : IContentTranslationService
                 "[DEBUG] ContentTranslationService.SendCustomPromptAsync called. PromptLength: {Length}",
                 prompt.Length);
 
-            var response = await CallClaudeApiAsync(prompt, cancellationToken);
+            var parsed = await CallClaudeApiAsync(prompt, cancellationToken);
 
-            if (string.IsNullOrWhiteSpace(response))
+            await _aiUsageLogger.LogAsync(
+                tenantId,
+                AiOperationCategory.ContentTranslation,
+                parsed.Model,
+                parsed.InputTokens,
+                parsed.OutputTokens,
+                isSystemCall: isSystemCall,
+                userId: userId,
+                referenceEntityId: toolboxTalkId,
+                cancellationToken);
+
+            if (string.IsNullOrWhiteSpace(parsed.ContentText))
             {
                 _logger.LogWarning(
                     "[DEBUG] Claude API returned empty response for custom prompt. PromptLength: {Length}",
@@ -128,8 +163,8 @@ public class ContentTranslationService : IContentTranslationService
 
             _logger.LogInformation(
                 "[DEBUG] Custom prompt completed. ResponseLength: {Length}",
-                response.Length);
-            return ContentTranslationResult.SuccessResult(response);
+                parsed.ContentText.Length);
+            return ContentTranslationResult.SuccessResult(parsed.ContentText);
         }
         catch (HttpRequestException ex)
         {
@@ -154,7 +189,11 @@ public class ContentTranslationService : IContentTranslationService
         string? sourceLanguage = null,
         string? sectorKey = null,
         bool isSafetyCritical = false,
-        IEnumerable<GlossaryTermInstruction>? glossaryTerms = null)
+        IEnumerable<GlossaryTermInstruction>? glossaryTerms = null,
+        Guid tenantId = default,
+        Guid? userId = null,
+        bool isSystemCall = false,
+        Guid? toolboxTalkId = null)
     {
         var source = sourceLanguage ?? "English";
         var itemsList = items.ToList();
@@ -168,9 +207,20 @@ public class ContentTranslationService : IContentTranslationService
             _logger.LogInformation("Translating batch of {Count} items from {Source} to {Language}", itemsList.Count, source, targetLanguage);
 
             var prompt = TranslationPrompts.BuildBatchTranslationPrompt(itemsList, source, targetLanguage, sectorKey, isSafetyCritical, glossaryTerms);
-            var responseText = await CallClaudeApiAsync(prompt, cancellationToken);
+            var parsed = await CallClaudeApiAsync(prompt, cancellationToken);
 
-            var results = ParseBatchResponse(responseText, itemsList);
+            await _aiUsageLogger.LogAsync(
+                tenantId,
+                AiOperationCategory.ContentTranslation,
+                parsed.Model,
+                parsed.InputTokens,
+                parsed.OutputTokens,
+                isSystemCall: isSystemCall,
+                userId: userId,
+                referenceEntityId: toolboxTalkId,
+                cancellationToken);
+
+            var results = ParseBatchResponse(parsed.ContentText, itemsList);
 
             _logger.LogInformation("Batch translation to {Language} completed", targetLanguage);
             return BatchTranslationResult.SuccessResult(results);
@@ -185,7 +235,7 @@ public class ContentTranslationService : IContentTranslationService
     /// <summary>
     /// Calls the Claude API with the given prompt.
     /// </summary>
-    private async Task<string> CallClaudeApiAsync(string prompt, CancellationToken cancellationToken)
+    private async Task<AnthropicParsedResponse> CallClaudeApiAsync(string prompt, CancellationToken cancellationToken)
     {
         // Validate API key is configured
         if (string.IsNullOrWhiteSpace(_settings.Claude.ApiKey))
@@ -231,33 +281,12 @@ public class ContentTranslationService : IContentTranslationService
             throw new HttpRequestException($"Claude API error: {response.StatusCode} - {responseBody}");
         }
 
-        var parsedResult = ParseClaudeResponse(responseBody);
+        var parsed = AnthropicResponseParser.Parse(responseBody);
         _logger.LogInformation(
             "[DEBUG] Parsed Claude response. IsEmpty: {IsEmpty}, ResultLength: {Length}",
-            string.IsNullOrWhiteSpace(parsedResult), parsedResult?.Length ?? 0);
+            string.IsNullOrWhiteSpace(parsed.ContentText), parsed.ContentText?.Length ?? 0);
 
-        return parsedResult;
-    }
-
-    /// <summary>
-    /// Parses the Claude API response to extract the translated text.
-    /// </summary>
-    private static string ParseClaudeResponse(string responseBody)
-    {
-        using var jsonDoc = JsonDocument.Parse(responseBody);
-
-        if (!jsonDoc.RootElement.TryGetProperty("content", out var contentArray))
-            return string.Empty;
-
-        foreach (var item in contentArray.EnumerateArray())
-        {
-            if (item.TryGetProperty("text", out var textEl))
-            {
-                return textEl.GetString() ?? string.Empty;
-            }
-        }
-
-        return string.Empty;
+        return parsed;
     }
 
     /// <summary>

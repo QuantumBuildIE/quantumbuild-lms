@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using QuantumBuild.Core.Application.Abstractions.AI;
 using QuantumBuild.Modules.LessonParser.Application.Abstractions;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
@@ -21,6 +22,7 @@ public class LessonGeneratorService : ILessonGeneratorService
     private readonly ClaudeSettings _claudeSettings;
     private readonly IToolboxTalksDbContext _toolboxTalksDbContext;
     private readonly ITranslationQueueService _translationQueueService;
+    private readonly IAiUsageLogger _aiUsageLogger;
     private readonly ILogger<LessonGeneratorService> _logger;
 
     private static readonly HashSet<string> CommonWords = new(StringComparer.OrdinalIgnoreCase)
@@ -38,12 +40,14 @@ public class LessonGeneratorService : ILessonGeneratorService
         IOptions<ClaudeSettings> claudeSettings,
         IToolboxTalksDbContext toolboxTalksDbContext,
         ITranslationQueueService translationQueueService,
+        IAiUsageLogger aiUsageLogger,
         ILogger<LessonGeneratorService> logger)
     {
         _httpClient = httpClient;
         _claudeSettings = claudeSettings.Value;
         _toolboxTalksDbContext = toolboxTalksDbContext;
         _translationQueueService = translationQueueService;
+        _aiUsageLogger = aiUsageLogger;
         _logger = logger;
     }
 
@@ -51,6 +55,7 @@ public class LessonGeneratorService : ILessonGeneratorService
         ExtractionResult extractedContent,
         Guid tenantId,
         string createdBy,
+        Guid? userId,
         IProgress<LessonParseProgress> progress,
         CancellationToken cancellationToken = default)
     {
@@ -67,7 +72,7 @@ public class LessonGeneratorService : ILessonGeneratorService
             "Calling Claude API to parse content for tenant {TenantId}, title: {Title}",
             tenantId, extractedContent.Title);
 
-        var responseText = await CallClaudeApiAsync(prompt, cancellationToken);
+        var responseText = await CallClaudeApiAsync(prompt, tenantId, userId, cancellationToken);
 
         // Parse JSON response into ParsedCourse
         ParsedCourse parsedCourse;
@@ -277,8 +282,13 @@ public class LessonGeneratorService : ILessonGeneratorService
 
     /// <summary>
     /// Calls the Claude API following the exact pattern used in ToolboxTalks services.
+    /// Parses response for token usage and logs via IAiUsageLogger.
     /// </summary>
-    private async Task<string> CallClaudeApiAsync(string prompt, CancellationToken cancellationToken)
+    private async Task<string> CallClaudeApiAsync(
+        string prompt,
+        Guid tenantId,
+        Guid? userId,
+        CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(_claudeSettings.ApiKey))
         {
@@ -312,29 +322,60 @@ public class LessonGeneratorService : ILessonGeneratorService
             throw new InvalidOperationException($"Claude API error: {response.StatusCode}");
         }
 
-        // Extract text from Claude response using the standard pattern
-        return ParseClaudeResponseText(responseBody);
+        // Parse response: extract content text, token usage, and model
+        var (contentText, inputTokens, outputTokens, model) = ParseClaudeResponse(responseBody);
+
+        await _aiUsageLogger.LogAsync(
+            tenantId,
+            AiOperationCategory.LessonGeneration,
+            model,
+            inputTokens,
+            outputTokens,
+            isSystemCall: false,
+            userId: userId,
+            referenceEntityId: null,
+            cancellationToken);
+
+        return contentText;
     }
 
     /// <summary>
-    /// Extracts the text content from a Claude API response.
+    /// Extracts content text, token usage, and model from a Claude API response.
+    /// Inline parsing to avoid cross-module Infrastructure dependency on AnthropicResponseParser.
     /// </summary>
-    private static string ParseClaudeResponseText(string responseBody)
+    private static (string ContentText, int InputTokens, int OutputTokens, string Model) ParseClaudeResponse(string responseBody)
     {
         using var jsonDoc = JsonDocument.Parse(responseBody);
+        var root = jsonDoc.RootElement;
 
-        if (!jsonDoc.RootElement.TryGetProperty("content", out var contentArray))
-            return string.Empty;
-
-        foreach (var item in contentArray.EnumerateArray())
+        var contentText = string.Empty;
+        if (root.TryGetProperty("content", out var contentArray))
         {
-            if (item.TryGetProperty("text", out var textEl))
+            foreach (var item in contentArray.EnumerateArray())
             {
-                return textEl.GetString() ?? string.Empty;
+                if (item.TryGetProperty("text", out var textEl))
+                {
+                    contentText = textEl.GetString() ?? string.Empty;
+                    break;
+                }
             }
         }
 
-        return string.Empty;
+        var inputTokens = 0;
+        var outputTokens = 0;
+        if (root.TryGetProperty("usage", out var usageEl))
+        {
+            if (usageEl.TryGetProperty("input_tokens", out var inputEl))
+                inputTokens = inputEl.GetInt32();
+            if (usageEl.TryGetProperty("output_tokens", out var outputEl))
+                outputTokens = outputEl.GetInt32();
+        }
+
+        var model = string.Empty;
+        if (root.TryGetProperty("model", out var modelEl))
+            model = modelEl.GetString() ?? string.Empty;
+
+        return (contentText, inputTokens, outputTokens, model);
     }
 
     /// <summary>
