@@ -284,9 +284,18 @@ public class ContentCreationSessionService : IContentCreationSessionService
         }
         catch (Exception ex)
         {
-            session.Status = ContentCreationSessionStatus.Failed;
-            await _dbContext.SaveChangesAsync(cancellationToken);
             _logger.LogError(ex, "[ContentCreationSession] Parse failed for session {SessionId}", sessionId);
+            try
+            {
+                session.Status = ContentCreationSessionStatus.Failed;
+                await _dbContext.SaveChangesAsync(cancellationToken);
+            }
+            catch (Exception cleanupEx)
+            {
+                _logger.LogError(cleanupEx,
+                    "[ContentCreationSession] Failed to mark session {SessionId} as Failed during parse error cleanup",
+                    sessionId);
+            }
             throw;
         }
     }
@@ -667,18 +676,27 @@ public class ContentCreationSessionService : IContentCreationSessionService
         Guid tenantId,
         CancellationToken cancellationToken = default)
     {
-        var session = await GetSessionEntityAsync(sessionId, tenantId, cancellationToken);
+        ContentCreationSession session;
+        try
+        {
+            session = await GetSessionEntityAsync(sessionId, tenantId, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[ContentCreationSession] Failed to load session {SessionId} for publish", sessionId);
+            return new PublishResult(false, null, null, "An error occurred while publishing. Please try again.");
+        }
 
         if (session.Status != ContentCreationSessionStatus.Parsed &&
             session.Status != ContentCreationSessionStatus.Validated &&
             session.Status != ContentCreationSessionStatus.QuizGenerated)
-            throw new InvalidOperationException("Session must be in Parsed, Validated, or QuizGenerated status to publish");
+            return new PublishResult(false, null, null, "Session must be in Parsed, Validated, or QuizGenerated status to publish");
 
         if (session.OutputType == null)
-            throw new InvalidOperationException("Output type must be set before publishing");
+            return new PublishResult(false, null, null, "Output type must be set before publishing");
 
         if (string.IsNullOrWhiteSpace(session.ParsedSectionsJson))
-            throw new InvalidOperationException("No parsed sections available for publishing");
+            return new PublishResult(false, null, null, "No parsed sections available for publishing");
 
         // Fall back to session settings for missing request fields (title, description, category)
         if (string.IsNullOrWhiteSpace(request.Title) && !string.IsNullOrWhiteSpace(session.SettingsJson))
@@ -696,7 +714,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
         }
 
         if (string.IsNullOrWhiteSpace(request.Title))
-            throw new InvalidOperationException("A title is required to publish. Set a title in the Settings step.");
+            return new PublishResult(false, null, null, "A title is required to publish. Set a title in the Settings step.");
 
         session.Status = ContentCreationSessionStatus.Publishing;
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -790,11 +808,20 @@ public class ContentCreationSessionService : IContentCreationSessionService
         }
         catch (Exception ex)
         {
-            ((DbContext)_dbContext).ChangeTracker.Clear();
-            var failedSession = await GetSessionEntityAsync(sessionId, tenantId, cancellationToken);
-            failedSession.Status = ContentCreationSessionStatus.Failed;
-            await _dbContext.SaveChangesAsync(cancellationToken);
             _logger.LogError(ex, "[ContentCreationSession] Publish failed for session {SessionId}", sessionId);
+            try
+            {
+                ((DbContext)_dbContext).ChangeTracker.Clear();
+                var failedSession = await GetSessionEntityAsync(sessionId, tenantId, cancellationToken);
+                failedSession.Status = ContentCreationSessionStatus.Failed;
+                await _dbContext.SaveChangesAsync(cancellationToken);
+            }
+            catch (Exception cleanupEx)
+            {
+                _logger.LogError(cleanupEx,
+                    "[ContentCreationSession] Failed to mark session {SessionId} as Failed during error cleanup",
+                    sessionId);
+            }
             return new PublishResult(false, null, null, "An error occurred while publishing. Please try again.");
         }
     }
@@ -897,9 +924,18 @@ public class ContentCreationSessionService : IContentCreationSessionService
         }
         catch (Exception ex)
         {
-            session.Status = ContentCreationSessionStatus.Failed;
-            await _dbContext.SaveChangesAsync(cancellationToken);
             _logger.LogError(ex, "[ContentCreationSession] Quiz generation failed for session {SessionId}", sessionId);
+            try
+            {
+                session.Status = ContentCreationSessionStatus.Failed;
+                await _dbContext.SaveChangesAsync(cancellationToken);
+            }
+            catch (Exception cleanupEx)
+            {
+                _logger.LogError(cleanupEx,
+                    "[ContentCreationSession] Failed to mark session {SessionId} as Failed during quiz generation error cleanup",
+                    sessionId);
+            }
             throw;
         }
     }

@@ -41,6 +41,15 @@ public static class TestTenantConstants
             public const string LastName = "Warehouse";
         }
 
+        public static class Supervisor
+        {
+            public static readonly Guid Id = Guid.Parse("AAAAAAAA-0001-0001-0001-000000000006");
+            public const string Email = "supervisor@test.quantumbuild.ie";
+            public const string Password = "TestSupervisor123!";
+            public const string FirstName = "Test";
+            public const string LastName = "Supervisor";
+        }
+
         public static class Operator
         {
             public static readonly Guid Id = Guid.Parse("AAAAAAAA-0001-0001-0001-000000000004");

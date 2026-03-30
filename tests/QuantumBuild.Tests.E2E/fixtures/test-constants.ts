@@ -14,12 +14,12 @@ export const TEST_TENANT = {
     warehouse: {
       email: 'warehouse@quantumbuild.ie',
       password: 'Warehouse123!',
-      homePage: '/stock',
+      homePage: '/dashboard',
     },
     siteManager: {
       email: 'sitemanager@quantumbuild.ie',
       password: 'SiteManager123!',
-      homePage: '/stock/orders',
+      homePage: '/dashboard',
     },
     officeStaff: {
       email: 'office@quantumbuild.ie',
@@ -30,6 +30,16 @@ export const TEST_TENANT = {
       email: 'finance@quantumbuild.ie',
       password: 'Finance123!',
       homePage: '/dashboard',
+    },
+    supervisor: {
+      email: 'supervisor@test.quantumbuild.ie',
+      password: 'TestSupervisor123!',
+      homePage: '/toolbox-talks',
+    },
+    operator: {
+      email: 'operator@test.quantumbuild.ie',
+      password: 'TestOperator123!',
+      homePage: '/toolbox-talks',
     },
   },
 
@@ -78,6 +88,34 @@ export const API_ENDPOINTS = {
     employees: '/api/employees',
     companies: '/api/companies',
     contacts: '/api/contacts',
+  },
+};
+
+/**
+ * Frontend routes
+ */
+export const ROUTES = {
+  dashboard: '/dashboard',
+  toolboxTalks: {
+    employeePortal: '/toolbox-talks',
+    adminDashboard: '/admin/toolbox-talks',
+    talksList: '/admin/toolbox-talks/talks',
+    createTalk: '/admin/toolbox-talks/talks/new',
+    courses: '/admin/toolbox-talks/courses',
+    schedules: '/admin/toolbox-talks/schedules',
+    assignments: '/admin/toolbox-talks/assignments',
+    reports: '/admin/toolbox-talks/reports',
+    certificates: '/admin/toolbox-talks/certificates',
+    settings: '/admin/toolbox-talks/settings',
+    compliance: '/admin/toolbox-talks/compliance',
+    pendingMappings: '/admin/toolbox-talks/pending-mappings',
+  },
+  admin: {
+    home: '/admin',
+    sites: '/admin/sites',
+    employees: '/admin/employees',
+    companies: '/admin/companies',
+    users: '/admin/users',
   },
 };
 

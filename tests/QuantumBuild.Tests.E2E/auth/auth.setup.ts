@@ -13,7 +13,7 @@ setup('authenticate as admin', async ({ page }) => {
   await page.click('button[type="submit"]');
 
   // Wait for redirect to authenticated area
-  await page.waitForURL(/\/(dashboard|home|stock|admin)/, { timeout: 15000 });
+  await page.waitForURL(/\/(dashboard|admin)/, { timeout: 15000 });
 
   // Verify we're logged in
   await expect(page.locator('body')).not.toContainText('Login');
@@ -31,8 +31,8 @@ setup('authenticate as warehouse', async ({ page }) => {
   await page.fill('[name="password"], #password, input[type="password"]', TEST_TENANT.users.warehouse.password);
   await page.click('button[type="submit"]');
 
-  // Wait for redirect to stock area (warehouse home page)
-  await page.waitForURL(/\/(stock|dashboard)/, { timeout: 15000 });
+  // Wait for redirect to authenticated area
+  await page.waitForURL(/\/(dashboard)/, { timeout: 15000 });
 
   await page.context().storageState({ path: `${STORAGE_DIR}/warehouse.json` });
 });
@@ -46,8 +46,8 @@ setup('authenticate as site manager', async ({ page }) => {
   await page.fill('[name="password"], #password, input[type="password"]', TEST_TENANT.users.siteManager.password);
   await page.click('button[type="submit"]');
 
-  // Wait for redirect to stock orders (site manager home page)
-  await page.waitForURL(/\/(stock|dashboard|site-attendance)/, { timeout: 15000 });
+  // Wait for redirect to authenticated area
+  await page.waitForURL(/\/(dashboard)/, { timeout: 15000 });
 
   await page.context().storageState({ path: `${STORAGE_DIR}/sitemanager.json` });
 });
@@ -61,7 +61,7 @@ setup('authenticate as office staff', async ({ page }) => {
   await page.fill('[name="password"], #password, input[type="password"]', TEST_TENANT.users.officeStaff.password);
   await page.click('button[type="submit"]');
 
-  await page.waitForURL(/\/(dashboard|proposals|stock)/, { timeout: 15000 });
+  await page.waitForURL(/\/(dashboard)/, { timeout: 15000 });
 
   await page.context().storageState({ path: `${STORAGE_DIR}/officestaff.json` });
 });
@@ -75,7 +75,37 @@ setup('authenticate as finance', async ({ page }) => {
   await page.fill('[name="password"], #password, input[type="password"]', TEST_TENANT.users.finance.password);
   await page.click('button[type="submit"]');
 
-  await page.waitForURL(/\/(dashboard|stock|proposals)/, { timeout: 15000 });
+  await page.waitForURL(/\/(dashboard)/, { timeout: 15000 });
 
   await page.context().storageState({ path: `${STORAGE_DIR}/finance.json` });
+});
+
+/**
+ * Authenticate as supervisor and save storage state
+ */
+setup('authenticate as supervisor', async ({ page }) => {
+  await page.goto('/login');
+  await page.fill('[name="email"], #email, input[type="email"]', TEST_TENANT.users.supervisor.email);
+  await page.fill('[name="password"], #password, input[type="password"]', TEST_TENANT.users.supervisor.password);
+  await page.click('button[type="submit"]');
+
+  // Supervisor lands on toolbox talks (employee portal with team management)
+  await page.waitForURL(/\/(toolbox-talks|dashboard)/, { timeout: 15000 });
+
+  await page.context().storageState({ path: `${STORAGE_DIR}/supervisor.json` });
+});
+
+/**
+ * Authenticate as operator and save storage state
+ */
+setup('authenticate as operator', async ({ page }) => {
+  await page.goto('/login');
+  await page.fill('[name="email"], #email, input[type="email"]', TEST_TENANT.users.operator.email);
+  await page.fill('[name="password"], #password, input[type="password"]', TEST_TENANT.users.operator.password);
+  await page.click('button[type="submit"]');
+
+  // Operator lands on toolbox talks (employee portal)
+  await page.waitForURL(/\/(toolbox-talks|dashboard)/, { timeout: 15000 });
+
+  await page.context().storageState({ path: `${STORAGE_DIR}/operator.json` });
 });

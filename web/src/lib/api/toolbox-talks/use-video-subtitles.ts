@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { getSubtitleProcessingStatus, getVttFile } from './subtitle-processing';
 import { getMySubtitleStatus, getMyVttFile } from './my-toolbox-talks';
 import type { SubtitleProcessingStatusResponse, LanguageStatus } from '@/types/toolbox-talks';
@@ -64,6 +64,7 @@ export function useVideoSubtitles(
   useEmployeeEndpoint = false
 ): VideoSubtitlesResult {
   const [subtitlesWithBlobs, setSubtitlesWithBlobs] = useState<AvailableSubtitle[]>([]);
+  const subtitlesRef = useRef<AvailableSubtitle[]>([]);
   const [blobsLoading, setBlobsLoading] = useState(false);
 
   // Load language names from lookup
@@ -113,10 +114,14 @@ export function useVideoSubtitles(
       }));
   }, [status, getLanguageName]);
 
+  // Stable dependency: only re-run when the set of completed language codes changes
+  const completedLanguageKeys = completedSubtitleInfo.map((s: { languageCode: string }) => s.languageCode).join(',');
+
   // Fetch VTT content and create blob URLs
   useEffect(() => {
     if (!toolboxTalkId || completedSubtitleInfo.length === 0) {
       setSubtitlesWithBlobs([]);
+      subtitlesRef.current = [];
       return;
     }
 
@@ -145,22 +150,23 @@ export function useVideoSubtitles(
 
       if (!cancelled) {
         setSubtitlesWithBlobs(results);
+        subtitlesRef.current = results;
         setBlobsLoading(false);
       }
     };
 
     fetchVttContent();
 
-    // Cleanup blob URLs on unmount
+    // Cleanup blob URLs on unmount or re-run — use ref for latest value
     return () => {
       cancelled = true;
-      subtitlesWithBlobs.forEach((subtitle) => {
+      subtitlesRef.current.forEach((subtitle) => {
         if (subtitle.vttUrl.startsWith('blob:')) {
           URL.revokeObjectURL(subtitle.vttUrl);
         }
       });
     };
-  }, [toolboxTalkId, JSON.stringify(completedSubtitleInfo), getVtt]);
+  }, [toolboxTalkId, completedLanguageKeys, completedSubtitleInfo, getVtt]);
 
   // Find preferred subtitle
   const preferredSubtitle = preferredLanguageCode

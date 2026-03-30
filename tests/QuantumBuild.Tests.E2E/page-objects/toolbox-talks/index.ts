@@ -1,3 +1,4 @@
 export { ToolboxTalkListPage } from './ToolboxTalkListPage';
-export { ToolboxTalkFormPage } from './ToolboxTalkFormPage';
+export { ContentCreationWizardPage } from './ContentCreationWizardPage';
 export { TalkViewerPage } from './TalkViewerPage';
+export { EmployeePortalPage } from './EmployeePortalPage';

@@ -212,7 +212,7 @@ function QuizResults({ result, onRetry, onContinue, onRewatchVideo }: QuizResult
         <p className="text-muted-foreground mt-1">
           {result.passed
             ? 'You passed the quiz!'
-            : `You need ${result.passingScore}% to pass. Try again!`}
+            : `You need ${Math.round(result.passingScore)}% to pass. Try again!`}
         </p>
       </div>
 
@@ -234,7 +234,7 @@ function QuizResults({ result, onRetry, onContinue, onRewatchVideo }: QuizResult
               result.passed ? 'text-green-600' : 'text-red-600'
             )}
           >
-            {result.percentage}%
+            {Math.round(result.percentage)}%
           </div>
           <div className="text-sm text-muted-foreground">Percentage</div>
         </div>

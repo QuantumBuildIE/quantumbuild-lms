@@ -220,6 +220,22 @@ public class TestTenantSeeder
             },
             new User
             {
+                Id = TestTenantConstants.Users.Supervisor.Id,
+                TenantId = TestTenantConstants.TenantId,
+                Email = TestTenantConstants.Users.Supervisor.Email,
+                NormalizedEmail = TestTenantConstants.Users.Supervisor.Email.ToUpperInvariant(),
+                UserName = TestTenantConstants.Users.Supervisor.Email,
+                NormalizedUserName = TestTenantConstants.Users.Supervisor.Email.ToUpperInvariant(),
+                FirstName = TestTenantConstants.Users.Supervisor.FirstName,
+                LastName = TestTenantConstants.Users.Supervisor.LastName,
+                EmailConfirmed = true,
+                IsActive = true,
+                SecurityStamp = Guid.NewGuid().ToString(),
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = "test-seeder"
+            },
+            new User
+            {
                 Id = TestTenantConstants.Users.Operator.Id,
                 TenantId = TestTenantConstants.TenantId,
                 Email = TestTenantConstants.Users.Operator.Email,
@@ -272,6 +288,7 @@ public class TestTenantSeeder
             (TestTenantConstants.Users.Admin.Id, TestTenantConstants.Users.Admin.Email, TestTenantConstants.Users.Admin.Password, TestTenantConstants.Users.Admin.FirstName, TestTenantConstants.Users.Admin.LastName, "Admin"),
             (TestTenantConstants.Users.SiteManager.Id, TestTenantConstants.Users.SiteManager.Email, TestTenantConstants.Users.SiteManager.Password, TestTenantConstants.Users.SiteManager.FirstName, TestTenantConstants.Users.SiteManager.LastName, "SiteManager"),
             (TestTenantConstants.Users.Warehouse.Id, TestTenantConstants.Users.Warehouse.Email, TestTenantConstants.Users.Warehouse.Password, TestTenantConstants.Users.Warehouse.FirstName, TestTenantConstants.Users.Warehouse.LastName, "WarehouseStaff"),
+            (TestTenantConstants.Users.Supervisor.Id, TestTenantConstants.Users.Supervisor.Email, TestTenantConstants.Users.Supervisor.Password, TestTenantConstants.Users.Supervisor.FirstName, TestTenantConstants.Users.Supervisor.LastName, "Supervisor"),
             (TestTenantConstants.Users.Operator.Id, TestTenantConstants.Users.Operator.Email, TestTenantConstants.Users.Operator.Password, TestTenantConstants.Users.Operator.FirstName, TestTenantConstants.Users.Operator.LastName, "Operator"),
             (TestTenantConstants.Users.Finance.Id, TestTenantConstants.Users.Finance.Email, TestTenantConstants.Users.Finance.Password, TestTenantConstants.Users.Finance.FirstName, TestTenantConstants.Users.Finance.LastName, "Finance")
         };

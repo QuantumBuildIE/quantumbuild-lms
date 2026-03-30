@@ -1,119 +1,176 @@
-import { Page, Locator } from '@playwright/test';
+import { Page, Locator, expect } from '@playwright/test';
 import { BasePage } from '../BasePage';
+import { TIMEOUTS } from '../../fixtures/test-constants';
 
 /**
- * Talk viewer page object - for completing toolbox talks
+ * Employee talk viewer at /toolbox-talks/[id]
+ * Handles the full completion flow: Video → Sections → Quiz → Sign → Complete
  */
 export class TalkViewerPage extends BasePage {
-  readonly talkTitle: Locator;
-  readonly progressIndicator: Locator;
-  readonly sectionTitle: Locator;
-  readonly sectionContent: Locator;
   readonly videoPlayer: Locator;
-  readonly acknowledgeCheckbox: Locator;
-  readonly nextButton: Locator;
-  readonly previousButton: Locator;
-  readonly completeButton: Locator;
   readonly signatureCanvas: Locator;
-  readonly signedByNameInput: Locator;
-  readonly quizSection: Locator;
 
   constructor(page: Page) {
     super(page);
-    this.talkTitle = page.locator('h1, [data-testid="talk-title"]');
-    this.progressIndicator = page.locator('[data-testid="progress"], .progress-bar, .progress');
-    this.sectionTitle = page.locator('[data-testid="section-title"], h2');
-    this.sectionContent = page.locator('[data-testid="section-content"], .section-content, article');
     this.videoPlayer = page.locator('video, iframe[src*="youtube"], iframe[src*="vimeo"]');
-    this.acknowledgeCheckbox = page.locator('[name="acknowledged"], #acknowledged, input[type="checkbox"]:near(:text("acknowledge"))');
-    this.nextButton = page.locator('button:has-text("Next"), [data-action="next"]');
-    this.previousButton = page.locator('button:has-text("Previous"), button:has-text("Back"), [data-action="previous"]');
-    this.completeButton = page.locator('button:has-text("Complete"), button:has-text("Finish"), button:has-text("Submit")');
-    this.signatureCanvas = page.locator('canvas, [data-testid="signature-pad"]');
-    this.signedByNameInput = page.locator('[name="signedByName"], #signedByName');
-    this.quizSection = page.locator('[data-testid="quiz-section"], .quiz-section');
+    this.signatureCanvas = page.locator('canvas');
   }
 
-  /**
-   * Navigate to a specific talk
-   */
+  // ---------------------------------------------------------------------------
+  // Navigation
+  // ---------------------------------------------------------------------------
+
   async goto(talkId: string): Promise<void> {
-    await this.page.goto(`/toolbox-talks/talks/${talkId}/view`);
+    await this.page.goto(`/toolbox-talks/${talkId}`);
     await this.waitForPageLoad();
   }
 
-  /**
-   * Get current section number
-   */
-  async getCurrentSection(): Promise<number> {
-    const progress = await this.progressIndicator.getAttribute('data-current');
-    return progress ? parseInt(progress, 10) : 1;
+  // ---------------------------------------------------------------------------
+  // Step navigation
+  // ---------------------------------------------------------------------------
+
+  private getStepButton(label: string): Locator {
+    return this.page.locator(`button:has-text("${label}")`);
   }
 
-  /**
-   * Get total sections count
-   */
-  async getTotalSections(): Promise<number> {
-    const progress = await this.progressIndicator.getAttribute('data-total');
-    return progress ? parseInt(progress, 10) : 1;
+  async clickStep(step: 'Video' | 'Sections' | 'Quiz' | 'Sign' | 'Complete'): Promise<void> {
+    await this.getStepButton(step).click();
   }
 
-  /**
-   * Acknowledge the current section
-   */
-  async acknowledgeSection(): Promise<void> {
-    const isVisible = await this.acknowledgeCheckbox.isVisible();
-    if (isVisible) {
-      await this.acknowledgeCheckbox.check();
-    }
+  // ---------------------------------------------------------------------------
+  // Start / Video
+  // ---------------------------------------------------------------------------
+
+  async startTalk(): Promise<void> {
+    // Click the first available action — either "Start" or "Continue to Sections"
+    const startBtn = this.page.locator(
+      'button:has-text("Start"), button:has-text("Continue to Sections"), button:has-text("Begin")'
+    );
+    await startBtn.first().click();
+    await this.page.waitForTimeout(500);
   }
 
-  /**
-   * Go to the next section
-   */
-  async goToNextSection(): Promise<void> {
-    await this.acknowledgeSection();
-    await this.nextButton.click();
-    await this.waitForPageLoad();
-  }
-
-  /**
-   * Go to the previous section
-   */
-  async goToPreviousSection(): Promise<void> {
-    await this.previousButton.click();
-    await this.waitForPageLoad();
-  }
-
-  /**
-   * Read through all sections
-   */
-  async readAllSections(): Promise<void> {
-    while (await this.nextButton.isVisible() && await this.nextButton.isEnabled()) {
-      await this.goToNextSection();
-    }
-  }
-
-  /**
-   * Watch video if present (wait for video to be viewable)
-   */
   async watchVideoIfPresent(durationMs: number = 3000): Promise<void> {
     if (await this.videoPlayer.isVisible()) {
-      // Click play if there's a play button
-      const playButton = this.page.locator('button:has-text("Play"), [data-action="play"]');
-      if (await playButton.isVisible()) {
-        await playButton.click();
+      const playBtn = this.page.locator('button:has-text("Play"), [data-action="play"]');
+      if (await playBtn.isVisible()) {
+        await playBtn.click();
       }
-      // Wait for some of the video duration
       await this.page.waitForTimeout(durationMs);
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Sections
+  // ---------------------------------------------------------------------------
+
+  private get sectionNavigator(): Locator {
+    return this.page.locator('nav:has-text("Sections"), [data-testid="section-navigator"]');
+  }
+
+  async readSection(index: number): Promise<void> {
+    // Click section item in the sidebar navigator if visible (desktop)
+    const sectionButtons = this.sectionNavigator.locator('button');
+    const count = await sectionButtons.count();
+    if (count > 0 && index < count) {
+      await sectionButtons.nth(index).click();
+      await this.page.waitForTimeout(300);
+    }
+
+    // Find and click the acknowledge / mark-read action for this section
+    const acknowledgeBtn = this.page.locator(
+      'button:has-text("Acknowledge"), button:has-text("Mark as Read"), button:has-text("I have read"), input[type="checkbox"]'
+    ).first();
+    if (await acknowledgeBtn.isVisible()) {
+      await acknowledgeBtn.click();
+      await this.page.waitForTimeout(300);
+    }
+  }
+
+  async readAllSections(): Promise<void> {
+    // Read through sections sequentially using Next button or sidebar
+    const nextBtn = this.page.locator('button:has-text("Next")');
+    const acknowledgeBtn = this.page.locator(
+      'button:has-text("Acknowledge"), button:has-text("Mark as Read"), button:has-text("I have read"), input[type="checkbox"]'
+    );
+
+    let iteration = 0;
+    const maxIterations = 50; // safety limit
+
+    while (iteration < maxIterations) {
+      // Acknowledge current section if possible
+      if (await acknowledgeBtn.first().isVisible({ timeout: 1000 }).catch(() => false)) {
+        await acknowledgeBtn.first().click();
+        await this.page.waitForTimeout(300);
+      }
+
+      // Try to advance to next section
+      if (await nextBtn.isVisible({ timeout: 1000 }).catch(() => false) && await nextBtn.isEnabled()) {
+        await nextBtn.click();
+        await this.page.waitForTimeout(500);
+      } else {
+        break;
+      }
+      iteration++;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Quiz
+  // ---------------------------------------------------------------------------
+
   /**
-   * Draw a signature on the canvas
+   * Submit quiz with answers keyed by question text fragment or index.
+   * For multiple choice / true-false, the value should match the option label text.
+   * For short answer, the value is typed into the text input.
    */
+  async submitQuizAnswers(answers: Record<string, string>): Promise<void> {
+    for (const [questionKey, answer] of Object.entries(answers)) {
+      // Find the question container — match by partial text in question heading
+      const questionContainer = this.page.locator(`[data-question]:has-text("${questionKey}"), .question-card:has-text("${questionKey}")`).first();
+
+      if (await questionContainer.isVisible().catch(() => false)) {
+        // Try radio option first (MC / TF)
+        const radio = questionContainer.locator(`label:has-text("${answer}") input[type="radio"], input[type="radio"][value="${answer}"]`);
+        if (await radio.isVisible().catch(() => false)) {
+          await radio.check();
+          continue;
+        }
+        // Fall back to text input (short answer)
+        const textInput = questionContainer.locator('input[type="text"], textarea');
+        if (await textInput.isVisible().catch(() => false)) {
+          await textInput.fill(answer);
+        }
+      }
+    }
+
+    // Click submit
+    const submitBtn = this.page.locator('button:has-text("Submit Quiz"), button:has-text("Submit Answers"), button:has-text("Submit")');
+    await submitBtn.first().click();
+    await this.page.waitForTimeout(500);
+  }
+
+  async getQuizResult(): Promise<{ passed: boolean; score: number }> {
+    // Wait for quiz result to appear
+    const resultArea = this.page.locator(':text-matches("(passed|failed|score|result)", "i")').first();
+    await expect(resultArea).toBeVisible({ timeout: TIMEOUTS.medium });
+
+    const resultText = await this.page.locator('body').textContent() || '';
+
+    const passed = /pass/i.test(resultText) && !/fail/i.test(resultText);
+    const scoreMatch = resultText.match(/(\d+)\s*%/);
+    const score = scoreMatch ? parseInt(scoreMatch[1], 10) : 0;
+
+    return { passed, score };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Signature & Completion
+  // ---------------------------------------------------------------------------
+
   async drawSignature(): Promise<void> {
     const canvas = this.signatureCanvas;
+    await expect(canvas).toBeVisible({ timeout: TIMEOUTS.medium });
     const box = await canvas.boundingBox();
     if (box) {
       await this.page.mouse.move(box.x + 50, box.y + 50);
@@ -125,75 +182,44 @@ export class TalkViewerPage extends BasePage {
     }
   }
 
-  /**
-   * Sign with name
-   */
-  async sign(name: string): Promise<void> {
+  async signAndComplete(signatureDataUrl?: string): Promise<void> {
+    // Draw on canvas (we can't inject a dataUrl via Playwright easily, so draw)
     await this.drawSignature();
-    await this.signedByNameInput.fill(name);
+
+    // Click complete / finish button
+    const completeBtn = this.page.locator(
+      'button:has-text("Complete"), button:has-text("Finish"), button:has-text("Submit")'
+    );
+    await completeBtn.first().click();
+    await this.page.waitForTimeout(500);
   }
 
-  /**
-   * Complete the talk
-   */
-  async complete(): Promise<void> {
-    await this.completeButton.click();
+  async waitForCertificate(): Promise<void> {
+    await expect(
+      this.page.locator(':text("Certificate"), :text("certificate"), :text("completed successfully")')
+    ).toBeVisible({ timeout: TIMEOUTS.long });
   }
 
-  /**
-   * Sign and complete the talk
-   */
-  async signAndComplete(name: string): Promise<void> {
-    await this.sign(name);
-    await this.complete();
-    await this.waitForToastSuccess();
-  }
+  // ---------------------------------------------------------------------------
+  // Full flow helper
+  // ---------------------------------------------------------------------------
 
   /**
-   * Answer a quiz question
+   * Completes the entire talk flow: start → read sections → quiz → sign.
    */
-  async answerQuestion(questionIndex: number, answer: string): Promise<void> {
-    const question = this.page.locator(`[data-question="${questionIndex}"]`);
-
-    // Try different answer input types
-    const radioOption = question.locator(`input[type="radio"][value="${answer}"], label:has-text("${answer}") input[type="radio"]`);
-    const textInput = question.locator('input[type="text"], textarea');
-
-    if (await radioOption.isVisible()) {
-      await radioOption.check();
-    } else if (await textInput.isVisible()) {
-      await textInput.fill(answer);
-    }
-  }
-
-  /**
-   * Answer all quiz questions
-   */
-  async answerAllQuestions(answers: { questionIndex: number; answer: string }[]): Promise<void> {
-    for (const { questionIndex, answer } of answers) {
-      await this.answerQuestion(questionIndex, answer);
-    }
-  }
-
-  /**
-   * Submit the quiz
-   */
-  async submitQuiz(): Promise<void> {
-    const submitButton = this.page.locator('button:has-text("Submit Quiz"), button:has-text("Submit Answers")');
-    await submitButton.click();
-  }
-
-  /**
-   * Complete the entire talk including reading sections and quiz
-   */
-  async completeEntireTalk(name: string, quizAnswers?: { questionIndex: number; answer: string }[]): Promise<void> {
+  async completeEntireTalk(options?: {
+    quizAnswers?: Record<string, string>;
+    signedByName?: string;
+    watchVideoDurationMs?: number;
+  }): Promise<void> {
+    await this.startTalk();
+    await this.watchVideoIfPresent(options?.watchVideoDurationMs);
     await this.readAllSections();
 
-    if (quizAnswers && await this.quizSection.isVisible()) {
-      await this.answerAllQuestions(quizAnswers);
-      await this.submitQuiz();
+    if (options?.quizAnswers && Object.keys(options.quizAnswers).length > 0) {
+      await this.submitQuizAnswers(options.quizAnswers);
     }
 
-    await this.signAndComplete(name);
+    await this.signAndComplete();
   }
 }

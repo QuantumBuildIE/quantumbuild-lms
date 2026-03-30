@@ -13,10 +13,14 @@ type CustomFixtures = {
   warehouseContext: BrowserContext;
   siteManagerContext: BrowserContext;
   financeContext: BrowserContext;
+  supervisorContext: BrowserContext;
+  operatorContext: BrowserContext;
   adminPage: Page;
   warehousePage: Page;
   siteManagerPage: Page;
   financePage: Page;
+  supervisorPage: Page;
+  operatorPage: Page;
 };
 
 export const test = base.extend<CustomFixtures>({
@@ -110,6 +114,46 @@ export const test = base.extend<CustomFixtures>({
    */
   financePage: async ({ financeContext }, use) => {
     const page = await financeContext.newPage();
+    await use(page);
+    await page.close();
+  },
+
+  /**
+   * Browser context authenticated as supervisor
+   */
+  supervisorContext: async ({ browser }, use) => {
+    const context = await browser.newContext({
+      storageState: 'playwright/.auth/supervisor.json',
+    });
+    await use(context);
+    await context.close();
+  },
+
+  /**
+   * Browser context authenticated as operator
+   */
+  operatorContext: async ({ browser }, use) => {
+    const context = await browser.newContext({
+      storageState: 'playwright/.auth/operator.json',
+    });
+    await use(context);
+    await context.close();
+  },
+
+  /**
+   * Page authenticated as supervisor
+   */
+  supervisorPage: async ({ supervisorContext }, use) => {
+    const page = await supervisorContext.newPage();
+    await use(page);
+    await page.close();
+  },
+
+  /**
+   * Page authenticated as operator
+   */
+  operatorPage: async ({ operatorContext }, use) => {
+    const page = await operatorContext.newPage();
     await use(page);
     await page.close();
   },
