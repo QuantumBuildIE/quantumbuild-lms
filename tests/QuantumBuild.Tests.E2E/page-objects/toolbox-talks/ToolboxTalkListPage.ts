@@ -28,7 +28,7 @@ export class ToolboxTalkListPage extends BasePage {
 
   async clickNewTalk(): Promise<void> {
     await this.createButton.click();
-    await this.page.waitForURL(/\/admin\/toolbox-talks\/talks\/new/, { timeout: TIMEOUTS.navigation });
+    await this.page.waitForURL(/\/admin\/toolbox-talks\/create/, { timeout: TIMEOUTS.navigation });
   }
 
   async searchFor(term: string): Promise<void> {

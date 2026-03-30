@@ -42,12 +42,20 @@ export class TalkViewerPage extends BasePage {
   // ---------------------------------------------------------------------------
 
   async startTalk(): Promise<void> {
-    // Click the first available action — either "Start" or "Continue to Sections"
+    // Wait for the talk data to load (skeleton disappears, content renders)
+    await this.page.waitForLoadState('networkidle');
+    await this.page.locator('h1').first().waitFor({ state: 'visible', timeout: 15_000 });
+
+    // For non-video talks the TalkViewer auto-starts via useEffect and renders
+    // sections directly — there is no explicit "Start" button. Only click if a
+    // start/continue button actually appears.
     const startBtn = this.page.locator(
       'button:has-text("Start"), button:has-text("Continue to Sections"), button:has-text("Begin")'
     );
-    await startBtn.first().click();
-    await this.page.waitForTimeout(500);
+    if (await startBtn.first().isVisible({ timeout: 3_000 }).catch(() => false)) {
+      await startBtn.first().click();
+      await this.page.waitForTimeout(500);
+    }
   }
 
   async watchVideoIfPresent(durationMs: number = 3000): Promise<void> {

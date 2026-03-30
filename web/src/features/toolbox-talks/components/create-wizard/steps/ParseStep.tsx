@@ -103,16 +103,22 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
   // ============================================
 
   useEffect(() => {
-    if (!state.sessionId || parseTriggered.current) return;
+    if (!state.sessionId) return;
 
     const status = session?.status;
 
-    // Already parsed — hydrate sections from session
-    if (status === 'Parsed' && session?.parsedSectionsJson) {
+    // Already parsed — hydrate sections from session. This must run even
+    // when parseTriggered is true so that the synchronous mutation response
+    // (which updates the query cache) triggers hydration.
+    if (status === 'Parsed' && session?.parsedSectionsJson && !hasParsed) {
       parseTriggered.current = true;
+      stopPolling();
       hydrateFromSession();
       return;
     }
+
+    // Guard: only trigger parse/polling once
+    if (parseTriggered.current) return;
 
     // Already parsing — just start polling
     if (status === 'Parsing') {
@@ -128,13 +134,14 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
       triggerParse();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.sessionId, session?.status]);
+  }, [state.sessionId, session?.status, hasParsed]);
 
   // ============================================
   // Cleanup polling on unmount
   // ============================================
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       if (pollIntervalRef.current) {
@@ -186,9 +193,17 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
     addLog('Parsing document structure...');
 
     try {
-      await parseContent.mutateAsync(state.sessionId);
-      addLog('Parse request submitted — waiting for results...');
-      startPolling();
+      const response = await parseContent.mutateAsync(state.sessionId);
+
+      // The parse endpoint is synchronous — the response already contains the
+      // parsed data. Use it directly instead of polling.
+      if (response.status === 'Parsed' && response.parsedSectionsJson) {
+        handleParseComplete(response.parsedSectionsJson, response.outputType);
+      } else {
+        // Fallback: if the endpoint ever becomes async, poll for results.
+        addLog('Parse request submitted — waiting for results...');
+        startPolling();
+      }
     } catch {
       addLog('Error: Parse request failed');
       setIsParseFailed(true);
@@ -358,10 +373,12 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
     }
   };
 
-  const isBusy =
-    parseContent.isPending ||
-    updateSections.isPending ||
-    isPolling;
+  // Once sections have been parsed and hydrated, neither stale polling state nor
+  // a lingering mutation pending state (from React strict-mode double-mount) should
+  // block the Continue button. Only the save-sections mutation matters at that point.
+  const isBusy = hasParsed
+    ? updateSections.isPending
+    : parseContent.isPending || updateSections.isPending || isPolling;
 
   const isParsing = parseContent.isPending || isPolling;
   const selectedType = state.selectedOutputType ?? state.suggestedOutputType;

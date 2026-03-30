@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using QuantumBuild.Core.Domain;
 using QuantumBuild.Core.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
@@ -91,6 +92,9 @@ public class TestTenantSeeder
         await ExecuteDeleteAsync("TranslationValidationResults", "\"ValidationRunId\" IN (SELECT \"Id\" FROM \"TranslationValidationRuns\" WHERE \"TenantId\" = {0})", tenantBId);
         await ExecuteDeleteAsync("TranslationValidationRuns", "\"TenantId\" = {0}", tenantBId);
 
+        // DPA acceptances (before core module due to FK to Tenant and User)
+        await ExecuteDeleteAsync("DpaAcceptances", "\"TenantId\" = {0}", tenantId);
+
         // Core module (must be last due to foreign keys)
         await ExecuteDeleteAsync("Contacts", "\"TenantId\" = {0}", tenantId);
         await ExecuteDeleteAsync("Companies", "\"TenantId\" = {0}", tenantId);
@@ -148,6 +152,30 @@ public class TestTenantSeeder
         await tenants.AddAsync(tenant);
         await _context.SaveChangesAsync();
         _logger.LogInformation("Created test tenant: {TenantName}", tenant.Name);
+
+        // Seed DPA acceptance so the tenant clears the DPA gate
+        var dpaAcceptances = _context.Set<DpaAcceptance>();
+        if (!await dpaAcceptances.IgnoreQueryFilters().AnyAsync(d => d.TenantId == TestTenantConstants.TenantId))
+        {
+            var dpa = new DpaAcceptance
+            {
+                Id = Guid.Parse("AAAAAAAA-AAAA-AAAA-AAAA-AAAA000000D1"),
+                TenantId = TestTenantConstants.TenantId,
+                AcceptedByUserId = TestTenantConstants.Users.Admin.Id,
+                OrganisationLegalName = TestTenantConstants.TenantName,
+                SignatoryFullName = $"{TestTenantConstants.Users.Admin.FirstName} {TestTenantConstants.Users.Admin.LastName}",
+                SignatoryRole = "Administrator",
+                Country = "Ireland",
+                IpAddress = "127.0.0.1",
+                AcceptedAt = DateTime.UtcNow,
+                DpaVersion = DpaConstants.CurrentDpaVersion,
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = "test-seeder"
+            };
+            await dpaAcceptances.AddAsync(dpa);
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("Created DPA acceptance for test tenant");
+        }
     }
 
     private async Task SeedUsersAsync()

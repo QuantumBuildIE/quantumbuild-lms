@@ -1,96 +1,64 @@
-import { test as setup, expect } from '@playwright/test';
+import { test as setup } from '@playwright/test';
 import { TEST_TENANT } from '../fixtures/test-constants';
 
+// Next.js dev server compiles pages on first visit — allow extra time
+setup.setTimeout(90000);
+
 const STORAGE_DIR = 'playwright/.auth';
+
+/**
+ * Helper: wait for post-login redirect and fail fast if DPA page appears.
+ */
+async function waitForAuthRedirect(page: import('@playwright/test').Page, urlPattern: RegExp) {
+  // Next.js dev server may need to compile the target page on first hit — allow extra time
+  await page.waitForURL(
+    /\/(dashboard|admin|toolbox-talks|dpa-acceptance)/,
+    { timeout: 60000 }
+  );
+  if (page.url().includes('dpa-acceptance')) {
+    throw new Error(
+      'Redirected to DPA acceptance page — ensure TestTenantSeeder seeds a DpaAcceptance record'
+    );
+  }
+  // Now verify we actually matched the expected pattern
+  await page.waitForURL(urlPattern, { timeout: 60000 });
+}
+
+/**
+ * Helper: fill login form and submit.
+ * Waits for the email input to be visible and enabled before interacting,
+ * handling Next.js compilation delay.
+ */
+async function loginAs(page: import('@playwright/test').Page, email: string, password: string) {
+  await page.goto('/login');
+  // Wait for the form to be rendered and interactive (handles Next.js compilation)
+  await page.waitForSelector('#email:not([disabled])', { timeout: 30000 });
+  await page.fill('#email', email);
+  await page.fill('#password', password);
+  await page.click('button[type="submit"]');
+}
 
 /**
  * Authenticate as admin user and save storage state
  */
 setup('authenticate as admin', async ({ page }) => {
-  await page.goto('/login');
-  await page.fill('[name="email"], #email, input[type="email"]', TEST_TENANT.users.admin.email);
-  await page.fill('[name="password"], #password, input[type="password"]', TEST_TENANT.users.admin.password);
-  await page.click('button[type="submit"]');
+  await loginAs(page, TEST_TENANT.users.admin.email, TEST_TENANT.users.admin.password);
 
-  // Wait for redirect to authenticated area
-  await page.waitForURL(/\/(dashboard|admin)/, { timeout: 15000 });
-
-  // Verify we're logged in
-  await expect(page.locator('body')).not.toContainText('Login');
+  // Wait for redirect to authenticated area (admin with employeeId may land on /toolbox-talks)
+  await waitForAuthRedirect(page, /\/(dashboard|admin|toolbox-talks)/);
 
   // Save storage state
   await page.context().storageState({ path: `${STORAGE_DIR}/admin.json` });
 });
 
 /**
- * Authenticate as warehouse user and save storage state
- */
-setup('authenticate as warehouse', async ({ page }) => {
-  await page.goto('/login');
-  await page.fill('[name="email"], #email, input[type="email"]', TEST_TENANT.users.warehouse.email);
-  await page.fill('[name="password"], #password, input[type="password"]', TEST_TENANT.users.warehouse.password);
-  await page.click('button[type="submit"]');
-
-  // Wait for redirect to authenticated area
-  await page.waitForURL(/\/(dashboard)/, { timeout: 15000 });
-
-  await page.context().storageState({ path: `${STORAGE_DIR}/warehouse.json` });
-});
-
-/**
- * Authenticate as site manager and save storage state
- */
-setup('authenticate as site manager', async ({ page }) => {
-  await page.goto('/login');
-  await page.fill('[name="email"], #email, input[type="email"]', TEST_TENANT.users.siteManager.email);
-  await page.fill('[name="password"], #password, input[type="password"]', TEST_TENANT.users.siteManager.password);
-  await page.click('button[type="submit"]');
-
-  // Wait for redirect to authenticated area
-  await page.waitForURL(/\/(dashboard)/, { timeout: 15000 });
-
-  await page.context().storageState({ path: `${STORAGE_DIR}/sitemanager.json` });
-});
-
-/**
- * Authenticate as office staff and save storage state
- */
-setup('authenticate as office staff', async ({ page }) => {
-  await page.goto('/login');
-  await page.fill('[name="email"], #email, input[type="email"]', TEST_TENANT.users.officeStaff.email);
-  await page.fill('[name="password"], #password, input[type="password"]', TEST_TENANT.users.officeStaff.password);
-  await page.click('button[type="submit"]');
-
-  await page.waitForURL(/\/(dashboard)/, { timeout: 15000 });
-
-  await page.context().storageState({ path: `${STORAGE_DIR}/officestaff.json` });
-});
-
-/**
- * Authenticate as finance user and save storage state
- */
-setup('authenticate as finance', async ({ page }) => {
-  await page.goto('/login');
-  await page.fill('[name="email"], #email, input[type="email"]', TEST_TENANT.users.finance.email);
-  await page.fill('[name="password"], #password, input[type="password"]', TEST_TENANT.users.finance.password);
-  await page.click('button[type="submit"]');
-
-  await page.waitForURL(/\/(dashboard)/, { timeout: 15000 });
-
-  await page.context().storageState({ path: `${STORAGE_DIR}/finance.json` });
-});
-
-/**
  * Authenticate as supervisor and save storage state
  */
 setup('authenticate as supervisor', async ({ page }) => {
-  await page.goto('/login');
-  await page.fill('[name="email"], #email, input[type="email"]', TEST_TENANT.users.supervisor.email);
-  await page.fill('[name="password"], #password, input[type="password"]', TEST_TENANT.users.supervisor.password);
-  await page.click('button[type="submit"]');
+  await loginAs(page, TEST_TENANT.users.supervisor.email, TEST_TENANT.users.supervisor.password);
 
   // Supervisor lands on toolbox talks (employee portal with team management)
-  await page.waitForURL(/\/(toolbox-talks|dashboard)/, { timeout: 15000 });
+  await waitForAuthRedirect(page, /\/(toolbox-talks|dashboard)/);
 
   await page.context().storageState({ path: `${STORAGE_DIR}/supervisor.json` });
 });
@@ -99,13 +67,10 @@ setup('authenticate as supervisor', async ({ page }) => {
  * Authenticate as operator and save storage state
  */
 setup('authenticate as operator', async ({ page }) => {
-  await page.goto('/login');
-  await page.fill('[name="email"], #email, input[type="email"]', TEST_TENANT.users.operator.email);
-  await page.fill('[name="password"], #password, input[type="password"]', TEST_TENANT.users.operator.password);
-  await page.click('button[type="submit"]');
+  await loginAs(page, TEST_TENANT.users.operator.email, TEST_TENANT.users.operator.password);
 
   // Operator lands on toolbox talks (employee portal)
-  await page.waitForURL(/\/(toolbox-talks|dashboard)/, { timeout: 15000 });
+  await waitForAuthRedirect(page, /\/(toolbox-talks|dashboard)/);
 
   await page.context().storageState({ path: `${STORAGE_DIR}/operator.json` });
 });

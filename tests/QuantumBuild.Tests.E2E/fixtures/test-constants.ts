@@ -7,28 +7,8 @@ export const TEST_TENANT = {
 
   users: {
     admin: {
-      email: 'admin@quantumbuild.ie',
+      email: 'admin@quantumbuild.ai',
       password: 'Admin123!',
-      homePage: '/dashboard',
-    },
-    warehouse: {
-      email: 'warehouse@quantumbuild.ie',
-      password: 'Warehouse123!',
-      homePage: '/dashboard',
-    },
-    siteManager: {
-      email: 'sitemanager@quantumbuild.ie',
-      password: 'SiteManager123!',
-      homePage: '/dashboard',
-    },
-    officeStaff: {
-      email: 'office@quantumbuild.ie',
-      password: 'Office123!',
-      homePage: '/dashboard',
-    },
-    finance: {
-      email: 'finance@quantumbuild.ie',
-      password: 'Finance123!',
       homePage: '/dashboard',
     },
     supervisor: {
@@ -100,7 +80,7 @@ export const ROUTES = {
     employeePortal: '/toolbox-talks',
     adminDashboard: '/admin/toolbox-talks',
     talksList: '/admin/toolbox-talks/talks',
-    createTalk: '/admin/toolbox-talks/talks/new',
+    createTalk: '/admin/toolbox-talks/create',
     courses: '/admin/toolbox-talks/courses',
     schedules: '/admin/toolbox-talks/schedules',
     assignments: '/admin/toolbox-talks/assignments',

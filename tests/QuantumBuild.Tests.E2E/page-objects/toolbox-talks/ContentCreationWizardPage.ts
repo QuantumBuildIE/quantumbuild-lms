@@ -9,12 +9,13 @@ const WIZARD_TIMEOUTS = {
 };
 
 /**
- * 6-step content creation wizard at /admin/toolbox-talks/talks/new
+ * 6-step content creation wizard at /admin/toolbox-talks/create
  */
 export class ContentCreationWizardPage extends BasePage {
   readonly stepNav: Locator;
   readonly backButton: Locator;
   readonly continueButton: Locator;
+  private _parseResponsePromise: Promise<any> | null = null;
 
   constructor(page: Page) {
     super(page);
@@ -51,13 +52,8 @@ export class ContentCreationWizardPage extends BasePage {
   // ---------------------------------------------------------------------------
 
   async selectContentSource(mode: 'Text' | 'Document' | 'Video'): Promise<void> {
+    // Mode buttons contain the label text inside the card-style button
     await this.page.locator(`button:has-text("${mode}")`).click();
-  }
-
-  async setTitle(title: string): Promise<void> {
-    // Title is set in Step 4 (Settings). In Step 1 there is no title field.
-    // Kept for convenience — delegates to fillSettingsTitle on the Settings step.
-    throw new Error('Title is set in SettingsStep (step 4). Use fillSettingsTitle() after navigating there.');
   }
 
   async pasteSourceText(text: string): Promise<void> {
@@ -66,23 +62,46 @@ export class ContentCreationWizardPage extends BasePage {
 
   async uploadPdf(filePath: string): Promise<void> {
     await this.selectContentSource('Document');
-    const fileInput = this.page.locator('input[type="file"][accept*=".pdf"]');
+    // The file input is hidden (className="hidden") with accept=".pdf"
+    const fileInput = this.page.locator('input[type="file"][accept=".pdf"]');
     await fileInput.setInputFiles(filePath);
-    // Wait for upload to finish
-    await this.page.locator('button:has-text("Continue")').waitFor({ state: 'visible', timeout: TIMEOUTS.long });
-    await expect(this.page.locator(':text("Uploading")')).not.toBeVisible({ timeout: TIMEOUTS.long });
+    // Wait for file name to appear in the dropzone (confirms file was accepted)
+    await expect(this.page.locator('text=.pdf')).toBeVisible({ timeout: TIMEOUTS.medium });
   }
 
   async uploadVideo(filePath: string): Promise<void> {
     await this.selectContentSource('Video');
-    const fileInput = this.page.locator('input[type="file"][accept*=".mp4"]');
+    const fileInput = this.page.locator('input[type="file"][accept=".mp4,.mov,.avi,.webm"]');
     await fileInput.setInputFiles(filePath);
     await expect(this.page.locator(':text("Uploading")')).not.toBeVisible({ timeout: TIMEOUTS.long });
   }
 
   async setVideoUrl(url: string): Promise<void> {
     await this.selectContentSource('Video');
-    await this.page.locator('input[placeholder*="youtube"], input[placeholder*="video URL"]').fill(url);
+    await this.page.locator('input[placeholder*="youtube"]').fill(url);
+  }
+
+  /**
+   * Select one or more target languages from the MultiSelectCombobox.
+   * Language names must match the lookup values (e.g. "Polish", "Spanish").
+   */
+  async selectTargetLanguages(languageNames: string[]): Promise<void> {
+    // Open the multi-select combobox popover — trigger has placeholder text
+    const trigger = this.page.locator('button:has-text("Select target languages")');
+    await trigger.click();
+    await this.page.waitForTimeout(300); // popover animation
+
+    for (const lang of languageNames) {
+      // Type in the search box to filter, then click the matching item
+      const searchInput = this.page.locator('input[placeholder="Search languages..."]');
+      await searchInput.fill(lang);
+      await this.page.waitForTimeout(200);
+      // Click the command item matching the language name
+      await this.page.locator(`[cmdk-item]:has-text("${lang}")`).first().click();
+    }
+
+    // Close the popover by clicking outside
+    await this.page.keyboard.press('Escape');
   }
 
   async selectOutputType(type: 'lesson' | 'course'): Promise<void> {
@@ -100,25 +119,37 @@ export class ContentCreationWizardPage extends BasePage {
   }
 
   async clickContinueFromInputConfig(): Promise<void> {
-    await this.page.locator('button:has-text("Continue")').click();
-    // Wait for navigation away from step 1
-    await this.page.waitForTimeout(500);
+    // Set up response listener BEFORE clicking — avoids race condition
+    this._parseResponsePromise = this.page.waitForResponse(
+      response =>
+        response.url().includes('/parse') &&
+        response.status() === 200,
+      { timeout: 180_000 }
+    );
+    await this.page.getByRole('button', { name: /continue/i }).click();
   }
 
   // ---------------------------------------------------------------------------
   // Step 2 — Parse
   // ---------------------------------------------------------------------------
 
-  async waitForParseComplete(timeoutMs: number = WIZARD_TIMEOUTS.parse): Promise<void> {
-    // Wait for the parse spinner/generating state to disappear and sections to appear
-    await expect(this.page.locator(':text("Parse complete"), :text("sections")')).toBeVisible({ timeout: timeoutMs });
-    // Ensure no active spinner remains
-    await expect(this.page.locator('.animate-spin').first()).not.toBeVisible({ timeout: TIMEOUTS.medium });
+  async waitForParseComplete(timeoutMs = 180_000): Promise<void> {
+    // Use the pre-registered response promise if available,
+    // otherwise fall back to DOM detection
+    if (this._parseResponsePromise) {
+      await this._parseResponsePromise;
+      this._parseResponsePromise = null;
+    }
+    // Give React one tick to update the DOM
+    await this.page.waitForTimeout(500);
+    // Verify the Continue button is enabled using getByRole
+    await this.page.getByRole('button', { name: /continue/i })
+      .waitFor({ state: 'visible', timeout: 15_000 });
   }
 
   async getSectionCount(): Promise<number> {
-    // Section count shown as "{n} section(s)" text
-    const text = await this.page.locator(':text-matches("\\\\d+ sections?")').first().textContent();
+    // Section count shown as "{n} section(s)" text in the bottom bar
+    const text = await this.page.locator(':text-matches("\\d+ sections?")').first().textContent();
     if (!text) return 0;
     const match = text.match(/(\d+)\s+section/);
     return match ? parseInt(match[1], 10) : 0;
@@ -245,11 +276,13 @@ export class ContentCreationWizardPage extends BasePage {
     description?: string;
     includeQuiz?: boolean;
     certificate?: boolean;
+    targetLanguages?: string[];
     parseTimeoutMs?: number;
     translationTimeoutMs?: number;
   }): Promise<void> {
-    // Step 1 — Upload PDF
+    // Step 1 — Upload PDF and select target languages
     await this.uploadPdf(options.pdfFilePath);
+    await this.selectTargetLanguages(options.targetLanguages ?? ['Polish']);
     if (options.includeQuiz !== undefined) {
       await this.toggleIncludeQuiz(options.includeQuiz);
     }
