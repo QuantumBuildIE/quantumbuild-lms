@@ -149,12 +149,13 @@ export function CreateWizard() {
     [highestStep, wizardState.includeQuiz, hasTargetLanguages]
   );
 
-  // Filter out skipped steps from display
-  const visibleSteps = STEPS.filter((s) => {
-    if (s.id === 3 && !wizardState.includeQuiz) return false;
-    if (s.id === 5 && !hasTargetLanguages) return false;
-    return true;
-  });
+  // Mark skipped steps instead of filtering them out
+  const steps = STEPS.map((s) => ({
+    ...s,
+    skipped:
+      (s.id === 3 && !wizardState.includeQuiz) ||
+      (s.id === 5 && !hasTargetLanguages),
+  }));
 
   const handleCancel = () => {
     if (confirm('Are you sure you want to cancel? All progress will be lost.')) {
@@ -258,16 +259,16 @@ export function CreateWizard() {
       {/* Step Indicator */}
       <nav aria-label="Progress" className="mb-8">
         <ol className="flex items-center">
-          {visibleSteps.map((step, stepIdx) => (
+          {steps.map((step, stepIdx) => (
             <li
               key={step.id}
               className={cn(
                 'relative',
-                stepIdx !== visibleSteps.length - 1 ? 'flex-1 pr-8 sm:pr-20' : ''
+                stepIdx !== steps.length - 1 ? 'flex-1 pr-8 sm:pr-20' : ''
               )}
             >
               {/* Connector line */}
-              {stepIdx !== visibleSteps.length - 1 && (
+              {stepIdx !== steps.length - 1 && (
                 <div
                   className={cn(
                     'absolute left-7 top-4 -ml-px mt-0.5 h-0.5 w-full',
@@ -276,50 +277,68 @@ export function CreateWizard() {
                 />
               )}
 
-              <button
-                onClick={() => goToStep(step.id)}
-                disabled={step.id > highestStep}
-                className={cn(
-                  'group relative flex items-start',
-                  step.id > highestStep
-                    ? 'cursor-not-allowed'
-                    : 'cursor-pointer'
-                )}
-              >
-                <span className="flex h-9 items-center">
-                  <span
-                    className={cn(
-                      'relative z-10 flex h-8 w-8 items-center justify-center rounded-full',
-                      step.id < currentStep
-                        ? 'bg-primary text-primary-foreground'
-                        : step.id === currentStep
-                          ? 'border-2 border-primary bg-background text-primary'
-                          : 'border-2 border-muted bg-background text-muted-foreground'
-                    )}
-                  >
-                    {step.id < currentStep ? (
-                      <Check className="h-4 w-4" />
-                    ) : (
+              {step.skipped ? (
+                <div className="group relative flex items-start cursor-default">
+                  <span className="flex h-9 items-center">
+                    <span className="relative z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 border-muted/50 bg-muted/30 text-muted-foreground/50">
                       <span className="text-xs">{step.id}</span>
-                    )}
+                    </span>
                   </span>
-                </span>
-                <span className="ml-3 flex min-w-0 flex-col">
-                  <span
-                    className={cn(
-                      'text-sm font-medium',
-                      step.id <= currentStep
-                        ? 'text-primary'
-                        : 'text-muted-foreground'
-                    )}
-                  >
-                    {step.name}
+                  <span className="ml-3 flex min-w-0 flex-col">
+                    <span className="text-sm font-medium text-muted-foreground/50 line-through">
+                      {step.name}
+                    </span>
+                    <span className="hidden text-xs text-muted-foreground/40 sm:block">
+                      Skipped
+                    </span>
                   </span>
-                  <span className="hidden text-xs text-muted-foreground sm:block">
-                    {step.description}
+                </div>
+              ) : (
+                <button
+                  onClick={() => goToStep(step.id)}
+                  disabled={step.id > highestStep}
+                  className={cn(
+                    'group relative flex items-start',
+                    step.id > highestStep
+                      ? 'cursor-not-allowed'
+                      : 'cursor-pointer'
+                  )}
+                >
+                  <span className="flex h-9 items-center">
+                    <span
+                      className={cn(
+                        'relative z-10 flex h-8 w-8 items-center justify-center rounded-full',
+                        step.id < currentStep
+                          ? 'bg-primary text-primary-foreground'
+                          : step.id === currentStep
+                            ? 'border-2 border-primary bg-background text-primary'
+                            : 'border-2 border-muted bg-background text-muted-foreground'
+                      )}
+                    >
+                      {step.id < currentStep ? (
+                        <Check className="h-4 w-4" />
+                      ) : (
+                        <span className="text-xs">{step.id}</span>
+                      )}
+                    </span>
                   </span>
-                </span>
-              </button>
+                  <span className="ml-3 flex min-w-0 flex-col">
+                    <span
+                      className={cn(
+                        'text-sm font-medium',
+                        step.id <= currentStep
+                          ? 'text-primary'
+                          : 'text-muted-foreground'
+                      )}
+                    >
+                      {step.name}
+                    </span>
+                    <span className="hidden text-xs text-muted-foreground sm:block">
+                      {step.description}
+                    </span>
+                  </span>
+                </button>
+              )}
             </li>
           ))}
         </ol>

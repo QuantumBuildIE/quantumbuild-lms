@@ -230,12 +230,17 @@ export function SettingsStep({ state, onNext, onBack }: SettingsStepProps) {
           {isStartingValidation ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Starting Validation...
+              {state.targetLanguageCodes.length > 0 ? 'Starting Validation...' : 'Preparing...'}
             </>
-          ) : (
+          ) : state.targetLanguageCodes.length > 0 ? (
             <>
               <Languages className="mr-2 h-4 w-4" />
               Translate & Validate
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </>
+          ) : (
+            <>
+              Continue to Publish
               <ArrowRight className="ml-2 h-4 w-4" />
             </>
           )}

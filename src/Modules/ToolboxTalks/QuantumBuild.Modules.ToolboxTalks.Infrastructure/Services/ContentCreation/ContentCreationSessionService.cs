@@ -351,9 +351,6 @@ public class ContentCreationSessionService : IContentCreationSessionService
             session.Status != ContentCreationSessionStatus.QuizGenerated)
             throw new InvalidOperationException("Translation/validation can only start from Parsed, QuizGenerated, or Validated status");
 
-        if (request.TargetLanguageCodes.Count == 0)
-            throw new InvalidOperationException("At least one target language code is required");
-
         if (string.IsNullOrWhiteSpace(session.ParsedSectionsJson))
             throw new InvalidOperationException("No parsed sections available for validation");
 
@@ -538,6 +535,31 @@ public class ContentCreationSessionService : IContentCreationSessionService
                 draftTalk.VideoUrl = session.SourceFileUrl;
                 draftTalk.VideoSource = VideoSource.DirectUrl;
             }
+        }
+
+        // No target languages — sync the draft talk but skip translation/validation entirely
+        if (request.TargetLanguageCodes.Count == 0)
+        {
+            session.TargetLanguageCodes = JsonSerializer.Serialize(request.TargetLanguageCodes);
+            session.Status = ContentCreationSessionStatus.Validated;
+
+            if (newDraftTalk != null)
+            {
+                await SaveWithCodeRetryAsync(
+                    () => [newDraftTalk],
+                    tenantId,
+                    cancellationToken);
+            }
+            else
+            {
+                await _dbContext.SaveChangesAsync(cancellationToken);
+            }
+
+            _logger.LogInformation(
+                "[ContentCreationSession] No target languages — skipped translation/validation for session {SessionId}, TalkId: {TalkId}",
+                sessionId, talkId);
+
+            return MapToDto(session);
         }
 
         session.TargetLanguageCodes = JsonSerializer.Serialize(request.TargetLanguageCodes);
