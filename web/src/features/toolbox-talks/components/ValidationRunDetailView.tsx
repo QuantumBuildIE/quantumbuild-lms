@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ValidationProgressPanel } from './create-wizard/steps/validate/ValidationProgressPanel';
 import { ValidationSectionCard } from './create-wizard/steps/validate/ValidationSectionCard';
 import { RegulatoryScorePanel } from './RegulatoryScorePanel';
+import { PreFlightScanBanner } from './PreFlightScanBanner';
 import {
   useValidationRun,
   useCourseValidationRun,
@@ -227,6 +228,14 @@ export function ValidationRunDetailView({
         progressMessage={`${run.totalSections} / ${run.totalSections} sections`}
         isConnected={false}
       />
+
+      {/* Pre-flight scan banner */}
+      {run.preFlightScanJson && (
+        <PreFlightScanBanner
+          preFlightScanJson={run.preFlightScanJson}
+          storageKey={runId}
+        />
+      )}
 
       {/* Section results */}
       <div className="space-y-3">

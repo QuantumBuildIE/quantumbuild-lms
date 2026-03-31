@@ -20,6 +20,8 @@ import type {
   SectionValidationResult,
   ValidationOutcome,
   ReviewerDecision,
+  ReviewReason,
+  ReviewReasonType,
 } from '@/types/content-creation';
 
 // ============================================
@@ -94,6 +96,22 @@ function parseJsonSafe<T>(json: string | null, fallback: T): T {
   }
 }
 
+const reasonChipStyle: Record<ReviewReasonType, string> = {
+  RegistryViolation: 'border-red-300 bg-red-50 text-red-700',
+  GlossaryMismatch: 'border-amber-300 bg-amber-50 text-amber-700',
+  ArtefactDetected: 'border-amber-300 bg-amber-50 text-amber-700',
+  SafetyCriticalBump: 'border-purple-300 bg-purple-50 text-purple-700',
+  LowScore: 'border-gray-300 bg-gray-50 text-gray-600',
+};
+
+const reasonLabel: Record<ReviewReasonType, string> = {
+  RegistryViolation: 'Registry Violation',
+  GlossaryMismatch: 'Glossary Mismatch',
+  ArtefactDetected: 'Artefact Detected',
+  SafetyCriticalBump: 'Safety Bump',
+  LowScore: 'Low Score',
+};
+
 // ============================================
 // Component
 // ============================================
@@ -143,6 +161,18 @@ export function ValidationSectionCard({
     () => parseJsonSafe<string[]>(result?.criticalTerms ?? null, []),
     [result?.criticalTerms]
   );
+
+  const reviewReasons = useMemo(
+    () => parseJsonSafe<ReviewReason[]>(result?.reviewReasonsJson ?? null, []),
+    [result?.reviewReasonsJson]
+  );
+
+  const [expandedReasonIdx, setExpandedReasonIdx] = useState<number | null>(null);
+
+  const showReasonChips =
+    reviewReasons.length > 0 &&
+    result &&
+    (result.outcome === 'Review' || result.outcome === 'Fail');
 
   const agreement = result
     ? 100 - Math.abs(result.scoreA - result.scoreB)
@@ -523,6 +553,39 @@ export function ValidationSectionCard({
       )}
     >
       {renderHeader()}
+      {showReasonChips && (
+        <div className="flex flex-wrap gap-1.5 border-t border-dashed px-4 py-2">
+          {reviewReasons.map((reason, idx) => (
+            <button
+              key={idx}
+              type="button"
+              className={cn(
+                'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors',
+                reasonChipStyle[reason.type as ReviewReasonType] ??
+                  'border-gray-300 bg-gray-50 text-gray-600',
+                expandedReasonIdx === idx && 'ring-1 ring-offset-1'
+              )}
+              onClick={() =>
+                setExpandedReasonIdx(expandedReasonIdx === idx ? null : idx)
+              }
+            >
+              {reasonLabel[reason.type as ReviewReasonType] ?? reason.type}
+            </button>
+          ))}
+          {expandedReasonIdx !== null && reviewReasons[expandedReasonIdx] && (
+            <div className="mt-1 w-full rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              <span className="font-medium">
+                {reviewReasons[expandedReasonIdx].message}
+              </span>
+              {reviewReasons[expandedReasonIdx].detail && (
+                <span className="ml-1">
+                  &mdash; {reviewReasons[expandedReasonIdx].detail}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
       {renderBody()}
     </div>
   );

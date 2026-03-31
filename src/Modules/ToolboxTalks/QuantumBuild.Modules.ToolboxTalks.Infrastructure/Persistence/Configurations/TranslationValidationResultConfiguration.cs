@@ -89,6 +89,16 @@ public class TranslationValidationResultConfiguration : IEntityTypeConfiguration
         builder.Property(r => r.EffectiveThreshold)
             .IsRequired();
 
+        // Translation quality diagnostics
+        builder.Property(r => r.ArtefactsJson)
+            .HasColumnType("text");
+
+        builder.Property(r => r.RegistryViolationsJson)
+            .HasColumnType("text");
+
+        builder.Property(r => r.ReviewReasonsJson)
+            .HasColumnType("text");
+
         // Reviewer decision
         builder.Property(r => r.ReviewerDecision)
             .IsRequired()

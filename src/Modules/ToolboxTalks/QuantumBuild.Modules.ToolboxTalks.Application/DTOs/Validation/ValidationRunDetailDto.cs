@@ -33,6 +33,9 @@ public record ValidationRunDetailDto
     public string? ClientName { get; init; }
     public string? AuditPurpose { get; init; }
 
+    // Pre-flight scan
+    public string? PreFlightScanJson { get; init; }
+
     public DateTime? StartedAt { get; init; }
     public DateTime? CompletedAt { get; init; }
     public DateTime CreatedAt { get; init; }

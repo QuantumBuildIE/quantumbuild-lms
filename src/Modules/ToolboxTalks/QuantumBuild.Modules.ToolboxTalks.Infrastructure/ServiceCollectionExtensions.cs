@@ -16,9 +16,12 @@ using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Storage;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Subtitles;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Slideshow;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Translations;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.ArtefactScan;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.ContentCreation;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Mapping;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.PreFlightScan;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.SafetyTermRegistry;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Sectors;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Mapping;
@@ -230,6 +233,20 @@ public static class ServiceCollectionExtensions
 
         // Register validation report PDF generation service
         services.AddScoped<IValidationReportService, ValidationReportService>();
+
+        // Register artefact scan service for translation quality checks
+        services.AddScoped<IArtefactScanService, ArtefactScanService>();
+
+        // Register safety term registry for known-bad translation pattern detection
+        services.AddScoped<ISafetyTermRegistryService, SafetyTermRegistryService>();
+
+        // Register pre-flight scan service (Claude Haiku for source content analysis before translation)
+        services.AddHttpClient<IPreFlightScanService, PreFlightScanService>(client =>
+        {
+            client.Timeout = TimeSpan.FromMinutes(1);
+        })
+        .AddPolicyHandler((sp, _) => ResiliencePolicies.GetClaudePolicy(
+            sp.GetRequiredService<ILogger<PreFlightScanService>>()));
 
         // Register regulatory score service (Claude Sonnet for regulatory scoring)
         services.AddHttpClient<IRegulatoryScoreService, RegulatoryScoreService>(client =>

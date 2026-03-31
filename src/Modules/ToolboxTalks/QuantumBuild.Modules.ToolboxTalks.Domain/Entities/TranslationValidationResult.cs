@@ -43,6 +43,11 @@ public class TranslationValidationResult : BaseEntity
     public string? GlossaryMismatches { get; set; }
     public int EffectiveThreshold { get; set; }
 
+    // Translation quality diagnostics
+    public string? ArtefactsJson { get; set; }
+    public string? RegistryViolationsJson { get; set; }
+    public string? ReviewReasonsJson { get; set; }
+
     // Reviewer decision
     public ReviewerDecision ReviewerDecision { get; set; } = ReviewerDecision.Pending;
     public string? EditedTranslation { get; set; }

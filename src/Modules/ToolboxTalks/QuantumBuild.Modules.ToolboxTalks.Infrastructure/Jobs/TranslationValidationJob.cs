@@ -4,6 +4,7 @@ using Hangfire;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.PreFlightScan;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Translations;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
@@ -28,7 +29,13 @@ public class TranslationValidationJob
     private readonly IContentTranslationService _contentTranslationService;
     private readonly ILanguageCodeService _languageCodeService;
     private readonly ISafetyClassificationService _safetyClassificationService;
+    private readonly IPreFlightScanService _preFlightScanService;
     private readonly ILogger<TranslationValidationJob> _logger;
+
+    private static readonly JsonSerializerOptions CamelCaseOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
 
     public TranslationValidationJob(
         ITranslationValidationService validationService,
@@ -37,6 +44,7 @@ public class TranslationValidationJob
         IContentTranslationService contentTranslationService,
         ILanguageCodeService languageCodeService,
         ISafetyClassificationService safetyClassificationService,
+        IPreFlightScanService preFlightScanService,
         ILogger<TranslationValidationJob> logger)
     {
         _validationService = validationService;
@@ -45,6 +53,7 @@ public class TranslationValidationJob
         _contentTranslationService = contentTranslationService;
         _languageCodeService = languageCodeService;
         _safetyClassificationService = safetyClassificationService;
+        _preFlightScanService = preFlightScanService;
         _logger = logger;
     }
 
@@ -116,6 +125,9 @@ public class TranslationValidationJob
 
             run.TotalSections = sections.Count;
             await _dbContext.SaveChangesAsync(cancellationToken);
+
+            // Pre-flight scan — non-blocking, never fails the job
+            await RunPreFlightScanAsync(run, sections, cancellationToken);
 
             // Validate each section (upsert logic in ValidateSectionAsync handles retry scenarios)
             var results = new List<Domain.Entities.TranslationValidationResult>();
@@ -280,6 +292,46 @@ public class TranslationValidationJob
             await SendCompletionAsync(validationRunId, false, clientMessage);
 
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Runs a pre-flight scan on source section texts and stores the result on the run.
+    /// Non-blocking — logs errors and continues if the scan fails.
+    /// </summary>
+    private async Task RunPreFlightScanAsync(
+        Domain.Entities.TranslationValidationRun run,
+        List<SectionPair> sections,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await SendProgressAsync(run.Id, "PreFlight", 3, "Running pre-flight scan...");
+
+            var sectionTexts = sections.Select(s => s.OriginalText).ToList();
+
+            var languageName = await _languageCodeService.GetLanguageNameAsync(run.LanguageCode);
+
+            var result = await _preFlightScanService.ScanAsync(
+                sectionTexts, languageName, run.SectorKey, cancellationToken);
+
+            run.PreFlightScanJson = JsonSerializer.Serialize(result, CamelCaseOptions);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            var message = result.HasFindings
+                ? $"Pre-flight scan complete — {result.Findings.Count} suggestions found"
+                : "No pre-flight suggestions";
+
+            await SendProgressAsync(run.Id, "PreFlight", 5, message);
+
+            _logger.LogInformation(
+                "Pre-flight scan for run {RunId}: {Count} findings (HighRisk={HighRisk}, ProperNouns={ProperNouns}, RoleConstructs={RoleConstructs})",
+                run.Id, result.Findings.Count, result.HighRiskCount, result.ProperNounCount, result.RoleConstructCount);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Pre-flight scan failed for run {RunId} — continuing with validation", run.Id);
+            await SendProgressAsync(run.Id, "PreFlight", 5, "Pre-flight scan skipped (error)");
         }
     }
 

@@ -35,6 +35,11 @@ public record ValidationResultDto
     public string? GlossaryMismatches { get; init; }
     public int EffectiveThreshold { get; init; }
 
+    // Translation quality diagnostics
+    public string? ArtefactsJson { get; init; }
+    public string? RegistryViolationsJson { get; init; }
+    public string? ReviewReasonsJson { get; init; }
+
     // Reviewer decision
     public ReviewerDecision ReviewerDecision { get; init; }
     public string? EditedTranslation { get; init; }

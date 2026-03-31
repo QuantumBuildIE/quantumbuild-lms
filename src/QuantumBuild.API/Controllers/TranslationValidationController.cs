@@ -1,9 +1,11 @@
+using System.Text.Json;
 using Hangfire;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Core.Application.Models;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.PreFlightScan;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Storage;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Validation;
@@ -595,6 +597,65 @@ public class TranslationValidationController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Run a pre-flight scan on the talk's source sections before validation.
+    /// Stores the result on the most recent validation run (if one exists).
+    /// </summary>
+    [HttpPost("preflight")]
+    [Authorize(Policy = "Learnings.Admin")]
+    [ProducesResponseType(typeof(PreFlightScanResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RunPreFlightScan(
+        Guid talkId,
+        [FromBody] PreFlightScanRequest request,
+        [FromServices] IPreFlightScanService preFlightScanService,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var tenantId = _currentUserService.TenantId;
+
+            var talkExists = await _dbContext.ToolboxTalks
+                .AnyAsync(t => t.Id == talkId && t.TenantId == tenantId, cancellationToken);
+
+            if (!talkExists)
+                return NotFound(new { message = "Toolbox talk not found" });
+
+            // Load section texts
+            var sectionTexts = await _dbContext.ToolboxTalkSections
+                .Where(s => s.ToolboxTalkId == talkId)
+                .OrderBy(s => s.SectionNumber)
+                .Select(s => s.Content)
+                .ToListAsync(cancellationToken);
+
+            if (sectionTexts.Count == 0)
+                return Ok(new PreFlightScanResult([], HasFindings: false, HighRiskCount: 0, ProperNounCount: 0, RoleConstructCount: 0));
+
+            var result = await preFlightScanService.ScanAsync(
+                sectionTexts, request.TargetLanguage, request.SectorKey, cancellationToken);
+
+            // Store on the most recent validation run for audit trail
+            var mostRecentRun = await _dbContext.TranslationValidationRuns
+                .Where(r => r.ToolboxTalkId == talkId && r.TenantId == tenantId)
+                .OrderByDescending(r => r.CreatedAt)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (mostRecentRun != null)
+            {
+                mostRecentRun.PreFlightScanJson = JsonSerializer.Serialize(result,
+                    new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                await _dbContext.SaveChangesAsync(cancellationToken);
+            }
+
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error running pre-flight scan for talk {TalkId}", talkId);
+            return StatusCode(500, new { message = "Error running pre-flight scan" });
+        }
+    }
+
     #region Private Helpers
 
     private async Task<TranslationValidationResult?> GetValidationResultAsync(
@@ -638,6 +699,7 @@ public class TranslationValidationController : ControllerBase
             DocumentRef = run.DocumentRef,
             ClientName = run.ClientName,
             AuditPurpose = run.AuditPurpose,
+            PreFlightScanJson = run.PreFlightScanJson,
             StartedAt = run.StartedAt,
             CompletedAt = run.CompletedAt,
             CreatedAt = run.CreatedAt,

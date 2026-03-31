@@ -177,10 +177,43 @@ export interface ValidationRunDetail {
   documentRef: string | null;
   clientName: string | null;
   auditPurpose: string | null;
+  preFlightScanJson: string | null;
   startedAt: string | null;
   completedAt: string | null;
   createdAt: string;
   results: SectionValidationResult[];
+}
+
+// Pre-flight scan types
+export type PreFlightFindingType = 'HighRiskTerm' | 'ProperNoun' | 'RoleConstruct' | 'SlashConstruct';
+
+export interface PreFlightFinding {
+  type: PreFlightFindingType;
+  term: string;
+  risk: string;
+  suggestedTranslation: string | null;
+}
+
+export interface PreFlightScanResult {
+  findings: PreFlightFinding[];
+  hasFindings: boolean;
+  highRiskCount: number;
+  properNounCount: number;
+  roleConstructCount: number;
+}
+
+// Review reason types
+export type ReviewReasonType =
+  | 'RegistryViolation'
+  | 'GlossaryMismatch'
+  | 'ArtefactDetected'
+  | 'SafetyCriticalBump'
+  | 'LowScore';
+
+export interface ReviewReason {
+  type: ReviewReasonType;
+  message: string;
+  detail: string;
 }
 
 export interface SectionValidationResult {
@@ -205,6 +238,9 @@ export interface SectionValidationResult {
   criticalTerms: string | null;
   glossaryMismatches: string | null;
   effectiveThreshold: number;
+  artefactsJson: string | null;
+  registryViolationsJson: string | null;
+  reviewReasonsJson: string | null;
   reviewerDecision: ReviewerDecision;
   editedTranslation: string | null;
   decisionAt: string | null;

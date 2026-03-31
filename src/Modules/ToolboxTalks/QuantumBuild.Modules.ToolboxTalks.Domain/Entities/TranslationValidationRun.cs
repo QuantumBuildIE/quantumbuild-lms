@@ -36,6 +36,9 @@ public class TranslationValidationRun : TenantEntity
     public string? ClientName { get; set; }
     public string? AuditPurpose { get; set; }
 
+    // Pre-flight scan
+    public string? PreFlightScanJson { get; set; }
+
     // Run state
     public ValidationRunStatus Status { get; set; } = ValidationRunStatus.Pending;
     public DateTime? StartedAt { get; set; }

@@ -83,6 +83,10 @@ public class TranslationValidationRunConfiguration : IEntityTypeConfiguration<Tr
         builder.Property(r => r.AuditPurpose)
             .HasMaxLength(500);
 
+        // Pre-flight scan
+        builder.Property(r => r.PreFlightScanJson)
+            .HasColumnType("text");
+
         // Run state
         builder.Property(r => r.Status)
             .IsRequired()
