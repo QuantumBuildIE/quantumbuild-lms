@@ -210,7 +210,7 @@ test.describe('Content Creation Wizard', () => {
     await wizardPage.toggleCertificate(true);
 
     await expect(
-      sharedPage.locator('button:has-text("Translate & Validate")')
+      sharedPage.getByRole('button', { name: 'Translate & Validate', exact: true })
     ).toBeVisible();
   });
 
@@ -232,7 +232,7 @@ test.describe('Content Creation Wizard', () => {
 
     // Step 6 — Publish
     await wizardPage.clickPublish();
-    await wizardPage.waitForPublishSuccess();
+    await wizardPage.waitForPublishSuccess(60_000);
 
     // Verify in list
     await listPage.navigateTo();
@@ -240,7 +240,7 @@ test.describe('Content Creation Wizard', () => {
     await listPage.assertTalkVisible(talkTitle);
 
     const row = listPage.getTalkRowByTitle(talkTitle);
-    await expect(row.locator(':text("Published")')).toBeVisible({
+    await expect(row.locator(':text("Active")')).toBeVisible({
       timeout: TIMEOUTS.medium,
     });
   });

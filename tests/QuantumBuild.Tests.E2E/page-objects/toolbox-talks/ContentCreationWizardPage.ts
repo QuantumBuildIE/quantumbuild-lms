@@ -15,8 +15,6 @@ export class ContentCreationWizardPage extends BasePage {
   readonly stepNav: Locator;
   readonly backButton: Locator;
   readonly continueButton: Locator;
-  private _parseResponsePromise: Promise<any> | null = null;
-
   constructor(page: Page) {
     super(page);
     this.stepNav = page.locator('nav[aria-label="Progress"]');
@@ -28,15 +26,13 @@ export class ContentCreationWizardPage extends BasePage {
   // Step navigation helpers
   // ---------------------------------------------------------------------------
 
-  private getStepButton(stepName: string): Locator {
-    return this.stepNav.locator(`button:has-text("${stepName}")`);
+  private getStepButton(stepNumber: number): Locator {
+    // Position-based — avoids text matching ambiguity across browsers
+    return this.stepNav.locator('button').nth(stepNumber - 1);
   }
 
   async assertCurrentStep(stepNumber: number): Promise<void> {
-    const stepNames = ['Input & Config', 'Parse', 'Quiz', 'Settings', 'Translate & Validate', 'Publish'];
-    const name = stepNames[stepNumber - 1];
-    // The active step button should be visually distinct (primary colour)
-    await expect(this.getStepButton(name)).toBeVisible({ timeout: TIMEOUTS.medium });
+    await expect(this.getStepButton(stepNumber)).toBeVisible({ timeout: TIMEOUTS.medium });
   }
 
   async clickNext(): Promise<void> {
@@ -119,13 +115,6 @@ export class ContentCreationWizardPage extends BasePage {
   }
 
   async clickContinueFromInputConfig(): Promise<void> {
-    // Set up response listener BEFORE clicking — avoids race condition
-    this._parseResponsePromise = this.page.waitForResponse(
-      response =>
-        response.url().includes('/parse') &&
-        response.status() === 200,
-      { timeout: 180_000 }
-    );
     await this.page.getByRole('button', { name: /continue/i }).click();
   }
 
@@ -156,14 +145,17 @@ export class ContentCreationWizardPage extends BasePage {
   // ---------------------------------------------------------------------------
 
   async waitForQuizGeneration(timeoutMs: number = WIZARD_TIMEOUTS.parse): Promise<void> {
-    await expect(this.page.locator(':text("Generating quiz questions")')).not.toBeVisible({ timeout: timeoutMs });
+    // Wait for the "Questions (N)" heading — positive signal that generation finished
+    await this.page
+      .getByText(/Questions \(\d+\)/)
+      .waitFor({ state: 'visible', timeout: timeoutMs });
   }
 
   async getQuestionCount(): Promise<number> {
-    const heading = this.page.locator(':text-matches("Questions \\\\(\\\\d+\\\\)")');
-    const text = await heading.textContent();
+    const el = this.page.getByText(/Questions \(\d+\)/);
+    const text = await el.textContent();
     if (!text) return 0;
-    const match = text.match(/Questions\s*\((\d+)\)/);
+    const match = text.match(/\((\d+)\)/);
     return match ? parseInt(match[1], 10) : 0;
   }
 
@@ -208,7 +200,8 @@ export class ContentCreationWizardPage extends BasePage {
   }
 
   async clickTranslateAndValidate(): Promise<void> {
-    await this.page.locator('button:has-text("Translate & Validate")').click();
+    // Target the action button, not the step nav button
+    await this.page.getByRole('button', { name: 'Translate & Validate', exact: true }).click();
   }
 
   // ---------------------------------------------------------------------------
@@ -232,12 +225,13 @@ export class ContentCreationWizardPage extends BasePage {
   // ---------------------------------------------------------------------------
 
   async clickPublish(): Promise<void> {
-    await this.page.locator('button:has-text("Publish")').click();
+    // Target the action button, not the step nav button
+    await this.page.getByRole('button', { name: 'Publish', exact: true }).click();
   }
 
   async waitForPublishSuccess(timeoutMs: number = WIZARD_TIMEOUTS.publish): Promise<void> {
-    // Success state shows "Published" text with a check icon
-    await expect(this.page.locator(':text("Published")')).toBeVisible({ timeout: timeoutMs });
+    // Success heading is "Toolbox Talk Published" or "Course Published"
+    await expect(this.page.getByText(/Published/)).toBeVisible({ timeout: timeoutMs });
   }
 
   async clickViewTalk(): Promise<void> {
