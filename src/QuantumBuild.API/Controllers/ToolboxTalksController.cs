@@ -1610,6 +1610,54 @@ public class ToolboxTalksController : ControllerBase
     }
 
     #endregion
+
+    #region Regenerate Certificate
+
+    /// <summary>
+    /// Regenerate a certificate for a completed talk where generation previously failed
+    /// </summary>
+    [HttpPost("{talkId}/completions/{completionId}/regenerate-certificate")]
+    [Authorize(Policy = "Learnings.Admin")]
+    public async Task<IActionResult> RegenerateCertificate(
+        Guid talkId,
+        Guid completionId,
+        [FromServices] ICertificateGenerationService certificateService,
+        [FromServices] QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces.IToolboxTalksDbContext dbContext)
+    {
+        try
+        {
+            var completion = await dbContext.ScheduledTalkCompletions
+                .Include(c => c.ScheduledTalk)
+                    .ThenInclude(st => st.ToolboxTalk)
+                .FirstOrDefaultAsync(c => c.Id == completionId
+                    && c.ScheduledTalk.ToolboxTalkId == talkId
+                    && c.ScheduledTalk.TenantId == _currentUserService.TenantId);
+
+            if (completion == null)
+                return NotFound(new { message = "Completion record not found" });
+
+            var certificate = await certificateService.GenerateTalkCertificateAsync(
+                completion.ScheduledTalk,
+                completion.SignatureData,
+                HttpContext.RequestAborted);
+
+            if (certificate == null)
+                return UnprocessableEntity(new { message = "Certificate generation returned null. The talk may have GenerateCertificate disabled or the talk may be part of a course." });
+
+            completion.CertificateUrl = certificate.PdfStoragePath;
+            completion.CertificateGenerationFailed = false;
+            await dbContext.SaveChangesAsync(HttpContext.RequestAborted);
+
+            return Ok(new { certificateUrl = certificate.PdfStoragePath });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to regenerate certificate for completion {CompletionId}", completionId);
+            return UnprocessableEntity(new { message = $"Certificate generation failed: {ex.Message}" });
+        }
+    }
+
+    #endregion
 }
 
 /// <summary>

@@ -54,6 +54,10 @@ public class ScheduledTalkCompletionConfiguration : IEntityTypeConfiguration<Sch
         builder.Property(c => c.CertificateUrl)
             .HasMaxLength(500);
 
+        builder.Property(c => c.CertificateGenerationFailed)
+            .IsRequired()
+            .HasDefaultValue(false);
+
         // Geolocation when completed
         builder.Property(c => c.CompletedLatitude).HasPrecision(9, 6);
         builder.Property(c => c.CompletedLongitude).HasPrecision(9, 6);

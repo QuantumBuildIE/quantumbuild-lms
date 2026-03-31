@@ -168,7 +168,7 @@ public class ToolboxTalk : TenantEntity
     /// <summary>
     /// Whether to generate a certificate on completion of this talk
     /// </summary>
-    public bool GenerateCertificate { get; set; } = false;
+    public bool GenerateCertificate { get; set; } = true;
 
     // Refresher settings (Phase 4)
 

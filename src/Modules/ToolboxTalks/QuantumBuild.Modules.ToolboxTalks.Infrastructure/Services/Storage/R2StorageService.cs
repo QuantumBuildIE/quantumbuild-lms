@@ -76,13 +76,14 @@ public class R2StorageService : IR2StorageService, IDisposable
                 UseChunkEncoding = false
             };
 
+            var contentLength = content.Length;
             await _s3Client.PutObjectAsync(request, cancellationToken);
 
             var publicUrl = GeneratePublicUrl(tenantId, SubsFolder, fileName);
 
             _logger.LogInformation("Successfully uploaded subtitle: {Url}", publicUrl);
 
-            return R2UploadResult.SuccessResult(publicUrl, key, content.Length, "application/x-subrip");
+            return R2UploadResult.SuccessResult(publicUrl, key, contentLength, "application/x-subrip");
         }
         catch (Exception ex)
         {
@@ -138,13 +139,14 @@ public class R2StorageService : IR2StorageService, IDisposable
                 UseChunkEncoding = false
             };
 
+            var contentLength = content.Length;
             await _s3Client.PutObjectAsync(request, cancellationToken);
 
             var publicUrl = GeneratePublicUrl(tenantId, VideosFolder, fileName);
 
             _logger.LogInformation("Successfully uploaded video: {Url}", publicUrl);
 
-            return R2UploadResult.SuccessResult(publicUrl, key, content.Length, contentType);
+            return R2UploadResult.SuccessResult(publicUrl, key, contentLength, contentType);
         }
         catch (Exception ex)
         {
@@ -192,13 +194,14 @@ public class R2StorageService : IR2StorageService, IDisposable
                 UseChunkEncoding = false
             };
 
+            var contentLength = content.Length;
             await _s3Client.PutObjectAsync(request, cancellationToken);
 
             var publicUrl = GeneratePublicUrl(tenantId, PdfsFolder, fileName);
 
             _logger.LogInformation("Successfully uploaded PDF: {Url}", publicUrl);
 
-            return R2UploadResult.SuccessResult(publicUrl, key, content.Length, "application/pdf");
+            return R2UploadResult.SuccessResult(publicUrl, key, contentLength, "application/pdf");
         }
         catch (Exception ex)
         {
@@ -234,13 +237,14 @@ public class R2StorageService : IR2StorageService, IDisposable
                 UseChunkEncoding = false
             };
 
+            var contentLength = content.Length;
             await _s3Client.PutObjectAsync(request, cancellationToken);
 
             var publicUrl = GeneratePublicUrl(tenantId, CertificatesFolder, fileName);
 
             _logger.LogInformation("Successfully uploaded certificate: {Url}", publicUrl);
 
-            return R2UploadResult.SuccessResult(publicUrl, key, content.Length, "application/pdf");
+            return R2UploadResult.SuccessResult(publicUrl, key, contentLength, "application/pdf");
         }
         catch (Exception ex)
         {
@@ -276,13 +280,14 @@ public class R2StorageService : IR2StorageService, IDisposable
                 UseChunkEncoding = false
             };
 
+            var contentLength = content.Length;
             await _s3Client.PutObjectAsync(request, cancellationToken);
 
             var publicUrl = GeneratePublicUrl(tenantId, ValidationReportsFolder, fileName);
 
             _logger.LogInformation("Successfully uploaded validation report: {Url}", publicUrl);
 
-            return R2UploadResult.SuccessResult(publicUrl, key, content.Length, "application/pdf");
+            return R2UploadResult.SuccessResult(publicUrl, key, contentLength, "application/pdf");
         }
         catch (Exception ex)
         {
@@ -617,13 +622,14 @@ public class R2StorageService : IR2StorageService, IDisposable
                 UseChunkEncoding = false
             };
 
+            var contentLength = content.Length;
             await _s3Client.PutObjectAsync(request, cancellationToken);
 
             var publicUrl = $"{_settings.PublicUrl.TrimEnd('/')}/{Uri.EscapeDataString(key).Replace("%2F", "/")}";
 
             _logger.LogInformation("Successfully uploaded session file: {Url}", publicUrl);
 
-            return R2UploadResult.SuccessResult(publicUrl, key, content.Length, contentType);
+            return R2UploadResult.SuccessResult(publicUrl, key, contentLength, contentType);
         }
         catch (Exception ex)
         {

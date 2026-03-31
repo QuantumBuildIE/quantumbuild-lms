@@ -219,6 +219,19 @@ public class CompleteToolboxTalkCommandHandler : IRequestHandler<CompleteToolbox
                     completion.CertificateUrl = certificate.PdfStoragePath;
                     await _dbContext.SaveChangesAsync(cancellationToken);
                 }
+                else
+                {
+                    _logger.LogWarning(
+                        "Certificate generation returned null for ScheduledTalk {ScheduledTalkId} " +
+                        "(Talk {TalkId}, Employee {EmployeeId}). " +
+                        "Check CertificateGenerationService logs for the specific reason.",
+                        scheduledTalk.Id,
+                        scheduledTalk.ToolboxTalkId,
+                        scheduledTalk.EmployeeId);
+
+                    completion.CertificateGenerationFailed = true;
+                    await _dbContext.SaveChangesAsync(cancellationToken);
+                }
             }
             catch (Exception ex)
             {
@@ -243,6 +256,7 @@ public class CompleteToolboxTalkCommandHandler : IRequestHandler<CompleteToolbox
             IPAddress = completion.IPAddress,
             UserAgent = completion.UserAgent,
             CertificateUrl = completion.CertificateUrl,
+            CertificateGenerationFailed = completion.CertificateGenerationFailed,
             CompletedLatitude = completion.CompletedLatitude,
             CompletedLongitude = completion.CompletedLongitude,
             CompletedAccuracyMeters = completion.CompletedAccuracyMeters,

@@ -13,6 +13,7 @@ import {
   getToolboxTalkPreview,
   getToolboxTalkPreviewSlides,
   getAdminSlideshowHtml,
+  regenerateCertificate,
 } from './toolbox-talks';
 import type {
   GenerateTranslationsRequest,
@@ -166,5 +167,17 @@ export function useAdminSlideshowHtml(id: string, lang?: string, enabled = true)
     queryKey: [...TOOLBOX_TALKS_KEY, id, 'slideshow-html', lang],
     queryFn: () => getAdminSlideshowHtml(id, lang),
     enabled: !!id && enabled,
+  });
+}
+
+export function useRegenerateCertificate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ talkId, completionId }: { talkId: string; completionId: string }) =>
+      regenerateCertificate(talkId, completionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reports'] });
+      queryClient.invalidateQueries({ queryKey: TOOLBOX_TALKS_KEY });
+    },
   });
 }

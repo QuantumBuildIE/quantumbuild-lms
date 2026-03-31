@@ -24,6 +24,7 @@ public record ScheduledTalkCompletionDto
     public string? IPAddress { get; init; }
     public string? UserAgent { get; init; }
     public string? CertificateUrl { get; init; }
+    public bool CertificateGenerationFailed { get; init; }
 
     // Completion geolocation
     public double? CompletedLatitude { get; init; }

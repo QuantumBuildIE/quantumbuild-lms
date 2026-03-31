@@ -243,6 +243,7 @@ export interface ScheduledTalkCompletion {
   ipAddress: string | null;
   userAgent: string | null;
   certificateUrl: string | null;
+  certificateGenerationFailed: boolean;
   completedLatitude: number | null;
   completedLongitude: number | null;
   completedAccuracyMeters: number | null;
@@ -752,6 +753,7 @@ export interface CompletionDetail {
   signedAt: string;
   completedOnTime: boolean;
   certificateUrl: string | null;
+  certificateGenerationFailed: boolean;
   startedLatitude: number | null;
   startedLongitude: number | null;
   startedAccuracyMeters: number | null;

@@ -703,6 +703,7 @@ public class TestTenantSeeder
             MinimumVideoWatchPercent = 90,
             RequiresQuiz = false,
             IsActive = true,
+            GenerateCertificate = true,
             CreatedAt = DateTime.UtcNow,
             CreatedBy = "test-seeder",
             Sections = new List<ToolboxTalkSection>
@@ -768,6 +769,7 @@ public class TestTenantSeeder
             RequiresQuiz = true,
             PassingScore = 80,
             IsActive = true,
+            GenerateCertificate = true,
             CreatedAt = DateTime.UtcNow,
             CreatedBy = "test-seeder",
             Sections = new List<ToolboxTalkSection>
@@ -889,6 +891,7 @@ public class TestTenantSeeder
             MinimumVideoWatchPercent = 90,
             RequiresQuiz = false,
             IsActive = true,
+            GenerateCertificate = true,
             CreatedAt = DateTime.UtcNow,
             CreatedBy = "test-seeder",
             Sections = new List<ToolboxTalkSection>

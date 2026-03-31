@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { format } from 'date-fns';
-import { CheckCircle, Download, ChevronLeft, ChevronRight, MapPin } from 'lucide-react';
+import { CheckCircle, Download, ChevronLeft, ChevronRight, MapPin, RefreshCw, AlertCircle } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -24,9 +24,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { useCompletionsReport, useExportCompletionsReport } from '@/lib/api/toolbox-talks';
+import { useCompletionsReport, useExportCompletionsReport, useRegenerateCertificate } from '@/lib/api/toolbox-talks';
 import { useSites } from '@/lib/api/admin/use-sites';
 import { useToolboxTalks } from '@/lib/api/toolbox-talks';
+import { usePermission } from '@/lib/auth/use-auth';
 import { toast } from 'sonner';
 
 export default function AdminCompletionsReportPage() {
@@ -52,6 +53,8 @@ export default function AdminCompletionsReportPage() {
   const { data: sitesData } = useSites();
   const { data: talksData } = useToolboxTalks({ isActive: true });
   const exportReport = useExportCompletionsReport();
+  const regenerateMutation = useRegenerateCertificate();
+  const canAdmin = usePermission('Learnings.Admin');
 
   const updateUrlParams = (updates: Record<string, string | null | undefined>) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -205,6 +208,7 @@ export default function AdminCompletionsReportPage() {
                 <TableHead className="text-center">Quiz Score</TableHead>
                 <TableHead className="text-center">On Time</TableHead>
                 <TableHead>Signed By</TableHead>
+                <TableHead className="text-center">Certificate</TableHead>
                 <TableHead>Location</TableHead>
               </TableRow>
             </TableHeader>
@@ -220,12 +224,13 @@ export default function AdminCompletionsReportPage() {
                     <TableCell><Skeleton className="h-4 w-20 mx-auto" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-16 mx-auto" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-16 mx-auto" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-28" /></TableCell>
                   </TableRow>
                 ))
               ) : (report?.items ?? []).length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-12">
+                  <TableCell colSpan={10} className="text-center py-12">
                     <div className="flex flex-col items-center gap-2">
                       <CheckCircle className="h-8 w-8 text-muted-foreground" />
                       <p className="text-muted-foreground">No completions found</p>
@@ -293,6 +298,46 @@ export default function AdminCompletionsReportPage() {
                           {format(new Date(item.signedAt), 'MMM dd, HH:mm')}
                         </div>
                       </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {item.certificateUrl ? (
+                        <a
+                          href={item.certificateUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline inline-flex items-center gap-1 text-xs"
+                        >
+                          <Download className="h-3 w-3" />
+                          PDF
+                        </a>
+                      ) : (item.certificateGenerationFailed || !item.certificateUrl) && canAdmin ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs gap-1"
+                          disabled={regenerateMutation.isPending}
+                          onClick={async () => {
+                            try {
+                              await regenerateMutation.mutateAsync({
+                                talkId: item.toolboxTalkId,
+                                completionId: item.completionId,
+                              });
+                              toast.success('Certificate regenerated');
+                            } catch (err) {
+                              const msg = err instanceof Error ? err.message : 'Failed to regenerate';
+                              toast.error('Regeneration failed', { description: msg });
+                            }
+                          }}
+                        >
+                          {item.certificateGenerationFailed && (
+                            <AlertCircle className="h-3 w-3 text-destructive" />
+                          )}
+                          <RefreshCw className="h-3 w-3" />
+                          Regenerate
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">-</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <div className="space-y-1">

@@ -454,6 +454,7 @@ export function TalkViewer({ scheduledTalkId }: TalkViewerProps) {
       ipAddress: null,
       userAgent: null,
       certificateUrl: talk.certificateUrl,
+      certificateGenerationFailed: false,
       completedLatitude: null,
       completedLongitude: null,
       completedAccuracyMeters: null,

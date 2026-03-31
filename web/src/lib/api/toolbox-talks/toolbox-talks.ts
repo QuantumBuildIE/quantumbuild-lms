@@ -464,3 +464,17 @@ export async function getAdminSlideshowHtml(
   );
   return response.data;
 }
+
+// ============================================
+// Regenerate Certificate
+// ============================================
+
+export async function regenerateCertificate(
+  talkId: string,
+  completionId: string
+): Promise<{ certificateUrl: string }> {
+  const response = await apiClient.post<{ certificateUrl: string }>(
+    `/toolbox-talks/${talkId}/completions/${completionId}/regenerate-certificate`
+  );
+  return response.data;
+}

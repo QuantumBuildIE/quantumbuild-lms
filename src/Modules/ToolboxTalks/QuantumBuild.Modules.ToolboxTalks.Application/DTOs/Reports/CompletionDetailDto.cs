@@ -115,6 +115,11 @@ public record CompletionDetailDto
     /// </summary>
     public string? CertificateUrl { get; init; }
 
+    /// <summary>
+    /// Whether certificate generation failed during completion
+    /// </summary>
+    public bool CertificateGenerationFailed { get; init; }
+
     // Start geolocation
     public double? StartedLatitude { get; init; }
     public double? StartedLongitude { get; init; }

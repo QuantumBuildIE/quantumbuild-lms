@@ -362,6 +362,7 @@ public class ToolboxTalkReportsService : IToolboxTalkReportsService
                 SignedAt = c.SignedAt,
                 CompletedOnTime = c.CompletedAt <= c.ScheduledTalk.DueDate,
                 CertificateUrl = c.CertificateUrl,
+                CertificateGenerationFailed = c.CertificateGenerationFailed,
                 StartedLatitude = c.ScheduledTalk.StartedLatitude,
                 StartedLongitude = c.ScheduledTalk.StartedLongitude,
                 StartedAccuracyMeters = c.ScheduledTalk.StartedAccuracyMeters,

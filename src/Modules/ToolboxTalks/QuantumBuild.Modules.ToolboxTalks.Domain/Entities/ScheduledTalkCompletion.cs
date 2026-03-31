@@ -78,6 +78,12 @@ public class ScheduledTalkCompletion : BaseEntity
     [MaxLength(500)]
     public string? CertificateUrl { get; set; }
 
+    /// <summary>
+    /// Whether certificate generation failed during completion.
+    /// Used to allow admin regeneration of certificates.
+    /// </summary>
+    public bool CertificateGenerationFailed { get; set; } = false;
+
     // Geolocation when completed
     public double? CompletedLatitude { get; set; }
     public double? CompletedLongitude { get; set; }
