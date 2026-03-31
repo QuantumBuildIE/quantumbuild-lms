@@ -534,6 +534,58 @@ public class R2StorageService : IR2StorageService, IDisposable
         }
     }
 
+    public async Task DeleteAllTenantFilesAsync(
+        Guid tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var prefix = $"{tenantId}/";
+            var totalDeleted = 0;
+
+            _logger.LogInformation("Deleting all files for tenant {TenantId} with prefix {Prefix}",
+                tenantId, prefix);
+
+            var listRequest = new ListObjectsV2Request
+            {
+                BucketName = _settings.BucketName,
+                Prefix = prefix
+            };
+
+            do
+            {
+                var response = await _s3Client.ListObjectsV2Async(listRequest, cancellationToken);
+
+                if (response.S3Objects.Count == 0)
+                    break;
+
+                var keysToDelete = response.S3Objects
+                    .Select(obj => new KeyVersion { Key = obj.Key })
+                    .ToList();
+
+                var deleteRequest = new DeleteObjectsRequest
+                {
+                    BucketName = _settings.BucketName,
+                    Objects = keysToDelete
+                };
+
+                await _s3Client.DeleteObjectsAsync(deleteRequest, cancellationToken);
+                totalDeleted += keysToDelete.Count;
+
+                listRequest.ContinuationToken = response.NextContinuationToken;
+            }
+            while (listRequest.ContinuationToken != null);
+
+            _logger.LogInformation("Deleted {Count} total files for tenant {TenantId}",
+                totalDeleted, tenantId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete all files for tenant {TenantId}", tenantId);
+            throw;
+        }
+    }
+
     #endregion
 
     #region Session Files

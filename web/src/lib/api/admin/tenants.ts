@@ -122,3 +122,7 @@ export async function updateTenantStatus(
   );
   return response.data.data;
 }
+
+export async function resetTenantData(id: string): Promise<void> {
+  await apiClient.post(`/tenants/${id}/reset-data`);
+}

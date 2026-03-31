@@ -161,6 +161,17 @@ public class FakeR2StorageService : IR2StorageService
             $"https://fake-r2.test/{key}", key, bytes.Length, contentType));
     }
 
+    public Task DeleteAllTenantFilesAsync(
+        Guid tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        var prefix = $"{tenantId}/";
+        var keysToRemove = _files.Keys.Where(k => k.StartsWith(prefix)).ToList();
+        foreach (var key in keysToRemove)
+            _files.Remove(key);
+        return Task.CompletedTask;
+    }
+
     public Task DeleteSessionFilesAsync(
         Guid tenantId,
         Guid sessionId,

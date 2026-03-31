@@ -25,12 +25,14 @@ import {
 import { TenantForm } from "@/components/admin/tenant-form";
 import { TenantModulesCard } from "@/components/admin/tenant-modules-card";
 import { TenantSectorsCard } from "@/components/admin/tenant-sectors-card";
-import { useTenant, useUpdateTenantStatus } from "@/lib/api/admin/use-tenants";
+import { TypeToConfirmDialog } from "@/components/shared/type-to-confirm-dialog";
+import { useTenant, useUpdateTenantStatus, useResetTenantData } from "@/lib/api/admin/use-tenants";
 import { useIsSuperUser } from "@/lib/auth/use-auth";
 import type { TenantStatus } from "@/types/admin";
 import { ChevronLeft } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { useState } from "react";
 
 const statusVariant: Record<TenantStatus, "default" | "secondary" | "destructive"> = {
   Active: "default",
@@ -67,6 +69,8 @@ export default function TenantDetailPage() {
 
   const { data: tenant, isLoading, error } = useTenant(tenantId);
   const updateStatus = useUpdateTenantStatus();
+  const resetData = useResetTenantData();
+  const [showResetDialog, setShowResetDialog] = useState(false);
 
   const handleSuccess = () => {
     router.push("/admin/tenants");
@@ -264,6 +268,65 @@ export default function TenantDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Danger Zone */}
+      <Card className="border-destructive">
+        <CardHeader>
+          <CardTitle className="text-destructive">Danger Zone</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-medium">Reset Training Data</p>
+              <p className="text-sm text-muted-foreground">
+                Permanently deletes all talks, courses, schedules, assignments,
+                completions, certificates and AI usage logs for this tenant.
+                This cannot be undone.
+              </p>
+            </div>
+            <Button
+              variant="destructive"
+              onClick={() => setShowResetDialog(true)}
+            >
+              Reset Training Data
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <TypeToConfirmDialog
+        open={showResetDialog}
+        onOpenChange={setShowResetDialog}
+        title="Reset Tenant Training Data"
+        description={
+          <span>
+            This will permanently delete <strong>all training data</strong> for{" "}
+            <strong>{tenant.name}</strong>, including talks, courses, schedules,
+            assignments, completions, certificates, validation runs, AI usage
+            logs, and all associated files in R2 storage. This action cannot be
+            undone.
+          </span>
+        }
+        confirmPhrase={tenant.name}
+        confirmLabel="Reset Training Data"
+        destructiveMessage="This is a destructive operation that cannot be reversed."
+        isLoading={resetData.isPending}
+        onConfirm={() => {
+          resetData.mutate(tenantId, {
+            onSuccess: () => {
+              toast.success("Training data reset successfully");
+              setShowResetDialog(false);
+            },
+            onError: (error) => {
+              toast.error(
+                error instanceof Error
+                  ? error.message
+                  : "Failed to reset training data"
+              );
+            },
+          });
+        }}
+      />
     </div>
   );
 }

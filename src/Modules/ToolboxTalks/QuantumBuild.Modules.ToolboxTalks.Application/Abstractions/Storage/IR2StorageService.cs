@@ -132,6 +132,14 @@ public interface IR2StorageService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Deletes all files stored under a tenant's prefix.
+    /// Used for complete tenant data removal.
+    /// </summary>
+    Task DeleteAllTenantFilesAsync(
+        Guid tenantId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Generates the public URL for a file in the R2 bucket.
     /// </summary>
     string GeneratePublicUrl(Guid tenantId, string folder, string fileName);

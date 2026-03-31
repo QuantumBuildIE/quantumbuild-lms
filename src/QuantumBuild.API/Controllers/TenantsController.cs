@@ -1,7 +1,10 @@
+using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using QuantumBuild.Core.Application.Features.Tenants;
 using QuantumBuild.Core.Application.Features.Tenants.DTOs;
+using QuantumBuild.Core.Application.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Application.Commands;
 
 namespace QuantumBuild.API.Controllers;
 
@@ -12,11 +15,22 @@ public class TenantsController : ControllerBase
 {
     private readonly ITenantService _tenantService;
     private readonly ITenantOnboardingService _onboardingService;
+    private readonly IMediator _mediator;
+    private readonly ICurrentUserService _currentUserService;
+    private readonly ILogger<TenantsController> _logger;
 
-    public TenantsController(ITenantService tenantService, ITenantOnboardingService onboardingService)
+    public TenantsController(
+        ITenantService tenantService,
+        ITenantOnboardingService onboardingService,
+        IMediator mediator,
+        ICurrentUserService currentUserService,
+        ILogger<TenantsController> logger)
     {
         _tenantService = tenantService;
         _onboardingService = onboardingService;
+        _mediator = mediator;
+        _currentUserService = currentUserService;
+        _logger = logger;
     }
 
     [HttpGet]
@@ -92,5 +106,21 @@ public class TenantsController : ControllerBase
             return NotFound(result);
 
         return Ok(result);
+    }
+
+    [HttpPost("{id:guid}/reset-data")]
+    public async Task<IActionResult> ResetData(Guid id)
+    {
+        var tenant = await _tenantService.GetByIdAsync(id);
+        if (!tenant.Success)
+            return NotFound(tenant);
+
+        var result = await _mediator.Send(new ResetTenantDataCommand(id));
+        if (!result.Success)
+            return BadRequest(result);
+
+        _logger.LogInformation("Tenant {TenantId} data reset by {UserId}", id, _currentUserService.UserId);
+
+        return Ok(new { message = "Tenant data reset successfully", tenantId = id });
     }
 }

@@ -5,6 +5,7 @@ import {
   createTenant,
   updateTenant,
   updateTenantStatus,
+  resetTenantData,
   type CreateTenantDto,
   type UpdateTenantDto,
   type UpdateTenantStatusDto,
@@ -62,6 +63,17 @@ export function useUpdateTenantStatus() {
       id: string;
       data: UpdateTenantStatusDto;
     }) => updateTenantStatus(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: TENANTS_KEY });
+    },
+  });
+}
+
+export function useResetTenantData() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => resetTenantData(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: TENANTS_KEY });
     },
