@@ -860,18 +860,6 @@ export function InputConfigStep({
           </AlertDescription>
         </Alert>
       )}
-      {state.inputMode &&
-        languages.length > 0 &&
-        state.targetLanguageCodes.length === 0 && (
-          <Alert>
-            <Info className="h-4 w-4" />
-            <AlertDescription>
-              Select at least one target language to enable translation
-              validation.
-            </AlertDescription>
-          </Alert>
-        )}
-
       {/* Actions */}
       <div className="flex items-center justify-between pt-2">
         <Button variant="outline" onClick={onCancel}>
