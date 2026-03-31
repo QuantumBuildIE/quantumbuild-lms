@@ -37,6 +37,7 @@ import { useLookupValues } from '@/hooks/use-lookups';
 import { useAllCompanies } from '@/lib/api/admin/use-companies';
 import { useTenantSectors, useAvailableSectors } from '@/lib/api/admin/use-tenant-sectors';
 import { useCreateSession, useUploadSessionFile, useUpdateSource } from '@/lib/api/toolbox-talks/use-content-creation';
+import { useAvailableLanguages } from '@/lib/api/toolbox-talks/use-subtitle-processing';
 import { useTenantSettings } from '@/lib/api/admin/use-tenant-settings';
 import type { WizardState } from '../CreateWizard';
 import type { InputMode } from '@/types/content-creation';
@@ -95,6 +96,9 @@ export function InputConfigStep({
     useAllCompanies();
   const { data: tenantSettings } = useTenantSettings();
 
+  // Employee preferred languages (for auto-populating target languages)
+  const { data: availableLanguages } = useAvailableLanguages();
+
   // Sector data
   const tenantId = user?.tenantId ?? '';
   const {
@@ -149,6 +153,17 @@ export function InputConfigStep({
       });
     }
   }, [user, state.reviewerName, updateState]);
+
+  // Auto-populate target languages from employee preferred languages
+  useEffect(() => {
+    if (!availableLanguages || state.targetLanguageCodes.length > 0) return;
+    const codes = availableLanguages.employeeLanguages
+      .filter((l) => l.employeeCount > 0 && l.languageCode !== 'en')
+      .map((l) => l.languageCode);
+    if (codes.length > 0) {
+      updateState({ targetLanguageCodes: codes });
+    }
+  }, [availableLanguages, state.targetLanguageCodes.length, updateState]);
 
   // Auto-select sector when tenant has exactly one, or default
   useEffect(() => {
@@ -244,7 +259,6 @@ export function InputConfigStep({
 
   const canContinue =
     !!state.inputMode &&
-    state.targetLanguageCodes.length > 0 &&
     (!sectorRequired || !!state.sectorKey) &&
     (state.inputMode === 'Text'
       ? state.sourceText.trim().length > 0

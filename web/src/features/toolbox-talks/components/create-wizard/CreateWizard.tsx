@@ -111,40 +111,50 @@ export function CreateWizard() {
     setWizardState((prev) => ({ ...prev, ...updates }));
   }, []);
 
+  const hasTargetLanguages = wizardState.targetLanguageCodes.length > 0;
+
   const goToNextStep = useCallback(() => {
     setCurrentStep((prev) => {
       let next = Math.min(prev + 1, 6) as WizardStep;
       // Skip Quiz step when quiz is excluded
       if (next === 3 && !wizardState.includeQuiz) next = 4 as WizardStep;
+      // Skip Translate & Validate step when no target languages
+      if (next === 5 && !hasTargetLanguages) next = 6 as WizardStep;
       setHighestStep((h) => Math.max(h, next) as WizardStep);
       return next;
     });
-  }, [wizardState.includeQuiz]);
+  }, [wizardState.includeQuiz, hasTargetLanguages]);
 
   const goToPreviousStep = useCallback(() => {
     setCurrentStep((prev) => {
       let next = Math.max(prev - 1, 1) as WizardStep;
       // Skip Quiz step when quiz is excluded
       if (next === 3 && !wizardState.includeQuiz) next = 2 as WizardStep;
+      // Skip Translate & Validate step when no target languages
+      if (next === 5 && !hasTargetLanguages) next = 4 as WizardStep;
       return next;
     });
-  }, [wizardState.includeQuiz]);
+  }, [wizardState.includeQuiz, hasTargetLanguages]);
 
   const goToStep = useCallback(
     (step: WizardStep) => {
       // Prevent navigating to Quiz step when quiz is excluded
       if (step === 3 && !wizardState.includeQuiz) return;
+      // Prevent navigating to Translate & Validate step when no target languages
+      if (step === 5 && !hasTargetLanguages) return;
       if (step <= highestStep) {
         setCurrentStep(step);
       }
     },
-    [highestStep, wizardState.includeQuiz]
+    [highestStep, wizardState.includeQuiz, hasTargetLanguages]
   );
 
-  // Filter out Quiz step from display when quiz is excluded
-  const visibleSteps = wizardState.includeQuiz
-    ? STEPS
-    : STEPS.filter((s) => s.id !== 3);
+  // Filter out skipped steps from display
+  const visibleSteps = STEPS.filter((s) => {
+    if (s.id === 3 && !wizardState.includeQuiz) return false;
+    if (s.id === 5 && !hasTargetLanguages) return false;
+    return true;
+  });
 
   const handleCancel = () => {
     if (confirm('Are you sure you want to cancel? All progress will be lost.')) {
