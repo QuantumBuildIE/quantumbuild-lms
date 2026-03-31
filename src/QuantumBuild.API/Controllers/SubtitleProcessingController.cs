@@ -75,6 +75,7 @@ public class SubtitleProcessingController : ControllerBase
                 request.VideoUrl,
                 request.VideoSourceType,
                 request.TargetLanguages,
+                cachedTranscriptWordsJson: null,
                 cancellationToken);
 
             return Accepted(new StartProcessingResponse

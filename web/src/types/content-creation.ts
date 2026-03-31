@@ -8,6 +8,7 @@ export type OutputType = 'Lesson' | 'Course';
 
 export type ContentCreationSessionStatus =
   | 'Draft'
+  | 'Transcribing'
   | 'Parsing'
   | 'Parsed'
   | 'GeneratingQuiz'

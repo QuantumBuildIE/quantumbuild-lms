@@ -22,6 +22,7 @@ public interface ISubtitleProcessingOrchestrator
     /// <param name="videoUrl">URL to the video file</param>
     /// <param name="sourceType">Type of video source</param>
     /// <param name="targetLanguages">Languages to translate to (English is always included)</param>
+    /// <param name="cachedTranscriptWordsJson">Optional cached transcript words JSON to skip ElevenLabs transcription</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>The ID of the created processing job</returns>
     Task<Guid> StartProcessingAsync(
@@ -29,6 +30,7 @@ public interface ISubtitleProcessingOrchestrator
         string videoUrl,
         SubtitleVideoSourceType sourceType,
         List<string> targetLanguages,
+        string? cachedTranscriptWordsJson = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

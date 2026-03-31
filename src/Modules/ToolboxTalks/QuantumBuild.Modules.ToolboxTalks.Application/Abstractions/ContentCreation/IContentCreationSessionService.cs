@@ -180,6 +180,8 @@ public record ContentCreationSessionDto
     public string? QuizSettingsJson { get; init; }
     public string? SettingsJson { get; init; }
     public string? SubtitleJobId { get; init; }
+    public string? TranscriptWordsJson { get; init; }
+    public string? TranscriptionJobId { get; init; }
     public DateTime CreatedAt { get; init; }
     public DateTime? UpdatedAt { get; init; }
 }

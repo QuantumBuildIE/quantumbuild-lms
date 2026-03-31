@@ -128,6 +128,8 @@ builder.Services.AddScoped<TranslationValidationJob>();
 builder.Services.AddScoped<DailyTranslationScanJob>();
 builder.Services.AddScoped<ExpiredSessionCleanupJob>();
 builder.Services.AddScoped<LessonParseJob>();
+builder.Services.AddScoped<VideoTranscriptionJob>();
+builder.Services.AddScoped<ContentCreationParseJob>();
 builder.Services.AddScoped<RequirementIngestionJob>();
 builder.Services.AddScoped<AggregateAiUsageJob>();
 

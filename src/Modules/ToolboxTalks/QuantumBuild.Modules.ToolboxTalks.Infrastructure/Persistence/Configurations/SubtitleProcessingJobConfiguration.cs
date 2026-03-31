@@ -54,6 +54,9 @@ public class SubtitleProcessingJobConfiguration : IEntityTypeConfiguration<Subti
         builder.Property(j => j.EnglishSrtUrl)
             .HasMaxLength(500);
 
+        builder.Property(j => j.CachedTranscriptWordsJson)
+            .HasColumnType("text");
+
         builder.Property(j => j.TenantId)
             .IsRequired();
 

@@ -80,6 +80,7 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
   const pollStartRef = useRef<number | null>(null);
   const slowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
+  const lastLoggedStatusRef = useRef<string | null>(null);
 
   // Polling timeout: 90 seconds to accommodate Polly retries (3 × 8s backoff)
   const POLL_TIMEOUT_MS = 90_000;
@@ -120,10 +121,14 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
     // Guard: only trigger parse/polling once
     if (parseTriggered.current) return;
 
-    // Already parsing — just start polling
-    if (status === 'Parsing') {
+    // Already transcribing or parsing — just start polling
+    if (status === 'Transcribing' || status === 'Parsing') {
       parseTriggered.current = true;
-      addLog('Resuming — parse already in progress...');
+      addLog(
+        status === 'Transcribing'
+          ? 'Resuming — video transcription in progress...'
+          : 'Resuming — parse already in progress...'
+      );
       startPolling();
       return;
     }
@@ -218,6 +223,7 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
     setIsPolling(true);
     setIsTakingLong(false);
     pollStartRef.current = Date.now();
+    lastLoggedStatusRef.current = null;
 
     if (pollIntervalRef.current) {
       clearInterval(pollIntervalRef.current);
@@ -250,6 +256,14 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
         if (!mountedRef.current || !freshSession) return;
 
         const status = freshSession.status as ContentCreationSessionStatus;
+
+        if (status === 'Transcribing' && lastLoggedStatusRef.current !== 'Transcribing') {
+          lastLoggedStatusRef.current = 'Transcribing';
+          addLog('Transcribing video audio... This may take a few minutes for large files.');
+        } else if (status === 'Parsing' && lastLoggedStatusRef.current !== 'Parsing') {
+          lastLoggedStatusRef.current = 'Parsing';
+          addLog('Parsing content...');
+        }
 
         if (status === 'Parsed') {
           stopPolling();

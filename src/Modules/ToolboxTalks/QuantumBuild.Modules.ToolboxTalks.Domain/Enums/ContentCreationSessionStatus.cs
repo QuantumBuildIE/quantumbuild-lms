@@ -15,5 +15,6 @@ public enum ContentCreationSessionStatus
     Publishing = 8,
     Completed = 9,
     Abandoned = 10,
-    Failed = 11
+    Failed = 11,
+    Transcribing = 12
 }

@@ -64,6 +64,13 @@ public class ContentCreationSession : TenantEntity
     // Subtitle processing — tracks the subtitle job spawned during content creation
     public string? SubtitleJobId { get; set; }
 
+    // Transcription reuse — stores full word-level transcript (Start, End, Text, Type per word)
+    // so subtitle processing can reuse the parse transcription instead of calling ElevenLabs again
+    public string? TranscriptWordsJson { get; set; }
+
+    // Hangfire job ID for background transcription so the session can track progress
+    public string? TranscriptionJobId { get; set; }
+
     // Navigation
     public ToolboxTalk? OutputTalk { get; set; }
     public ToolboxTalkCourse? OutputCourse { get; set; }

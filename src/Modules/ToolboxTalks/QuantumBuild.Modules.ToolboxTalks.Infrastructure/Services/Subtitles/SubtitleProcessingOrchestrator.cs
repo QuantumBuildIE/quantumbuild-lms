@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -25,6 +26,12 @@ namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Subtitles;
 /// </summary>
 public class SubtitleProcessingOrchestrator : ISubtitleProcessingOrchestrator
 {
+    private static readonly JsonSerializerOptions CamelCaseJson = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true
+    };
+
     private readonly IToolboxTalksDbContext _dbContext;
     private readonly IVideoSourceProvider _videoSourceProvider;
     private readonly ITranscriptionService _transcriptionService;
@@ -69,6 +76,7 @@ public class SubtitleProcessingOrchestrator : ISubtitleProcessingOrchestrator
         string videoUrl,
         SubtitleVideoSourceType sourceType,
         List<string> targetLanguages,
+        string? cachedTranscriptWordsJson = null,
         CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Starting subtitle processing for ToolboxTalk {TalkId}", toolboxTalkId);
@@ -104,7 +112,8 @@ public class SubtitleProcessingOrchestrator : ISubtitleProcessingOrchestrator
             SourceVideoUrl = videoUrl,
             VideoSourceType = resolvedSourceType,
             Status = SubtitleProcessingStatus.Pending,
-            StartedAt = DateTime.UtcNow
+            StartedAt = DateTime.UtcNow,
+            CachedTranscriptWordsJson = cachedTranscriptWordsJson
         };
 
         // Add English as the first translation (source)
@@ -161,35 +170,57 @@ public class SubtitleProcessingOrchestrator : ISubtitleProcessingOrchestrator
         {
             _logger.LogInformation("Processing job {JobId} for ToolboxTalk {TalkId}", jobId, job.ToolboxTalkId);
 
-            // Step 1: Get direct video URL
-            await UpdateStatusAsync(job, SubtitleProcessingStatus.Transcribing, "Getting video URL...", 2, cancellationToken);
+            List<TranscriptWord> transcriptWords;
 
-            var videoResult = await _videoSourceProvider.GetDirectUrlAsync(
-                job.SourceVideoUrl, job.VideoSourceType, cancellationToken);
-
-            if (!videoResult.Success)
+            // Check for cached transcript words — skip ElevenLabs if available
+            if (!string.IsNullOrEmpty(job.CachedTranscriptWordsJson))
             {
-                await FailJobAsync(job, $"Failed to get video URL: {videoResult.ErrorMessage}", cancellationToken);
-                return;
+                _logger.LogInformation("Job {JobId} has cached transcript — skipping ElevenLabs transcription", jobId);
+                await UpdateStatusAsync(job, SubtitleProcessingStatus.Transcribing, "Using cached transcription...", 5, cancellationToken);
+
+                transcriptWords = JsonSerializer.Deserialize<List<TranscriptWord>>(
+                    job.CachedTranscriptWordsJson, CamelCaseJson) ?? [];
+
+                if (transcriptWords.Count == 0)
+                {
+                    await FailJobAsync(job, "Cached transcript words JSON deserialized to an empty list", cancellationToken);
+                    return;
+                }
             }
-
-            // Step 2: Transcribe video
-            await UpdateStatusAsync(job, SubtitleProcessingStatus.Transcribing, "Transcribing audio...", 5, cancellationToken);
-
-            var transcriptionResult = await _transcriptionService.TranscribeAsync(
-                videoResult.DirectUrl!, cancellationToken);
-
-            if (!transcriptionResult.Success)
+            else
             {
-                await FailJobAsync(job, $"Transcription failed: {transcriptionResult.ErrorMessage}", cancellationToken);
-                return;
+                // Step 1: Get direct video URL
+                await UpdateStatusAsync(job, SubtitleProcessingStatus.Transcribing, "Getting video URL...", 2, cancellationToken);
+
+                var videoResult = await _videoSourceProvider.GetDirectUrlAsync(
+                    job.SourceVideoUrl, job.VideoSourceType, cancellationToken);
+
+                if (!videoResult.Success)
+                {
+                    await FailJobAsync(job, $"Failed to get video URL: {videoResult.ErrorMessage}", cancellationToken);
+                    return;
+                }
+
+                // Step 2: Transcribe video
+                await UpdateStatusAsync(job, SubtitleProcessingStatus.Transcribing, "Transcribing audio...", 5, cancellationToken);
+
+                var transcriptionResult = await _transcriptionService.TranscribeAsync(
+                    videoResult.DirectUrl!, cancellationToken);
+
+                if (!transcriptionResult.Success)
+                {
+                    await FailJobAsync(job, $"Transcription failed: {transcriptionResult.ErrorMessage}", cancellationToken);
+                    return;
+                }
+
+                transcriptWords = transcriptionResult.Words;
             }
 
             // Step 3: Generate English SRT
             await UpdateStatusAsync(job, SubtitleProcessingStatus.Transcribing, "Generating subtitles...", 10, cancellationToken);
 
             var englishSrt = _srtGeneratorService.GenerateSrt(
-                transcriptionResult.Words, _settings.WordsPerSubtitle);
+                transcriptWords, _settings.WordsPerSubtitle);
 
             job.EnglishSrtContent = englishSrt;
             job.TotalSubtitles = _srtGeneratorService.CountSubtitleBlocks(englishSrt);

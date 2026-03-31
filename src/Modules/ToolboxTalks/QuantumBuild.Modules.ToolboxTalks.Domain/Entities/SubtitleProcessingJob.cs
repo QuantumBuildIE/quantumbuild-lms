@@ -60,6 +60,12 @@ public class SubtitleProcessingJob : TenantEntity
     /// </summary>
     public string? EnglishSrtUrl { get; set; }
 
+    /// <summary>
+    /// Cached transcript words JSON from a prior transcription (e.g. ContentCreationSession).
+    /// When set, ProcessAsync skips the ElevenLabs call and deserializes these words directly.
+    /// </summary>
+    public string? CachedTranscriptWordsJson { get; set; }
+
     // Navigation properties
 
     /// <summary>

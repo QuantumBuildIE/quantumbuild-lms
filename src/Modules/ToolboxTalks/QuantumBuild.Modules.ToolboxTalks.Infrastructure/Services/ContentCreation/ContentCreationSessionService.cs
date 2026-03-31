@@ -209,35 +209,45 @@ public class ContentCreationSessionService : IContentCreationSessionService
                 sessionId, pdfResult.PageCount, pdfResult.Text.Length);
         }
 
-        // Video mode: transcribe video if not already transcribed
-        if (session.InputMode == InputMode.Video && string.IsNullOrWhiteSpace(session.TranscriptText))
+        // Video mode: dispatch to background jobs instead of blocking the HTTP request
+        if (session.InputMode == InputMode.Video)
         {
-            if (string.IsNullOrWhiteSpace(session.SourceFileUrl))
-                throw new InvalidOperationException("No video file uploaded. Upload a video first.");
+            if (string.IsNullOrWhiteSpace(session.TranscriptText))
+            {
+                // No transcript yet — enqueue transcription (which chains to parse on completion)
+                if (string.IsNullOrWhiteSpace(session.SourceFileUrl))
+                    throw new InvalidOperationException("No video file uploaded. Upload a video first.");
 
-            _logger.LogInformation(
-                "[ContentCreationSession] Transcribing video for session {SessionId}, URL: {Url}",
-                sessionId, session.SourceFileUrl);
+                session.Status = ContentCreationSessionStatus.Transcribing;
+                await _dbContext.SaveChangesAsync(cancellationToken);
 
-            var transcriptionResult = await _transcriptionService.TranscribeAsync(
-                session.SourceFileUrl, cancellationToken);
+                var jobId = BackgroundJob.Enqueue<VideoTranscriptionJob>(
+                    job => job.ExecuteAsync(sessionId, tenantId, CancellationToken.None));
 
-            if (!transcriptionResult.Success)
-                throw new InvalidOperationException($"Video transcription failed: {transcriptionResult.ErrorMessage}");
+                session.TranscriptionJobId = jobId;
+                await _dbContext.SaveChangesAsync(cancellationToken);
 
-            var transcriptText = string.Join(" ", transcriptionResult.Words
-                .Where(w => w.Type == "word")
-                .Select(w => w.Text));
+                _logger.LogInformation(
+                    "[ContentCreationSession] Enqueued VideoTranscriptionJob {JobId} for session {SessionId}",
+                    jobId, sessionId);
 
-            if (string.IsNullOrWhiteSpace(transcriptText))
-                throw new InvalidOperationException("Video transcription returned no content.");
+                return MapToDto(session);
+            }
+            else
+            {
+                // Transcript already populated (retry path) — skip straight to parse
+                session.Status = ContentCreationSessionStatus.Parsing;
+                await _dbContext.SaveChangesAsync(cancellationToken);
 
-            session.TranscriptText = transcriptText;
-            await _dbContext.SaveChangesAsync(cancellationToken);
+                BackgroundJob.Enqueue<ContentCreationParseJob>(
+                    job => job.ExecuteAsync(sessionId, tenantId, CancellationToken.None));
 
-            _logger.LogInformation(
-                "[ContentCreationSession] Video transcription complete for session {SessionId}: {WordCount} words, {Length} chars",
-                sessionId, transcriptionResult.Words.Count(w => w.Type == "word"), transcriptText.Length);
+                _logger.LogInformation(
+                    "[ContentCreationSession] Transcript exists — enqueued ContentCreationParseJob for session {SessionId}",
+                    sessionId);
+
+                return MapToDto(session);
+            }
         }
 
         // Determine raw text to parse
@@ -602,6 +612,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
                     session.SourceFileUrl,
                     SubtitleVideoSourceType.DirectUrl,
                     targetLanguageNames,
+                    session.TranscriptWordsJson,
                     cancellationToken);
 
                 session.SubtitleJobId = subtitleJobId.ToString();
@@ -2146,6 +2157,8 @@ public class ContentCreationSessionService : IContentCreationSessionService
             QuizSettingsJson = session.QuizSettingsJson,
             SettingsJson = session.SettingsJson,
             SubtitleJobId = session.SubtitleJobId,
+            TranscriptWordsJson = session.TranscriptWordsJson,
+            TranscriptionJobId = session.TranscriptionJobId,
             CreatedAt = session.CreatedAt,
             UpdatedAt = session.UpdatedAt
         };
