@@ -134,24 +134,16 @@ export class ContentCreationWizardPage extends BasePage {
   // ---------------------------------------------------------------------------
 
   async waitForParseComplete(timeoutMs = 180_000): Promise<void> {
-    // Use the pre-registered response promise if available,
-    // otherwise fall back to DOM detection
-    if (this._parseResponsePromise) {
-      await this._parseResponsePromise;
-      this._parseResponsePromise = null;
-    }
-    // Give React one tick to update the DOM
-    await this.page.waitForTimeout(500);
-    // Verify the Continue button is enabled using getByRole
-    await this.page.getByRole('button', { name: /continue/i })
-      .waitFor({ state: 'visible', timeout: 15_000 });
+    await this.page
+      .getByText(/Sections \(\d+\)/)
+      .waitFor({ state: 'visible', timeout: timeoutMs });
   }
 
   async getSectionCount(): Promise<number> {
-    // Section count shown as "{n} section(s)" text in the bottom bar
-    const text = await this.page.locator(':text-matches("\\d+ sections?")').first().textContent();
+    const el = this.page.getByText(/Sections \(\d+\)/);
+    const text = await el.textContent();
     if (!text) return 0;
-    const match = text.match(/(\d+)\s+section/);
+    const match = text.match(/\((\d+)\)/);
     return match ? parseInt(match[1], 10) : 0;
   }
 
