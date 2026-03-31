@@ -30,13 +30,15 @@ public class ElevenLabsTranscriptionService : ITranscriptionService
     /// Transcribes audio from a video URL using ElevenLabs API.
     /// Downloads the video first, then uploads it to ElevenLabs as a file.
     /// </summary>
+    private const long StreamingThresholdBytes = 50 * 1024 * 1024; // 50 MB
+
     public async Task<TranscriptionResult> TranscribeAsync(string videoUrl, CancellationToken cancellationToken = default)
     {
         try
         {
             _logger.LogInformation("Starting transcription for video: {VideoUrl}", videoUrl);
 
-            // Step 1: Download the video from the URL
+            // Step 1: Download the video as a stream (never fully buffered in memory for large files)
             _logger.LogInformation("Downloading video from: {VideoUrl}", videoUrl);
 
             using var downloadResponse = await _httpClient.GetAsync(videoUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
@@ -47,15 +49,9 @@ public class ElevenLabsTranscriptionService : ITranscriptionService
                 return TranscriptionResult.FailureResult($"Failed to download video from {videoUrl}. Status: {downloadResponse.StatusCode}");
             }
 
-            var videoBytes = await downloadResponse.Content.ReadAsByteArrayAsync(cancellationToken);
-            _logger.LogInformation("Video downloaded successfully. Size: {Size} bytes ({SizeMB:F2} MB)",
-                videoBytes.Length, videoBytes.Length / 1024.0 / 1024.0);
-
-            if (videoBytes.Length == 0)
-            {
-                _logger.LogError("Downloaded video is empty (0 bytes)");
-                return TranscriptionResult.FailureResult("Downloaded video is empty (0 bytes)");
-            }
+            var contentLength = downloadResponse.Content.Headers.ContentLength;
+            _logger.LogInformation("Video content length: {ContentLength} bytes ({SizeMB:F2} MB)",
+                contentLength ?? -1, (contentLength ?? 0) / 1024.0 / 1024.0);
 
             // Step 2: Extract filename from URL
             var fileName = GetFileNameFromUrl(videoUrl) ?? "video.mp4";
@@ -64,39 +60,80 @@ public class ElevenLabsTranscriptionService : ITranscriptionService
             // Step 3: Determine content type based on file extension
             var contentType = GetContentType(fileName);
 
-            // Step 4: Upload to ElevenLabs as file (not URL)
-            _logger.LogInformation("Uploading to ElevenLabs for transcription. Model: {Model}", _settings.ElevenLabs.Model);
+            // Step 4: Buffer into MemoryStream for files under 50 MB (supports Polly retries),
+            // or stream directly for larger files
+            var useBufferedStream = contentLength.HasValue && contentLength.Value <= StreamingThresholdBytes;
 
-            var request = new HttpRequestMessage(HttpMethod.Post, $"{_settings.ElevenLabs.BaseUrl}/speech-to-text");
-            request.Headers.Add("xi-api-key", _settings.ElevenLabs.ApiKey);
+            await using var downloadStream = await downloadResponse.Content.ReadAsStreamAsync(cancellationToken);
 
-            var fileContent = new ByteArrayContent(videoBytes);
-            fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+            HttpContent fileContent;
+            MemoryStream? bufferedStream = null;
 
-            var formContent = new MultipartFormDataContent
+            if (useBufferedStream)
             {
-                { fileContent, "file", fileName },
-                { new StringContent(_settings.ElevenLabs.Model), "model_id" }
-            };
+                bufferedStream = new MemoryStream();
+                await downloadStream.CopyToAsync(bufferedStream, cancellationToken);
 
-            request.Content = formContent;
+                if (bufferedStream.Length == 0)
+                {
+                    await bufferedStream.DisposeAsync();
+                    _logger.LogError("Downloaded video is empty (0 bytes)");
+                    return TranscriptionResult.FailureResult("Downloaded video is empty (0 bytes)");
+                }
 
-            var response = await _httpClient.SendAsync(request, cancellationToken);
-            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                _logger.LogInformation("Video buffered. Size: {Size} bytes ({SizeMB:F2} MB)",
+                    bufferedStream.Length, bufferedStream.Length / 1024.0 / 1024.0);
 
-            if (!response.IsSuccessStatusCode)
+                bufferedStream.Position = 0;
+                fileContent = new StreamContent(bufferedStream);
+            }
+            else
             {
-                _logger.LogError("ElevenLabs API error: {StatusCode} - {Response}", response.StatusCode, responseBody);
-                return TranscriptionResult.FailureResult($"ElevenLabs API error: {response.StatusCode} - {responseBody}");
+                _logger.LogInformation("Streaming large video directly to ElevenLabs (>{ThresholdMB} MB)",
+                    StreamingThresholdBytes / 1024 / 1024);
+                fileContent = new StreamContent(downloadStream);
             }
 
-            _logger.LogInformation("ElevenLabs transcription completed successfully");
+            try
+            {
+                fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
 
-            var words = ParseTranscriptionResponse(responseBody);
+                // Step 5: Upload to ElevenLabs as file (not URL)
+                _logger.LogInformation("Uploading to ElevenLabs for transcription. Model: {Model}", _settings.ElevenLabs.Model);
 
-            _logger.LogInformation("Transcription completed. Words extracted: {WordCount}", words.Count);
+                var request = new HttpRequestMessage(HttpMethod.Post, $"{_settings.ElevenLabs.BaseUrl}/speech-to-text");
+                request.Headers.Add("xi-api-key", _settings.ElevenLabs.ApiKey);
 
-            return TranscriptionResult.SuccessResult(words, responseBody);
+                var formContent = new MultipartFormDataContent
+                {
+                    { fileContent, "file", fileName },
+                    { new StringContent(_settings.ElevenLabs.Model), "model_id" }
+                };
+
+                request.Content = formContent;
+
+                using var response = await _httpClient.SendAsync(request, cancellationToken);
+                var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogError("ElevenLabs API error: {StatusCode} - {Response}", response.StatusCode, responseBody);
+                    return TranscriptionResult.FailureResult($"ElevenLabs API error: {response.StatusCode} - {responseBody}");
+                }
+
+                _logger.LogInformation("ElevenLabs transcription completed successfully");
+
+                var words = ParseTranscriptionResponse(responseBody);
+
+                _logger.LogInformation("Transcription completed. Words extracted: {WordCount}", words.Count);
+
+                return TranscriptionResult.SuccessResult(words, responseBody);
+            }
+            finally
+            {
+                if (bufferedStream != null)
+                    await bufferedStream.DisposeAsync();
+            }
         }
         catch (HttpRequestException ex)
         {
