@@ -11,6 +11,7 @@ import {
   useUploadCoverImage,
   useStartValidation,
 } from '@/lib/api/toolbox-talks/use-content-creation';
+import { checkSessionTitle } from '@/lib/api/toolbox-talks/content-creation';
 import { TitleDescriptionPanel } from './settings/TitleDescriptionPanel';
 import { CategoryPanel } from './settings/CategoryPanel';
 import { RefresherPanel } from './settings/RefresherPanel';
@@ -134,8 +135,34 @@ export function SettingsStep({ state, onNext, onBack }: SettingsStepProps) {
   );
 
   const [isStartingValidation, setIsStartingValidation] = useState(false);
+  const [titleError, setTitleError] = useState<string | null>(null);
   const isSaving = updateSettings.isPending;
-  const canContinue = settings.title.trim().length > 0;
+  const canContinue = settings.title.trim().length > 0 && !titleError;
+
+  // Clear title error when user modifies the title
+  const handleChangeWithTitleClear = useCallback(
+    (newSettings: ContentCreationSettings) => {
+      if (newSettings.title !== settings.title) {
+        setTitleError(null);
+      }
+      handleChange(newSettings);
+    },
+    [handleChange, settings.title]
+  );
+
+  // Check title uniqueness on blur
+  const handleTitleBlur = useCallback(async () => {
+    const title = settings.title.trim();
+    if (!title || !sessionId) return;
+    try {
+      const result = await checkSessionTitle(sessionId, title);
+      if (!result.available) {
+        setTitleError(result.message || 'A learning with this title already exists. Please choose a different title.');
+      }
+    } catch {
+      // Don't block the user if the check fails
+    }
+  }, [settings.title, sessionId]);
 
   // Flush pending settings save, then start translate-validate, then navigate
   const handleContinue = useCallback(async () => {
@@ -181,8 +208,10 @@ export function SettingsStep({ state, onNext, onBack }: SettingsStepProps) {
       {/* Panel A — Title, Description, Cover Image */}
       <TitleDescriptionPanel
         settings={settings}
-        onChange={handleChange}
+        onChange={handleChangeWithTitleClear}
         onUploadCoverImage={handleUploadCoverImage}
+        onTitleBlur={handleTitleBlur}
+        titleError={titleError}
         isUploading={uploadCoverImage.isPending}
         isSaving={isSaving}
       />

@@ -839,6 +839,24 @@ public class ContentCreationSessionService : IContentCreationSessionService
 
             return new PublishResult(true, effectiveOutputId, session.OutputType);
         }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "[ContentCreationSession] Publish failed for session {SessionId}", sessionId);
+            try
+            {
+                ((DbContext)_dbContext).ChangeTracker.Clear();
+                var failedSession = await GetSessionEntityAsync(sessionId, tenantId, cancellationToken);
+                failedSession.Status = ContentCreationSessionStatus.Failed;
+                await _dbContext.SaveChangesAsync(cancellationToken);
+            }
+            catch (Exception cleanupEx)
+            {
+                _logger.LogError(cleanupEx,
+                    "[ContentCreationSession] Failed to mark session {SessionId} as Failed during error cleanup",
+                    sessionId);
+            }
+            return new PublishResult(false, null, null, ex.Message);
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "[ContentCreationSession] Publish failed for session {SessionId}", sessionId);
@@ -1125,6 +1143,28 @@ public class ContentCreationSessionService : IContentCreationSessionService
             "[ContentCreationSession] Cover image uploaded for session {SessionId}", sessionId);
 
         return MapToDto(session);
+    }
+
+    public async Task<TitleCheckResult> CheckTitleAvailableAsync(
+        string title,
+        Guid sessionId,
+        Guid tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        var session = await GetSessionEntityAsync(sessionId, tenantId, cancellationToken);
+
+        var query = _dbContext.ToolboxTalks
+            .Where(t => t.TenantId == tenantId && t.Title == title);
+
+        // Exclude the draft talk if one exists
+        if (session.OutputTalkId.HasValue)
+            query = query.Where(t => t.Id != session.OutputTalkId.Value);
+
+        var titleExists = await query.AnyAsync(cancellationToken);
+
+        return titleExists
+            ? new TitleCheckResult(false, "A learning with this title already exists.")
+            : new TitleCheckResult(true);
     }
 
     #region Private Helpers

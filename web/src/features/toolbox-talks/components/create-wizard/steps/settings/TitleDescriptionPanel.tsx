@@ -13,6 +13,8 @@ interface TitleDescriptionPanelProps {
   settings: ContentCreationSettings;
   onChange: (settings: ContentCreationSettings) => void;
   onUploadCoverImage: (file: File) => void;
+  onTitleBlur?: () => void;
+  titleError?: string | null;
   isUploading?: boolean;
   isSaving?: boolean;
 }
@@ -24,6 +26,8 @@ export function TitleDescriptionPanel({
   settings,
   onChange,
   onUploadCoverImage,
+  onTitleBlur,
+  titleError,
   isUploading,
   isSaving,
 }: TitleDescriptionPanelProps) {
@@ -78,8 +82,13 @@ export function TitleDescriptionPanel({
           id="settings-title"
           value={settings.title}
           onChange={(e) => onChange({ ...settings, title: e.target.value })}
+          onBlur={onTitleBlur}
           placeholder="Enter a title for this learning"
+          className={titleError ? 'border-destructive' : ''}
         />
+        {titleError && (
+          <p className="text-sm text-destructive">{titleError}</p>
+        )}
       </div>
 
       {/* Description */}

@@ -97,6 +97,12 @@ public interface IContentCreationSessionService
         IFormFile file,
         Guid tenantId,
         CancellationToken cancellationToken = default);
+
+    Task<TitleCheckResult> CheckTitleAvailableAsync(
+        string title,
+        Guid sessionId,
+        Guid tenantId,
+        CancellationToken cancellationToken = default);
 }
 
 #region DTOs
@@ -223,6 +229,8 @@ public record PublishResult(
     Guid? OutputId,
     OutputType? OutputType,
     string? ErrorMessage = null);
+
+public record TitleCheckResult(bool Available, string? Message = null);
 
 public record SessionSettingsDto
 {

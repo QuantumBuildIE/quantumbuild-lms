@@ -521,6 +521,34 @@ public class ContentCreationController : ControllerBase
     }
 
     /// <summary>
+    /// Check if a title is available (not already used by another learning)
+    /// </summary>
+    [HttpGet("session/{id:guid}/check-title")]
+    [ProducesResponseType(typeof(TitleCheckResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> CheckTitle(
+        Guid id,
+        [FromQuery] string title,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var tenantId = _currentUserService.TenantId;
+            var result = await _sessionService.CheckTitleAvailableAsync(title, id, tenantId, cancellationToken);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex) when (ex.Message == "Session not found")
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error checking title availability for session {SessionId}", id);
+            return StatusCode(500, Result.Fail("Error checking title availability"));
+        }
+    }
+
+    /// <summary>
     /// Abandon and clean up a session
     /// </summary>
     [HttpDelete("session/{id:guid}")]

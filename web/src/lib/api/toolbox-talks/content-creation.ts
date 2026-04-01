@@ -254,6 +254,20 @@ export async function uploadSessionCoverImage(
   return response.data;
 }
 
+/**
+ * Check if a title is available (not already used by another learning)
+ */
+export async function checkSessionTitle(
+  sessionId: string,
+  title: string
+): Promise<{ available: boolean; message?: string }> {
+  const response = await apiClient.get<{ available: boolean; message?: string }>(
+    `/toolbox-talks/create/session/${sessionId}/check-title`,
+    { params: { title } }
+  );
+  return response.data;
+}
+
 // ============================================
 // Validation API (per-run endpoints)
 // ============================================
