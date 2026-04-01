@@ -175,6 +175,7 @@ export function SettingsStep({ state, onNext, onBack }: SettingsStepProps) {
         const titleCheck = await checkSessionTitle(sessionId, trimmedTitle);
         if (!titleCheck.available) {
           setTitleError(titleCheck.message || 'A learning with this title already exists. Please choose a different title.');
+          document.querySelector('[data-title-input]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
           return;
         }
       } catch {

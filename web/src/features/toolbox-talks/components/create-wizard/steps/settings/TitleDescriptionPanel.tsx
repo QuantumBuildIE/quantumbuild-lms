@@ -80,6 +80,7 @@ export function TitleDescriptionPanel({
         </Label>
         <Input
           id="settings-title"
+          data-title-input
           value={settings.title}
           onChange={(e) => onChange({ ...settings, title: e.target.value })}
           onBlur={onTitleBlur}
