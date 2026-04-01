@@ -170,8 +170,16 @@ export function PublishStep({ state, onBack }: PublishStepProps) {
             toast.error(result.errorMessage || 'Failed to publish');
           }
         },
-        onError: (error: Error) => {
-          toast.error(error.message || 'Failed to publish');
+        onError: (error) => {
+          if (error && typeof error === 'object' && 'response' in error) {
+            const axiosError = error as import('axios').AxiosError<{ errors?: string[]; message?: string }>;
+            const data = axiosError.response?.data;
+            const description = data?.errors?.[0] ?? data?.message ?? axiosError.message ?? 'An error occurred';
+            toast.error('Failed to publish', { description });
+          } else {
+            const message = error instanceof Error ? error.message : 'An error occurred';
+            toast.error('Failed to publish', { description: message });
+          }
         },
       }
     );

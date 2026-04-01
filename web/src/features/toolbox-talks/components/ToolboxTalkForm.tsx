@@ -305,16 +305,30 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
         onSuccess?.(result);
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'An error occurred';
-      toast.error(isEditing ? 'Failed to update learning' : 'Failed to create learning', {
-        description: message,
-      });
+      const title = isEditing ? 'Failed to update learning' : 'Failed to create learning';
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as import('axios').AxiosError<{ errors?: string[]; message?: string }>;
+        const data = axiosError.response?.data;
+        const description = data?.errors?.[0] ?? data?.message ?? axiosError.message ?? 'An error occurred';
+        toast.error(title, { description });
+      } else {
+        toast.error(title, { description: 'An error occurred' });
+      }
     }
   }
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={form.handleSubmit(onSubmit, (errors) => {
+          toast.error('Please fix the form errors before saving', {
+            description: 'Some required fields are incomplete or invalid.',
+          });
+          const firstKey = Object.keys(errors)[0];
+          if (firstKey) {
+            const el = document.querySelector(`[name="${firstKey}"]`);
+            el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        })} className="space-y-6">
         {/* Basic Information */}
         <Card>
           <CardHeader>

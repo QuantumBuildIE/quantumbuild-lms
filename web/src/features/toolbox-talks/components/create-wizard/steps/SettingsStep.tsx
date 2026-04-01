@@ -168,6 +168,20 @@ export function SettingsStep({ state, onNext, onBack }: SettingsStepProps) {
   const handleContinue = useCallback(async () => {
     if (!sessionId || !canContinue) return;
 
+    // Check title availability before proceeding (handles race with onBlur)
+    const trimmedTitle = settings.title.trim();
+    if (trimmedTitle) {
+      try {
+        const titleCheck = await checkSessionTitle(sessionId, trimmedTitle);
+        if (!titleCheck.available) {
+          setTitleError(titleCheck.message || 'A learning with this title already exists. Please choose a different title.');
+          return;
+        }
+      } catch {
+        // Don't block if check fails
+      }
+    }
+
     setIsStartingValidation(true);
     try {
       // Flush any pending debounced save by saving immediately
