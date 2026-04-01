@@ -191,14 +191,21 @@ public class ResetTenantDataCommandHandler(
                 .ExecuteDeleteAsync(cancellationToken);
             logger.LogInformation("Deleted {Count} AiUsageSummary rows for TenantId={TenantId}", aiSummariesDeleted, tenantId);
 
-            // Step 20: ToolboxTalkCourse
+            // Step 20: ToolboxTalkCourseTranslation
+            var courseTranslationsDeleted = await dbContext.ToolboxTalkCourseTranslations
+                .IgnoreQueryFilters()
+                .Where(ct => ct.Course.TenantId == tenantId)
+                .ExecuteDeleteAsync(cancellationToken);
+            logger.LogInformation("Deleted {Count} ToolboxTalkCourseTranslation rows for TenantId={TenantId}", courseTranslationsDeleted, tenantId);
+
+            // Step 21: ToolboxTalkCourse
             var coursesDeleted = await dbContext.ToolboxTalkCourses
                 .IgnoreQueryFilters()
                 .Where(c => c.TenantId == tenantId)
                 .ExecuteDeleteAsync(cancellationToken);
             logger.LogInformation("Deleted {Count} ToolboxTalkCourse rows for TenantId={TenantId}", coursesDeleted, tenantId);
 
-            // Step 21: ToolboxTalk
+            // Step 22: ToolboxTalk
             var talksDeleted = await dbContext.ToolboxTalks
                 .IgnoreQueryFilters()
                 .Where(t => t.TenantId == tenantId)
@@ -208,13 +215,14 @@ public class ResetTenantDataCommandHandler(
             await transaction.CommitAsync(cancellationToken);
             logger.LogWarning("Tenant data reset transaction committed for TenantId={TenantId}", tenantId);
         }
-        catch
+        catch (Exception ex)
         {
+            logger.LogError(ex, "[ResetTenantData] Reset failed for TenantId={TenantId}", tenantId);
             await transaction.RollbackAsync(cancellationToken);
             throw;
         }
 
-        // Step 22: R2 storage cleanup (after transaction commits)
+        // Step 23: R2 storage cleanup (after transaction commits)
         try
         {
             await r2StorageService.DeleteAllTenantFilesAsync(tenantId, cancellationToken);
