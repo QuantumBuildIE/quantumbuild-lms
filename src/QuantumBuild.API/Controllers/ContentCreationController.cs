@@ -57,7 +57,8 @@ public class ContentCreationController : ControllerBase
     }
 
     /// <summary>
-    /// Upload a file for a content creation session
+    /// Upload a file for a content creation session.
+    /// Legacy: use GET upload-url + POST upload-complete for direct R2 upload
     /// </summary>
     [HttpPost("session/{id:guid}/upload")]
     [Authorize(Policy = "Learnings.Manage")]
@@ -546,6 +547,80 @@ public class ContentCreationController : ControllerBase
         {
             _logger.LogError(ex, "Error checking title availability for session {SessionId}", id);
             return StatusCode(500, Result.Fail("Error checking title availability"));
+        }
+    }
+
+    /// <summary>
+    /// Get a presigned PUT URL for direct browser-to-R2 upload.
+    /// Returns uploadUrl (PUT target), key (storage key), and publicUrl (read URL).
+    /// The browser must PUT the file directly to uploadUrl with the matching Content-Type header.
+    /// Do NOT include auth headers on the PUT — the URL is pre-authenticated.
+    /// After the PUT succeeds, call POST upload-complete with the returned key.
+    /// </summary>
+    [HttpGet("session/{id:guid}/upload-url")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(typeof(UploadUrlResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetUploadUrl(
+        Guid id,
+        [FromQuery] string fileName,
+        [FromQuery] string contentType,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var tenantId = _currentUserService.TenantId;
+            var result = await _sessionService.GetUploadUrlAsync(id, fileName, contentType, tenantId, cancellationToken);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex) when (ex.Message == "Session not found")
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(Result.Fail(ex.Message));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating upload URL for session {SessionId}", id);
+            return StatusCode(500, Result.Fail("Error generating upload URL"));
+        }
+    }
+
+    /// <summary>
+    /// Confirm a direct R2 upload is complete and record the file URL on the session.
+    /// Call this after a successful PUT to the presigned URL returned by GET upload-url.
+    /// </summary>
+    [HttpPost("session/{id:guid}/upload-complete")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(typeof(ContentCreationSessionDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ConfirmUpload(
+        Guid id,
+        [FromBody] ConfirmUploadRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var tenantId = _currentUserService.TenantId;
+            var session = await _sessionService.ConfirmUploadAsync(id, request, tenantId, cancellationToken);
+            return Ok(session);
+        }
+        catch (InvalidOperationException ex) when (ex.Message == "Session not found")
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(Result.Fail(ex.Message));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error confirming upload for session {SessionId}", id);
+            return StatusCode(500, Result.Fail("Error confirming upload"));
         }
     }
 

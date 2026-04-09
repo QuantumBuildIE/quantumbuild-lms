@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   createSession,
   getSession,
-  uploadSessionFile,
+  uploadFileDirectToR2,
   updateSessionSource,
   parseSessionContent,
   updateSessionSections,
@@ -117,7 +117,7 @@ export function useUploadSessionFile() {
       sessionId: string;
       file: File;
       onProgress?: (percent: number) => void;
-    }) => uploadSessionFile(sessionId, file, onProgress),
+    }) => uploadFileDirectToR2(sessionId, file, onProgress),
     onSuccess: (session) => {
       queryClient.setQueryData(
         contentCreationKeys.session(session.id),

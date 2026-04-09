@@ -103,6 +103,27 @@ public interface IContentCreationSessionService
         Guid sessionId,
         Guid tenantId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Generates a presigned PUT URL for direct browser-to-R2 upload.
+    /// Validates session ownership and allowed file extensions.
+    /// </summary>
+    Task<UploadUrlResult> GetUploadUrlAsync(
+        Guid sessionId,
+        string fileName,
+        string contentType,
+        Guid tenantId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Records a completed direct upload on the session.
+    /// Sets SourceFileUrl, SourceFileName, SourceFileType and resets status to Draft.
+    /// </summary>
+    Task<ContentCreationSessionDto> ConfirmUploadAsync(
+        Guid sessionId,
+        ConfirmUploadRequest request,
+        Guid tenantId,
+        CancellationToken cancellationToken = default);
 }
 
 #region DTOs
@@ -232,6 +253,16 @@ public record PublishResult(
     string? ErrorMessage = null);
 
 public record TitleCheckResult(bool Available, string? Message = null);
+
+public record UploadUrlResult(string UploadUrl, string Key, string PublicUrl);
+
+public record ConfirmUploadRequest
+{
+    public string Key { get; init; } = string.Empty;
+    public string FileName { get; init; } = string.Empty;
+    /// <summary>"Video" or "Pdf"</summary>
+    public string FileType { get; init; } = string.Empty;
+}
 
 public record SessionSettingsDto
 {

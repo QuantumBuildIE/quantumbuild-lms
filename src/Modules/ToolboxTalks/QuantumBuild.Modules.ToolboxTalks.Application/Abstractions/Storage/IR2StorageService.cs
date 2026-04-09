@@ -143,4 +143,16 @@ public interface IR2StorageService
     /// Generates the public URL for a file in the R2 bucket.
     /// </summary>
     string GeneratePublicUrl(Guid tenantId, string folder, string fileName);
+
+    /// <summary>
+    /// Builds a public URL from a pre-built storage key.
+    /// </summary>
+    string GetPublicUrl(string key);
+
+    /// <summary>
+    /// Generates a presigned S3 PUT URL for direct browser-to-R2 upload.
+    /// The URL is valid for the specified expiry duration.
+    /// The caller must PUT with the matching Content-Type header or R2 will reject the request.
+    /// </summary>
+    Task<string> GenerateUploadUrlAsync(string key, string contentType, TimeSpan expiry);
 }

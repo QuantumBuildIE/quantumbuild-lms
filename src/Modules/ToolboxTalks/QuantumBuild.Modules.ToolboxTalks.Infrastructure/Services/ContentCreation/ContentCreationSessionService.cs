@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Hangfire;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
@@ -1165,6 +1166,75 @@ public class ContentCreationSessionService : IContentCreationSessionService
         return titleExists
             ? new TitleCheckResult(false, "A learning with this title already exists.")
             : new TitleCheckResult(true);
+    }
+
+    private static readonly HashSet<string> AllowedUploadExtensions = new(StringComparer.OrdinalIgnoreCase)
+        { "mp4", "mov", "avi", "webm", "mkv", "pdf" };
+
+    public async Task<UploadUrlResult> GetUploadUrlAsync(
+        Guid sessionId,
+        string fileName,
+        string contentType,
+        Guid tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        var session = await GetSessionEntityAsync(sessionId, tenantId, cancellationToken);
+
+        if (session.InputMode == InputMode.Text)
+            throw new InvalidOperationException("File upload is not allowed for Text input mode");
+
+        var ext = Path.GetExtension(fileName).TrimStart('.');
+        if (!AllowedUploadExtensions.Contains(ext))
+            throw new InvalidOperationException(
+                $"File extension '.{ext}' is not allowed. Allowed: mp4, mov, avi, webm, mkv, pdf");
+
+        var sanitizedFileName = SanitizeFileName(fileName);
+        var key = $"{tenantId}/sessions/{sessionId}/{sanitizedFileName}";
+
+        var uploadUrl = await _storageService.GenerateUploadUrlAsync(key, contentType, TimeSpan.FromHours(1));
+        var publicUrl = _storageService.GetPublicUrl(key);
+
+        _logger.LogInformation(
+            "[ContentCreationSession] Generated upload URL for session {SessionId}: {Key}",
+            sessionId, key);
+
+        return new UploadUrlResult(uploadUrl, key, publicUrl);
+    }
+
+    public async Task<ContentCreationSessionDto> ConfirmUploadAsync(
+        Guid sessionId,
+        ConfirmUploadRequest request,
+        Guid tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        var session = await GetSessionEntityAsync(sessionId, tenantId, cancellationToken);
+
+        // Security: validate key starts with expected tenant/session prefix (prevent key injection)
+        var expectedPrefix = $"{tenantId}/sessions/{sessionId}/";
+        if (!request.Key.StartsWith(expectedPrefix, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Invalid file key");
+
+        session.SourceFileUrl = _storageService.GetPublicUrl(request.Key);
+        session.SourceFileName = request.FileName;
+        session.SourceFileType = request.FileType;
+        session.Status = ContentCreationSessionStatus.Draft; // Reset in case of re-upload
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "[ContentCreationSession] Upload confirmed for session {SessionId}: {FileName}",
+            sessionId, request.FileName);
+
+        return MapToDto(session);
+    }
+
+    private static string SanitizeFileName(string fileName)
+    {
+        var extension = Path.GetExtension(fileName).ToLower();
+        var nameWithoutExt = Path.GetFileNameWithoutExtension(fileName).ToLower();
+        var sanitized = Regex.Replace(nameWithoutExt, @"[^a-z0-9]+", "-").Trim('-');
+        if (string.IsNullOrEmpty(sanitized)) sanitized = "file";
+        return $"{sanitized}{extension}";
     }
 
     #region Private Helpers

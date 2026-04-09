@@ -692,6 +692,25 @@ public class R2StorageService : IR2StorageService, IDisposable
         return $"{publicUrl}/{encodedKey}";
     }
 
+    public string GetPublicUrl(string key)
+    {
+        return $"{_settings.PublicUrl.TrimEnd('/')}/{Uri.EscapeDataString(key).Replace("%2F", "/")}";
+    }
+
+    public Task<string> GenerateUploadUrlAsync(string key, string contentType, TimeSpan expiry)
+    {
+        var request = new GetPreSignedUrlRequest
+        {
+            BucketName = _settings.BucketName,
+            Key = key,
+            Verb = HttpVerb.PUT,
+            Expires = DateTime.UtcNow.Add(expiry),
+            ContentType = contentType
+        };
+        var url = _s3Client.GetPreSignedURL(request);
+        return Task.FromResult(url);
+    }
+
     private static string BuildKey(Guid tenantId, string folder, string fileName)
     {
         return $"{tenantId}/{folder}/{fileName}";

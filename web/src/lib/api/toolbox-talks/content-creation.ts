@@ -47,7 +47,8 @@ export async function getSession(
 }
 
 /**
- * Upload a file to the session (PDF or video)
+ * Upload a file to the session (PDF or video).
+ * Legacy path: browser → Railway → R2. Use uploadFileDirectToR2 for the direct path.
  */
 export async function uploadSessionFile(
   sessionId: string,
@@ -73,6 +74,98 @@ export async function uploadSessionFile(
     }
   );
   return response.data;
+}
+
+interface UploadUrlResult {
+  uploadUrl: string;
+  key: string;
+  publicUrl: string;
+}
+
+/**
+ * Get a presigned PUT URL for direct browser-to-R2 upload.
+ */
+export async function getSessionUploadUrl(
+  sessionId: string,
+  fileName: string,
+  contentType: string
+): Promise<UploadUrlResult> {
+  const response = await apiClient.get<UploadUrlResult>(
+    `/toolbox-talks/create/session/${sessionId}/upload-url`,
+    { params: { fileName, contentType } }
+  );
+  return response.data;
+}
+
+/**
+ * Confirm a completed direct upload and record the file URL on the session.
+ * Call after a successful PUT to the presigned URL.
+ */
+export async function confirmSessionUpload(
+  sessionId: string,
+  key: string,
+  fileName: string,
+  fileType: string
+): Promise<ContentCreationSession> {
+  const response = await apiClient.post<ContentCreationSession>(
+    `/toolbox-talks/create/session/${sessionId}/upload-complete`,
+    { key, fileName, fileType }
+  );
+  return response.data;
+}
+
+/**
+ * Upload a file directly to R2, bypassing the Railway server.
+ * Flow: get presigned URL → PUT file to R2 → confirm upload via API.
+ *
+ * Progress is reported 0-100 based on the PUT to R2.
+ * The PUT uses XMLHttpRequest (not Axios) to avoid injecting auth headers
+ * that would invalidate the presigned URL signature.
+ */
+export async function uploadFileDirectToR2(
+  sessionId: string,
+  file: File,
+  onProgress?: (percent: number) => void
+): Promise<ContentCreationSession> {
+  // 1. Get the presigned PUT URL from the API
+  const { uploadUrl, key } = await getSessionUploadUrl(
+    sessionId,
+    file.name,
+    file.type
+  );
+
+  // 2. PUT the file directly to R2
+  // DO NOT use Axios here — it injects auth headers that invalidate the presigned signature
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+
+    xhr.upload.onprogress = (event) => {
+      if (onProgress && event.lengthComputable) {
+        const percent = Math.round((event.loaded * 100) / event.total);
+        onProgress(percent);
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status === 200 || xhr.status === 204) {
+        resolve();
+      } else {
+        reject(new Error(`R2 upload failed with status ${xhr.status}: ${xhr.responseText}`));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error('R2 upload failed (network error)'));
+    xhr.onabort = () => reject(new Error('R2 upload aborted'));
+
+    xhr.open('PUT', uploadUrl);
+    // Content-Type must match the value used to generate the presigned URL — R2 rejects mismatches with 403
+    xhr.setRequestHeader('Content-Type', file.type);
+    xhr.send(file);
+  });
+
+  // 3. Tell the API the upload is done and get the updated session
+  const fileType = file.type.startsWith('video/') ? 'Video' : 'Pdf';
+  return confirmSessionUpload(sessionId, key, file.name, fileType);
 }
 
 /**
