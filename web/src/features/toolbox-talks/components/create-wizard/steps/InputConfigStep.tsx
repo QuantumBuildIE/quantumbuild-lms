@@ -521,6 +521,23 @@ export function InputConfigStep({
                 />
               </div>
 
+              {/* Web optimisation advisory */}
+              <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>
+                  For best results, videos should be web-optimised before uploading. This ensures smooth playback for employees and reliable processing. We recommend{' '}
+                  <a
+                    href="https://handbrake.fr"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline underline-offset-2 hover:text-foreground"
+                  >
+                    HandBrake (free)
+                  </a>
+                  {' '}— use the Web preset.
+                </span>
+              </p>
+
               {/* OR divider */}
               {!state.sourceFile && (
                 <>
