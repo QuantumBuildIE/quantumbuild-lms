@@ -64,6 +64,7 @@ export interface ContentCreationSession {
   quizSettingsJson: string | null;
   settingsJson: string | null;
   subtitleJobId: string | null;
+  errorMessage: string | null;
   createdAt: string;
   updatedAt: string | null;
 }

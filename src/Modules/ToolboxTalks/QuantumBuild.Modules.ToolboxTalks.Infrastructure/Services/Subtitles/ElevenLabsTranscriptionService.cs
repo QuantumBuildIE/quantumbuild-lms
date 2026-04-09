@@ -28,17 +28,16 @@ public class ElevenLabsTranscriptionService : ITranscriptionService
 
     /// <summary>
     /// Transcribes audio from a video URL using ElevenLabs API.
-    /// Downloads the video first, then uploads it to ElevenLabs as a file.
+    /// Downloads the full file into a MemoryStream first so Polly retries can seek back to the start.
+    /// ElevenLabs supports up to 1 GB — buffering a few hundred MB is acceptable.
     /// </summary>
-    private const long StreamingThresholdBytes = 50 * 1024 * 1024; // 50 MB
-
     public async Task<TranscriptionResult> TranscribeAsync(string videoUrl, CancellationToken cancellationToken = default)
     {
         try
         {
             _logger.LogInformation("Starting transcription for video: {VideoUrl}", videoUrl);
 
-            // Step 1: Download the video as a stream (never fully buffered in memory for large files)
+            // Step 1: Download the video with headers-read completion so we can read Content-Length
             _logger.LogInformation("Downloading video from: {VideoUrl}", videoUrl);
 
             using var downloadResponse = await _httpClient.GetAsync(videoUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
@@ -50,55 +49,45 @@ public class ElevenLabsTranscriptionService : ITranscriptionService
             }
 
             var contentLength = downloadResponse.Content.Headers.ContentLength;
-            _logger.LogInformation("Video content length: {ContentLength} bytes ({SizeMB:F2} MB)",
-                contentLength ?? -1, (contentLength ?? 0) / 1024.0 / 1024.0);
 
-            // Step 2: Extract filename from URL
+            // Step 2: Buffer the full file into a MemoryStream.
+            // A seekable MemoryStream is required for Polly retries — the stream can be rewound
+            // to position 0 on each attempt. Streaming directly breaks on the first retry attempt
+            // because the stream has already been consumed.
+            _logger.LogDebug("Buffering {ContentLength} bytes for ElevenLabs upload",
+                contentLength.HasValue ? contentLength.Value.ToString() : "unknown");
+
+            var bufferedStream = new MemoryStream();
+            await using (var downloadStream = await downloadResponse.Content.ReadAsStreamAsync(cancellationToken))
+            {
+                await downloadStream.CopyToAsync(bufferedStream, cancellationToken);
+            }
+
+            if (bufferedStream.Length == 0)
+            {
+                await bufferedStream.DisposeAsync();
+                _logger.LogError("Downloaded video is empty (0 bytes)");
+                return TranscriptionResult.FailureResult("Downloaded video is empty (0 bytes)");
+            }
+
+            _logger.LogInformation("Video buffered. Size: {Size} bytes ({SizeMB:F2} MB)",
+                bufferedStream.Length, bufferedStream.Length / 1024.0 / 1024.0);
+
+            // Step 3: Extract filename and content type from URL
             var fileName = GetFileNameFromUrl(videoUrl) ?? "video.mp4";
             _logger.LogInformation("Using filename: {FileName}", fileName);
-
-            // Step 3: Determine content type based on file extension
             var contentType = GetContentType(fileName);
-
-            // Step 4: Buffer into MemoryStream for files under 50 MB (supports Polly retries),
-            // or stream directly for larger files
-            var useBufferedStream = contentLength.HasValue && contentLength.Value <= StreamingThresholdBytes;
-
-            await using var downloadStream = await downloadResponse.Content.ReadAsStreamAsync(cancellationToken);
-
-            HttpContent fileContent;
-            MemoryStream? bufferedStream = null;
-
-            if (useBufferedStream)
-            {
-                bufferedStream = new MemoryStream();
-                await downloadStream.CopyToAsync(bufferedStream, cancellationToken);
-
-                if (bufferedStream.Length == 0)
-                {
-                    await bufferedStream.DisposeAsync();
-                    _logger.LogError("Downloaded video is empty (0 bytes)");
-                    return TranscriptionResult.FailureResult("Downloaded video is empty (0 bytes)");
-                }
-
-                _logger.LogInformation("Video buffered. Size: {Size} bytes ({SizeMB:F2} MB)",
-                    bufferedStream.Length, bufferedStream.Length / 1024.0 / 1024.0);
-
-                bufferedStream.Position = 0;
-                fileContent = new StreamContent(bufferedStream);
-            }
-            else
-            {
-                _logger.LogInformation("Streaming large video directly to ElevenLabs (>{ThresholdMB} MB)",
-                    StreamingThresholdBytes / 1024 / 1024);
-                fileContent = new StreamContent(downloadStream);
-            }
 
             try
             {
+                // Step 4: Upload to ElevenLabs as a multipart file upload.
+                // Position is reset to 0 before building the request so that Polly can retry
+                // by resending the same MemoryStream from the beginning.
+                bufferedStream.Position = 0;
+
+                var fileContent = new StreamContent(bufferedStream);
                 fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
 
-                // Step 5: Upload to ElevenLabs as file (not URL)
                 _logger.LogInformation("Uploading to ElevenLabs for transcription. Model: {Model}", _settings.ElevenLabs.Model);
 
                 var request = new HttpRequestMessage(HttpMethod.Post, $"{_settings.ElevenLabs.BaseUrl}/speech-to-text");
@@ -131,8 +120,7 @@ public class ElevenLabsTranscriptionService : ITranscriptionService
             }
             finally
             {
-                if (bufferedStream != null)
-                    await bufferedStream.DisposeAsync();
+                await bufferedStream.DisposeAsync();
             }
         }
         catch (HttpRequestException ex)

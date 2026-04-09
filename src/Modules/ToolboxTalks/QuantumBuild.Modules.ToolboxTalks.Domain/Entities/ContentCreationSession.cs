@@ -71,6 +71,9 @@ public class ContentCreationSession : TenantEntity
     // Hangfire job ID for background transcription so the session can track progress
     public string? TranscriptionJobId { get; set; }
 
+    // Error detail — populated when Status = Failed, surfaced to the frontend for actionable feedback
+    public string? ErrorMessage { get; set; }
+
     // Navigation
     public ToolboxTalk? OutputTalk { get; set; }
     public ToolboxTalkCourse? OutputCourse { get; set; }

@@ -2221,6 +2221,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
             SubtitleJobId = session.SubtitleJobId,
             TranscriptWordsJson = session.TranscriptWordsJson,
             TranscriptionJobId = session.TranscriptionJobId,
+            ErrorMessage = session.ErrorMessage,
             CreatedAt = session.CreatedAt,
             UpdatedAt = session.UpdatedAt
         };

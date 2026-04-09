@@ -74,6 +74,7 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
   const [parseLog, setParseLog] = useState<ParseLogEntry[]>([]);
   const [hasParsed, setHasParsed] = useState(false);
   const [isParseFailed, setIsParseFailed] = useState(false);
+  const [parseErrorDetail, setParseErrorDetail] = useState<string | null>(null);
   const [isTakingLong, setIsTakingLong] = useState(false);
   const parseTriggered = useRef(false);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -271,6 +272,7 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
         } else if (status === 'Failed') {
           stopPolling();
           addLog('Parse failed — the server encountered an error');
+          setParseErrorDetail(freshSession.errorMessage ?? null);
           setIsParseFailed(true);
         }
       } catch {
@@ -329,6 +331,7 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
     // Keep session and uploaded file intact — only clear parse results
     setHasParsed(false);
     setIsParseFailed(false);
+    setParseErrorDetail(null);
     setIsTakingLong(false);
     updateState({
       parsedSections: [],
@@ -424,10 +427,17 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription className="flex items-center justify-between">
-            <span>
-              We had trouble processing your content. This can happen during high demand. Please try again.
-            </span>
-            <Button variant="outline" size="sm" onClick={handleRetry}>
+            <div className="space-y-1">
+              <span>
+                We had trouble processing your content. This can happen during high demand. Please try again.
+              </span>
+              {parseErrorDetail && (
+                <p className="text-xs text-muted-foreground">
+                  Error detail: {parseErrorDetail}
+                </p>
+              )}
+            </div>
+            <Button variant="outline" size="sm" onClick={handleRetry} className="ml-4 shrink-0">
               <RefreshCw className="mr-2 h-3 w-3" />
               Try Again
             </Button>

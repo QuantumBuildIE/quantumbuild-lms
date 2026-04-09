@@ -68,6 +68,7 @@ public class VideoTranscriptionJob(
                     "[VideoTranscription] Transcription failed for session {SessionId}: {Error}",
                     sessionId, result.ErrorMessage);
                 session.Status = ContentCreationSessionStatus.Failed;
+                session.ErrorMessage = result.ErrorMessage;
                 await dbContext.SaveChangesAsync(cancellationToken);
                 return;
             }
@@ -110,6 +111,7 @@ public class VideoTranscriptionJob(
             try
             {
                 session.Status = ContentCreationSessionStatus.Failed;
+                session.ErrorMessage = ex.Message;
                 await dbContext.SaveChangesAsync(cancellationToken);
             }
             catch (Exception saveEx)
