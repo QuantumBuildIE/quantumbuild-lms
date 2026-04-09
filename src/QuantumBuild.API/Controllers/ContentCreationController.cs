@@ -62,6 +62,7 @@ public class ContentCreationController : ControllerBase
     [HttpPost("session/{id:guid}/upload")]
     [Authorize(Policy = "Learnings.Manage")]
     [RequestSizeLimit(524288000)] // 500MB
+    [RequestFormLimits(MultipartBodyLengthLimit = 524288000)] // 500MB — must match RequestSizeLimit
     [ProducesResponseType(typeof(ContentCreationSessionDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

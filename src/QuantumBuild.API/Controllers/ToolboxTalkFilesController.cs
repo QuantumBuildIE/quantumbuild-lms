@@ -51,6 +51,7 @@ public class ToolboxTalkFilesController : ControllerBase
     /// <returns>Upload result with public URL</returns>
     [HttpPost("video")]
     [RequestSizeLimit(524288000)] // 500MB
+    [RequestFormLimits(MultipartBodyLengthLimit = 524288000)] // 500MB — must match RequestSizeLimit
     [ProducesResponseType(typeof(VideoUploadResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
