@@ -25,6 +25,7 @@ public class TranslationValidationService(
     IConsensusEngine consensusEngine,
     ISafetyClassificationService safetyClassifier,
     IGlossaryTermVerificationService glossaryVerifier,
+    IGlossaryReplacementService glossaryReplacer,
     IWordDiffService wordDiff,
     IArtefactScanService artefactScanner,
     ISafetyTermRegistryService registryService,
@@ -72,20 +73,33 @@ public class TranslationValidationService(
                 sectionTitle, passThreshold, effectiveThreshold, settings.Value.SafetyCriticalBump);
         }
 
-        // 2. Consensus engine — back-translate and score
+        // 2. Glossary hard-block — replace English source terms with approved translations
+        //    BEFORE consensus scoring so the corrected text is what gets back-translated and scored.
+        var replacementResult = glossaryReplacer.Apply(translatedText, safetyResult.GlossaryMatches);
+        var effectiveTranslatedText = replacementResult.WasModified
+            ? replacementResult.CorrectedText
+            : translatedText;
+        if (replacementResult.WasModified)
+        {
+            logger.LogInformation(
+                "Section '{Title}': {Count} glossary term(s) auto-corrected before consensus scoring",
+                sectionTitle, replacementResult.Corrections.Count);
+        }
+
+        // 3. Consensus engine — back-translate and score (uses corrected text if replacements applied)
         var consensus = await consensusEngine.RunAsync(
-            originalText, translatedText,
+            originalText, effectiveTranslatedText,
             sourceLanguage, targetLanguage,
             effectiveThreshold, cancellationToken,
             tenantId: tenantId, toolboxTalkId: toolboxTalkId);
 
-        // 3. Glossary term verification
+        // 4. Glossary term verification (runs on corrected text — corrections resolve mismatches)
         var engineOutcome = consensus.Outcome;
         GlossaryVerificationResult? glossaryResult = null;
         if (safetyResult.GlossaryMatches.Count > 0)
         {
             glossaryResult = glossaryVerifier.Verify(
-                translatedText, safetyResult.GlossaryMatches, targetLanguage);
+                effectiveTranslatedText, safetyResult.GlossaryMatches, targetLanguage);
 
             if (glossaryResult.HasMismatches)
             {
@@ -104,8 +118,8 @@ public class TranslationValidationService(
             }
         }
 
-        // 4. Artefact scan — detect translation anomalies
-        var artefactResult = artefactScanner.Scan(originalText, translatedText, targetLanguage);
+        // 5. Artefact scan — detect translation anomalies in the corrected text
+        var artefactResult = artefactScanner.Scan(originalText, effectiveTranslatedText, targetLanguage);
         if (artefactResult.HasArtefacts && consensus.Outcome == Domain.Enums.ValidationOutcome.Pass)
         {
             consensus.Outcome = Domain.Enums.ValidationOutcome.Review;
@@ -114,8 +128,8 @@ public class TranslationValidationService(
                 sectionTitle, artefactResult.Artefacts.Count);
         }
 
-        // 5. Safety term registry scan — obligation language verification
-        var registryResult = registryService.Scan(translatedText, targetLanguage);
+        // 6. Safety term registry scan — obligation language verification
+        var registryResult = registryService.Scan(effectiveTranslatedText, targetLanguage);
         if (registryResult.HasViolations)
         {
             if (consensus.Outcome != Domain.Enums.ValidationOutcome.Fail)
@@ -127,7 +141,7 @@ public class TranslationValidationService(
                 sectionTitle, registryResult.Violations.Count);
         }
 
-        // 6. Build ReviewReasonsJson — collect all reasons for Review or Fail
+        // 7. Build ReviewReasonsJson — collect all reasons for Review or Fail
         string? reviewReasonsJson = null;
         if (consensus.Outcome is Domain.Enums.ValidationOutcome.Review
             or Domain.Enums.ValidationOutcome.Fail)
@@ -195,7 +209,7 @@ public class TranslationValidationService(
             }
         }
 
-        // 7. Upsert the result entity — find existing row for {RunId, SectionIndex} or create new
+        // 8. Upsert the result entity — find existing row for {RunId, SectionIndex} or create new
         var entity = await dbContext.TranslationValidationResults
             .IgnoreQueryFilters()
             .FirstOrDefaultAsync(r => r.ValidationRunId == validationRunId
@@ -213,7 +227,7 @@ public class TranslationValidationService(
 
         entity.SectionTitle = sectionTitle;
         entity.OriginalText = originalText;
-        entity.TranslatedText = translatedText;
+        entity.TranslatedText = effectiveTranslatedText;
         entity.BackTranslationA = consensus.BackTranslationA;
         entity.BackTranslationB = consensus.BackTranslationB;
         entity.BackTranslationC = consensus.BackTranslationC;
@@ -241,6 +255,10 @@ public class TranslationValidationService(
             ? JsonSerializer.Serialize(registryResult.Violations, CamelCase)
             : null;
         entity.ReviewReasonsJson = reviewReasonsJson;
+        entity.GlossaryCorrectionsJson = replacementResult.WasModified
+            ? JsonSerializer.Serialize(replacementResult.Corrections, CamelCase)
+            : null;
+        entity.GlossaryHardBlockApplied = replacementResult.WasModified ? true : null;
         // Reset reviewer decision on re-validation
         entity.ReviewerDecision = Domain.Enums.ReviewerDecision.Pending;
         entity.EditedTranslation = null;
@@ -250,11 +268,11 @@ public class TranslationValidationService(
         logger.LogInformation(
             "Section '{Title}' validated. Outcome={Outcome}, FinalScore={Score}, " +
             "SafetyCritical={Safety}, Rounds={Rounds}, Artefacts={ArtefactCount}, " +
-            "RegistryViolations={ViolationCount}, ResultId={Id}",
+            "RegistryViolations={ViolationCount}, GlossaryCorrections={CorrectionCount}, ResultId={Id}",
             sectionTitle, entity.Outcome, entity.FinalScore,
             entity.IsSafetyCritical, entity.RoundsUsed,
             artefactResult.Artefacts.Count, registryResult.Violations.Count,
-            entity.Id);
+            replacementResult.Corrections.Count, entity.Id);
 
         return entity;
     }

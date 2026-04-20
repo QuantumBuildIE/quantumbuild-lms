@@ -14,8 +14,15 @@ import {
   ShieldAlert,
   AlertTriangle,
   Loader2,
+  Wand2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import type {
   SectionValidationResult,
   ValidationOutcome,
@@ -32,6 +39,12 @@ interface GlossaryMismatch {
   term: string;
   expected: string;
   actual: string;
+}
+
+interface GlossaryCorrection {
+  englishTerm: string;
+  appliedTranslation: string;
+  originalFragment: string;
 }
 
 interface ValidationSectionCardProps {
@@ -167,6 +180,11 @@ export function ValidationSectionCard({
     [result?.reviewReasonsJson]
   );
 
+  const glossaryCorrections = useMemo(
+    () => parseJsonSafe<GlossaryCorrection[]>(result?.glossaryCorrectionsJson ?? null, []),
+    [result?.glossaryCorrectionsJson]
+  );
+
   const [expandedReasonIdx, setExpandedReasonIdx] = useState<number | null>(null);
 
   const showReasonChips =
@@ -243,6 +261,31 @@ export function ValidationSectionCard({
           <ShieldAlert className="h-3 w-3" />
           Safety
         </Badge>
+      )}
+
+      {/* Glossary hard-block auto-correction badge */}
+      {result?.glossaryHardBlockApplied && glossaryCorrections.length > 0 && (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Badge
+                variant="outline"
+                className="shrink-0 cursor-default gap-1 border-amber-300 bg-amber-50 text-amber-700"
+              >
+                <Wand2 className="h-3 w-3" />
+                {glossaryCorrections.length} term{glossaryCorrections.length !== 1 ? 's' : ''} auto-corrected
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs space-y-1 text-xs">
+              <p className="font-medium">Glossary terms auto-corrected before scoring:</p>
+              {glossaryCorrections.map((c, i) => (
+                <p key={i}>
+                  &ldquo;{c.originalFragment}&rdquo; → &ldquo;{c.appliedTranslation}&rdquo;
+                </p>
+              ))}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       )}
 
       {/* Score */}

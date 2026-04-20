@@ -39,6 +39,8 @@ public record ValidationResultDto
     public string? ArtefactsJson { get; init; }
     public string? RegistryViolationsJson { get; init; }
     public string? ReviewReasonsJson { get; init; }
+    public string? GlossaryCorrectionsJson { get; init; }
+    public bool? GlossaryHardBlockApplied { get; init; }
 
     // Reviewer decision
     public ReviewerDecision ReviewerDecision { get; init; }

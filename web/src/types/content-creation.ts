@@ -242,6 +242,8 @@ export interface SectionValidationResult {
   artefactsJson: string | null;
   registryViolationsJson: string | null;
   reviewReasonsJson: string | null;
+  glossaryCorrectionsJson: string | null;
+  glossaryHardBlockApplied: boolean | null;
   reviewerDecision: ReviewerDecision;
   editedTranslation: string | null;
   decisionAt: string | null;

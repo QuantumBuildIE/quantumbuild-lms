@@ -99,6 +99,11 @@ public class TranslationValidationResultConfiguration : IEntityTypeConfiguration
         builder.Property(r => r.ReviewReasonsJson)
             .HasColumnType("text");
 
+        builder.Property(r => r.GlossaryCorrectionsJson)
+            .HasColumnType("text");
+
+        builder.Property(r => r.GlossaryHardBlockApplied);
+
         // Reviewer decision
         builder.Property(r => r.ReviewerDecision)
             .IsRequired()

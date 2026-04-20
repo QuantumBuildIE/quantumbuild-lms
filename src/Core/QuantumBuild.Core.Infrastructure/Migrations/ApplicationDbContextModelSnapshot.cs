@@ -4078,6 +4078,12 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasDefaultValue(0);
 
+                    b.Property<string>("GlossaryCorrectionsJson")
+                        .HasColumnType("text");
+
+                    b.Property<bool?>("GlossaryHardBlockApplied")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("GlossaryMismatches")
                         .HasColumnType("text");
 

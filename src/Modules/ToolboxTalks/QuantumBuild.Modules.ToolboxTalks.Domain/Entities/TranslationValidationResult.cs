@@ -48,6 +48,10 @@ public class TranslationValidationResult : BaseEntity
     public string? RegistryViolationsJson { get; set; }
     public string? ReviewReasonsJson { get; set; }
 
+    // Glossary hard-block corrections applied before consensus scoring
+    public string? GlossaryCorrectionsJson { get; set; }
+    public bool? GlossaryHardBlockApplied { get; set; }
+
     // Reviewer decision
     public ReviewerDecision ReviewerDecision { get; set; } = ReviewerDecision.Pending;
     public string? EditedTranslation { get; set; }

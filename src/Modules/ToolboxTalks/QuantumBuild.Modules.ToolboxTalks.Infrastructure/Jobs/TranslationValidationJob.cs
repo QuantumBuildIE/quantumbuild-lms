@@ -676,13 +676,13 @@ public class TranslationValidationJob
                     isSafetyCritical = classification.IsSafetyCritical;
                 }
 
-                // Section title: sector-aware but not safety-critical, no glossary
+                // Section title: sector-aware, glossary terms injected for consistency with content
                 var titleResult = await _contentTranslationService.TranslateTextAsync(
                     title, languageName, false, cancellationToken,
                     sourceLanguage: source,
                     sectorKey: sectorKey,
                     isSafetyCritical: false,
-                    glossaryTerms: null,
+                    glossaryTerms: glossaryInstructions.Count > 0 ? glossaryInstructions : null,
                     tenantId: tenantId,
                     isSystemCall: true,
                     toolboxTalkId: talkId);
@@ -730,7 +730,9 @@ public class TranslationValidationJob
             if (talk != null)
             {
                 var titleTranslation = await _contentTranslationService.TranslateTextAsync(
-                    talk.Title, languageName, false, cancellationToken, sectorKey: sectorKey,
+                    talk.Title, languageName, false, cancellationToken,
+                    sectorKey: sectorKey,
+                    glossaryTerms: glossaryInstructions.Count > 0 ? glossaryInstructions : null,
                     tenantId: tenantId, isSystemCall: true, toolboxTalkId: talkId);
                 if (titleTranslation.Success)
                     translatedTitle = titleTranslation.TranslatedContent;

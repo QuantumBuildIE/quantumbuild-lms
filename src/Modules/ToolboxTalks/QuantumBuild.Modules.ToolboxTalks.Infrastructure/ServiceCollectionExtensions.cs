@@ -213,9 +213,10 @@ public static class ServiceCollectionExtensions
         .AddPolicyHandler((sp, _) => ResiliencePolicies.GetClaudePolicy(
             sp.GetRequiredService<ILogger<DialectDetectionService>>()));
 
-        // Register safety classification and glossary verification services (scoped — cache per request)
+        // Register safety classification, glossary verification, and glossary hard-block replacement
         services.AddScoped<ISafetyClassificationService, SafetyClassificationService>();
         services.AddScoped<IGlossaryTermVerificationService, GlossaryTermVerificationService>();
+        services.AddScoped<IGlossaryReplacementService, GlossaryReplacementService>();
 
         // Register Claude Haiku back-translation service (Provider A in consensus engine)
         services.AddHttpClient<IClaudeHaikuBackTranslationService, ClaudeHaikuBackTranslationService>(client =>
