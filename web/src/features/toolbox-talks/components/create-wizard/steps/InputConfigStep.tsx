@@ -587,7 +587,7 @@ export function InputConfigStep({
       <WizardSectionDivider number="1b" label="Translation Settings" />
 
       {/* Target Languages + Translation Pass Threshold */}
-      <div className="flex items-start gap-4">
+      <div className="flex items-start gap-3 rounded-lg border p-4">
         <div className="min-w-0" style={{ flex: '1 1 60%' }}>
           <Label className="mb-2 block text-sm font-medium">
             Target Languages
