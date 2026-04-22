@@ -25,6 +25,7 @@ import type {
   ContentCreationSessionStatus,
 } from '@/types/content-creation';
 import { AiSuggestionBanner } from './parse/AiSuggestionBanner';
+import { WizardSectionDivider } from '@/components/ui/wizard-section-divider';
 import { OutputTypeSelector } from './parse/OutputTypeSelector';
 import { SectionList } from './parse/SectionList';
 import { ParseLogPanel } from './parse/ParseLogPanel';
@@ -455,6 +456,9 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
             selectedType={state.selectedOutputType}
           />
 
+          {/* 2a — Output Type */}
+          <WizardSectionDivider number="2a" label="Output Type" />
+
           {/* Output Type Selector */}
           <OutputTypeSelector
             suggestedType={state.suggestedOutputType}
@@ -472,6 +476,9 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
               </AlertDescription>
             </Alert>
           )}
+
+          {/* 2b — Sections */}
+          <WizardSectionDivider number="2b" label="Sections" />
 
           {/* Section List */}
           <SectionList

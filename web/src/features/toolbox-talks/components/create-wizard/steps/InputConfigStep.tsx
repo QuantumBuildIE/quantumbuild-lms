@@ -19,6 +19,7 @@ import {
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Switch } from '@/components/ui/switch';
+import { WizardSectionDivider } from '@/components/ui/wizard-section-divider';
 import {
   AlertTriangle,
   FileText,
@@ -341,6 +342,9 @@ export function InputConfigStep({
 
   return (
     <div className="space-y-6">
+      {/* 1a — Content Source */}
+      <WizardSectionDivider number="1a" label="Content Source" />
+
       {/* Mode Selection */}
       <div>
         <Label className="mb-3 block text-sm font-medium">Content Source</Label>
@@ -580,6 +584,9 @@ export function InputConfigStep({
         </div>
       )}
 
+      {/* 1b — Translation Settings */}
+      <WizardSectionDivider number="1b" label="Translation Settings" />
+
       {/* Target Languages + Translation Pass Threshold */}
       <div className="flex items-start gap-4">
         <div className="min-w-0" style={{ flex: '1 1 60%' }}>
@@ -627,6 +634,9 @@ export function InputConfigStep({
         </div>
       </div>
 
+      {/* 1c — Content Options */}
+      <WizardSectionDivider number="1c" label="Content Options" />
+
       {/* Include Quiz Toggle */}
       <div className="flex items-center justify-between rounded-lg border p-4">
         <div className="space-y-0.5">
@@ -643,6 +653,9 @@ export function InputConfigStep({
           onCheckedChange={(checked) => updateState({ includeQuiz: checked })}
         />
       </div>
+
+      {/* 1d — Sector */}
+      <WizardSectionDivider number="1d" label="Sector" />
 
       {/* Sector Selection */}
       {tenantSectorsLoading ? (
@@ -727,6 +740,9 @@ export function InputConfigStep({
           </p>
         </div>
       )}
+
+      {/* 1e — Audit Metadata */}
+      <WizardSectionDivider number="1e" label="Audit Metadata" />
 
       {/* Audit Metadata */}
       <Card>

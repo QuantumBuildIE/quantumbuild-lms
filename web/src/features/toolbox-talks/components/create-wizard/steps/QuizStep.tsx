@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { WizardSectionDivider } from '@/components/ui/wizard-section-divider';
 import { Loader2, Sparkles, AlertCircle, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -258,12 +259,18 @@ export function QuizStep({ state, onNext, onBack }: QuizStepProps) {
         </Alert>
       )}
 
+      {/* 3a — Quiz Settings */}
+      <WizardSectionDivider number="3a" label="Quiz Settings" />
+
       {/* Quiz settings */}
       <QuizSettingsPanel
         settings={settings}
         onChange={handleSettingsChange}
         isSaving={isSaving}
       />
+
+      {/* 3b — Questions */}
+      <WizardSectionDivider number="3b" label="Questions" />
 
       {/* Section-grouped questions */}
       <div className="space-y-4">

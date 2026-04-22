@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
+import { WizardSectionDivider } from '@/components/ui/wizard-section-divider';
 import { Loader2, Languages, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -220,6 +221,9 @@ export function SettingsStep({ state, onNext, onBack }: SettingsStepProps) {
 
   return (
     <div className="space-y-6">
+      {/* 4a — Title & Description */}
+      <WizardSectionDivider number="4a" label="Title & Description" />
+
       {/* Panel A — Title, Description, Cover Image */}
       <TitleDescriptionPanel
         settings={settings}
@@ -230,6 +234,9 @@ export function SettingsStep({ state, onNext, onBack }: SettingsStepProps) {
         isUploading={uploadCoverImage.isPending}
         isSaving={isSaving}
       />
+
+      {/* 4b — Classification */}
+      <WizardSectionDivider number="4b" label="Classification" />
 
       <div className="grid gap-6 sm:grid-cols-2">
         {/* Panel B — Category */}
@@ -247,12 +254,18 @@ export function SettingsStep({ state, onNext, onBack }: SettingsStepProps) {
         />
       </div>
 
+      {/* 4c — Behaviour */}
+      <WizardSectionDivider number="4c" label="Behaviour" />
+
       {/* Panel D — Behaviour */}
       <BehaviourPanel
         settings={settings}
         onChange={handleChange}
         isSaving={isSaving}
       />
+
+      {/* 4d — Slideshow */}
+      <WizardSectionDivider number="4d" label="Slideshow" />
 
       {/* Panel E — Slideshow */}
       <SlideshowPanel
