@@ -22,8 +22,11 @@ public class TranslationValidationSettings
     public GeminiSettings Gemini { get; set; } = new();
 
     /// <summary>
-    /// DeepSeek API settings for back-translation
+    /// DeepSeek API settings — retained for reference only.
+    /// Removed from active pipeline in v6.4 (GDPR: indefinite retention, China-based servers).
+    /// Round 3 now uses Claude Sonnet via the existing Claude API key.
     /// </summary>
+    [Obsolete("Removed in pipeline v6.4 — GDPR risk. Round 3 now uses Claude Sonnet.")]
     public DeepSeekSettings DeepSeek { get; set; } = new();
 
     /// <summary>

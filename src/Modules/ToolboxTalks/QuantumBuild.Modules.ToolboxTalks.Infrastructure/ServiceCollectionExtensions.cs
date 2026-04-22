@@ -193,13 +193,13 @@ public static class ServiceCollectionExtensions
         })
         .AddPolicyHandler((sp, _) => ResiliencePolicies.GetTransientPolicy(
             sp.GetRequiredService<ILogger<GeminiTranslationService>>(), "Gemini"));
-        // DeepSeek: OpenAI-compatible API, configurable base URL
-        services.AddHttpClient<IDeepSeekTranslationService, DeepSeekTranslationService>(client =>
+        // Claude Sonnet: Round 3 final tiebreaker (v6.4 — replaced DeepSeek for GDPR compliance)
+        services.AddHttpClient<IClaudeSonnetBackTranslationService, ClaudeSonnetBackTranslationService>(client =>
         {
             client.Timeout = TimeSpan.FromMinutes(2); // 2 minutes for back-translation
         })
-        .AddPolicyHandler((sp, _) => ResiliencePolicies.GetTransientPolicy(
-            sp.GetRequiredService<ILogger<DeepSeekTranslationService>>(), "DeepSeek"));
+        .AddPolicyHandler((sp, _) => ResiliencePolicies.GetClaudePolicy(
+            sp.GetRequiredService<ILogger<ClaudeSonnetBackTranslationService>>()));
 
         // Register translation validation scoring and diff services (pure logic, no HTTP)
         services.AddSingleton<ILexicalScoringService, LexicalScoringService>();

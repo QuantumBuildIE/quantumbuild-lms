@@ -11,6 +11,7 @@ namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Validation;
 /// Back-translation service using the DeepSeek API (OpenAI-compatible format).
 /// Base URL is configurable to support alternative OpenAI-compatible endpoints.
 /// </summary>
+[Obsolete("Removed in pipeline v6.4 — GDPR risk (indefinite data retention, China-based servers). Round 3 now uses Claude Sonnet (claude-sonnet-4-20250514).")]
 public class DeepSeekTranslationService : IDeepSeekTranslationService
 {
     private const string ProviderName = "DeepSeek";

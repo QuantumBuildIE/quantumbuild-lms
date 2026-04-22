@@ -6,12 +6,12 @@ using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Validation;
 
-/// <summary>
-/// Implements escalating multi-round back-translation consensus logic.
-/// Round 1: Claude Haiku (A) + DeepL (B).
-/// Round 2: Add Gemini (C) if configured.
-/// Round 3: Add DeepSeek (D) if configured.
-/// </summary>
+// Round 1A: Claude Haiku  (claude-haiku-4-5-20251001) — back-translation A
+// Round 1B: DeepL         — back-translation B (independent signal)
+// Round 2:  Gemini        — tiebreaker (different training lineage)
+// Round 3:  Claude Sonnet (claude-sonnet-4-20250514) — final tiebreaker,
+//           fires only when rounds 1 and 2 disagree
+// Pipeline v6.4: DeepSeek removed — GDPR risk (indefinite retention, China-based servers)
 public class ConsensusEngine : IConsensusEngine
 {
     /// <summary>
@@ -23,7 +23,7 @@ public class ConsensusEngine : IConsensusEngine
     private readonly IClaudeHaikuBackTranslationService _claudeHaiku;
     private readonly IDeepLTranslationService _deepL;
     private readonly IGeminiTranslationService _gemini;
-    private readonly IDeepSeekTranslationService _deepSeek;
+    private readonly IClaudeSonnetBackTranslationService _claudeSonnet;
     private readonly ILexicalScoringService _scorer;
     private readonly TranslationValidationSettings _settings;
     private readonly ILogger<ConsensusEngine> _logger;
@@ -32,7 +32,7 @@ public class ConsensusEngine : IConsensusEngine
         IClaudeHaikuBackTranslationService claudeHaiku,
         IDeepLTranslationService deepL,
         IGeminiTranslationService gemini,
-        IDeepSeekTranslationService deepSeek,
+        IClaudeSonnetBackTranslationService claudeSonnet,
         ILexicalScoringService scorer,
         IOptions<TranslationValidationSettings> settings,
         ILogger<ConsensusEngine> logger)
@@ -40,7 +40,7 @@ public class ConsensusEngine : IConsensusEngine
         _claudeHaiku = claudeHaiku;
         _deepL = deepL;
         _gemini = gemini;
-        _deepSeek = deepSeek;
+        _claudeSonnet = claudeSonnet;
         _scorer = scorer;
         _settings = settings.Value;
         _logger = logger;
@@ -122,13 +122,14 @@ public class ConsensusEngine : IConsensusEngine
             }
         }
 
-        // ── Round 3: Add DeepSeek (D) if configured — final determination ──
+        // ── Round 3: Claude Sonnet (D) — final tiebreaker ──
         if (maxRounds >= 3)
         {
             result.RoundsUsed = 3;
 
-            var resultD = await _deepSeek.BackTranslateAsync(
-                translatedText, sourceLanguage, targetLanguage, cancellationToken);
+            var resultD = await _claudeSonnet.BackTranslateAsync(
+                translatedText, sourceLanguage, targetLanguage, cancellationToken,
+                tenantId: tenantId, toolboxTalkId: toolboxTalkId);
 
             if (resultD != null)
             {
@@ -140,7 +141,7 @@ public class ConsensusEngine : IConsensusEngine
             }
             else
             {
-                _logger.LogInformation("Round 3 — DeepSeek provider unavailable");
+                _logger.LogInformation("Round 3 — Claude Sonnet provider unavailable");
             }
         }
 

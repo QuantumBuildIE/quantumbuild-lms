@@ -82,7 +82,7 @@ public static class ResiliencePolicies
 
     /// <summary>
     /// Generic transient policy: 3 retries, exponential backoff 1s/2s/4s.
-    /// For DeepL, Gemini, DeepSeek and other external providers.
+    /// For DeepL, Gemini, and other external providers.
     /// Triggers on HttpRequestException, 429, and all 5xx status codes.
     /// </summary>
     public static IAsyncPolicy<HttpResponseMessage> GetTransientPolicy(ILogger logger, string providerName = "External")

@@ -23,7 +23,7 @@ public class ConsensusResult
     public string? BackTranslationC { get; set; }
 
     /// <summary>
-    /// Back-translation from Provider D (DeepSeek).
+    /// Back-translation from Provider D (Claude Sonnet — Round 3 final tiebreaker, v6.4+).
     /// </summary>
     public string? BackTranslationD { get; set; }
 
@@ -67,7 +67,7 @@ public class ConsensusResult
 /// Implements escalating multi-round back-translation consensus logic.
 /// Round 1: Claude Haiku (A) + DeepL (B). If both pass threshold and agreement is high → PASS.
 /// Round 2: Add Gemini (C) if configured. Recalculate.
-/// Round 3: Add DeepSeek (D) if configured. Final determination.
+/// Round 3: Add Claude Sonnet (D) if configured. Final determination. (v6.4: replaced DeepSeek)
 /// </summary>
 public interface IConsensusEngine
 {
