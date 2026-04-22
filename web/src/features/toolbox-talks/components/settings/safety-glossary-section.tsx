@@ -226,6 +226,13 @@ function SectorRow({
         </div>
       </div>
 
+      {/* Override hint */}
+      {sector.isSystemDefault && !overrideExists && (
+        <p className="px-3 pb-2 text-xs text-muted-foreground">
+          Creating an override copies these terms to your tenant so you can customise, add, or remove them without affecting other tenants.
+        </p>
+      )}
+
       {/* Inline sector edit */}
       {editingSector && !sector.isSystemDefault && (
         <div className="px-3 pb-3 flex items-center gap-2">
@@ -529,7 +536,12 @@ function TermRow({
             <span className="text-xs text-muted-foreground">None</span>
           )}
         </div>
-        {!isSystemDefault && (
+        {isSystemDefault ? (
+          <div className="flex items-center gap-1 text-xs text-muted-foreground justify-end">
+            <Lock className="h-3 w-3 shrink-0" />
+            <span>System default — create a tenant override to enable editing</span>
+          </div>
+        ) : (
           <div className="flex gap-1 w-16 justify-end">
             <Button
               variant="ghost"
