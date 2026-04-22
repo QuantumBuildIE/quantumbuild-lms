@@ -23,8 +23,6 @@ export function BehaviourPanel({ settings, onChange, isSaving }: BehaviourPanelP
 
   return (
     <div className="rounded-lg border bg-muted/30 p-4 space-y-5">
-      <h3 className="text-sm font-semibold">Behaviour</h3>
-
       {/* Active on Publish */}
       <div className="flex items-center justify-between gap-3">
         <Label htmlFor="active-on-publish" className="text-sm">

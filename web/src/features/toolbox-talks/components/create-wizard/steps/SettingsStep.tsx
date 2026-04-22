@@ -222,7 +222,7 @@ export function SettingsStep({ state, onNext, onBack }: SettingsStepProps) {
   return (
     <div className="space-y-6">
       {/* 4a — Title & Description */}
-      <WizardSectionDivider number="4a" label="Title & Description" />
+      <WizardSectionDivider number="4a" label="Title & Description" firstSection />
 
       {/* Panel A — Title, Description, Cover Image */}
       <TitleDescriptionPanel

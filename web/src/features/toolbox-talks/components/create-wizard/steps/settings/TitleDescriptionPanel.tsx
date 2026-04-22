@@ -71,8 +71,6 @@ export function TitleDescriptionPanel({
 
   return (
     <div className="rounded-lg border bg-muted/30 p-4 space-y-4">
-      <h3 className="text-sm font-semibold">Title & Description</h3>
-
       {/* Title */}
       <div className="space-y-1.5">
         <Label htmlFor="settings-title" className="text-sm">

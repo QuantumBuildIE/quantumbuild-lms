@@ -343,11 +343,10 @@ export function InputConfigStep({
   return (
     <div className="space-y-6">
       {/* 1a — Content Source */}
-      <WizardSectionDivider number="1a" label="Content Source" />
+      <WizardSectionDivider number="1a" label="Content Source" firstSection />
 
       {/* Mode Selection */}
       <div>
-        <Label className="mb-3 block text-sm font-medium">Content Source</Label>
         <div className="grid grid-cols-3 gap-3">
           {INPUT_MODES.map(({ mode, label, icon: Icon, description }) => (
             <button
@@ -719,7 +718,6 @@ export function InputConfigStep({
       ) : (
         /* Case B — Multiple sectors, user picks */
         <div>
-          <Label className="mb-2 block text-sm font-medium">Sector</Label>
           <Select
             value={state.sectorKey ?? ''}
             onValueChange={(v) => updateState({ sectorKey: v })}
@@ -747,7 +745,6 @@ export function InputConfigStep({
       {/* Audit Metadata */}
       <Card>
         <CardContent className="pt-4">
-          <h3 className="mb-4 text-sm font-medium">Audit Metadata</h3>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="reviewer-name" className="text-xs">

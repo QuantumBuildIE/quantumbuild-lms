@@ -260,7 +260,7 @@ export function QuizStep({ state, onNext, onBack }: QuizStepProps) {
       )}
 
       {/* 3a — Quiz Settings */}
-      <WizardSectionDivider number="3a" label="Quiz Settings" />
+      <WizardSectionDivider number="3a" label="Quiz Settings" firstSection />
 
       {/* Quiz settings */}
       <QuizSettingsPanel

@@ -24,8 +24,6 @@ export function QuizSettingsPanel({ settings, onChange, isSaving }: QuizSettings
 
   return (
     <div className="rounded-lg border bg-muted/30 p-4">
-      <h3 className="text-sm font-semibold mb-4">Quiz Settings</h3>
-
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {/* Require Quiz */}
         <div className="flex items-center justify-between gap-3">
