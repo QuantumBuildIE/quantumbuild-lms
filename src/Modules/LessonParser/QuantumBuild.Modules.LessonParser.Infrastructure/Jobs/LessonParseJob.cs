@@ -102,7 +102,7 @@ public class LessonParseJob
             // Build ExtractionResult from the stored content
             var extraction = new ExtractionResult
             {
-                Content = extractedContent,
+                Content = extractedContent ?? string.Empty,
                 Title = contentTitle,
                 CharacterCount = extractedContent?.Length ?? 0
             };

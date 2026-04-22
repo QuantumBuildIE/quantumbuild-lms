@@ -1185,7 +1185,7 @@ public class ToolboxTalksController : ControllerBase
     [Authorize(Policy = "Learnings.Admin")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> DeleteTranslation(Guid id, string languageCode)
+    public IActionResult DeleteTranslation(Guid id, string languageCode)
     {
         try
         {

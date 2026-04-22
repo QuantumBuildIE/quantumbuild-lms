@@ -1,6 +1,8 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using QuantumBuild.Core.Application.Constants;
 using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Core.Domain;
 using QuantumBuild.Core.Domain.Entities;
@@ -10,7 +12,7 @@ namespace QuantumBuild.API.Controllers;
 [ApiController]
 [Route("api/tenants/{tenantId:guid}/modules")]
 [Authorize(Policy = "Tenant.Manage")]
-public class TenantModulesController(ICoreDbContext db) : ControllerBase
+public class TenantModulesController(ICoreDbContext db, ISystemAuditLogger auditLogger) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> GetModules(Guid tenantId)
@@ -39,7 +41,6 @@ public class TenantModulesController(ICoreDbContext db) : ControllerBase
         if (!ModuleNames.All.Contains(request.ModuleName))
             return BadRequest(new { error = $"Unknown module: '{request.ModuleName}'. Valid modules: {string.Join(", ", ModuleNames.All)}" });
 
-        // Check if tenant exists
         var tenantExists = await db.Tenants
             .IgnoreQueryFilters()
             .AnyAsync(t => t.Id == tenantId && !t.IsDeleted);
@@ -47,7 +48,6 @@ public class TenantModulesController(ICoreDbContext db) : ControllerBase
         if (!tenantExists)
             return NotFound(new { error = "Tenant not found." });
 
-        // Check if already assigned (including soft-deleted for restore)
         var existing = await db.TenantModules
             .IgnoreQueryFilters()
             .FirstOrDefaultAsync(m => m.TenantId == tenantId && m.ModuleName == request.ModuleName);
@@ -57,9 +57,12 @@ public class TenantModulesController(ICoreDbContext db) : ControllerBase
             if (!existing.IsDeleted)
                 return Conflict(new { error = $"Module '{request.ModuleName}' is already assigned to this tenant." });
 
-            // Restore soft-deleted record
             existing.IsDeleted = false;
             await db.SaveChangesAsync();
+
+            await auditLogger.LogAsync(AuditActions.Module.Assign, success: true,
+                entityType: "Tenant", entityId: tenantId,
+                metadataJson: JsonSerializer.Serialize(new { moduleName = request.ModuleName }));
 
             return Ok(new TenantModuleDto
             {
@@ -79,6 +82,10 @@ public class TenantModulesController(ICoreDbContext db) : ControllerBase
         db.TenantModules.Add(tenantModule);
         await db.SaveChangesAsync();
 
+        await auditLogger.LogAsync(AuditActions.Module.Assign, success: true,
+            entityType: "Tenant", entityId: tenantId,
+            metadataJson: JsonSerializer.Serialize(new { moduleName = request.ModuleName }));
+
         return CreatedAtAction(nameof(GetModules), new { tenantId }, new TenantModuleDto
         {
             ModuleName = tenantModule.ModuleName,
@@ -95,11 +102,20 @@ public class TenantModulesController(ICoreDbContext db) : ControllerBase
             .FirstOrDefaultAsync(m => m.TenantId == tenantId && m.ModuleName == moduleName && !m.IsDeleted);
 
         if (existing == null)
+        {
+            await auditLogger.LogAsync(AuditActions.Module.Remove, success: false,
+                entityType: "Tenant", entityId: tenantId,
+                failureReason: $"Module '{moduleName}' is not assigned to this tenant.",
+                metadataJson: JsonSerializer.Serialize(new { moduleName }));
             return NotFound(new { error = $"Module '{moduleName}' is not assigned to this tenant." });
+        }
 
         existing.IsDeleted = true;
         await db.SaveChangesAsync();
 
+        await auditLogger.LogAsync(AuditActions.Module.Remove, success: true,
+            entityType: "Tenant", entityId: tenantId,
+            metadataJson: JsonSerializer.Serialize(new { moduleName }));
         return NoContent();
     }
 }

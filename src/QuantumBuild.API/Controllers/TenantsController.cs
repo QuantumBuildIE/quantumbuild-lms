@@ -1,6 +1,8 @@
+using System.Text.Json;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using QuantumBuild.Core.Application.Constants;
 using QuantumBuild.Core.Application.Features.Tenants;
 using QuantumBuild.Core.Application.Features.Tenants.DTOs;
 using QuantumBuild.Core.Application.Interfaces;
@@ -17,6 +19,7 @@ public class TenantsController : ControllerBase
     private readonly ITenantOnboardingService _onboardingService;
     private readonly IMediator _mediator;
     private readonly ICurrentUserService _currentUserService;
+    private readonly ISystemAuditLogger _auditLogger;
     private readonly ILogger<TenantsController> _logger;
 
     public TenantsController(
@@ -24,12 +27,14 @@ public class TenantsController : ControllerBase
         ITenantOnboardingService onboardingService,
         IMediator mediator,
         ICurrentUserService currentUserService,
+        ISystemAuditLogger auditLogger,
         ILogger<TenantsController> logger)
     {
         _tenantService = tenantService;
         _onboardingService = onboardingService;
         _mediator = mediator;
         _currentUserService = currentUserService;
+        _auditLogger = auditLogger;
         _logger = logger;
     }
 
@@ -66,7 +71,14 @@ public class TenantsController : ControllerBase
         var result = await _tenantService.CreateAsync(command);
 
         if (!result.Success)
+        {
+            await _auditLogger.LogAsync(AuditActions.Tenant.Create, success: false,
+                entityType: "Tenant", failureReason: result.Errors.FirstOrDefault() ?? result.Message);
             return BadRequest(result);
+        }
+
+        await _auditLogger.LogAsync(AuditActions.Tenant.Create, success: true,
+            entityType: "Tenant", entityId: result.Data!.Id, entityDisplayName: result.Data!.Name);
 
         if (!string.IsNullOrWhiteSpace(command.ContactEmail) && !string.IsNullOrWhiteSpace(command.ContactName))
         {
@@ -92,8 +104,15 @@ public class TenantsController : ControllerBase
         var result = await _tenantService.UpdateAsync(id, command);
 
         if (!result.Success)
+        {
+            await _auditLogger.LogAsync(AuditActions.Tenant.Update, success: false,
+                entityType: "Tenant", entityId: id,
+                failureReason: result.Errors.FirstOrDefault() ?? result.Message);
             return NotFound(result);
+        }
 
+        await _auditLogger.LogAsync(AuditActions.Tenant.Update, success: true,
+            entityType: "Tenant", entityId: id, entityDisplayName: result.Data!.Name);
         return Ok(result);
     }
 
@@ -103,8 +122,16 @@ public class TenantsController : ControllerBase
         var result = await _tenantService.UpdateStatusAsync(id, command);
 
         if (!result.Success)
+        {
+            await _auditLogger.LogAsync(AuditActions.Tenant.StatusUpdate, success: false,
+                entityType: "Tenant", entityId: id,
+                failureReason: result.Errors.FirstOrDefault() ?? result.Message);
             return NotFound(result);
+        }
 
+        await _auditLogger.LogAsync(AuditActions.Tenant.StatusUpdate, success: true,
+            entityType: "Tenant", entityId: id,
+            metadataJson: JsonSerializer.Serialize(new { status = command.Status.ToString() }));
         return Ok(result);
     }
 
@@ -113,14 +140,30 @@ public class TenantsController : ControllerBase
     {
         var tenant = await _tenantService.GetByIdAsync(id);
         if (!tenant.Success)
+        {
+            await _auditLogger.LogAsync(AuditActions.Tenant.Reset, success: false,
+                entityType: "Tenant", entityId: id, failureReason: "Tenant not found",
+                metadataJson: JsonSerializer.Serialize(new { resetAt = DateTimeOffset.UtcNow }));
             return NotFound(tenant);
+        }
 
         var result = await _mediator.Send(new ResetTenantDataCommand(id));
+        var metadata = JsonSerializer.Serialize(new { resetAt = DateTimeOffset.UtcNow });
+
         if (!result.Success)
+        {
+            await _auditLogger.LogAsync(AuditActions.Tenant.Reset, success: false,
+                entityType: "Tenant", entityId: id, entityDisplayName: tenant.Data!.Name,
+                failureReason: result.Errors.FirstOrDefault() ?? result.Message,
+                metadataJson: metadata);
             return BadRequest(result);
+        }
+
+        await _auditLogger.LogAsync(AuditActions.Tenant.Reset, success: true,
+            entityType: "Tenant", entityId: id, entityDisplayName: tenant.Data!.Name,
+            metadataJson: metadata);
 
         _logger.LogInformation("Tenant {TenantId} data reset by {UserId}", id, _currentUserService.UserId);
-
         return Ok(new { message = "Tenant data reset successfully", tenantId = id });
     }
 }

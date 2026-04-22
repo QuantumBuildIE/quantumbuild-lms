@@ -34,4 +34,9 @@ public abstract class BaseEntity
     /// Soft delete flag - true if entity is deleted
     /// </summary>
     public bool IsDeleted { get; set; }
+
+    /// <summary>
+    /// User who soft-deleted this entity (null if not deleted)
+    /// </summary>
+    public string? DeletedBy { get; set; }
 }
