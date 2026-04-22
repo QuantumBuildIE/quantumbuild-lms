@@ -744,7 +744,7 @@ export function InputConfigStep({
 
       {/* Audit Metadata */}
       <Card>
-        <CardContent className="pt-4">
+        <CardContent>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="reviewer-name" className="text-xs">
