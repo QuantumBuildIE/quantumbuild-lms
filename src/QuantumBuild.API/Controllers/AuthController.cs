@@ -17,12 +17,14 @@ public class AuthController : ControllerBase
     private readonly IAuthService _authService;
     private readonly IUserService _userService;
     private readonly ICoreDbContext _db;
+    private readonly ILogger<AuthController> _logger;
 
-    public AuthController(IAuthService authService, IUserService userService, ICoreDbContext db)
+    public AuthController(IAuthService authService, IUserService userService, ICoreDbContext db, ILogger<AuthController> logger)
     {
         _authService = authService;
         _userService = userService;
         _db = db;
+        _logger = logger;
     }
 
     /// <summary>

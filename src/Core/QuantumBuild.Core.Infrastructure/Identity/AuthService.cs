@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using QuantumBuild.Core.Application.DTOs.Auth;
@@ -22,17 +23,20 @@ public class AuthService : IAuthService
     private readonly RoleManager<Role> _roleManager;
     private readonly JwtSettings _jwtSettings;
     private readonly ICoreDbContext _db;
+    private readonly ILogger<AuthService> _logger;
 
     public AuthService(
         UserManager<User> userManager,
         RoleManager<Role> roleManager,
         IOptions<JwtSettings> jwtSettings,
-        ICoreDbContext db)
+        ICoreDbContext db,
+        ILogger<AuthService> logger)
     {
         _userManager = userManager;
         _roleManager = roleManager;
         _jwtSettings = jwtSettings.Value;
         _db = db;
+        _logger = logger;
     }
 
     public async Task<AuthResponse> LoginAsync(LoginRequest request)

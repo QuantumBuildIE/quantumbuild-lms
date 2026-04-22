@@ -28,6 +28,9 @@ public interface ICoreDbContext
     DbSet<LookupValue> LookupValues { get; }
     DbSet<TenantLookupValue> TenantLookupValues { get; }
 
+    // Audit DbSets
+    DbSet<SystemAuditLog> SystemAuditLogs { get; }
+
     /// <summary>
     /// Save changes to the database
     /// </summary>

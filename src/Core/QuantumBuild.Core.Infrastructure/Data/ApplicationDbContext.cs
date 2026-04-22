@@ -107,6 +107,9 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
     public DbSet<AiUsageLog> AiUsageLogs => Set<AiUsageLog>();
     public DbSet<AiUsageSummary> AiUsageSummaries => Set<AiUsageSummary>();
 
+    // Audit DbSets
+    public DbSet<SystemAuditLog> SystemAuditLogs => Set<SystemAuditLog>();
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         base.OnConfiguring(optionsBuilder);
@@ -259,6 +262,7 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.ApplyConfiguration(new RegulatoryRequirementMappingConfiguration());
         modelBuilder.ApplyConfiguration(new AiUsageLogConfiguration());
         modelBuilder.ApplyConfiguration(new AiUsageSummaryConfiguration());
+        modelBuilder.ApplyConfiguration(new SystemAuditLogConfiguration());
 
         // Apply global query filters - Core entities
         // BypassTenantFilter allows SuperUser to see all tenants' data when no tenant is selected

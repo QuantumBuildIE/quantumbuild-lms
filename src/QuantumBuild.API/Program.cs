@@ -99,6 +99,7 @@ builder.Services.AddHttpClient("ClaudeApi", client =>
 // Register Infrastructure services
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<ITenantRepository, TenantRepository>();
+builder.Services.AddScoped<ISystemAuditLogger, SystemAuditLogger>();
 
 // Register Email Provider
 builder.Services.Configure<EmailProviderSettings>(
