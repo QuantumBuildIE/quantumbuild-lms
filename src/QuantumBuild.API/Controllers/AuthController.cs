@@ -34,7 +34,8 @@ public class AuthController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
-        var result = await _authService.LoginAsync(request);
+        var ipAddress = GetClientIpAddress();
+        var result = await _authService.LoginAsync(request, ipAddress);
 
         if (!result.Success)
         {
@@ -42,6 +43,19 @@ public class AuthController : ControllerBase
         }
 
         return Ok(result);
+    }
+
+    private string? GetClientIpAddress()
+    {
+        var forwardedFor = Request.Headers["X-Forwarded-For"].FirstOrDefault();
+        if (!string.IsNullOrEmpty(forwardedFor))
+        {
+            var ip = forwardedFor.Split(',').First().Trim();
+            if (ip.Length <= 50) return ip;
+        }
+        var remoteIp = HttpContext.Connection.RemoteIpAddress?.ToString();
+        if (remoteIp?.Length <= 50) return remoteIp;
+        return null;
     }
 
     /// <summary>

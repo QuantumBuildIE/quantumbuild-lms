@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using QuantumBuild.Core.Application.Constants;
 using QuantumBuild.Core.Application.DTOs.Auth;
 using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Core.Domain;
@@ -24,41 +25,78 @@ public class AuthService : IAuthService
     private readonly JwtSettings _jwtSettings;
     private readonly ICoreDbContext _db;
     private readonly ILogger<AuthService> _logger;
+    private readonly ISystemAuditLogger _auditLogger;
 
     public AuthService(
         UserManager<User> userManager,
         RoleManager<Role> roleManager,
         IOptions<JwtSettings> jwtSettings,
         ICoreDbContext db,
-        ILogger<AuthService> logger)
+        ILogger<AuthService> logger,
+        ISystemAuditLogger auditLogger)
     {
         _userManager = userManager;
         _roleManager = roleManager;
         _jwtSettings = jwtSettings.Value;
         _db = db;
         _logger = logger;
+        _auditLogger = auditLogger;
     }
 
-    public async Task<AuthResponse> LoginAsync(LoginRequest request)
+    public async Task<AuthResponse> LoginAsync(LoginRequest request, string? ipAddress = null)
     {
         // Use Users queryable to ensure all custom properties (including EmployeeId) are loaded
         var user = await _userManager.Users
             .FirstOrDefaultAsync(u => u.NormalizedEmail == request.Email.ToUpperInvariant());
         if (user == null)
         {
+            await _auditLogger.LogAsync(
+                AuditActions.Auth.LoginFailed,
+                success: false,
+                failureReason: "User not found",
+                ipAddress: ipAddress);
             return AuthResponse.Failure("Invalid email or password.");
         }
 
         if (!user.IsActive)
         {
+            await _auditLogger.LogAsync(
+                AuditActions.Auth.LoginAccountInactive,
+                success: false,
+                entityType: "User",
+                entityId: user.Id,
+                entityDisplayName: user.FullName,
+                failureReason: "Account inactive",
+                ipAddress: ipAddress);
             return AuthResponse.Failure("This account has been deactivated.");
         }
 
         var isValidPassword = await _userManager.CheckPasswordAsync(user, request.Password);
         if (!isValidPassword)
         {
+            await _auditLogger.LogAsync(
+                AuditActions.Auth.LoginFailed,
+                success: false,
+                entityType: "User",
+                entityId: user.Id,
+                entityDisplayName: user.FullName,
+                failureReason: "Invalid password",
+                ipAddress: ipAddress);
+            await _userManager.AccessFailedAsync(user);
             return AuthResponse.Failure("Invalid email or password.");
         }
+
+        user.LastLoginAt = DateTimeOffset.UtcNow;
+        user.LastLoginIp = ipAddress;
+        await _userManager.UpdateAsync(user);
+
+        await _auditLogger.LogAsync(
+            AuditActions.Auth.LoginSuccess,
+            success: true,
+            entityType: "User",
+            entityId: user.Id,
+            entityDisplayName: user.FullName,
+            ipAddress: ipAddress);
 
         return await GenerateAuthResponseAsync(user);
     }
@@ -96,12 +134,20 @@ public class AuthService : IAuthService
         var principal = GetPrincipalFromExpiredToken(request.AccessToken);
         if (principal == null)
         {
+            await _auditLogger.LogAsync(
+                AuditActions.Auth.TokenRefresh,
+                success: false,
+                failureReason: "Invalid access token");
             return AuthResponse.Failure("Invalid access token.");
         }
 
         var userIdClaim = principal.FindFirst(ClaimTypes.NameIdentifier);
         if (userIdClaim == null || !Guid.TryParse(userIdClaim.Value, out var userId))
         {
+            await _auditLogger.LogAsync(
+                AuditActions.Auth.TokenRefresh,
+                success: false,
+                failureReason: "Invalid access token");
             return AuthResponse.Failure("Invalid access token.");
         }
 
@@ -110,13 +156,34 @@ public class AuthService : IAuthService
             .FirstOrDefaultAsync(u => u.Id == userId);
         if (user == null || user.RefreshToken != request.RefreshToken || user.RefreshTokenExpiryTime <= DateTime.UtcNow)
         {
+            await _auditLogger.LogAsync(
+                AuditActions.Auth.TokenRefresh,
+                success: false,
+                entityType: user != null ? "User" : null,
+                entityId: user?.Id,
+                entityDisplayName: user?.FullName,
+                failureReason: "Invalid or expired refresh token");
             return AuthResponse.Failure("Invalid or expired refresh token.");
         }
 
         if (!user.IsActive)
         {
+            await _auditLogger.LogAsync(
+                AuditActions.Auth.TokenRefresh,
+                success: false,
+                entityType: "User",
+                entityId: user.Id,
+                entityDisplayName: user.FullName,
+                failureReason: "Account inactive");
             return AuthResponse.Failure("This account has been deactivated.");
         }
+
+        await _auditLogger.LogAsync(
+            AuditActions.Auth.TokenRefresh,
+            success: true,
+            entityType: "User",
+            entityId: user.Id,
+            entityDisplayName: user.FullName);
 
         return await GenerateAuthResponseAsync(user);
     }
@@ -132,6 +199,13 @@ public class AuthService : IAuthService
         user.RefreshToken = null;
         user.RefreshTokenExpiryTime = null;
         await _userManager.UpdateAsync(user);
+
+        await _auditLogger.LogAsync(
+            AuditActions.Auth.Logout,
+            success: true,
+            entityType: "User",
+            entityId: user.Id,
+            entityDisplayName: user.FullName);
 
         return true;
     }

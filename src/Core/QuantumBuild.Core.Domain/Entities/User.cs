@@ -77,6 +77,9 @@ public class User : IdentityUser<Guid>
     /// </summary>
     public string? UpdatedBy { get; set; }
 
+    public DateTimeOffset? LastLoginAt { get; set; }
+    public string? LastLoginIp { get; set; }
+
     /// <summary>
     /// Navigation property to user roles
     /// </summary>

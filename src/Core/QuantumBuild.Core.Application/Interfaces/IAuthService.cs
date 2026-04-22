@@ -10,7 +10,7 @@ public interface IAuthService
     /// <summary>
     /// Authenticate a user with email and password
     /// </summary>
-    Task<AuthResponse> LoginAsync(LoginRequest request);
+    Task<AuthResponse> LoginAsync(LoginRequest request, string? ipAddress = null);
 
     /// <summary>
     /// Register a new user

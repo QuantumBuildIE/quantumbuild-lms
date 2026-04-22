@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using QuantumBuild.Core.Application.Constants;
 using QuantumBuild.Core.Application.Features.Users.DTOs;
 using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Core.Application.Models;
@@ -13,17 +14,20 @@ public class UserService : IUserService
     private readonly RoleManager<Role> _roleManager;
     private readonly ICurrentUserService _currentUserService;
     private readonly ICoreDbContext _context;
+    private readonly ISystemAuditLogger _auditLogger;
 
     public UserService(
         UserManager<User> userManager,
         RoleManager<Role> roleManager,
         ICurrentUserService currentUserService,
-        ICoreDbContext context)
+        ICoreDbContext context,
+        ISystemAuditLogger auditLogger)
     {
         _userManager = userManager;
         _roleManager = roleManager;
         _currentUserService = currentUserService;
         _context = context;
+        _auditLogger = auditLogger;
     }
 
     public async Task<Result<List<UserDto>>> GetAllAsync()
@@ -508,6 +512,10 @@ public class UserService : IUserService
 
             if (user == null)
             {
+                await _auditLogger.LogAsync(
+                    AuditActions.Auth.PasswordSet,
+                    success: false,
+                    failureReason: "User not found");
                 return Result.Fail("User not found");
             }
 
@@ -516,12 +524,26 @@ public class UserService : IUserService
             if (!result.Succeeded)
             {
                 var errors = result.Errors.Select(e => e.Description).ToList();
+                await _auditLogger.LogAsync(
+                    AuditActions.Auth.PasswordSet,
+                    success: false,
+                    entityType: "User",
+                    entityId: user.Id,
+                    entityDisplayName: user.FullName,
+                    failureReason: string.Join("; ", errors));
                 return Result.Fail(errors);
             }
 
             user.UpdatedAt = DateTime.UtcNow;
             user.UpdatedBy = _currentUserService.UserId;
             await _userManager.UpdateAsync(user);
+
+            await _auditLogger.LogAsync(
+                AuditActions.Auth.PasswordSet,
+                success: true,
+                entityType: "User",
+                entityId: user.Id,
+                entityDisplayName: user.FullName);
 
             return Result.Ok();
         }
@@ -538,6 +560,10 @@ public class UserService : IUserService
             // Validate passwords match
             if (dto.NewPassword != dto.ConfirmPassword)
             {
+                await _auditLogger.LogAsync(
+                    AuditActions.Auth.PasswordSet,
+                    success: false,
+                    failureReason: "Passwords do not match");
                 return Result.Fail("Passwords do not match");
             }
 
@@ -546,6 +572,10 @@ public class UserService : IUserService
 
             if (user == null)
             {
+                await _auditLogger.LogAsync(
+                    AuditActions.Auth.PasswordSet,
+                    success: false,
+                    failureReason: "Invalid token or email");
                 // Return generic error to avoid user enumeration
                 return Result.Fail("Invalid token or email");
             }
@@ -557,12 +587,28 @@ public class UserService : IUserService
             {
                 var errors = result.Errors.Select(e => e.Description).ToList();
 
+                string failureReason;
                 // Check for specific token errors and return generic message
                 if (errors.Any(e => e.Contains("Invalid token", StringComparison.OrdinalIgnoreCase)))
                 {
+                    failureReason = "Invalid or expired token";
+                    await _auditLogger.LogAsync(
+                        AuditActions.Auth.PasswordSet,
+                        success: false,
+                        entityType: "User",
+                        entityId: user.Id,
+                        entityDisplayName: user.FullName,
+                        failureReason: failureReason);
                     return Result.Fail("This password setup link has expired or is invalid. Please contact your administrator.");
                 }
 
+                await _auditLogger.LogAsync(
+                    AuditActions.Auth.PasswordSet,
+                    success: false,
+                    entityType: "User",
+                    entityId: user.Id,
+                    entityDisplayName: user.FullName,
+                    failureReason: string.Join("; ", errors));
                 return Result.Fail(errors);
             }
 
@@ -570,6 +616,13 @@ public class UserService : IUserService
             user.EmailConfirmed = true;
             user.UpdatedAt = DateTime.UtcNow;
             await _userManager.UpdateAsync(user);
+
+            await _auditLogger.LogAsync(
+                AuditActions.Auth.PasswordSet,
+                success: true,
+                entityType: "User",
+                entityId: user.Id,
+                entityDisplayName: user.FullName);
 
             return Result.Ok();
         }
