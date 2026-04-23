@@ -16,21 +16,23 @@ namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Validation;
 public class ClaudeHaikuBackTranslationService : IClaudeHaikuBackTranslationService
 {
     private const string ProviderName = "Claude Haiku";
-    private const string HaikuModel = "claude-haiku-4-5-20251001";
 
     private readonly HttpClient _httpClient;
     private readonly SubtitleProcessingSettings _settings;
+    private readonly TranslationValidationSettings _tvSettings;
     private readonly IAiUsageLogger _aiUsageLogger;
     private readonly ILogger<ClaudeHaikuBackTranslationService> _logger;
 
     public ClaudeHaikuBackTranslationService(
         HttpClient httpClient,
         IOptions<SubtitleProcessingSettings> settings,
+        IOptions<TranslationValidationSettings> tvSettings,
         IAiUsageLogger aiUsageLogger,
         ILogger<ClaudeHaikuBackTranslationService> logger)
     {
         _httpClient = httpClient;
         _settings = settings.Value;
+        _tvSettings = tvSettings.Value;
         _aiUsageLogger = aiUsageLogger;
         _logger = logger;
     }
@@ -73,7 +75,7 @@ public class ClaudeHaikuBackTranslationService : IClaudeHaikuBackTranslationServ
 
             var requestBody = new
             {
-                model = HaikuModel,
+                model = _tvSettings.Round1AModel,
                 max_tokens = 4096,
                 messages = new[]
                 {

@@ -4,6 +4,7 @@ using Hangfire;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.PreFlightScan;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Translations;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Validation;
@@ -30,6 +31,7 @@ public class TranslationValidationJob
     private readonly ILanguageCodeService _languageCodeService;
     private readonly ISafetyClassificationService _safetyClassificationService;
     private readonly IPreFlightScanService _preFlightScanService;
+    private readonly IPipelineVersionService _pipelineVersionService;
     private readonly ILogger<TranslationValidationJob> _logger;
 
     private static readonly JsonSerializerOptions CamelCaseOptions = new()
@@ -45,6 +47,7 @@ public class TranslationValidationJob
         ILanguageCodeService languageCodeService,
         ISafetyClassificationService safetyClassificationService,
         IPreFlightScanService preFlightScanService,
+        IPipelineVersionService pipelineVersionService,
         ILogger<TranslationValidationJob> logger)
     {
         _validationService = validationService;
@@ -54,6 +57,7 @@ public class TranslationValidationJob
         _languageCodeService = languageCodeService;
         _safetyClassificationService = safetyClassificationService;
         _preFlightScanService = preFlightScanService;
+        _pipelineVersionService = pipelineVersionService;
         _logger = logger;
     }
 
@@ -93,6 +97,11 @@ public class TranslationValidationJob
                     validationRunId, tenantId);
                 return;
             }
+
+            // Stamp with the active pipeline version (graceful degradation if none exists yet)
+            var pipelineVersion = await _pipelineVersionService.GetActiveAsync(cancellationToken);
+            if (pipelineVersion != null)
+                run.PipelineVersionId = pipelineVersion.Id;
 
             // Mark as running
             run.Status = ValidationRunStatus.Running;

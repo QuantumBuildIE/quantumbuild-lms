@@ -290,6 +290,9 @@ public static class ServiceCollectionExtensions
         // Register AI usage logger (fire-and-forget token tracking per API call)
         services.AddScoped<IAiUsageLogger, AiUsageLogger>();
 
+        // Register pipeline version service (system-level audit of active translation pipeline config)
+        services.AddScoped<IPipelineVersionService, PipelineVersionService>();
+
         // Register requirement mapping job HttpClient (calls Claude API for content analysis)
         services.AddHttpClient<RequirementMappingJob>(client =>
         {

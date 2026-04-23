@@ -43,6 +43,10 @@ public interface IToolboxTalksDbContext
     DbSet<TranslationValidationRun> TranslationValidationRuns { get; }
     DbSet<TranslationValidationResult> TranslationValidationResults { get; }
 
+    // Pipeline version audit entities
+    DbSet<PipelineVersion> PipelineVersions { get; }
+    DbSet<PipelineChangeRecord> PipelineChangeRecords { get; }
+
     // Safety glossary entities
     DbSet<SafetyGlossary> SafetyGlossaries { get; }
     DbSet<SafetyGlossaryTerm> SafetyGlossaryTerms { get; }

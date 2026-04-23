@@ -14,12 +14,6 @@ namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Validation;
 // Pipeline v6.4: DeepSeek removed — GDPR risk (indefinite retention, China-based servers)
 public class ConsensusEngine : IConsensusEngine
 {
-    /// <summary>
-    /// Minimum agreement percentage between providers to consider consensus strong.
-    /// If both provider scores are above threshold AND agreement is above this value, Round 1 passes.
-    /// </summary>
-    private const int AgreementThreshold = 10; // Max score difference between A and B for high agreement
-
     private readonly IClaudeHaikuBackTranslationService _claudeHaiku;
     private readonly IDeepLTranslationService _deepL;
     private readonly IGeminiTranslationService _gemini;
@@ -81,7 +75,7 @@ public class ConsensusEngine : IConsensusEngine
             result.ScoreA, resultA?.ProviderName ?? "unavailable",
             result.ScoreB, resultB?.ProviderName ?? "unavailable");
 
-        if (EvaluateRound1(result, threshold))
+        if (EvaluateRound1(result, threshold, _settings.AgreementThreshold))
         {
             result.Outcome = ValidationOutcome.Pass;
             result.FinalScore = CalculateFinalScore(result);
@@ -201,7 +195,7 @@ public class ConsensusEngine : IConsensusEngine
     /// <summary>
     /// Evaluates Round 1: both A and B must exceed threshold AND agreement must be high.
     /// </summary>
-    private static bool EvaluateRound1(ConsensusResult result, int threshold)
+    private static bool EvaluateRound1(ConsensusResult result, int threshold, int agreementThreshold)
     {
         // Both providers must have produced a result
         if (result.BackTranslationA == null || result.BackTranslationB == null)
@@ -213,7 +207,7 @@ public class ConsensusEngine : IConsensusEngine
 
         // Agreement between A and B must be within the tolerance
         var scoreDifference = Math.Abs(result.ScoreA - result.ScoreB);
-        return scoreDifference <= AgreementThreshold;
+        return scoreDifference <= agreementThreshold;
     }
 
     /// <summary>

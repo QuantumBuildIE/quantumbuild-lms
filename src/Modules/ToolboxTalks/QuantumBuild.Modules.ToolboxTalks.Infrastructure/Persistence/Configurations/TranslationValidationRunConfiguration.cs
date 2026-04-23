@@ -87,6 +87,9 @@ public class TranslationValidationRunConfiguration : IEntityTypeConfiguration<Tr
         builder.Property(r => r.PreFlightScanJson)
             .HasColumnType("text");
 
+        // Pipeline version stamp (nullable — pre-feature runs have null)
+        builder.Property(r => r.PipelineVersionId);
+
         // Run state
         builder.Property(r => r.Status)
             .IsRequired()
@@ -135,6 +138,10 @@ public class TranslationValidationRunConfiguration : IEntityTypeConfiguration<Tr
             .WithOne(res => res.ValidationRun)
             .HasForeignKey(res => res.ValidationRunId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // PipelineVersion FK — relationship managed from PipelineVersionConfiguration
+        builder.HasIndex(r => r.PipelineVersionId)
+            .HasDatabaseName("ix_translation_validation_runs_pipeline_version");
 
         // Indexes
         builder.HasIndex(r => r.TenantId)

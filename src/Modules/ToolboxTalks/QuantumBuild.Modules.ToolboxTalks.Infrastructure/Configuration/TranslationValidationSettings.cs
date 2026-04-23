@@ -59,6 +59,40 @@ public class TranslationValidationSettings
     /// Default: 24
     /// </summary>
     public int SessionExpiryHours { get; set; } = 24;
+
+    /// <summary>
+    /// Claude model used as Round 1A back-translator (Provider A in the consensus engine).
+    /// Default: claude-haiku-4-5-20251001
+    /// </summary>
+    public string Round1AModel { get; set; } = "claude-haiku-4-5-20251001";
+
+    /// <summary>
+    /// Claude model used as Round 3D back-translator (Provider D — final tiebreaker).
+    /// Replaced DeepSeek in pipeline v6.4 for GDPR compliance.
+    /// Default: claude-sonnet-4-20250514
+    /// </summary>
+    public string Round3DModel { get; set; } = "claude-sonnet-4-20250514";
+
+    /// <summary>
+    /// Maximum score difference between Round 1 providers (A and B) that is still considered
+    /// high agreement. If the difference exceeds this value, the engine escalates to Round 2.
+    /// Default: 10
+    /// </summary>
+    public int AgreementThreshold { get; set; } = 10;
+
+    /// <summary>
+    /// Version tag for the translation prompts currently in use.
+    /// Recorded in the pipeline version snapshot for audit purposes.
+    /// Default: v3
+    /// </summary>
+    public string PromptVersion { get; set; } = "v3";
+
+    /// <summary>
+    /// Human-readable pipeline version identifier recorded on each validation run.
+    /// Bump this string whenever a provider or threshold change is deployed.
+    /// Default: 6.4
+    /// </summary>
+    public string PipelineVersion { get; set; } = "6.4";
 }
 
 /// <summary>

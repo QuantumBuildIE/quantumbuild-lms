@@ -45,8 +45,12 @@ public class TranslationValidationRun : TenantEntity
     public DateTime? CompletedAt { get; set; }
     public string? AuditReportUrl { get; set; }
 
+    // Pipeline version stamp (nullable — null for runs that predate this feature)
+    public Guid? PipelineVersionId { get; set; }
+
     // Navigation properties
     public ToolboxTalk? ToolboxTalk { get; set; }
     public ToolboxTalkCourse? Course { get; set; }
     public ICollection<TranslationValidationResult> Results { get; set; } = new List<TranslationValidationResult>();
+    public PipelineVersion? PipelineVersion { get; set; }
 }

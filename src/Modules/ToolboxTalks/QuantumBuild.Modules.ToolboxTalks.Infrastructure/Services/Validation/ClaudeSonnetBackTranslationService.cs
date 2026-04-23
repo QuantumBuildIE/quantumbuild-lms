@@ -17,21 +17,23 @@ namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Validation;
 public class ClaudeSonnetBackTranslationService : IClaudeSonnetBackTranslationService
 {
     private const string ProviderName = "Claude Sonnet";
-    private const string SonnetModel = "claude-sonnet-4-20250514";
 
     private readonly HttpClient _httpClient;
     private readonly SubtitleProcessingSettings _settings;
+    private readonly TranslationValidationSettings _tvSettings;
     private readonly IAiUsageLogger _aiUsageLogger;
     private readonly ILogger<ClaudeSonnetBackTranslationService> _logger;
 
     public ClaudeSonnetBackTranslationService(
         HttpClient httpClient,
         IOptions<SubtitleProcessingSettings> settings,
+        IOptions<TranslationValidationSettings> tvSettings,
         IAiUsageLogger aiUsageLogger,
         ILogger<ClaudeSonnetBackTranslationService> logger)
     {
         _httpClient = httpClient;
         _settings = settings.Value;
+        _tvSettings = tvSettings.Value;
         _aiUsageLogger = aiUsageLogger;
         _logger = logger;
     }
@@ -74,7 +76,7 @@ public class ClaudeSonnetBackTranslationService : IClaudeSonnetBackTranslationSe
 
             var requestBody = new
             {
-                model = SonnetModel,
+                model = _tvSettings.Round3DModel,
                 max_tokens = 4096,
                 messages = new[]
                 {

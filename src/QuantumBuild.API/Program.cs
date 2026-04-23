@@ -13,6 +13,7 @@ using QuantumBuild.Core.Application.Abstractions.Email;
 using QuantumBuild.Core.Infrastructure.Services;
 using QuantumBuild.Core.Infrastructure.Services.Email;
 using QuantumBuild.Modules.ToolboxTalks.Application;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
@@ -473,6 +474,11 @@ static async Task SeedToolboxTalksDataAsync(IServiceProvider serviceProvider)
         await SectorSeedData.SeedAsync(context, logger);
         await RegulatoryProfileSeedData.SeedAsync(context, logger);
         await RegulatoryRequirementSeedData.SeedAsync(context, logger);
+
+        // Ensure the active pipeline version record exists on first startup
+        var pipelineVersionService = services.GetRequiredService<IPipelineVersionService>();
+        await pipelineVersionService.GetOrCreateCurrentAsync();
+
         logger.LogInformation("Learnings module seeding completed");
     }
     catch (Exception ex)
