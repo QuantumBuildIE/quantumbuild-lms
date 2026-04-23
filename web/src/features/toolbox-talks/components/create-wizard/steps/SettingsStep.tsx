@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { WizardSectionDivider } from '@/components/ui/wizard-section-divider';
-import { Loader2, Languages, ArrowRight } from 'lucide-react';
+import { Loader2, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   useCreationSession,
@@ -287,17 +287,11 @@ export function SettingsStep({ state, onNext, onBack }: SettingsStepProps) {
           {isStartingValidation ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              {state.targetLanguageCodes.length > 0 ? 'Starting Validation...' : 'Preparing...'}
-            </>
-          ) : state.targetLanguageCodes.length > 0 ? (
-            <>
-              <Languages className="mr-2 h-4 w-4" />
-              Translate & Validate
-              <ArrowRight className="ml-2 h-4 w-4" />
+              Continuing...
             </>
           ) : (
             <>
-              Continue to Publish
+              Continue
               <ArrowRight className="ml-2 h-4 w-4" />
             </>
           )}
