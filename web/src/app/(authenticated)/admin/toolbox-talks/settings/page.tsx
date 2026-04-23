@@ -6,6 +6,7 @@ import { usePermission } from '@/lib/auth/use-auth';
 import { SafetyGlossarySection } from '@/features/toolbox-talks/components/settings/safety-glossary-section';
 import { PassThresholdSection } from '@/features/toolbox-talks/components/settings/pass-threshold-section';
 import { AuditPurposeSection } from '@/features/toolbox-talks/components/settings/audit-purpose-section';
+import { SkipValidationSection } from '@/features/toolbox-talks/components/settings/skip-validation-section';
 
 export default function AdminToolboxTalksSettingsPage() {
   const hasAdminPermission = usePermission('Learnings.Admin');
@@ -95,6 +96,7 @@ export default function AdminToolboxTalksSettingsPage() {
 
         <TabsContent value="validation" className="space-y-6 pt-4">
           <SafetyGlossarySection />
+          <SkipValidationSection />
           <PassThresholdSection />
           <AuditPurposeSection />
         </TabsContent>

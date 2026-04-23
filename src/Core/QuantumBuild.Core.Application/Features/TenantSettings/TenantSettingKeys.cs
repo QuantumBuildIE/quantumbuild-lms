@@ -7,6 +7,7 @@ public static class TenantSettingKeys
     public const string EmailTeamName = "EmailTeamName";
     public const string TalkCertificatePrefix = "TalkCertificatePrefix";
     public const string CourseCertificatePrefix = "CourseCertificatePrefix";
+    public const string SkipValidationStep = "SkipValidationStep";
 
     public static class Defaults
     {
