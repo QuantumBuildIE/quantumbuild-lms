@@ -1,3 +1,4 @@
+// @deprecated — split into TranslateStep.tsx (step 5) and ValidateStep.tsx (step 6)
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';

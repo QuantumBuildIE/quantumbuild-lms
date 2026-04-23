@@ -368,13 +368,14 @@ export interface SectionCompletedEvent {
 // Wizard Step State
 // ============================================
 
-export type WizardStep = 1 | 2 | 3 | 4 | 5 | 6;
+export type WizardStep = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 export const WIZARD_STEPS = [
   { step: 1 as const, label: 'Input & Config' },
   { step: 2 as const, label: 'Parse' },
   { step: 3 as const, label: 'Quiz' },
   { step: 4 as const, label: 'Settings' },
-  { step: 5 as const, label: 'Translate & Validate' },
-  { step: 6 as const, label: 'Publish' },
+  { step: 5 as const, label: 'Translate' },
+  { step: 6 as const, label: 'Validate' },
+  { step: 7 as const, label: 'Publish' },
 ] as const;

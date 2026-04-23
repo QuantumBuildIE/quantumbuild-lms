@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Check, ChevronLeft, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useTenantSettings } from '@/lib/api/admin/use-tenant-settings';
 import type { WizardStep, InputMode, OutputType, ParsedSection } from '@/types/content-creation';
 
 // Lazy-load step components
@@ -15,16 +16,17 @@ const InputConfigStep = lazy(() =>
 const ParseStep = lazy(() =>
   import('./steps/ParseStep').then((m) => ({ default: m.ParseStep }))
 );
-const TranslateValidateStep = lazy(() =>
-  import('./steps/TranslateValidateStep').then((m) => ({
-    default: m.TranslateValidateStep,
-  }))
-);
 const QuizStep = lazy(() =>
   import('./steps/QuizStep').then((m) => ({ default: m.QuizStep }))
 );
 const SettingsStep = lazy(() =>
   import('./steps/SettingsStep').then((m) => ({ default: m.SettingsStep }))
+);
+const TranslateStep = lazy(() =>
+  import('./steps/TranslateStep').then((m) => ({ default: m.TranslateStep }))
+);
+const ValidateStep = lazy(() =>
+  import('./steps/ValidateStep').then((m) => ({ default: m.ValidateStep }))
 );
 const PublishStep = lazy(() =>
   import('./steps/PublishStep').then((m) => ({ default: m.PublishStep }))
@@ -39,8 +41,9 @@ const STEPS = [
   { id: 2 as WizardStep, name: 'Parse', description: 'Extract sections from content' },
   { id: 3 as WizardStep, name: 'Quiz', description: 'Review generated questions' },
   { id: 4 as WizardStep, name: 'Settings', description: 'Title, category, behaviour' },
-  { id: 5 as WizardStep, name: 'Translate & Validate', description: 'AI translation with validation' },
-  { id: 6 as WizardStep, name: 'Publish', description: 'Review and publish' },
+  { id: 5 as WizardStep, name: 'Translate', description: 'AI translation with progress' },
+  { id: 6 as WizardStep, name: 'Validate', description: 'Review and accept translations' },
+  { id: 7 as WizardStep, name: 'Publish', description: 'Review and publish' },
 ];
 
 // ============================================
@@ -111,50 +114,60 @@ export function CreateWizard() {
     setWizardState((prev) => ({ ...prev, ...updates }));
   }, []);
 
+  // Tenant settings — used to derive skip conditions
+  const { data: tenantSettings } = useTenantSettings();
+  const skipValidationStep = tenantSettings?.['SkipValidationStep'] === 'true';
+
   const hasTargetLanguages = wizardState.targetLanguageCodes.length > 0;
 
   const goToNextStep = useCallback(() => {
     setCurrentStep((prev) => {
-      let next = Math.min(prev + 1, 6) as WizardStep;
-      // Skip Quiz step when quiz is excluded
+      let next = Math.min(prev + 1, 7) as WizardStep;
+      // Skip Quiz when quiz is excluded
       if (next === 3 && !wizardState.includeQuiz) next = 4 as WizardStep;
-      // Skip Translate & Validate step when no target languages
-      if (next === 5 && !hasTargetLanguages) next = 6 as WizardStep;
+      // Skip both Translate (5) and Validate (6) when no target languages
+      if (next === 5 && !hasTargetLanguages) next = 7 as WizardStep;
+      // Skip Validate (6) when SkipValidationStep tenant setting is enabled
+      if (next === 6 && skipValidationStep) next = 7 as WizardStep;
       setHighestStep((h) => Math.max(h, next) as WizardStep);
       return next;
     });
-  }, [wizardState.includeQuiz, hasTargetLanguages]);
+  }, [wizardState.includeQuiz, hasTargetLanguages, skipValidationStep]);
 
   const goToPreviousStep = useCallback(() => {
     setCurrentStep((prev) => {
       let next = Math.max(prev - 1, 1) as WizardStep;
-      // Skip Quiz step when quiz is excluded
+      // Skip Quiz when quiz is excluded
       if (next === 3 && !wizardState.includeQuiz) next = 2 as WizardStep;
-      // Skip Translate & Validate step when no target languages
+      // Skip both Translate (5) and Validate (6) when no target languages
+      if (next === 6 && !hasTargetLanguages) next = 4 as WizardStep;
       if (next === 5 && !hasTargetLanguages) next = 4 as WizardStep;
+      // Skip Validate (6) when SkipValidationStep tenant setting is enabled
+      if (next === 6 && skipValidationStep) next = 5 as WizardStep;
       return next;
     });
-  }, [wizardState.includeQuiz, hasTargetLanguages]);
+  }, [wizardState.includeQuiz, hasTargetLanguages, skipValidationStep]);
 
   const goToStep = useCallback(
     (step: WizardStep) => {
-      // Prevent navigating to Quiz step when quiz is excluded
+      // Prevent navigating to skipped steps
       if (step === 3 && !wizardState.includeQuiz) return;
-      // Prevent navigating to Translate & Validate step when no target languages
       if (step === 5 && !hasTargetLanguages) return;
+      if (step === 6 && (!hasTargetLanguages || skipValidationStep)) return;
       if (step <= highestStep) {
         setCurrentStep(step);
       }
     },
-    [highestStep, wizardState.includeQuiz, hasTargetLanguages]
+    [highestStep, wizardState.includeQuiz, hasTargetLanguages, skipValidationStep]
   );
 
-  // Mark skipped steps instead of filtering them out
+  // Mark skipped steps for the indicator — greyed out with strikethrough
   const steps = STEPS.map((s) => ({
     ...s,
     skipped:
       (s.id === 3 && !wizardState.includeQuiz) ||
-      (s.id === 5 && !hasTargetLanguages),
+      (s.id === 5 && !hasTargetLanguages) ||
+      (s.id === 6 && (!hasTargetLanguages || skipValidationStep)),
   }));
 
   const handleCancel = () => {
@@ -212,7 +225,7 @@ export function CreateWizard() {
       case 5:
         return (
           <Suspense fallback={<StepLoader />}>
-            <TranslateValidateStep
+            <TranslateStep
               state={wizardState}
               updateState={updateState}
               onNext={goToNextStep}
@@ -221,6 +234,17 @@ export function CreateWizard() {
           </Suspense>
         );
       case 6:
+        return (
+          <Suspense fallback={<StepLoader />}>
+            <ValidateStep
+              state={wizardState}
+              updateState={updateState}
+              onNext={goToNextStep}
+              onBack={goToPreviousStep}
+            />
+          </Suspense>
+        );
+      case 7:
         return (
           <Suspense fallback={<StepLoader />}>
             <PublishStep
