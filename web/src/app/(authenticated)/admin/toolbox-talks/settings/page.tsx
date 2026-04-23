@@ -95,8 +95,8 @@ export default function AdminToolboxTalksSettingsPage() {
         </TabsContent>
 
         <TabsContent value="validation" className="space-y-6 pt-4">
-          <SafetyGlossarySection />
           <SkipValidationSection />
+          <SafetyGlossarySection />
           <PassThresholdSection />
           <AuditPurposeSection />
         </TabsContent>
