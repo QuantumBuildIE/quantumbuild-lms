@@ -46,8 +46,10 @@ export function SkipValidationSection() {
       <CardHeader>
         <CardTitle>Skip Validation Step</CardTitle>
         <CardDescription>
-          When enabled, the translation validation review step is skipped in the content
-          creation wizard. Translations will be published without manual review.
+          The validation step lets reviewers inspect each AI-translated 
+          section — accepting, editing, or rejecting translations before 
+          content is published. When enabled, this step is skipped and 
+          translations are published automatically without human review.
         </CardDescription>
       </CardHeader>
       <CardContent>
