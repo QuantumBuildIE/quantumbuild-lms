@@ -1,3 +1,4 @@
+using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
@@ -26,4 +27,11 @@ public interface IPipelineVersionService
     /// Called when an admin records a deliberate pipeline change.
     /// </summary>
     Task<PipelineVersion> CreateNewVersionAsync(string version, CancellationToken ct = default);
+
+    /// <summary>
+    /// Creates an append-only PipelineChangeRecord, bumps the active pipeline version,
+    /// and returns the persisted change record with a sequential ChangeId (e.g. "CR-0001").
+    /// </summary>
+    Task<PipelineChangeRecord> CreateChangeRecordAsync(
+        CreatePipelineChangeRecordRequest request, CancellationToken ct = default);
 }

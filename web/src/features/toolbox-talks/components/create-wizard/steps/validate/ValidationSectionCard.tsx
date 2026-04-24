@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   Loader2,
   Wand2,
+  Flag,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -47,6 +48,16 @@ interface GlossaryCorrection {
   originalFragment: string;
 }
 
+export interface DeviationPrefill {
+  validationRunId: string;
+  validationResultId: string;
+  moduleRef: string;
+  lessonRef: string;
+  languagePair: string;
+  sourceExcerpt: string;
+  targetExcerpt: string;
+}
+
 interface ValidationSectionCardProps {
   sectionIndex: number;
   sectionTitle: string;
@@ -61,6 +72,8 @@ interface ValidationSectionCardProps {
   defaultExpanded?: boolean;
   /** When true, hides Accept/Reject/Edit/Retry action buttons */
   readOnly?: boolean;
+  /** When provided, shows a Flag Issue button after a reviewer decision has been made */
+  onFlagDeviation?: (prefill: DeviationPrefill) => void;
 }
 
 // ============================================
@@ -142,6 +155,7 @@ export function ValidationSectionCard({
   isDecisionPending,
   defaultExpanded = false,
   readOnly = false,
+  onFlagDeviation,
 }: ValidationSectionCardProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const [isEditing, setIsEditing] = useState(false);
@@ -535,7 +549,7 @@ export function ValidationSectionCard({
 
         {/* Action buttons */}
         {!readOnly && !isEditing && (
-          <div className="flex gap-2 border-t pt-3">
+          <div className="flex flex-wrap gap-2 border-t pt-3">
             <Button
               size="sm"
               variant={
@@ -573,6 +587,51 @@ export function ValidationSectionCard({
                 <RefreshCw className="mr-1 h-3 w-3" />
               )}
               Retry
+            </Button>
+            {onFlagDeviation && hasDecision && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="ml-auto border-orange-300 text-orange-700 hover:bg-orange-50"
+                onClick={() =>
+                  onFlagDeviation({
+                    validationRunId: '',
+                    validationResultId: result.id ?? '',
+                    moduleRef: '',
+                    lessonRef: sectionTitle,
+                    languagePair: languageCode ? `en-${languageCode}` : '',
+                    sourceExcerpt: result.originalText?.slice(0, 300) ?? '',
+                    targetExcerpt: (result.editedTranslation ?? result.translatedText)?.slice(0, 300) ?? '',
+                  })
+                }
+              >
+                <Flag className="mr-1 h-3 w-3" />
+                Flag issue
+              </Button>
+            )}
+          </div>
+        )}
+        {/* Flag button in read-only mode (after reviewer decision) */}
+        {readOnly && !isEditing && onFlagDeviation && hasDecision && (
+          <div className="flex justify-end border-t pt-3">
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-orange-300 text-orange-700 hover:bg-orange-50"
+              onClick={() =>
+                onFlagDeviation({
+                  validationRunId: '',
+                  validationResultId: result!.id ?? '',
+                  moduleRef: '',
+                  lessonRef: sectionTitle,
+                  languagePair: languageCode ? `en-${languageCode}` : '',
+                  sourceExcerpt: result!.originalText?.slice(0, 300) ?? '',
+                  targetExcerpt: (result!.editedTranslation ?? result!.translatedText)?.slice(0, 300) ?? '',
+                })
+              }
+            >
+              <Flag className="mr-1 h-3 w-3" />
+              Flag issue
             </Button>
           </div>
         )}

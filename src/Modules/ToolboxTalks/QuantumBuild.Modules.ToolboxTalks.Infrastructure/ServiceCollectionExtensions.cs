@@ -293,6 +293,10 @@ public static class ServiceCollectionExtensions
         // Register pipeline version service (system-level audit of active translation pipeline config)
         services.AddScoped<IPipelineVersionService, PipelineVersionService>();
 
+        // Register pipeline audit Phase 2 services
+        services.AddScoped<ITranslationDeviationService, TranslationDeviationService>();
+        services.AddScoped<IPipelineAuditQueryService, PipelineAuditQueryService>();
+
         // Register requirement mapping job HttpClient (calls Claude API for content analysis)
         services.AddHttpClient<RequirementMappingJob>(client =>
         {

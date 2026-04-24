@@ -46,6 +46,7 @@ public interface IToolboxTalksDbContext
     // Pipeline version audit entities
     DbSet<PipelineVersion> PipelineVersions { get; }
     DbSet<PipelineChangeRecord> PipelineChangeRecords { get; }
+    DbSet<TranslationDeviation> TranslationDeviations { get; }
 
     // Safety glossary entities
     DbSet<SafetyGlossary> SafetyGlossaries { get; }

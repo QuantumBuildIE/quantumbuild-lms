@@ -16,6 +16,7 @@ const adminToolboxTalksNavItems = [
   { href: "/admin/toolbox-talks/certificates", label: "Certificates" },
   { href: "/admin/toolbox-talks/pending-mappings", label: "Mappings", permissions: ["Learnings.Admin"] },
   { href: "/admin/toolbox-talks/compliance", label: "Compliance", permissions: ["Learnings.Admin"] },
+  { href: "/admin/toolbox-talks/pipeline", label: "Pipeline Audit" },
   { href: "/admin/toolbox-talks/settings", label: "Settings", permissions: ["Learnings.Admin"] },
 ];
 

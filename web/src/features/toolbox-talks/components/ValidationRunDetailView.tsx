@@ -1,14 +1,15 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useCallback } from 'react';
 import { format } from 'date-fns';
 import { DownloadIcon, Loader2, ChevronLeft } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ValidationProgressPanel } from './create-wizard/steps/validate/ValidationProgressPanel';
-import { ValidationSectionCard } from './create-wizard/steps/validate/ValidationSectionCard';
+import { ValidationSectionCard, type DeviationPrefill } from './create-wizard/steps/validate/ValidationSectionCard';
 import { RegulatoryScorePanel } from './RegulatoryScorePanel';
 import { PreFlightScanBanner } from './PreFlightScanBanner';
 import {
@@ -36,10 +37,28 @@ export function ValidationRunDetailView({
   runId,
   onBack,
 }: ValidationRunDetailViewProps) {
+  const router = useRouter();
   const talkRunQuery = useValidationRun(talkId ?? null, talkId ? runId : null);
   const courseRunQuery = useCourseValidationRun(courseId ?? null, courseId ? runId : null);
   const { data: run, isLoading, error } = courseId ? courseRunQuery : talkRunQuery;
   const downloadMutation = useDownloadValidationReport();
+
+  const handleFlagDeviation = useCallback(
+    (prefill: DeviationPrefill) => {
+      const enriched: DeviationPrefill = {
+        ...prefill,
+        validationRunId: runId,
+        moduleRef: run
+          ? (run as any).talkTitle ?? (run as any).courseTitle ?? ''
+          : '',
+      };
+      const encoded = btoa(JSON.stringify(enriched));
+      router.push(
+        `/admin/toolbox-talks/pipeline?action=new_deviation&prefill=${encoded}`
+      );
+    },
+    [runId, run, router]
+  );
 
   const statusCounts = useMemo(() => {
     if (!run) return { pass: 0, review: 0, fail: 0, running: 0, pending: 0 };
@@ -253,6 +272,7 @@ export function ValidationRunDetailView({
             onRetry={() => {}}
             isDecisionPending={false}
             readOnly
+            onFlagDeviation={handleFlagDeviation}
           />
         ))}
       </div>

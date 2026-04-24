@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
 
@@ -131,6 +132,67 @@ public class PipelineVersionService : IPipelineVersionService
         };
 
         return JsonSerializer.Serialize(components, SnakeCaseOptions);
+    }
+
+    /// <inheritdoc />
+    public async Task<PipelineChangeRecord> CreateChangeRecordAsync(
+        CreatePipelineChangeRecordRequest request, CancellationToken ct = default)
+    {
+        // Capture the current active version before bumping
+        var previousActive = await GetActiveAsync(ct);
+
+        // Create a new pipeline version for this change
+        var newVersion = await CreateNewVersionAsync(request.NewVersionLabel, ct);
+
+        var changeId = await GenerateChangeIdAsync(ct);
+
+        var record = new PipelineChangeRecord
+        {
+            Id = Guid.NewGuid(),
+            ChangeId = changeId,
+            Component = request.Component,
+            ChangeFrom = request.ChangeFrom,
+            ChangeTo = request.ChangeTo,
+            Justification = request.Justification,
+            ImpactAssessment = request.ImpactAssessment,
+            PriorModulesAction = request.PriorModulesAction,
+            Approver = request.Approver,
+            DeployedAt = DateTimeOffset.UtcNow,
+            PipelineVersionId = newVersion.Id,
+            PreviousPipelineVersionId = previousActive?.Id
+        };
+
+        _dbContext.PipelineChangeRecords.Add(record);
+        await _dbContext.SaveChangesAsync(ct);
+
+        _logger.LogInformation(
+            "Pipeline change record {ChangeId} created, new version {Version} (hash {Hash})",
+            changeId, newVersion.Version, newVersion.Hash);
+
+        return record;
+    }
+
+    /// <summary>
+    /// Generates a system-wide sequential ChangeId: "CR-0001", "CR-0002", etc.
+    /// Includes soft-deleted records in the scan so IDs are never reused.
+    /// </summary>
+    private async Task<string> GenerateChangeIdAsync(CancellationToken ct)
+    {
+        var existingIds = await _dbContext.PipelineChangeRecords
+            .IgnoreQueryFilters()
+            .Where(cr => cr.ChangeId.StartsWith("CR-"))
+            .Select(cr => cr.ChangeId)
+            .ToListAsync(ct);
+
+        int maxSuffix = 0;
+        foreach (var id in existingIds)
+        {
+            var suffix = id[3..]; // "CR-0001" → "0001"
+            if (int.TryParse(suffix, out var num) && num > maxSuffix)
+                maxSuffix = num;
+        }
+
+        return $"CR-{maxSuffix + 1:D4}";
     }
 
     /// <summary>

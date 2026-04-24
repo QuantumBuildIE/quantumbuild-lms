@@ -92,6 +92,7 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
     public DbSet<TranslationValidationResult> TranslationValidationResults => Set<TranslationValidationResult>();
     public DbSet<PipelineVersion> PipelineVersions => Set<PipelineVersion>();
     public DbSet<PipelineChangeRecord> PipelineChangeRecords => Set<PipelineChangeRecord>();
+    public DbSet<TranslationDeviation> TranslationDeviations => Set<TranslationDeviation>();
     public DbSet<SafetyGlossary> SafetyGlossaries => Set<SafetyGlossary>();
     public DbSet<SafetyGlossaryTerm> SafetyGlossaryTerms => Set<SafetyGlossaryTerm>();
     public DbSet<ContentCreationSession> ContentCreationSessions => Set<ContentCreationSession>();
@@ -252,6 +253,7 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.ApplyConfiguration(new TranslationValidationResultConfiguration());
         modelBuilder.ApplyConfiguration(new PipelineVersionConfiguration());
         modelBuilder.ApplyConfiguration(new PipelineChangeRecordConfiguration());
+        modelBuilder.ApplyConfiguration(new TranslationDeviationConfiguration());
         modelBuilder.ApplyConfiguration(new SafetyGlossaryConfiguration());
         modelBuilder.ApplyConfiguration(new SafetyGlossaryTermConfiguration());
         modelBuilder.ApplyConfiguration(new ContentCreationSessionConfiguration());
