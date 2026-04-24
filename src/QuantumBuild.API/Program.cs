@@ -25,6 +25,8 @@ using QuantumBuild.Modules.LessonParser.Infrastructure.Hubs;
 using QuantumBuild.Modules.LessonParser.Infrastructure.Jobs;
 using QuantumBuild.Core.Application.Http;
 using QuantumBuild.Modules.LessonParser.Infrastructure.Persistence;
+using QuantumBuild.Core.Application.Abstractions;
+using QuantumBuild.Core.Infrastructure.Jobs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -134,6 +136,7 @@ builder.Services.AddScoped<VideoTranscriptionJob>();
 builder.Services.AddScoped<ContentCreationParseJob>();
 builder.Services.AddScoped<RequirementIngestionJob>();
 builder.Services.AddScoped<AggregateAiUsageJob>();
+builder.Services.AddScoped<IGenerateEmployeePinsJob, GenerateEmployeePinsJob>();
 
 // Add Hangfire with PostgreSQL storage
 builder.Services.AddHangfire(config => config

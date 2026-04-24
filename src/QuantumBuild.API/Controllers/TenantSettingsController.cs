@@ -1,5 +1,7 @@
+using Hangfire;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using QuantumBuild.Core.Application.Abstractions;
 using QuantumBuild.Core.Application.Features.TenantSettings;
 using QuantumBuild.Core.Application.Features.TenantSettings.DTOs;
 using QuantumBuild.Core.Application.Interfaces;
@@ -31,9 +33,28 @@ public class TenantSettingsController(
         if (tenantId == Guid.Empty)
             return BadRequest("Tenant context required.");
 
+        // Detect if QrLocationTrainingEnabled is being turned on for the first time
+        var qrSetting = dto.Settings.FirstOrDefault(s => s.Key == TenantSettingKeys.QrLocationTrainingEnabled);
+        bool shouldEnqueuePinJob = false;
+
+        if (qrSetting?.Value == "true")
+        {
+            var previous = await tenantSettingsService.GetSettingAsync(
+                tenantId, TenantSettingKeys.QrLocationTrainingEnabled, ct: ct);
+
+            if (previous != "true")
+                shouldEnqueuePinJob = true;
+        }
+
         foreach (var setting in dto.Settings)
         {
             await tenantSettingsService.SetSettingAsync(tenantId, setting.Key, setting.Value, ct);
+        }
+
+        if (shouldEnqueuePinJob)
+        {
+            BackgroundJob.Enqueue<IGenerateEmployeePinsJob>(
+                j => j.ExecuteAsync(tenantId, CancellationToken.None));
         }
 
         var settings = await tenantSettingsService.GetAllSettingsAsync(tenantId, ct);

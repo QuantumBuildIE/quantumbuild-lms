@@ -6,7 +6,7 @@ namespace QuantumBuild.Core.Application.Features.TenantSettings;
 
 public class TenantSettingsService(ICoreDbContext context) : ITenantSettingsService
 {
-    public async Task<string> GetSettingAsync(Guid tenantId, string key, string defaultValue, CancellationToken ct = default)
+    public async Task<string> GetSettingAsync(Guid tenantId, string key, string defaultValue = "", CancellationToken ct = default)
     {
         var setting = await context.TenantSettings
             .AsNoTracking()

@@ -11,6 +11,7 @@ import {
   linkEmployeeToUser,
   createUserForEmployee,
   unlinkEmployeeFromUser,
+  resetEmployeePin,
   type CreateEmployeeDto,
   type UpdateEmployeeDto,
   type GetEmployeesParams,
@@ -135,6 +136,12 @@ export function useUnlinkEmployeeFromUser() {
       queryClient.invalidateQueries({ queryKey: EMPLOYEES_KEY });
       queryClient.invalidateQueries({ queryKey: USERS_KEY });
     },
+  });
+}
+
+export function useResetEmployeePin() {
+  return useMutation({
+    mutationFn: (employeeId: string) => resetEmployeePin(employeeId),
   });
 }
 

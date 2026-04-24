@@ -2,7 +2,9 @@ using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using QuantumBuild.Core.Application.Abstractions;
 using QuantumBuild.Core.Application.Features.Employees.DTOs;
+using QuantumBuild.Core.Application.Features.TenantSettings;
 using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Core.Application.Models;
 using QuantumBuild.Core.Domain.Entities;
@@ -19,6 +21,8 @@ public class EmployeeService : IEmployeeService
     private readonly ILogger<EmployeeService> _logger;
     private readonly IEnumerable<INewEmployeeTrainingAssigner> _trainingAssigners;
     private readonly IEnumerable<IEmployeeLanguageChangeHandler> _languageChangeHandlers;
+    private readonly IEmployeePinService _pinService;
+    private readonly ITenantSettingsService _tenantSettings;
 
     private const string DefaultUserRole = "Operator";
 
@@ -30,7 +34,9 @@ public class EmployeeService : IEmployeeService
         IEmailService emailService,
         ILogger<EmployeeService> logger,
         IEnumerable<INewEmployeeTrainingAssigner> trainingAssigners,
-        IEnumerable<IEmployeeLanguageChangeHandler> languageChangeHandlers)
+        IEnumerable<IEmployeeLanguageChangeHandler> languageChangeHandlers,
+        IEmployeePinService pinService,
+        ITenantSettingsService tenantSettings)
     {
         _context = context;
         _userManager = userManager;
@@ -40,6 +46,8 @@ public class EmployeeService : IEmployeeService
         _logger = logger;
         _trainingAssigners = trainingAssigners;
         _languageChangeHandlers = languageChangeHandlers;
+        _pinService = pinService;
+        _tenantSettings = tenantSettings;
     }
 
     public async Task<Result<List<EmployeeDto>>> GetAllAsync()
@@ -357,13 +365,34 @@ public class EmployeeService : IEmployeeService
                 }
             }
 
+            // Optionally generate a QR workstation PIN if the feature is enabled
+            string? rawPin = null;
+            var qrEnabled = await _tenantSettings.GetSettingAsync(
+                tenantId, TenantSettingKeys.QrLocationTrainingEnabled);
+            if (qrEnabled == "true")
+            {
+                try
+                {
+                    rawPin = _pinService.GenerateRawPin();
+                    await _pinService.SetPinAsync(employee, rawPin);
+                    _logger.LogInformation(
+                        "Generated QR PIN for Employee {EmployeeId}", employee.Id);
+                }
+                catch (Exception pinEx)
+                {
+                    _logger.LogWarning(pinEx,
+                        "Failed to generate QR PIN for Employee {EmployeeId}", employee.Id);
+                    rawPin = null;
+                }
+            }
+
             // Send password setup email if user was created
             if (createdUser != null && !string.IsNullOrWhiteSpace(dto.Email))
             {
                 try
                 {
                     var token = await _userManager.GeneratePasswordResetTokenAsync(createdUser);
-                    await _emailService.SendPasswordSetupEmailAsync(dto.Email, dto.FirstName, token);
+                    await _emailService.SendPasswordSetupEmailAsync(dto.Email, dto.FirstName, token, qrPin: rawPin);
                     _logger.LogInformation(
                         "Sent password setup email to {Email} for Employee {EmployeeId}",
                         dto.Email,
@@ -1202,6 +1231,59 @@ public class EmployeeService : IEmployeeService
         {
             _logger.LogError(ex, "Error creating user for employee {EmployeeId}", employeeId);
             return Result.Fail<EmployeeDto>($"Error creating user: {ex.Message}");
+        }
+    }
+
+    public async Task<Result> ResetPinAsync(Guid employeeId, CancellationToken ct = default)
+    {
+        try
+        {
+            var tenantId = _currentUserService.TenantId;
+
+            var qrEnabled = await _tenantSettings.GetSettingAsync(
+                tenantId, TenantSettingKeys.QrLocationTrainingEnabled, ct: ct);
+
+            if (qrEnabled != "true")
+                return Result.Fail("QR Location Training is not enabled for this tenant.");
+
+            var employee = await _context.Employees
+                .FirstOrDefaultAsync(e => e.Id == employeeId, ct);
+
+            if (employee == null)
+                return Result.Fail($"Employee with ID {employeeId} not found");
+
+            if (string.IsNullOrWhiteSpace(employee.Email))
+                return Result.Fail("Employee does not have an email address. Cannot send PIN.");
+
+            var rawPin = await _pinService.ResetPinAsync(employee, ct);
+
+            try
+            {
+                await _emailService.SendPinEmailAsync(
+                    email: employee.Email,
+                    firstName: employee.FirstName,
+                    qrPin: rawPin,
+                    subject: "Your new workstation access PIN",
+                    introText: "Your workstation access PIN has been reset. Use the PIN below to identify yourself at QR-enabled training stations and worksite locations.",
+                    cancellationToken: ct);
+
+                _logger.LogInformation(
+                    "Sent PIN reset email to {Email} for Employee {EmployeeId}",
+                    employee.Email, employeeId);
+            }
+            catch (Exception emailEx)
+            {
+                _logger.LogWarning(emailEx,
+                    "Failed to send PIN reset email to {Email} for Employee {EmployeeId}",
+                    employee.Email, employeeId);
+            }
+
+            return Result.Ok();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error resetting PIN for Employee {EmployeeId}", employeeId);
+            return Result.Fail($"Error resetting PIN: {ex.Message}");
         }
     }
 

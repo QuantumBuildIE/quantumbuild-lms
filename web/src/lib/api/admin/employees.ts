@@ -179,3 +179,7 @@ export async function createUserForEmployee(
 export async function unlinkEmployeeFromUser(employeeId: string): Promise<void> {
   await apiClient.delete(`/employees/${employeeId}/unlink-user`);
 }
+
+export async function resetEmployeePin(employeeId: string): Promise<void> {
+  await apiClient.post(`/employees/${employeeId}/reset-pin`);
+}

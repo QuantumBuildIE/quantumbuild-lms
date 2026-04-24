@@ -1,16 +1,29 @@
 "use client";
 
+import { useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { EmployeeCertificatesSection } from "@/components/admin/employee-certificates-section";
 import { AssignedOperatorsSection } from "@/components/admin/assigned-operators-section";
-import { useEmployee } from "@/lib/api/admin/use-employees";
+import { useEmployee, useResetEmployeePin } from "@/lib/api/admin/use-employees";
 import { useUser } from "@/lib/api/admin/use-users";
 import { useLookupValues } from "@/hooks/use-lookups";
-import { ChevronLeft, Pencil } from "lucide-react";
+import { useTenantSettings } from "@/lib/api/admin/use-tenant-settings";
+import { ChevronLeft, Pencil, KeyRound } from "lucide-react";
+import { toast } from "sonner";
 import { format } from "date-fns";
 
 export default function EmployeeDetailPage() {
@@ -22,6 +35,20 @@ export default function EmployeeDetailPage() {
   const { data: linkedUser } = useUser(linkedUserId);
   const isSupervisor = linkedUser?.roles?.some((r) => r.name === "Supervisor") ?? false;
   const { data: languages = [] } = useLookupValues("Language");
+  const { data: settings } = useTenantSettings();
+  const qrEnabled = settings?.["QrLocationTrainingEnabled"] === "true";
+  const resetPinMutation = useResetEmployeePin();
+  const [pinResetConfirmOpen, setPinResetConfirmOpen] = useState(false);
+
+  const handleResetPin = async () => {
+    setPinResetConfirmOpen(false);
+    try {
+      await resetPinMutation.mutateAsync(employeeId);
+      toast.success("New PIN sent to employee's email");
+    } catch {
+      toast.error("Failed to reset PIN. Please try again.");
+    }
+  };
 
   const getLanguageName = (code: string) => {
     const lang = languages.find((l) => l.code === code);
@@ -104,12 +131,24 @@ export default function EmployeeDetailPage() {
             {employee.isActive ? "Active" : "Inactive"}
           </Badge>
         </div>
-        <Button asChild>
-          <Link href={`/admin/employees/${employeeId}/edit`}>
-            <Pencil className="h-4 w-4 mr-2" />
-            Edit
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          {qrEnabled && (
+            <Button
+              variant="outline"
+              onClick={() => setPinResetConfirmOpen(true)}
+              disabled={resetPinMutation.isPending}
+            >
+              <KeyRound className="h-4 w-4 mr-2" />
+              Reset Workstation PIN
+            </Button>
+          )}
+          <Button asChild>
+            <Link href={`/admin/employees/${employeeId}/edit`}>
+              <Pencil className="h-4 w-4 mr-2" />
+              Edit
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <Card className="max-w-2xl">
@@ -157,6 +196,27 @@ export default function EmployeeDetailPage() {
           <AssignedOperatorsSection employeeId={employeeId} />
         </div>
       )}
+
+      <AlertDialog open={pinResetConfirmOpen} onOpenChange={setPinResetConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset Workstation PIN?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will generate a new PIN and email it to{" "}
+              <strong>
+                {employee.firstName} {employee.lastName}
+              </strong>{" "}
+              at <strong>{employee.email}</strong>. Their current PIN will stop working immediately.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleResetPin}>
+              Reset PIN &amp; Send Email
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

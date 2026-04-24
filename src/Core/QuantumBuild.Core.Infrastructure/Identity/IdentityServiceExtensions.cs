@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
+using QuantumBuild.Core.Application.Abstractions;
 using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Core.Domain.Entities;
 using QuantumBuild.Core.Infrastructure.Services;
@@ -103,6 +104,10 @@ public static class IdentityServiceExtensions
 
         // Register permission authorization handler
         services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
+
+        // Register PIN services
+        services.AddScoped<IPasswordHasher<Employee>, PasswordHasher<Employee>>();
+        services.AddScoped<IEmployeePinService, EmployeePinService>();
 
         return services;
     }

@@ -219,6 +219,39 @@ public class EmployeesController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>
+    /// Resets an employee's QR workstation PIN and emails the new PIN to them.
+    /// Accessible by admins (Learnings.Admin) or by the employee themselves.
+    /// </summary>
+    [HttpPost("{id:guid}/reset-pin")]
+    public async Task<IActionResult> ResetPin(Guid id, CancellationToken ct)
+    {
+        var isAdmin = User.FindAll("permission").Any(c => c.Value == "Learnings.Admin") ||
+                      User.FindAll("is_super_user").Any(c =>
+                          string.Equals(c.Value, "true", StringComparison.OrdinalIgnoreCase));
+
+        var currentEmployeeId = GetCurrentEmployeeId();
+        var isSelf = currentEmployeeId.HasValue && currentEmployeeId.Value == id;
+
+        if (!isAdmin && !isSelf)
+            return Forbid();
+
+        var result = await _employeeService.ResetPinAsync(id, ct);
+
+        if (!result.Success)
+        {
+            await _auditLogger.LogAsync(AuditActions.Employee.PinReset, success: false,
+                entityType: "Employee", entityId: id,
+                failureReason: result.Errors.FirstOrDefault() ?? result.Message);
+            return BadRequest(result);
+        }
+
+        await _auditLogger.LogAsync(AuditActions.Employee.PinReset, success: true,
+            entityType: "Employee", entityId: id);
+
+        return Ok();
+    }
+
     // ── Supervisor Assignment Endpoints ──────────────────────────────────
 
     /// <summary>

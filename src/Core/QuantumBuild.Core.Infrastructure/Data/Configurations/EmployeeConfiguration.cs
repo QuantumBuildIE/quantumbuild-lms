@@ -55,6 +55,14 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
         builder.Property(e => e.FloatLinkedAt);
         builder.Property(e => e.FloatLinkMethod).HasMaxLength(50);
 
+        // QR Location Training PIN fields
+        builder.Property(e => e.QrPin).HasMaxLength(500);
+        builder.Property(e => e.QrPinIsSet).HasDefaultValue(false);
+        builder.Property(e => e.QrPinGeneratedAt);
+        builder.Property(e => e.QrPinLastUsedAt);
+        builder.Property(e => e.QrPinFailedAttempts).HasDefaultValue(0);
+        builder.Property(e => e.QrPinLockedUntil);
+
         // Ignore computed property
         builder.Ignore(e => e.FullName);
 

@@ -125,4 +125,36 @@ public class Employee : TenantEntity
     /// How this employee was linked to Float (Auto-Email, Auto-Name, Manual)
     /// </summary>
     public string? FloatLinkMethod { get; set; }
+
+    // QR Location Training PIN fields
+
+    /// <summary>
+    /// Bcrypt/PBKDF2 hashed workstation access PIN (never stored plain text)
+    /// </summary>
+    public string? QrPin { get; set; }
+
+    /// <summary>
+    /// False until the first PIN is generated for this employee
+    /// </summary>
+    public bool QrPinIsSet { get; set; }
+
+    /// <summary>
+    /// When the PIN was last generated or reset
+    /// </summary>
+    public DateTimeOffset? QrPinGeneratedAt { get; set; }
+
+    /// <summary>
+    /// When the PIN was last used successfully at a QR station
+    /// </summary>
+    public DateTimeOffset? QrPinLastUsedAt { get; set; }
+
+    /// <summary>
+    /// Number of consecutive failed PIN attempts (resets to 0 on success)
+    /// </summary>
+    public int QrPinFailedAttempts { get; set; }
+
+    /// <summary>
+    /// If set and in the future, PIN entry is locked until this time
+    /// </summary>
+    public DateTimeOffset? QrPinLockedUntil { get; set; }
 }

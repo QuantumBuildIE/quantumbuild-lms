@@ -42,4 +42,10 @@ public interface IEmployeeService
     /// <param name="employeeId">Employee ID</param>
     /// <returns>Result indicating success or failure</returns>
     Task<Result> UnlinkUserAsync(Guid employeeId);
+
+    /// <summary>
+    /// Resets the employee's QR workstation PIN and emails the new PIN to them.
+    /// Returns a failure result if QR Location Training is not enabled for the tenant.
+    /// </summary>
+    Task<Result> ResetPinAsync(Guid employeeId, CancellationToken ct = default);
 }

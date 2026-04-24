@@ -8,8 +8,9 @@ import { SafetyGlossarySection } from '@/features/toolbox-talks/components/setti
 import { PassThresholdSection } from '@/features/toolbox-talks/components/settings/pass-threshold-section';
 import { AuditPurposeSection } from '@/features/toolbox-talks/components/settings/audit-purpose-section';
 import { SkipValidationSection } from '@/features/toolbox-talks/components/settings/skip-validation-section';
+import { QrLocationTrainingSection } from '@/features/toolbox-talks/components/settings/qr-location-training-section';
 
-const VALID_TABS = ['general', 'notifications', 'quiz', 'validation'] as const;
+const VALID_TABS = ['general', 'notifications', 'quiz', 'validation', 'qr-training'] as const;
 type SettingsTab = typeof VALID_TABS[number];
 
 export default function AdminToolboxTalksSettingsPage() {
@@ -53,6 +54,7 @@ export default function AdminToolboxTalksSettingsPage() {
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="quiz">Quiz</TabsTrigger>
           <TabsTrigger value="validation">Validation</TabsTrigger>
+          <TabsTrigger value="qr-training">QR Training</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general" className="space-y-6 pt-4">
@@ -108,6 +110,10 @@ export default function AdminToolboxTalksSettingsPage() {
           <SafetyGlossarySection />
           <PassThresholdSection />
           <AuditPurposeSection />
+        </TabsContent>
+
+        <TabsContent value="qr-training" className="space-y-6 pt-4">
+          <QrLocationTrainingSection />
         </TabsContent>
       </Tabs>
     </div>

@@ -43,5 +43,6 @@ public static class AuditActions
         public const string Delete = "Employee.Delete";
         public const string AssignOperator = "Employee.AssignOperator";
         public const string UnassignOperator = "Employee.UnassignOperator";
+        public const string PinReset = "Employee.PinReset";
     }
 }
