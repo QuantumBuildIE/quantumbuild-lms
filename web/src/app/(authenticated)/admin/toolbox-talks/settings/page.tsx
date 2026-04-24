@@ -1,5 +1,6 @@
 'use client';
 
+import { useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePermission } from '@/lib/auth/use-auth';
@@ -8,8 +9,16 @@ import { PassThresholdSection } from '@/features/toolbox-talks/components/settin
 import { AuditPurposeSection } from '@/features/toolbox-talks/components/settings/audit-purpose-section';
 import { SkipValidationSection } from '@/features/toolbox-talks/components/settings/skip-validation-section';
 
+const VALID_TABS = ['general', 'notifications', 'quiz', 'validation'] as const;
+type SettingsTab = typeof VALID_TABS[number];
+
 export default function AdminToolboxTalksSettingsPage() {
   const hasAdminPermission = usePermission('Learnings.Admin');
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const initialTab: SettingsTab = VALID_TABS.includes(tabParam as SettingsTab)
+    ? (tabParam as SettingsTab)
+    : 'general';
 
   if (!hasAdminPermission) {
     return (
@@ -38,7 +47,7 @@ export default function AdminToolboxTalksSettingsPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="general">
+      <Tabs defaultValue={initialTab}>
         <TabsList>
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>

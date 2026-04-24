@@ -1396,7 +1396,7 @@ function TermGateTab() {
               Term Database
             </span>
             <Link
-              href="/admin/toolbox-talks/settings"
+              href="/admin/toolbox-talks/settings?tab=validation"
               className="text-sm font-normal text-primary hover:underline"
             >
               Manage Glossary →
