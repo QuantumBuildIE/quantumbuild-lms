@@ -117,6 +117,10 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
     public DbSet<CorpusRunResult> CorpusRunResults => Set<CorpusRunResult>();
     public DbSet<ProviderResultCache> ProviderResultCache => Set<ProviderResultCache>();
 
+    // QR location DbSets
+    public DbSet<QrLocation> QrLocations => Set<QrLocation>();
+    public DbSet<QrCode> QrCodes => Set<QrCode>();
+
     // Audit DbSets
     public DbSet<SystemAuditLog> SystemAuditLogs => Set<SystemAuditLog>();
 
@@ -281,6 +285,8 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.ApplyConfiguration(new CorpusRunConfiguration());
         modelBuilder.ApplyConfiguration(new CorpusRunResultConfiguration());
         modelBuilder.ApplyConfiguration(new ProviderResultCacheConfiguration());
+        modelBuilder.ApplyConfiguration(new QrLocationConfiguration());
+        modelBuilder.ApplyConfiguration(new QrCodeConfiguration());
 
         // Apply global query filters - Core entities
         // BypassTenantFilter allows SuperUser to see all tenants' data when no tenant is selected
@@ -294,6 +300,8 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.Entity<RegulatoryRequirementMapping>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<AuditCorpus>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<CorpusRun>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
+        modelBuilder.Entity<QrLocation>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
+        modelBuilder.Entity<QrCode>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<DpaAcceptance>().HasQueryFilter(e => !e.IsDeleted);
 
         // Note: Toolbox Talks query filters are defined in entity configurations

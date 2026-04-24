@@ -24,6 +24,7 @@ public class R2StorageService : IR2StorageService, IDisposable
     private const string SubsFolder = "subs";
     private const string CertificatesFolder = "certificates";
     private const string ValidationReportsFolder = "validation-reports";
+    private const string QrCodesFolder = "qr-codes";
 
     public R2StorageService(
         IOptions<R2StorageSettings> settings,
@@ -588,6 +589,52 @@ public class R2StorageService : IR2StorageService, IDisposable
         {
             _logger.LogError(ex, "Failed to delete all files for tenant {TenantId}", tenantId);
             throw;
+        }
+    }
+
+    #endregion
+
+    #region QR Codes
+
+    public async Task<R2UploadResult> UploadQrCodeImageAsync(
+        Guid tenantId,
+        string codeToken,
+        byte[] pngBytes,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var fileName = $"{codeToken}.png";
+            var key = BuildKey(tenantId, QrCodesFolder, fileName);
+            var contentLength = (long)pngBytes.Length;
+
+            _logger.LogInformation("Uploading QR code image to R2: {Key}", key);
+
+            var stream = new MemoryStream(pngBytes);
+
+            var request = new PutObjectRequest
+            {
+                BucketName = _settings.BucketName,
+                Key = key,
+                InputStream = stream,
+                ContentType = "image/png",
+                DisablePayloadSigning = true,
+                UseChunkEncoding = false
+            };
+
+            await _s3Client.PutObjectAsync(request, cancellationToken);
+            await stream.DisposeAsync();
+
+            var publicUrl = GeneratePublicUrl(tenantId, QrCodesFolder, fileName);
+
+            _logger.LogInformation("Successfully uploaded QR code image: {Url}", publicUrl);
+
+            return R2UploadResult.SuccessResult(publicUrl, key, contentLength, "image/png");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to upload QR code image for token {CodeToken}", codeToken);
+            return R2UploadResult.FailureResult($"QR code image upload failed: {ex.Message}");
         }
     }
 

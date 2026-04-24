@@ -83,5 +83,9 @@ public interface IToolboxTalksDbContext
     DbSet<CorpusRunResult> CorpusRunResults { get; }
     DbSet<ProviderResultCache> ProviderResultCache { get; }
 
+    // QR location entities
+    DbSet<QrLocation> QrLocations { get; }
+    DbSet<QrCode> QrCodes { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

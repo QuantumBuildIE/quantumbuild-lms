@@ -132,6 +132,16 @@ public interface IR2StorageService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Uploads a QR code PNG image to R2 storage.
+    /// Path: {tenantId}/qr-codes/{codeToken}.png
+    /// </summary>
+    Task<R2UploadResult> UploadQrCodeImageAsync(
+        Guid tenantId,
+        string codeToken,
+        byte[] pngBytes,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Deletes all files stored under a tenant's prefix.
     /// Used for complete tenant data removal.
     /// </summary>
