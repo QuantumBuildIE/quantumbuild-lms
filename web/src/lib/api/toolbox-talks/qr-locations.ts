@@ -128,3 +128,94 @@ export async function deleteQrCode(
 ): Promise<void> {
   await apiClient.delete(`/qr-locations/${locationId}/codes/${codeId}`);
 }
+
+// ── Session types ─────────────────────────────────────────────────────────────
+
+export type QrSessionStatus = 'Active' | 'Completed' | 'Abandoned';
+
+export interface QrSessionListItemDto {
+  id: string;
+  sessionToken: string;
+  employeeName: string;
+  locationName: string;
+  talkTitle?: string;
+  contentMode: ContentMode;
+  language: string;
+  status: QrSessionStatus;
+  startedAt: string;
+  completedAt?: string;
+  score?: number;
+}
+
+export interface QrSessionsByLocation {
+  locationName: string;
+  count: number;
+}
+
+export interface QrSessionsByLanguage {
+  language: string;
+  count: number;
+}
+
+export interface QrSessionSummaryDto {
+  totalSessions: number;
+  completedSessions: number;
+  abandonedSessions: number;
+  activeSessions: number;
+  averageScore?: number;
+  sessionsByLocation: QrSessionsByLocation[];
+  sessionsByLanguage: QrSessionsByLanguage[];
+}
+
+export interface QrSessionsParams {
+  employeeId?: string;
+  qrCodeId?: string;
+  status?: QrSessionStatus;
+  from?: string;
+  to?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export async function getQrSessions(
+  params?: QrSessionsParams
+): Promise<PaginatedResult<QrSessionListItemDto>> {
+  const response = await apiClient.get<PaginatedResult<QrSessionListItemDto>>(
+    '/qr-locations/sessions',
+    { params }
+  );
+  return response.data;
+}
+
+export async function getQrSessionsSummary(): Promise<QrSessionSummaryDto> {
+  const response = await apiClient.get<QrSessionSummaryDto>(
+    '/qr-locations/sessions/summary'
+  );
+  return response.data;
+}
+
+// ── Employee training history types ──────────────────────────────────────────
+
+export type TrainingHistoryItemType = 'ScheduledTalk' | 'QrSession';
+
+export interface EmployeeTrainingHistoryItemDto {
+  type: TrainingHistoryItemType;
+  itemId: string;
+  talkTitle: string;
+  locationName?: string;
+  contentMode?: ContentMode;
+  score?: number;
+  language?: string;
+  completedAt: string;
+}
+
+export async function getEmployeeTrainingHistory(
+  employeeId: string,
+  params?: { page?: number; pageSize?: number }
+): Promise<PaginatedResult<EmployeeTrainingHistoryItemDto>> {
+  const response = await apiClient.get<PaginatedResult<EmployeeTrainingHistoryItemDto>>(
+    `/employees/${employeeId}/training-history`,
+    { params }
+  );
+  return response.data;
+}

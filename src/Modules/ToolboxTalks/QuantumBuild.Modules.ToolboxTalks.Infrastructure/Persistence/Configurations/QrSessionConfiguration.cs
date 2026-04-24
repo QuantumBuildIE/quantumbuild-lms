@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
+using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Persistence.Configurations;
 
@@ -16,7 +17,7 @@ public class QrSessionConfiguration : IEntityTypeConfiguration<QrSession>
         builder.Property(x => x.SessionToken).IsRequired();
         builder.Property(x => x.Language).IsRequired().HasMaxLength(10);
         builder.Property(x => x.ContentMode).IsRequired().HasConversion<string>().HasMaxLength(50);
-        builder.Property(x => x.Status).IsRequired().HasConversion<string>().HasMaxLength(50).HasDefaultValue("Active");
+        builder.Property(x => x.Status).IsRequired().HasConversion<string>().HasMaxLength(50).HasDefaultValue(QrSessionStatus.Active);
         builder.Property(x => x.StartedAt).IsRequired();
 
         builder.Property(x => x.CreatedAt).IsRequired();

@@ -8,10 +8,14 @@ import {
   createQrCode,
   updateQrCode,
   deleteQrCode,
+  getQrSessions,
+  getQrSessionsSummary,
+  getEmployeeTrainingHistory,
   type CreateQrLocationRequest,
   type UpdateQrLocationRequest,
   type CreateQrCodeRequest,
   type UpdateQrCodeRequest,
+  type QrSessionsParams,
 } from './qr-locations';
 
 const QR_LOCATIONS_KEY = ['qr-locations'];
@@ -92,5 +96,30 @@ export function useDeleteQrCode(locationId: string) {
       queryClient.invalidateQueries({ queryKey: [...QR_LOCATIONS_KEY, locationId, 'codes'] });
       queryClient.invalidateQueries({ queryKey: QR_LOCATIONS_KEY });
     },
+  });
+}
+
+export function useQrSessions(params?: QrSessionsParams) {
+  return useQuery({
+    queryKey: [...QR_LOCATIONS_KEY, 'sessions', params],
+    queryFn: () => getQrSessions(params),
+  });
+}
+
+export function useQrSessionsSummary() {
+  return useQuery({
+    queryKey: [...QR_LOCATIONS_KEY, 'sessions', 'summary'],
+    queryFn: () => getQrSessionsSummary(),
+  });
+}
+
+export function useEmployeeTrainingHistory(
+  employeeId: string,
+  params?: { page?: number; pageSize?: number }
+) {
+  return useQuery({
+    queryKey: ['employee-training-history', employeeId, params],
+    queryFn: () => getEmployeeTrainingHistory(employeeId, params),
+    enabled: !!employeeId,
   });
 }

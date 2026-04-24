@@ -1,12 +1,25 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using QuantumBuild.Core.Application.Constants;
 using QuantumBuild.Core.Application.Features.Employees;
 using QuantumBuild.Core.Application.Features.Employees.DTOs;
 using QuantumBuild.Core.Application.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 
 namespace QuantumBuild.API.Controllers;
+
+public record EmployeeTrainingHistoryItemDto(
+    string Type,
+    Guid ItemId,
+    string TalkTitle,
+    string? LocationName,
+    string? ContentMode,
+    int? Score,
+    string? Language,
+    DateTime CompletedAt);
 
 [ApiController]
 [Route("api/employees")]
@@ -17,17 +30,23 @@ public class EmployeesController : ControllerBase
     private readonly ISupervisorAssignmentService _supervisorAssignmentService;
     private readonly ICurrentUserService _currentUserService;
     private readonly ISystemAuditLogger _auditLogger;
+    private readonly IToolboxTalksDbContext _toolboxDbContext;
+    private readonly ILogger<EmployeesController> _logger;
 
     public EmployeesController(
         IEmployeeService employeeService,
         ISupervisorAssignmentService supervisorAssignmentService,
         ICurrentUserService currentUserService,
-        ISystemAuditLogger auditLogger)
+        ISystemAuditLogger auditLogger,
+        IToolboxTalksDbContext toolboxDbContext,
+        ILogger<EmployeesController> logger)
     {
         _employeeService = employeeService;
         _supervisorAssignmentService = supervisorAssignmentService;
         _currentUserService = currentUserService;
         _auditLogger = auditLogger;
+        _toolboxDbContext = toolboxDbContext;
+        _logger = logger;
     }
 
     /// <summary>
@@ -359,6 +378,75 @@ public class EmployeesController : ControllerBase
             return BadRequest(result);
 
         return Ok(result);
+    }
+
+    // ── Training History ─────────────────────────────────────────────────
+
+    [HttpGet("{id:guid}/training-history")]
+    [Authorize(Policy = "Core.ManageEmployees")]
+    public async Task<IActionResult> GetTrainingHistory(
+        Guid id,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var scheduledTalkItems = await _toolboxDbContext.ScheduledTalks
+                .Where(st => st.EmployeeId == id
+                    && st.Status == ScheduledTalkStatus.Completed
+                    && st.Completion != null)
+                .Select(st => new EmployeeTrainingHistoryItemDto(
+                    "ScheduledTalk",
+                    st.Id,
+                    st.ToolboxTalk.Title,
+                    null,
+                    null,
+                    st.Completion!.QuizScore,
+                    st.LanguageCode,
+                    st.Completion!.CompletedAt))
+                .ToListAsync(cancellationToken);
+
+            var qrSessionItems = await _toolboxDbContext.QrSessions
+                .Where(s => s.EmployeeId == id
+                    && s.Status == QrSessionStatus.Completed
+                    && s.CompletedAt != null)
+                .Select(s => new EmployeeTrainingHistoryItemDto(
+                    "QrSession",
+                    s.Id,
+                    s.QrCode.ToolboxTalk != null ? s.QrCode.ToolboxTalk.Title : "—",
+                    s.QrCode.QrLocation.Name,
+                    s.ContentMode.ToString(),
+                    s.Score,
+                    s.Language,
+                    s.CompletedAt!.Value.DateTime))
+                .ToListAsync(cancellationToken);
+
+            var combined = scheduledTalkItems
+                .Concat(qrSessionItems)
+                .OrderByDescending(x => x.CompletedAt)
+                .ToList();
+
+            var totalCount = combined.Count;
+            var items = combined
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToList();
+
+            return Ok(new
+            {
+                items,
+                totalCount,
+                pageNumber = page,
+                pageSize,
+                totalPages = (int)Math.Ceiling(totalCount / (double)pageSize)
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving training history for employee {Id}", id);
+            return StatusCode(500, new { message = "Error retrieving training history" });
+        }
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────

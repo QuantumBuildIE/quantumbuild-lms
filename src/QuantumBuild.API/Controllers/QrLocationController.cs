@@ -65,6 +65,31 @@ public record QrCodePublicDto(
     string? TalkTitle,
     string ContentMode);
 
+public record QrSessionListItemDto(
+    Guid Id,
+    Guid SessionToken,
+    string EmployeeName,
+    string LocationName,
+    string? TalkTitle,
+    string ContentMode,
+    string Language,
+    string Status,
+    DateTimeOffset StartedAt,
+    DateTimeOffset? CompletedAt,
+    int? Score);
+
+public record QrSessionsByLocationItem(string LocationName, int Count);
+public record QrSessionsByLanguageItem(string Language, int Count);
+
+public record QrSessionSummaryDto(
+    int TotalSessions,
+    int CompletedSessions,
+    int AbandonedSessions,
+    int ActiveSessions,
+    double? AverageScore,
+    IList<QrSessionsByLocationItem> SessionsByLocation,
+    IList<QrSessionsByLanguageItem> SessionsByLanguage);
+
 // ── Controller ───────────────────────────────────────────────────────────────
 
 [ApiController]
@@ -385,6 +410,125 @@ public class QrLocationController : ControllerBase
         {
             _logger.LogError(ex, "Error deleting QR code {CodeId}", codeId);
             return StatusCode(500, Result.Fail("Error deleting QR code"));
+        }
+    }
+
+    // ── Sessions ──────────────────────────────────────────────────────────────
+
+    [HttpGet("sessions")]
+    public async Task<IActionResult> GetSessions(
+        [FromQuery] Guid? employeeId = null,
+        [FromQuery] Guid? qrCodeId = null,
+        [FromQuery] string? status = null,
+        [FromQuery] DateTimeOffset? from = null,
+        [FromQuery] DateTimeOffset? to = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var tenantId = _currentUserService.TenantId;
+            var query = _dbContext.QrSessions
+                .Where(s => s.TenantId == tenantId)
+                .AsQueryable();
+
+            if (employeeId.HasValue)
+                query = query.Where(s => s.EmployeeId == employeeId.Value);
+
+            if (qrCodeId.HasValue)
+                query = query.Where(s => s.QrCodeId == qrCodeId.Value);
+
+            if (!string.IsNullOrWhiteSpace(status) &&
+                Enum.TryParse<QrSessionStatus>(status, true, out var parsedStatus))
+                query = query.Where(s => s.Status == parsedStatus);
+
+            if (from.HasValue)
+                query = query.Where(s => s.StartedAt >= from.Value);
+
+            if (to.HasValue)
+                query = query.Where(s => s.StartedAt <= to.Value);
+
+            var totalCount = await query.CountAsync(cancellationToken);
+
+            var items = await query
+                .OrderByDescending(s => s.StartedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(s => new QrSessionListItemDto(
+                    s.Id,
+                    s.SessionToken,
+                    s.Employee.FirstName + " " + s.Employee.LastName,
+                    s.QrCode.QrLocation.Name,
+                    s.QrCode.ToolboxTalk != null ? s.QrCode.ToolboxTalk.Title : null,
+                    s.ContentMode.ToString(),
+                    s.Language,
+                    s.Status.ToString(),
+                    s.StartedAt,
+                    s.CompletedAt,
+                    s.Score))
+                .ToListAsync(cancellationToken);
+
+            return Ok(new
+            {
+                items,
+                totalCount,
+                pageNumber = page,
+                pageSize,
+                totalPages = (int)Math.Ceiling(totalCount / (double)pageSize)
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving QR sessions");
+            return StatusCode(500, Result.Fail("Error retrieving QR sessions"));
+        }
+    }
+
+    [HttpGet("sessions/summary")]
+    public async Task<IActionResult> GetSessionsSummary(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var tenantId = _currentUserService.TenantId;
+
+            var sessionData = await _dbContext.QrSessions
+                .Where(s => s.TenantId == tenantId)
+                .Select(s => new { s.Status, s.Score })
+                .ToListAsync(cancellationToken);
+
+            var total = sessionData.Count;
+            var completed = sessionData.Count(s => s.Status == QrSessionStatus.Completed);
+            var abandoned = sessionData.Count(s => s.Status == QrSessionStatus.Abandoned);
+            var active = sessionData.Count(s => s.Status == QrSessionStatus.Active);
+            var completedScores = sessionData
+                .Where(s => s.Status == QrSessionStatus.Completed && s.Score.HasValue)
+                .Select(s => (double)s.Score!.Value)
+                .ToList();
+            double? avgScore = completedScores.Count > 0 ? completedScores.Average() : null;
+
+            var byLocation = await _dbContext.QrSessions
+                .Where(s => s.TenantId == tenantId)
+                .Select(s => new { LocationName = s.QrCode.QrLocation.Name })
+                .GroupBy(s => s.LocationName)
+                .Select(g => new QrSessionsByLocationItem(g.Key, g.Count()))
+                .OrderByDescending(x => x.Count)
+                .ToListAsync(cancellationToken);
+
+            var byLanguage = await _dbContext.QrSessions
+                .Where(s => s.TenantId == tenantId)
+                .GroupBy(s => s.Language)
+                .Select(g => new QrSessionsByLanguageItem(g.Key, g.Count()))
+                .OrderByDescending(x => x.Count)
+                .ToListAsync(cancellationToken);
+
+            return Ok(new QrSessionSummaryDto(
+                total, completed, abandoned, active, avgScore, byLocation, byLanguage));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving QR session summary");
+            return StatusCode(500, Result.Fail("Error retrieving QR session summary"));
         }
     }
 

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Plus, MapPin, QrCode, Download, Pencil, Trash2, X } from "lucide-react";
+import { Plus, MapPin, QrCode, Download, Pencil, Trash2, X, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { format } from "date-fns";
 import {
   useQrLocations,
   useQrCodes,
@@ -22,8 +23,16 @@ import {
   useCreateQrCode,
   useUpdateQrCode,
   useDeleteQrCode,
+  useQrSessions,
+  useQrSessionsSummary,
 } from "@/lib/api/toolbox-talks/use-qr-locations";
-import type { QrLocationDto, QrCodeDto, ContentMode } from "@/lib/api/toolbox-talks/qr-locations";
+import type {
+  QrLocationDto,
+  QrCodeDto,
+  ContentMode,
+  QrSessionStatus,
+  QrSessionsParams,
+} from "@/lib/api/toolbox-talks/qr-locations";
 import { useToolboxTalks } from "@/lib/api/toolbox-talks/use-toolbox-talks";
 
 const CONTENT_MODE_LABELS: Record<ContentMode, string> = {
@@ -278,6 +287,262 @@ function QrCodeCard({
   );
 }
 
+// ── Session status helpers ────────────────────────────────────────────────────
+
+const STATUS_LABELS: Record<QrSessionStatus, string> = {
+  Active: "Active",
+  Completed: "Completed",
+  Abandoned: "Abandoned",
+};
+
+const STATUS_COLOURS: Record<QrSessionStatus, string> = {
+  Active: "bg-blue-100 text-blue-700",
+  Completed: "bg-green-100 text-green-700",
+  Abandoned: "bg-slate-100 text-slate-600",
+};
+
+const LANGUAGE_NAMES: Record<string, string> = {
+  en: "English", es: "Spanish", fr: "French", pl: "Polish",
+  ro: "Romanian", uk: "Ukrainian", pt: "Portuguese",
+  lt: "Lithuanian", de: "German", lv: "Latvian",
+};
+
+// ── Sessions panel ────────────────────────────────────────────────────────────
+
+function SessionsPanel({ locations }: { locations: QrLocationDto[] }) {
+  const [filters, setFilters] = useState<QrSessionsParams>({ page: 1, pageSize: 15 });
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+
+  const { data: summary } = useQrSessionsSummary();
+  const { data: sessions, isLoading } = useQrSessions(filters);
+
+  const applyDates = () => {
+    setFilters((f) => ({
+      ...f,
+      page: 1,
+      from: fromDate || undefined,
+      to: toDate || undefined,
+    }));
+  };
+
+  const setFilter = <K extends keyof QrSessionsParams>(key: K, value: QrSessionsParams[K]) => {
+    setFilters((f) => ({ ...f, page: 1, [key]: value || undefined }));
+  };
+
+  const items = sessions?.items ?? [];
+  const total = sessions?.totalCount ?? 0;
+  const totalPages = sessions?.totalPages ?? 1;
+  const currentPage = filters.page ?? 1;
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-lg font-semibold flex items-center gap-2">
+        <Activity className="h-5 w-5" />
+        QR Sessions
+      </h2>
+
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {[
+          { label: "Total", value: summary?.totalSessions ?? 0 },
+          { label: "Completed", value: summary?.completedSessions ?? 0 },
+          { label: "Abandoned", value: summary?.abandonedSessions ?? 0 },
+          { label: "Active", value: summary?.activeSessions ?? 0 },
+          {
+            label: "Avg Score",
+            value: summary?.averageScore != null
+              ? `${Math.round(summary.averageScore)}%`
+              : "—",
+          },
+        ].map((card) => (
+          <Card key={card.label}>
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground">{card.label}</p>
+              <p className="text-2xl font-bold mt-1">{card.value}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="space-y-1">
+          <Label className="text-xs">Status</Label>
+          <Select
+            value={filters.status ?? ""}
+            onValueChange={(v) => setFilter("status", (v || undefined) as QrSessionStatus | undefined)}
+          >
+            <SelectTrigger className="h-8 w-32 text-xs">
+              <SelectValue placeholder="All" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">All</SelectItem>
+              <SelectItem value="Active">Active</SelectItem>
+              <SelectItem value="Completed">Completed</SelectItem>
+              <SelectItem value="Abandoned">Abandoned</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1">
+          <Label className="text-xs">Location</Label>
+          <Select
+            value={filters.qrCodeId ?? ""}
+            onValueChange={() => {}}
+          >
+            <SelectTrigger className="h-8 w-40 text-xs">
+              <SelectValue placeholder="All locations" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">All locations</SelectItem>
+              {locations.map((loc) => (
+                <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1">
+          <Label className="text-xs">From</Label>
+          <Input
+            type="date"
+            className="h-8 text-xs w-36"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">To</Label>
+          <Input
+            type="date"
+            className="h-8 text-xs w-36"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+          />
+        </div>
+        <Button size="sm" variant="outline" className="h-8 text-xs" onClick={applyDates}>
+          Apply
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-8 text-xs"
+          onClick={() => {
+            setFromDate("");
+            setToDate("");
+            setFilters({ page: 1, pageSize: 15 });
+          }}
+        >
+          Clear
+        </Button>
+      </div>
+
+      {/* Table */}
+      <div className="border rounded-lg overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50">
+              <tr>
+                {["Employee", "Location", "Talk", "Mode", "Language", "Status", "Score", "Started", "Completed"].map(
+                  (h) => (
+                    <th key={h} className="px-3 py-2 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">
+                      {h}
+                    </th>
+                  )
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i}>
+                    {Array.from({ length: 9 }).map((__, j) => (
+                      <td key={j} className="px-3 py-2">
+                        <Skeleton className="h-4 w-full" />
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : items.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="px-3 py-8 text-center text-muted-foreground text-sm">
+                    No sessions found
+                  </td>
+                </tr>
+              ) : (
+                items.map((s) => (
+                  <tr key={s.id} className="border-t hover:bg-muted/30 transition-colors">
+                    <td className="px-3 py-2 font-medium whitespace-nowrap">{s.employeeName}</td>
+                    <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{s.locationName}</td>
+                    <td className="px-3 py-2 max-w-[180px] truncate" title={s.talkTitle ?? "—"}>
+                      {s.talkTitle ?? <span className="text-muted-foreground">—</span>}
+                    </td>
+                    <td className="px-3 py-2">
+                      <Badge className={cn("text-xs", CONTENT_MODE_COLOURS[s.contentMode])}>
+                        {CONTENT_MODE_LABELS[s.contentMode]}
+                      </Badge>
+                    </td>
+                    <td className="px-3 py-2 text-muted-foreground">
+                      {LANGUAGE_NAMES[s.language] ?? s.language}
+                    </td>
+                    <td className="px-3 py-2">
+                      <Badge className={cn("text-xs", STATUS_COLOURS[s.status])}>
+                        {STATUS_LABELS[s.status]}
+                      </Badge>
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      {s.score != null ? `${s.score}%` : <span className="text-muted-foreground">—</span>}
+                    </td>
+                    <td className="px-3 py-2 text-muted-foreground whitespace-nowrap text-xs">
+                      {format(new Date(s.startedAt), "dd MMM yyyy HH:mm")}
+                    </td>
+                    <td className="px-3 py-2 text-muted-foreground whitespace-nowrap text-xs">
+                      {s.completedAt
+                        ? format(new Date(s.completedAt), "dd MMM yyyy HH:mm")
+                        : <span>—</span>}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Pagination */}
+      {total > 0 && (
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <span>{total} session{total !== 1 ? "s" : ""}</span>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-2 text-xs"
+              disabled={currentPage <= 1}
+              onClick={() => setFilters((f) => ({ ...f, page: (f.page ?? 1) - 1 }))}
+            >
+              Previous
+            </Button>
+            <span className="text-xs">
+              {currentPage} / {totalPages}
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-2 text-xs"
+              disabled={currentPage >= totalPages}
+              onClick={() => setFilters((f) => ({ ...f, page: (f.page ?? 1) + 1 }))}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function QrLocationsPage() {
@@ -473,6 +738,11 @@ export default function QrLocationsPage() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Sessions panel */}
+      <div className="border-t pt-6">
+        <SessionsPanel locations={locations} />
       </div>
 
       {/* Location dialog */}

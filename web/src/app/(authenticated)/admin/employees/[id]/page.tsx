@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,9 +23,107 @@ import { useEmployee, useResetEmployeePin } from "@/lib/api/admin/use-employees"
 import { useUser } from "@/lib/api/admin/use-users";
 import { useLookupValues } from "@/hooks/use-lookups";
 import { useTenantSettings } from "@/lib/api/admin/use-tenant-settings";
-import { ChevronLeft, Pencil, KeyRound } from "lucide-react";
+import { useEmployeeTrainingHistory } from "@/lib/api/toolbox-talks/use-qr-locations";
+import { ChevronLeft, Pencil, KeyRound, ScanLine } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { cn } from "@/lib/utils";
+
+const CONTENT_MODE_LABELS: Record<string, string> = {
+  ViewOnly: "View Only",
+  Training: "Training",
+  Induction: "Induction",
+};
+
+const CONTENT_MODE_COLOURS: Record<string, string> = {
+  ViewOnly: "bg-slate-100 text-slate-700",
+  Training: "bg-blue-100 text-blue-700",
+  Induction: "bg-green-100 text-green-700",
+};
+
+function QrTrainingHistorySection({ employeeId }: { employeeId: string }) {
+  const [page, setPage] = useState(1);
+  const { data, isLoading } = useEmployeeTrainingHistory(employeeId, { page, pageSize: 10 });
+  const items = data?.items.filter((i) => i.type === "QrSession") ?? [];
+  const total = items.length;
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader><CardTitle className="flex items-center gap-2"><ScanLine className="h-4 w-4" />QR Training History</CardTitle></CardHeader>
+        <CardContent className="space-y-2">
+          {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (total === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <ScanLine className="h-4 w-4" />
+          QR Training History
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50">
+              <tr>
+                {["Location", "Talk", "Mode", "Score", "Language", "Date"].map((h) => (
+                  <th key={h} className="px-4 py-2 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.itemId} className="border-t hover:bg-muted/30 transition-colors">
+                  <td className="px-4 py-2 text-muted-foreground whitespace-nowrap text-xs">
+                    {item.locationName ?? "—"}
+                  </td>
+                  <td className="px-4 py-2 max-w-[200px] truncate" title={item.talkTitle}>
+                    {item.talkTitle}
+                  </td>
+                  <td className="px-4 py-2">
+                    {item.contentMode ? (
+                      <Badge className={cn("text-xs", CONTENT_MODE_COLOURS[item.contentMode] ?? "bg-slate-100 text-slate-700")}>
+                        {CONTENT_MODE_LABELS[item.contentMode] ?? item.contentMode}
+                      </Badge>
+                    ) : <span className="text-muted-foreground">—</span>}
+                  </td>
+                  <td className="px-4 py-2 text-center">
+                    {item.score != null ? `${item.score}%` : <span className="text-muted-foreground">—</span>}
+                  </td>
+                  <td className="px-4 py-2 text-muted-foreground text-xs">
+                    {item.language ? (item.language.toUpperCase()) : "—"}
+                  </td>
+                  <td className="px-4 py-2 text-muted-foreground whitespace-nowrap text-xs">
+                    {format(new Date(item.completedAt), "dd MMM yyyy")}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {(data?.totalPages ?? 1) > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t text-xs text-muted-foreground">
+            <span>{data?.totalCount} sessions</span>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" className="h-6 px-2 text-xs" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Prev</Button>
+              <span>{page} / {data?.totalPages}</span>
+              <Button size="sm" variant="outline" className="h-6 px-2 text-xs" disabled={page >= (data?.totalPages ?? 1)} onClick={() => setPage((p) => p + 1)}>Next</Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function EmployeeDetailPage() {
   const params = useParams();
@@ -194,6 +293,12 @@ export default function EmployeeDetailPage() {
       {isSupervisor && (
         <div className="max-w-2xl">
           <AssignedOperatorsSection employeeId={employeeId} />
+        </div>
+      )}
+
+      {qrEnabled && (
+        <div className="max-w-2xl">
+          <QrTrainingHistorySection employeeId={employeeId} />
         </div>
       )}
 
