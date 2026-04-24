@@ -63,6 +63,8 @@ import {
   useCreateDeviation,
   useUpdateDeviationStatus,
   useCreateChangeRecord,
+  useTermGateSummary,
+  useTermGateCheck,
 } from '@/lib/api/toolbox-talks/use-pipeline-audit';
 import type {
   TranslationDeviationDto,
@@ -70,6 +72,8 @@ import type {
   CreatePipelineChangeRecordRequest,
   PipelineChangeRecordDto,
   ModuleOutcomeDto,
+  TermGateCheckResult,
+  TermGateFailure,
 } from '@/lib/api/toolbox-talks/pipeline-audit';
 
 // ─── Shared helpers ────────────────────────────────────────────────────────────
@@ -121,7 +125,7 @@ function DeviationStatusBadge({ status }: { status: string }) {
   );
 }
 
-// ─── Deviation prefill type (mirrors ValidationSectionCard) ───────────────────
+// ─── Deviation prefill type (mirrors ValidationSectionCard + term gate) ───────
 
 interface DeviationPrefill {
   validationRunId?: string;
@@ -131,6 +135,9 @@ interface DeviationPrefill {
   languagePair?: string;
   sourceExcerpt?: string;
   targetExcerpt?: string;
+  // Pre-fill nature/rootCauseCategory from term gate failures
+  nature?: string;
+  rootCauseCategory?: string;
 }
 
 // ─── New Deviation Dialog ─────────────────────────────────────────────────────
@@ -156,8 +163,8 @@ function NewDeviationDialog({ open, onOpenChange, prefill }: NewDeviationDialogP
         sourceExcerpt: prefill?.sourceExcerpt ?? '',
         targetExcerpt: prefill?.targetExcerpt ?? '',
         detectedBy: '',
-        nature: '',
-        rootCauseCategory: '',
+        nature: prefill?.nature ?? '',
+        rootCauseCategory: prefill?.rootCauseCategory ?? '',
         rootCauseDetail: '',
         correctiveAction: '',
         preventiveAction: '',
@@ -1132,6 +1139,325 @@ function ChangesTab() {
   );
 }
 
+// ─── Term Gate Tab ────────────────────────────────────────────────────────────
+
+const GATE_LANGUAGES = [
+  { code: 'fr', name: 'French' },
+  { code: 'pl', name: 'Polish' },
+  { code: 'ro', name: 'Romanian' },
+  { code: 'uk', name: 'Ukrainian' },
+  { code: 'pt', name: 'Portuguese' },
+  { code: 'es', name: 'Spanish' },
+  { code: 'lt', name: 'Lithuanian' },
+  { code: 'de', name: 'German' },
+  { code: 'lv', name: 'Latvian' },
+];
+
+function TermGateTab() {
+  const router = useRouter();
+  const [sourceText, setSourceText] = useState('');
+  const [targetText, setTargetText] = useState('');
+  const [languageCode, setLanguageCode] = useState('');
+  const [sectorKey, setSectorKey] = useState('');
+  const [lastResult, setLastResult] = useState<TermGateCheckResult | null>(null);
+  const [checkError, setCheckError] = useState<string | null>(null);
+
+  const { data: summary, isLoading: summaryLoading } = useTermGateSummary();
+  const checkMutation = useTermGateCheck();
+
+  const handleRunCheck = () => {
+    if (!sectorKey || !languageCode) {
+      setCheckError('Please select a sector and language before running the check.');
+      return;
+    }
+    setCheckError(null);
+    setLastResult(null);
+    checkMutation.mutate(
+      { sourceText, targetText, languageCode, sectorKey },
+      {
+        onSuccess: (result) => setLastResult(result),
+        onError: () => setCheckError('Failed to run gate check. Please try again.'),
+      }
+    );
+  };
+
+  const handleClear = () => {
+    setSourceText('');
+    setTargetText('');
+    setLanguageCode('');
+    setSectorKey('');
+    setLastResult(null);
+    setCheckError(null);
+  };
+
+  const handleLogDeviation = (failures: TermGateFailure[]) => {
+    const first = failures[0];
+    const prefill: DeviationPrefill = {
+      nature: first ? `Term gate failure: ${first.englishTerm}` : 'Term gate failure',
+      rootCauseCategory: 'terminology',
+      sourceExcerpt: sourceText,
+      targetExcerpt: targetText,
+      languagePair: `en-${languageCode}`,
+    };
+    router.push(
+      `/admin/toolbox-talks/pipeline?action=new_deviation&prefill=${btoa(JSON.stringify(prefill))}`
+    );
+  };
+
+  const sectorName =
+    summary?.termsBySector.find((s) => s.sectorKey === sectorKey)?.sectorName ?? sectorKey;
+
+  const resultState =
+    lastResult === null
+      ? 'none'
+      : lastResult.checkedCount === 0
+      ? 'no-terms'
+      : lastResult.passed
+      ? 'pass'
+      : 'fail';
+
+  return (
+    <div className="space-y-6">
+      {/* Section 1 — Term Database Summary */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <Lock className="h-4 w-4 text-muted-foreground" />
+              Term Database
+            </span>
+            <Link
+              href="/admin/toolbox-talks/settings"
+              className="text-sm font-normal text-primary hover:underline"
+            >
+              Manage Glossary →
+            </Link>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {summaryLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-56" />
+              <Skeleton className="h-4 w-72" />
+            </div>
+          ) : summary && summary.totalTerms > 0 ? (
+            <div className="space-y-3">
+              {/* Top stats */}
+              <div className="flex flex-wrap items-center gap-6 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Total locked terms: </span>
+                  <span className="font-semibold">{summary.totalTerms}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Critical: </span>
+                  <span className="font-semibold text-amber-600">{summary.criticalTerms}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Languages covered: </span>
+                  <span className="font-semibold">{summary.languagesWithCoverage.length}</span>
+                </div>
+              </div>
+              {/* Sector chips */}
+              {summary.termsBySector.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {summary.termsBySector.map((s) => (
+                    <Badge key={s.sectorKey} variant="secondary" className="text-xs">
+                      {s.sectorName}: {s.termCount}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              {/* Language coverage badges */}
+              {summary.languagesWithCoverage.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {summary.languagesWithCoverage.map((code) => (
+                    <Badge key={code} variant="outline" className="font-mono text-xs">
+                      {code.toUpperCase()}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No glossary terms found. Add terms in Settings to enable the gate.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Section 2 — Gate Tester */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+            Gate Tester
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Language</Label>
+                <Select value={languageCode} onValueChange={setLanguageCode}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select language" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {GATE_LANGUAGES.map((l) => (
+                      <SelectItem key={l.code} value={l.code}>
+                        {l.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Sector</Label>
+                <Select value={sectorKey} onValueChange={setSectorKey}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select sector" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {summary?.termsBySector.map((s) => (
+                      <SelectItem key={s.sectorKey} value={s.sectorKey}>
+                        {s.sectorName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Source text (English)</Label>
+              <Textarea
+                value={sourceText}
+                onChange={(e) => setSourceText(e.target.value)}
+                placeholder="Paste the English source sentence to check"
+                rows={3}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Target translation</Label>
+              <Textarea
+                value={targetText}
+                onChange={(e) => setTargetText(e.target.value)}
+                placeholder="Paste the translated text to check against"
+                rows={3}
+              />
+            </div>
+
+            {checkError && (
+              <Alert variant="destructive">
+                <AlertDescription>{checkError}</AlertDescription>
+              </Alert>
+            )}
+
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={handleRunCheck}
+                disabled={checkMutation.isPending || !sourceText.trim() || !targetText.trim()}
+              >
+                {checkMutation.isPending ? 'Checking…' : 'Run Gate Check'}
+              </Button>
+              <Button variant="outline" onClick={handleClear} disabled={checkMutation.isPending}>
+                Clear
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Section 3 — Gate Result */}
+      {lastResult !== null && (
+        <Card>
+          <CardContent className="pt-6">
+            {resultState === 'no-terms' && (
+              <div className="border-l-4 border-muted pl-4 py-2">
+                <p className="text-sm text-muted-foreground">
+                  No terms from the{' '}
+                  <span className="font-medium">{sectorName}</span> glossary were found in the
+                  source text. Nothing to check.
+                </p>
+              </div>
+            )}
+
+            {resultState === 'pass' && (
+              <div className="border-l-4 border-green-500 pl-4 py-2 space-y-3">
+                <p className="text-sm font-medium text-green-700 dark:text-green-400 flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Gate passed — {lastResult.checkedCount} term
+                  {lastResult.checkedCount !== 1 ? 's' : ''} checked, all approved translations
+                  present
+                </p>
+                {lastResult.passingTerms.length > 0 && (
+                  <div className="space-y-1.5">
+                    {lastResult.passingTerms.map((t) => (
+                      <div key={t.termId} className="flex items-center gap-2 text-sm">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0" />
+                        <span className="font-medium">{t.englishTerm}</span>
+                        <span className="text-muted-foreground">→</span>
+                        <span className="italic">{t.approvedTranslation}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {resultState === 'fail' && (
+              <div className="border-l-4 border-red-500 pl-4 py-2 space-y-4">
+                <p className="text-sm font-medium text-red-700 dark:text-red-400 flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  Gate failed — {lastResult.failures.length} failure
+                  {lastResult.failures.length !== 1 ? 's' : ''} detected
+                </p>
+                <div className="space-y-3">
+                  {lastResult.failures.map((f, i) => (
+                    <div key={i} className="rounded-md bg-muted/50 px-4 py-3 text-sm space-y-1">
+                      <div>
+                        <span className="text-muted-foreground">Term: </span>
+                        <span className="font-medium">{f.englishTerm}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Expected: </span>
+                        <span className="italic">{f.expectedTranslation}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Reason: </span>
+                        {f.failureReason === 'missing_approved' ? (
+                          'Approved translation not found in target'
+                        ) : (
+                          <>
+                            Forbidden variant{' '}
+                            <span className="font-medium text-red-600 dark:text-red-400">
+                              &lsquo;{f.forbiddenTermFound}&rsquo;
+                            </span>{' '}
+                            present in target
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleLogDeviation(lastResult.failures)}
+                >
+                  Log as Deviation →
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PipelineAuditPage() {
@@ -1177,6 +1503,7 @@ export default function PipelineAuditPage() {
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
           <TabsTrigger value="deviations">Deviations</TabsTrigger>
           <TabsTrigger value="modules">Modules</TabsTrigger>
+          <TabsTrigger value="term-gate">Term Gate</TabsTrigger>
           {isSuperUser && <TabsTrigger value="changes">Changes</TabsTrigger>}
         </TabsList>
 
@@ -1193,6 +1520,10 @@ export default function PipelineAuditPage() {
 
         <TabsContent value="modules" className="mt-6">
           <ModulesTab />
+        </TabsContent>
+
+        <TabsContent value="term-gate" className="mt-6">
+          <TermGateTab />
         </TabsContent>
 
         {isSuperUser && (

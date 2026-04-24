@@ -1,9 +1,13 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Core.Application.Models;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.SafetyTermRegistry;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Validation;
+using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 
@@ -22,6 +26,8 @@ public class PipelineAuditController : ControllerBase
     private readonly IPipelineAuditQueryService _auditQueryService;
     private readonly IPipelineVersionService _pipelineVersionService;
     private readonly ICurrentUserService _currentUser;
+    private readonly IToolboxTalksDbContext _dbContext;
+    private readonly ISafetyTermRegistryService _registryService;
     private readonly ILogger<PipelineAuditController> _logger;
 
     public PipelineAuditController(
@@ -29,12 +35,16 @@ public class PipelineAuditController : ControllerBase
         IPipelineAuditQueryService auditQueryService,
         IPipelineVersionService pipelineVersionService,
         ICurrentUserService currentUser,
+        IToolboxTalksDbContext dbContext,
+        ISafetyTermRegistryService registryService,
         ILogger<PipelineAuditController> logger)
     {
         _deviationService = deviationService;
         _auditQueryService = auditQueryService;
         _pipelineVersionService = pipelineVersionService;
         _currentUser = currentUser;
+        _dbContext = dbContext;
+        _registryService = registryService;
         _logger = logger;
     }
 
@@ -328,4 +338,225 @@ public class PipelineAuditController : ControllerBase
             return StatusCode(500, Result.Fail("Error loading pipeline version"));
         }
     }
+
+    // ─── Term Gate ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Summary of the term database: total terms, critical terms, terms by sector, and language coverage.
+    /// Includes system defaults + tenant overrides, deduplicated with tenant taking precedence.
+    /// </summary>
+    [HttpGet("term-gate/summary")]
+    [ProducesResponseType(typeof(TermGateSummaryDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetTermGateSummary(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var tenantId = _currentUser.TenantId;
+            var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+
+            var allTerms = await _dbContext.SafetyGlossaryTerms
+                .IgnoreQueryFilters()
+                .Include(t => t.Glossary)
+                .Where(t => !t.IsDeleted
+                    && !t.Glossary.IsDeleted
+                    && (t.Glossary.TenantId == tenantId || t.Glossary.TenantId == null))
+                .ToListAsync(cancellationToken);
+
+            // Deduplicate per (SectorKey, EnglishTerm), prefer tenant override
+            var deduped = allTerms
+                .GroupBy(t => $"{t.Glossary.SectorKey}||{t.EnglishTerm.ToLowerInvariant()}")
+                .Select(g => g.FirstOrDefault(t => t.Glossary.TenantId == tenantId) ?? g.First())
+                .ToList();
+
+            var bySector = deduped
+                .GroupBy(t => t.Glossary.SectorKey)
+                .Select(g =>
+                {
+                    var tenantTerm = g.FirstOrDefault(t => t.Glossary.TenantId == tenantId);
+                    var sectorName = (tenantTerm ?? g.First()).Glossary.SectorName;
+                    return new TermGateSectorSummary
+                    {
+                        SectorKey = g.Key,
+                        SectorName = sectorName,
+                        TermCount = g.Count()
+                    };
+                })
+                .OrderBy(s => s.SectorName)
+                .ToList();
+
+            var languagesWithCoverage = deduped
+                .SelectMany(t =>
+                {
+                    if (string.IsNullOrWhiteSpace(t.Translations)) return Enumerable.Empty<string>();
+                    try
+                    {
+                        var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(t.Translations, jsonOptions);
+                        return dict?.Where(kv => !string.IsNullOrWhiteSpace(kv.Value)).Select(kv => kv.Key)
+                               ?? Enumerable.Empty<string>();
+                    }
+                    catch { return Enumerable.Empty<string>(); }
+                })
+                .Distinct()
+                .OrderBy(c => c)
+                .ToList();
+
+            return Ok(new TermGateSummaryDto
+            {
+                TotalTerms = deduped.Count,
+                CriticalTerms = deduped.Count(t => t.IsCritical),
+                TermsBySector = bySector,
+                LanguagesWithCoverage = languagesWithCoverage,
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading term gate summary");
+            return StatusCode(500, Result.Fail("Error loading term gate summary"));
+        }
+    }
+
+    /// <summary>
+    /// Run a term gate check: verify that glossary terms found in the source appear correctly in the target,
+    /// and that no known-forbidden variants are present.
+    /// </summary>
+    [HttpPost("term-gate/check")]
+    [ProducesResponseType(typeof(TermGateCheckResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> CheckTermGate(
+        [FromBody] TermGateCheckRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.SourceText) ||
+            string.IsNullOrWhiteSpace(request.TargetText) ||
+            string.IsNullOrWhiteSpace(request.LanguageCode) ||
+            string.IsNullOrWhiteSpace(request.SectorKey))
+        {
+            return BadRequest(new { message = "SourceText, TargetText, LanguageCode, and SectorKey are required" });
+        }
+
+        try
+        {
+            var tenantId = _currentUser.TenantId;
+            var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+
+            // Load glossary terms — same pattern as TranslationValidationJob.LoadGlossaryTermsAsync
+            var allTerms = await _dbContext.SafetyGlossaryTerms
+                .IgnoreQueryFilters()
+                .Include(t => t.Glossary)
+                .Where(t => !t.IsDeleted
+                    && !t.Glossary.IsDeleted
+                    && t.Glossary.SectorKey == request.SectorKey
+                    && (t.Glossary.TenantId == tenantId || t.Glossary.TenantId == null))
+                .ToListAsync(cancellationToken);
+
+            // Prefer tenant override per English term
+            var grouped = allTerms.GroupBy(t => t.EnglishTerm.ToLowerInvariant());
+
+            // Registry scan for forbidden patterns (once per request)
+            var languageName = MapLanguageCodeToName(request.LanguageCode);
+            var registryScan = _registryService.Scan(request.TargetText, languageName);
+
+            var failures = new List<TermGateFailure>();
+            var passingTerms = new List<TermGatePassingTerm>();
+            var checkedTermIds = new HashSet<Guid>();
+
+            foreach (var group in grouped)
+            {
+                var term = group.FirstOrDefault(t => t.Glossary.TenantId == tenantId) ?? group.First();
+
+                // Only process terms that appear in the source text
+                if (!request.SourceText.Contains(term.EnglishTerm, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                // Get approved translation for this language
+                if (string.IsNullOrWhiteSpace(term.Translations)) continue;
+
+                Dictionary<string, string>? translations;
+                try
+                {
+                    translations = JsonSerializer.Deserialize<Dictionary<string, string>>(term.Translations, jsonOptions);
+                }
+                catch (JsonException) { continue; }
+
+                if (translations == null
+                    || !translations.TryGetValue(request.LanguageCode, out var approvedTranslation)
+                    || string.IsNullOrWhiteSpace(approvedTranslation))
+                {
+                    continue; // No approved translation for this language — skip
+                }
+
+                checkedTermIds.Add(term.Id);
+
+                // Check 1: missing_approved
+                bool approvedFound = request.TargetText.Contains(approvedTranslation, StringComparison.OrdinalIgnoreCase);
+
+                if (!approvedFound)
+                {
+                    failures.Add(new TermGateFailure
+                    {
+                        TermId = term.Id,
+                        EnglishTerm = term.EnglishTerm,
+                        ExpectedTranslation = approvedTranslation,
+                        FailureReason = "missing_approved",
+                    });
+                }
+                else
+                {
+                    passingTerms.Add(new TermGatePassingTerm
+                    {
+                        TermId = term.Id,
+                        EnglishTerm = term.EnglishTerm,
+                        ApprovedTranslation = approvedTranslation,
+                    });
+                }
+
+                // Check 2: forbidden_present — link registry violations to this glossary term
+                foreach (var violation in registryScan.Violations)
+                {
+                    var termLower = term.EnglishTerm.ToLowerInvariant();
+                    var sourceLower = violation.SourceTerm.ToLowerInvariant();
+
+                    if (sourceLower.Contains(termLower) || termLower.Contains(sourceLower))
+                    {
+                        failures.Add(new TermGateFailure
+                        {
+                            TermId = term.Id,
+                            EnglishTerm = term.EnglishTerm,
+                            ExpectedTranslation = approvedTranslation,
+                            FailureReason = "forbidden_present",
+                            ForbiddenTermFound = violation.FoundBadPattern,
+                        });
+                    }
+                }
+            }
+
+            return Ok(new TermGateCheckResult
+            {
+                Passed = failures.Count == 0,
+                CheckedCount = checkedTermIds.Count,
+                Failures = failures,
+                PassingTerms = passingTerms,
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error checking term gate for sector {Sector} language {Lang}",
+                request.SectorKey, request.LanguageCode);
+            return StatusCode(500, Result.Fail("Error checking term gate"));
+        }
+    }
+
+    private static string MapLanguageCodeToName(string code) => code.ToLowerInvariant() switch
+    {
+        "pl" => "Polish",
+        "ro" => "Romanian",
+        "pt" => "Portuguese",
+        "es" => "Spanish",
+        "fr" => "French",
+        "uk" => "Ukrainian",
+        "lt" => "Lithuanian",
+        "de" => "German",
+        "lv" => "Latvian",
+        _ => code,
+    };
 }

@@ -11,9 +11,12 @@ import {
   getChangeRecords,
   createChangeRecord,
   getActivePipelineVersion,
+  checkTermGate,
+  getTermGateSummary,
   type CreateDeviationRequest,
   type UpdateDeviationStatusRequest,
   type CreatePipelineChangeRecordRequest,
+  type TermGateCheckRequest,
 } from './pipeline-audit';
 
 export function usePipelineAuditDashboard(tenantId?: string) {
@@ -107,5 +110,19 @@ export function useActivePipelineVersion() {
     queryKey: ['pipeline-audit', 'version'],
     queryFn: () => getActivePipelineVersion(),
     staleTime: 60_000,
+  });
+}
+
+export function useTermGateSummary() {
+  return useQuery({
+    queryKey: ['pipeline-audit', 'term-gate-summary'],
+    queryFn: () => getTermGateSummary(),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useTermGateCheck() {
+  return useMutation({
+    mutationFn: (request: TermGateCheckRequest) => checkTermGate(request),
   });
 }

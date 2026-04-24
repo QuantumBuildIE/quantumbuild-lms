@@ -200,3 +200,60 @@ export async function getActivePipelineVersion(): Promise<{
   const res = await apiClient.get(`${BASE}/version`);
   return res.data;
 }
+
+// ─── Term Gate Types ──────────────────────────────────────────────────────────
+
+export interface TermGateCheckRequest {
+  sourceText: string;
+  targetText: string;
+  languageCode: string;
+  sectorKey: string;
+}
+
+export interface TermGatePassingTerm {
+  termId: string;
+  englishTerm: string;
+  approvedTranslation: string;
+}
+
+export interface TermGateFailure {
+  termId: string;
+  englishTerm: string;
+  expectedTranslation: string;
+  failureReason: 'missing_approved' | 'forbidden_present';
+  forbiddenTermFound?: string;
+}
+
+export interface TermGateCheckResult {
+  passed: boolean;
+  checkedCount: number;
+  failures: TermGateFailure[];
+  passingTerms: TermGatePassingTerm[];
+}
+
+export interface TermGateSectorSummaryItem {
+  sectorKey: string;
+  sectorName: string;
+  termCount: number;
+}
+
+export interface TermGateSummaryDto {
+  totalTerms: number;
+  criticalTerms: number;
+  termsBySector: TermGateSectorSummaryItem[];
+  languagesWithCoverage: string[];
+}
+
+// ─── Term Gate API functions ──────────────────────────────────────────────────
+
+export async function checkTermGate(
+  request: TermGateCheckRequest
+): Promise<TermGateCheckResult> {
+  const res = await apiClient.post(`${BASE}/term-gate/check`, request);
+  return res.data;
+}
+
+export async function getTermGateSummary(): Promise<TermGateSummaryDto> {
+  const res = await apiClient.get(`${BASE}/term-gate/summary`);
+  return res.data;
+}

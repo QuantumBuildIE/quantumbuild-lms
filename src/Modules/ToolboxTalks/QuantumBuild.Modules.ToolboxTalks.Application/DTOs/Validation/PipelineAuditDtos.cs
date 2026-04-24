@@ -136,3 +136,54 @@ public record PipelineAuditDashboardDto
     public PipelineChangeRecordDto? MostRecentChangeRecord { get; init; }
     public IReadOnlyList<TranslationDeviationDto> TopOpenDeviations { get; init; } = [];
 }
+
+// ─── Term Gate DTOs ──────────────────────────────────────────────────────────
+
+public record TermGateCheckRequest
+{
+    public string SourceText { get; init; } = string.Empty;
+    public string TargetText { get; init; } = string.Empty;
+    public string LanguageCode { get; init; } = string.Empty;
+    public string SectorKey { get; init; } = string.Empty;
+}
+
+public record TermGatePassingTerm
+{
+    public Guid TermId { get; init; }
+    public string EnglishTerm { get; init; } = string.Empty;
+    public string ApprovedTranslation { get; init; } = string.Empty;
+}
+
+public record TermGateFailure
+{
+    public Guid TermId { get; init; }
+    public string EnglishTerm { get; init; } = string.Empty;
+    public string ExpectedTranslation { get; init; } = string.Empty;
+    /// <summary>"missing_approved" or "forbidden_present"</summary>
+    public string FailureReason { get; init; } = string.Empty;
+    public string? ForbiddenTermFound { get; init; }
+}
+
+public record TermGateCheckResult
+{
+    public bool Passed { get; init; }
+    public int CheckedCount { get; init; }
+    public IReadOnlyList<TermGateFailure> Failures { get; init; } = [];
+    public IReadOnlyList<TermGatePassingTerm> PassingTerms { get; init; } = [];
+}
+
+public record TermGateSectorSummary
+{
+    public string SectorKey { get; init; } = string.Empty;
+    public string SectorName { get; init; } = string.Empty;
+    public int TermCount { get; init; }
+}
+
+public record TermGateSummaryDto
+{
+    public int TotalTerms { get; init; }
+    public int CriticalTerms { get; init; }
+    public IReadOnlyList<TermGateSectorSummary> TermsBySector { get; init; } = [];
+    /// <summary>Language codes (e.g. "pl", "fr") that have at least one approved translation in the effective glossary.</summary>
+    public IReadOnlyList<string> LanguagesWithCoverage { get; init; } = [];
+}
