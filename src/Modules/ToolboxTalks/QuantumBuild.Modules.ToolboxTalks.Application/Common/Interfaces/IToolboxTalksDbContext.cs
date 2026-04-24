@@ -86,6 +86,7 @@ public interface IToolboxTalksDbContext
     // QR location entities
     DbSet<QrLocation> QrLocations { get; }
     DbSet<QrCode> QrCodes { get; }
+    DbSet<QrSession> QrSessions { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
