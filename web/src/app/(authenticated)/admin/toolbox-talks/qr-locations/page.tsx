@@ -34,6 +34,7 @@ import type {
   QrSessionsParams,
 } from "@/lib/api/toolbox-talks/qr-locations";
 import { useToolboxTalks } from "@/lib/api/toolbox-talks/use-toolbox-talks";
+import { useToolboxTalkCourses } from "@/lib/api/toolbox-talks/use-courses";
 
 const CONTENT_MODE_LABELS: Record<ContentMode, string> = {
   ViewOnly: "View Only",
@@ -108,9 +109,13 @@ function LocationDialog({
 
 // ── QR code form ──────────────────────────────────────────────────────────────
 
+type ContentAssignmentType = "talk" | "course" | "none";
+
 interface CodeFormState {
   name: string;
+  assignmentType: ContentAssignmentType;
   toolboxTalkId: string;
+  courseId: string;
   contentMode: string;
 }
 
@@ -127,15 +132,23 @@ function QrCodeDialog({
 }) {
   const [form, setForm] = useState<CodeFormState>({
     name: "",
+    assignmentType: "none",
     toolboxTalkId: "__none__",
+    courseId: "__none__",
     contentMode: "Training",
   });
 
   const { data: talksData } = useToolboxTalks({ pageNumber: 1, pageSize: 200 });
   const talks = talksData?.items ?? [];
 
+  const { data: coursesData } = useToolboxTalkCourses({ isActive: true });
+  const courses = coursesData ?? [];
+
   const set = <K extends keyof CodeFormState>(k: K) => (v: string) =>
     setForm((f) => ({ ...f, [k]: v }));
+
+  const setAssignmentType = (type: ContentAssignmentType) =>
+    setForm((f) => ({ ...f, assignmentType: type, toolboxTalkId: "__none__", courseId: "__none__" }));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -148,22 +161,66 @@ function QrCodeDialog({
             <Label htmlFor="code-name">Name *</Label>
             <Input id="code-name" value={form.name} onChange={(e) => set("name")(e.target.value)} />
           </div>
+
           <div className="space-y-1.5">
-            <Label htmlFor="code-talk">Learning (optional)</Label>
-            <Select value={form.toolboxTalkId} onValueChange={set("toolboxTalkId")}>
-              <SelectTrigger id="code-talk">
-                <SelectValue placeholder="Select a learning…" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">None</SelectItem>
-                {talks.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    {t.code} — {t.title}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label>Assign Content (optional)</Label>
+            <div className="flex gap-2">
+              {(["none", "talk", "course"] as ContentAssignmentType[]).map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setAssignmentType(type)}
+                  className={cn(
+                    "flex-1 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors",
+                    form.assignmentType === type
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-background hover:bg-accent"
+                  )}
+                >
+                  {type === "none" ? "None" : type === "talk" ? "Talk" : "Course"}
+                </button>
+              ))}
+            </div>
           </div>
+
+          {form.assignmentType === "talk" && (
+            <div className="space-y-1.5">
+              <Label htmlFor="code-talk">Talk</Label>
+              <Select value={form.toolboxTalkId} onValueChange={set("toolboxTalkId")}>
+                <SelectTrigger id="code-talk">
+                  <SelectValue placeholder="Select a talk…" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">None</SelectItem>
+                  {talks.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.code} — {t.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {form.assignmentType === "course" && (
+            <div className="space-y-1.5">
+              <Label htmlFor="code-course">Course</Label>
+              <Select value={form.courseId} onValueChange={set("courseId")}>
+                <SelectTrigger id="code-course">
+                  <SelectValue placeholder="Select a course…" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">None</SelectItem>
+                  {courses.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <Label htmlFor="code-mode">Content Mode *</Label>
             <Select value={form.contentMode} onValueChange={set("contentMode")}>
@@ -232,8 +289,10 @@ function QrCodeCard({
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="font-medium text-sm truncate">{code.name}</p>
-            {code.talkTitle && (
-              <p className="text-xs text-muted-foreground truncate mt-0.5">{code.talkTitle}</p>
+            {(code.talkTitle || code.courseTitle) && (
+              <p className="text-xs text-muted-foreground truncate mt-0.5">
+                {code.courseTitle ? `Course: ${code.courseTitle}` : code.talkTitle}
+              </p>
             )}
           </div>
           <Badge className={cn("shrink-0 text-xs", CONTENT_MODE_COLOURS[code.contentMode])}>
@@ -337,7 +396,7 @@ function SessionsPanel({ locations }: { locations: QrLocationDto[] }) {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold flex items-center gap-2">
+      <h2 className="text-lg font-semibold flex items-center gap-2 mb-3">
         <Activity className="h-5 w-5" />
         QR Sessions
       </h2>
@@ -365,7 +424,8 @@ function SessionsPanel({ locations }: { locations: QrLocationDto[] }) {
         ))}
       </div>
 
-      {/* Filters */}
+      {/* Filters + table panel */}
+      <div className="bg-white dark:bg-slate-900 border rounded-lg shadow-sm p-4 space-y-4">
       <div className="flex flex-wrap items-end gap-2">
         <div className="space-y-1">
           <Label className="text-xs">Status</Label>
@@ -539,6 +599,7 @@ function SessionsPanel({ locations }: { locations: QrLocationDto[] }) {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
@@ -593,11 +654,16 @@ export default function QrLocationsPage() {
     }
   };
 
-  const handleSaveCode = async (form: { name: string; toolboxTalkId: string; contentMode: string }) => {
+  const handleSaveCode = async (form: { name: string; assignmentType: string; toolboxTalkId: string; courseId: string; contentMode: string }) => {
     try {
       await createCode.mutateAsync({
         name: form.name,
-        toolboxTalkId: form.toolboxTalkId === "__none__" ? undefined : form.toolboxTalkId || undefined,
+        toolboxTalkId: form.assignmentType === "talk" && form.toolboxTalkId !== "__none__"
+          ? form.toolboxTalkId
+          : undefined,
+        courseId: form.assignmentType === "course" && form.courseId !== "__none__"
+          ? form.courseId
+          : undefined,
         contentMode: form.contentMode,
       });
       setCodeDialogOpen(false);
@@ -615,7 +681,7 @@ export default function QrLocationsPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* Left panel — location list */}
-        <div className="lg:col-span-2 space-y-3">
+        <div className="lg:col-span-2 space-y-3 bg-white dark:bg-slate-900 border rounded-lg shadow-sm p-4">
           <div className="flex items-center gap-2">
             <Input
               placeholder="Search locations…"
@@ -696,9 +762,9 @@ export default function QrLocationsPage() {
         </div>
 
         {/* Right panel — selected location detail */}
-        <div className="lg:col-span-3">
+        <div className="lg:col-span-3 bg-white dark:bg-slate-900 border rounded-lg shadow-sm p-4">
           {!selectedLocation ? (
-            <div className="flex flex-col items-center justify-center h-64 text-muted-foreground border rounded-lg">
+            <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
               <QrCode className="h-10 w-10 mb-3 opacity-30" />
               <p className="text-sm">Select a location to view its QR codes</p>
             </div>
@@ -741,7 +807,7 @@ export default function QrLocationsPage() {
       </div>
 
       {/* Sessions panel */}
-      <div className="border-t pt-6">
+      <div className="pt-2">
         <SessionsPanel locations={locations} />
       </div>
 

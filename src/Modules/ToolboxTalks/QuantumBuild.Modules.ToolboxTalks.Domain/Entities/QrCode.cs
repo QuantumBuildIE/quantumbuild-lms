@@ -11,6 +11,9 @@ public class QrCode : TenantEntity
     public Guid? ToolboxTalkId { get; set; }
     public ToolboxTalk? ToolboxTalk { get; set; }
 
+    public Guid? CourseId { get; set; }
+    public ToolboxTalkCourse? Course { get; set; }
+
     public string Name { get; set; } = string.Empty;
     public ContentMode ContentMode { get; set; } = ContentMode.Training;
     public string CodeToken { get; set; } = string.Empty;

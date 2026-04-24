@@ -28,11 +28,13 @@ public record UpdateQrLocationRequest(
 public record CreateQrCodeRequest(
     string Name,
     Guid? ToolboxTalkId,
+    Guid? CourseId,
     string ContentMode);
 
 public record UpdateQrCodeRequest(
     string Name,
     Guid? ToolboxTalkId,
+    Guid? CourseId,
     string ContentMode,
     bool IsActive);
 
@@ -52,6 +54,8 @@ public record QrCodeDto(
     Guid QrLocationId,
     Guid? ToolboxTalkId,
     string? TalkTitle,
+    Guid? CourseId,
+    string? CourseTitle,
     string Name,
     string ContentMode,
     string CodeToken,
@@ -63,6 +67,8 @@ public record QrCodePublicDto(
     string LocationName,
     Guid? TalkId,
     string? TalkTitle,
+    Guid? CourseId,
+    string? CourseTitle,
     string ContentMode);
 
 public record QrSessionListItemDto(
@@ -263,12 +269,15 @@ public class QrLocationController : ControllerBase
             var codes = await _dbContext.QrCodes
                 .Where(x => x.QrLocationId == id)
                 .Include(x => x.ToolboxTalk)
+                .Include(x => x.Course)
                 .OrderBy(x => x.Name)
                 .Select(x => new QrCodeDto(
                     x.Id,
                     x.QrLocationId,
                     x.ToolboxTalkId,
                     x.ToolboxTalk != null ? x.ToolboxTalk.Title : null,
+                    x.CourseId,
+                    x.Course != null ? x.Course.Title : null,
                     x.Name,
                     x.ContentMode.ToString(),
                     x.CodeToken,
@@ -299,6 +308,9 @@ public class QrLocationController : ControllerBase
 
             if (!locationExists) return NotFound(new { message = "Location not found" });
 
+            if (request.ToolboxTalkId.HasValue && request.CourseId.HasValue)
+                return BadRequest(new { message = "ToolboxTalkId and CourseId are mutually exclusive." });
+
             if (!Enum.TryParse<ContentMode>(request.ContentMode, true, out var contentMode))
                 return BadRequest(new { message = $"Invalid ContentMode: {request.ContentMode}" });
 
@@ -325,6 +337,7 @@ public class QrLocationController : ControllerBase
                 Id = Guid.NewGuid(),
                 QrLocationId = id,
                 ToolboxTalkId = request.ToolboxTalkId,
+                CourseId = request.CourseId,
                 Name = request.Name,
                 ContentMode = contentMode,
                 CodeToken = codeToken,
@@ -342,8 +355,15 @@ public class QrLocationController : ControllerBase
                     .FirstOrDefaultAsync(cancellationToken)
                 : null;
 
+            var courseTitle = request.CourseId.HasValue
+                ? await _dbContext.ToolboxTalkCourses
+                    .Where(c => c.Id == request.CourseId.Value)
+                    .Select(c => c.Title)
+                    .FirstOrDefaultAsync(cancellationToken)
+                : null;
+
             var dto = new QrCodeDto(code.Id, code.QrLocationId, code.ToolboxTalkId,
-                talkTitle, code.Name, code.ContentMode.ToString(),
+                talkTitle, code.CourseId, courseTitle, code.Name, code.ContentMode.ToString(),
                 code.CodeToken, code.IsActive, code.QrImageUrl);
 
             return Ok(dto);
@@ -370,11 +390,15 @@ public class QrLocationController : ControllerBase
 
             if (code == null) return NotFound();
 
+            if (request.ToolboxTalkId.HasValue && request.CourseId.HasValue)
+                return BadRequest(new { message = "ToolboxTalkId and CourseId are mutually exclusive." });
+
             if (!Enum.TryParse<ContentMode>(request.ContentMode, true, out var contentMode))
                 return BadRequest(new { message = $"Invalid ContentMode: {request.ContentMode}" });
 
             code.Name = request.Name;
             code.ToolboxTalkId = request.ToolboxTalkId;
+            code.CourseId = request.CourseId;
             code.ContentMode = contentMode;
             code.IsActive = request.IsActive;
 
@@ -545,6 +569,7 @@ public class QrLocationController : ControllerBase
                 .Where(x => !x.IsDeleted && x.IsActive && x.CodeToken == codeToken)
                 .Include(x => x.QrLocation)
                 .Include(x => x.ToolboxTalk)
+                .Include(x => x.Course)
                 .FirstOrDefaultAsync(cancellationToken);
 
             if (code == null) return NotFound();
@@ -554,6 +579,8 @@ public class QrLocationController : ControllerBase
                 code.QrLocation.Name,
                 code.ToolboxTalkId,
                 code.ToolboxTalk?.Title,
+                code.CourseId,
+                code.Course?.Title,
                 code.ContentMode.ToString());
 
             return Ok(dto);

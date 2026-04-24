@@ -35,6 +35,11 @@ public class QrCodeConfiguration : IEntityTypeConfiguration<QrCode>
             .HasForeignKey(x => x.ToolboxTalkId)
             .OnDelete(DeleteBehavior.SetNull);
 
+        builder.HasOne(x => x.Course)
+            .WithMany()
+            .HasForeignKey(x => x.CourseId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         builder.HasIndex(x => x.CodeToken).IsUnique().HasDatabaseName("ix_qr_codes_token");
         builder.HasIndex(x => x.TenantId).HasDatabaseName("ix_qr_codes_tenant");
     }

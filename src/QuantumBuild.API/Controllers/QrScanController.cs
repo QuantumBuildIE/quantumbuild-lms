@@ -27,6 +27,7 @@ public record QrVerifyPinResponse(
     string EmployeeName,
     string PreferredLanguage,
     Guid? TalkId,
+    Guid? CourseId,
     string ContentMode,
     string LocationName);
 
@@ -112,8 +113,8 @@ public class QrScanController : ControllerBase
             if (code == null)
                 return NotFound(new { message = "QR code not found or inactive." });
 
-            if (code.ToolboxTalkId == null)
-                return BadRequest(new { message = "This QR code has no talk assigned." });
+            if (code.ToolboxTalkId == null && code.CourseId == null)
+                return BadRequest(new { message = "This QR code has no talk or course assigned." });
 
             var tenantId = code.TenantId;
 
@@ -179,6 +180,7 @@ public class QrScanController : ControllerBase
                 matched.FullName,
                 matched.PreferredLanguage ?? "en",
                 code.ToolboxTalkId,
+                code.CourseId,
                 code.ContentMode.ToString(),
                 code.QrLocation.Name));
         }
@@ -212,59 +214,145 @@ public class QrScanController : ControllerBase
             if (session.Status == QrSessionStatus.Completed || session.Status == QrSessionStatus.Abandoned)
                 return StatusCode(410, new { message = "Session has ended." });
 
-            if (session.QrCode.ToolboxTalkId == null)
-                return BadRequest(new { message = "No talk assigned to this QR code." });
-
-            var talk = await _db.ToolboxTalks
-                .IgnoreQueryFilters()
-                .Where(t => !t.IsDeleted && t.Id == session.QrCode.ToolboxTalkId.Value)
-                .Include(t => t.Sections.Where(s => !s.IsDeleted).OrderBy(s => s.SectionNumber))
-                .Include(t => t.Questions.Where(q => !q.IsDeleted).OrderBy(q => q.QuestionNumber))
-                .Include(t => t.Translations)
-                .FirstOrDefaultAsync(cancellationToken);
-
-            if (talk == null)
-                return NotFound(new { message = "Talk not found." });
+            if (session.QrCode.ToolboxTalkId == null && session.QrCode.CourseId == null)
+                return BadRequest(new { message = "No talk or course assigned to this QR code." });
 
             var lang = session.Language;
-            var translation = talk.Translations?.FirstOrDefault(t => t.LanguageCode == lang);
+            QrSessionTalkDto talkDto;
 
-            var translatedSections = ParseTranslatedSections(translation?.TranslatedSections);
-            var translatedQuestions = ParseTranslatedQuestions(translation?.TranslatedQuestions);
-
-            var sections = talk.Sections.Select(s =>
+            if (session.QrCode.CourseId != null)
             {
-                var ts = translatedSections?.FirstOrDefault(x => x.SectionId == s.Id);
-                return new QrSessionSectionDto(
-                    s.Id,
-                    s.SectionNumber,
-                    ts?.Title ?? s.Title,
-                    ts?.Content ?? s.Content,
-                    s.RequiresAcknowledgment);
-            }).ToList();
+                var courseTitle = await _db.ToolboxTalkCourses
+                    .IgnoreQueryFilters()
+                    .Where(c => !c.IsDeleted && c.Id == session.QrCode.CourseId.Value)
+                    .Select(c => c.Title)
+                    .FirstOrDefaultAsync(cancellationToken);
 
-            var questions = talk.Questions.Select(q =>
+                if (courseTitle == null)
+                    return NotFound(new { message = "Course not found." });
+
+                var talkIds = await _db.ToolboxTalkCourseItems
+                    .IgnoreQueryFilters()
+                    .Where(i => !i.IsDeleted && i.CourseId == session.QrCode.CourseId.Value)
+                    .OrderBy(i => i.OrderIndex)
+                    .Select(i => i.ToolboxTalkId)
+                    .ToListAsync(cancellationToken);
+
+                var allSections = new List<QrSessionSectionDto>();
+                var allQuestions = new List<QrSessionQuestionDto>();
+                int sectionOffset = 0;
+                int questionOffset = 0;
+                bool requiresQuiz = false;
+                int passingScore = 80;
+
+                foreach (var talkId in talkIds)
+                {
+                    var courseTalk = await _db.ToolboxTalks
+                        .IgnoreQueryFilters()
+                        .Where(t => !t.IsDeleted && t.Id == talkId)
+                        .Include(t => t.Sections.Where(s => !s.IsDeleted).OrderBy(s => s.SectionNumber))
+                        .Include(t => t.Questions.Where(q => !q.IsDeleted).OrderBy(q => q.QuestionNumber))
+                        .Include(t => t.Translations)
+                        .FirstOrDefaultAsync(cancellationToken);
+
+                    if (courseTalk == null) continue;
+
+                    var translation = courseTalk.Translations?.FirstOrDefault(t => t.LanguageCode == lang);
+                    var translatedSections = ParseTranslatedSections(translation?.TranslatedSections);
+                    var translatedQuestions = ParseTranslatedQuestions(translation?.TranslatedQuestions);
+
+                    foreach (var s in courseTalk.Sections)
+                    {
+                        var ts = translatedSections?.FirstOrDefault(x => x.SectionId == s.Id);
+                        allSections.Add(new QrSessionSectionDto(
+                            s.Id,
+                            sectionOffset + s.SectionNumber,
+                            ts?.Title ?? s.Title,
+                            ts?.Content ?? s.Content,
+                            s.RequiresAcknowledgment));
+                    }
+                    sectionOffset += courseTalk.Sections.Count;
+
+                    foreach (var q in courseTalk.Questions)
+                    {
+                        var tq = translatedQuestions?.FirstOrDefault(x => x.QuestionId == q.Id);
+                        allQuestions.Add(new QrSessionQuestionDto(
+                            q.Id,
+                            questionOffset + q.QuestionNumber,
+                            tq?.QuestionText ?? q.QuestionText,
+                            q.QuestionType.ToString(),
+                            tq?.Options ?? ParseOptions(q.Options),
+                            q.CorrectOptionIndex,
+                            q.Points));
+                    }
+                    questionOffset += courseTalk.Questions.Count;
+
+                    if (courseTalk.RequiresQuiz) requiresQuiz = true;
+                    if (courseTalk.PassingScore.HasValue && courseTalk.PassingScore.Value > passingScore)
+                        passingScore = courseTalk.PassingScore.Value;
+                }
+
+                talkDto = new QrSessionTalkDto(
+                    session.QrCode.CourseId.Value,
+                    courseTitle,
+                    null,
+                    null,
+                    requiresQuiz,
+                    passingScore,
+                    allSections,
+                    allQuestions);
+            }
+            else
             {
-                var tq = translatedQuestions?.FirstOrDefault(x => x.QuestionId == q.Id);
-                return new QrSessionQuestionDto(
-                    q.Id,
-                    q.QuestionNumber,
-                    tq?.QuestionText ?? q.QuestionText,
-                    q.QuestionType.ToString(),
-                    tq?.Options ?? ParseOptions(q.Options),
-                    q.CorrectOptionIndex,
-                    q.Points);
-            }).ToList();
+                var talk = await _db.ToolboxTalks
+                    .IgnoreQueryFilters()
+                    .Where(t => !t.IsDeleted && t.Id == session.QrCode.ToolboxTalkId!.Value)
+                    .Include(t => t.Sections.Where(s => !s.IsDeleted).OrderBy(s => s.SectionNumber))
+                    .Include(t => t.Questions.Where(q => !q.IsDeleted).OrderBy(q => q.QuestionNumber))
+                    .Include(t => t.Translations)
+                    .FirstOrDefaultAsync(cancellationToken);
 
-            var talkDto = new QrSessionTalkDto(
-                talk.Id,
-                translation?.TranslatedTitle ?? talk.Title,
-                translation?.TranslatedDescription ?? talk.Description,
-                talk.VideoUrl,
-                talk.RequiresQuiz,
-                talk.PassingScore ?? 80,
-                sections,
-                questions);
+                if (talk == null)
+                    return NotFound(new { message = "Talk not found." });
+
+                var translation = talk.Translations?.FirstOrDefault(t => t.LanguageCode == lang);
+                var translatedSections = ParseTranslatedSections(translation?.TranslatedSections);
+                var translatedQuestions = ParseTranslatedQuestions(translation?.TranslatedQuestions);
+
+                var sections = talk.Sections.Select(s =>
+                {
+                    var ts = translatedSections?.FirstOrDefault(x => x.SectionId == s.Id);
+                    return new QrSessionSectionDto(
+                        s.Id,
+                        s.SectionNumber,
+                        ts?.Title ?? s.Title,
+                        ts?.Content ?? s.Content,
+                        s.RequiresAcknowledgment);
+                }).ToList();
+
+                var questions = talk.Questions.Select(q =>
+                {
+                    var tq = translatedQuestions?.FirstOrDefault(x => x.QuestionId == q.Id);
+                    return new QrSessionQuestionDto(
+                        q.Id,
+                        q.QuestionNumber,
+                        tq?.QuestionText ?? q.QuestionText,
+                        q.QuestionType.ToString(),
+                        tq?.Options ?? ParseOptions(q.Options),
+                        q.CorrectOptionIndex,
+                        q.Points);
+                }).ToList();
+
+                talkDto = new QrSessionTalkDto(
+                    talk.Id,
+                    translation?.TranslatedTitle ?? talk.Title,
+                    translation?.TranslatedDescription ?? talk.Description,
+                    talk.VideoUrl,
+                    talk.RequiresQuiz,
+                    talk.PassingScore ?? 80,
+                    sections,
+                    questions);
+            }
 
             var dto = new QrSessionDto(
                 session.SessionToken.ToString(),
@@ -308,16 +396,28 @@ public class QrScanController : ControllerBase
             if (session.Status != QrSessionStatus.Active)
                 return BadRequest(new { message = "Session is not active." });
 
-            if (session.QrCode.ToolboxTalkId == null)
-                return BadRequest(new { message = "No talk assigned to this QR code." });
+            if (session.QrCode.ToolboxTalkId == null && session.QrCode.CourseId == null)
+                return BadRequest(new { message = "No talk or course assigned to this QR code." });
 
             var now = DateTimeOffset.UtcNow;
+
+            // For course-based sessions, use the first talk in the course for the completion record.
+            // The session itself captures the full course context via QrCode.CourseId.
+            var completionTalkId = session.QrCode.ToolboxTalkId ?? await _db.ToolboxTalkCourseItems
+                .IgnoreQueryFilters()
+                .Where(i => !i.IsDeleted && i.CourseId == session.QrCode.CourseId!.Value)
+                .OrderBy(i => i.OrderIndex)
+                .Select(i => (Guid?)i.ToolboxTalkId)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (completionTalkId == null)
+                return BadRequest(new { message = "No talk found for completion." });
 
             var scheduledTalk = new ScheduledTalk
             {
                 Id = Guid.NewGuid(),
                 TenantId = session.TenantId,
-                ToolboxTalkId = session.QrCode.ToolboxTalkId.Value,
+                ToolboxTalkId = completionTalkId.Value,
                 EmployeeId = session.EmployeeId,
                 LanguageCode = session.Language,
                 RequiredDate = session.StartedAt.UtcDateTime,

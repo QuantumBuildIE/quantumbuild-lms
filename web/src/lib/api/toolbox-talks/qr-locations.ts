@@ -17,6 +17,8 @@ export interface QrCodeDto {
   qrLocationId: string;
   toolboxTalkId?: string;
   talkTitle?: string;
+  courseId?: string;
+  courseTitle?: string;
   name: string;
   contentMode: ContentMode;
   codeToken: string;
@@ -29,6 +31,8 @@ export interface QrCodePublicDto {
   locationName: string;
   talkId?: string;
   talkTitle?: string;
+  courseId?: string;
+  courseTitle?: string;
   contentMode: ContentMode;
 }
 
@@ -56,12 +60,14 @@ export interface UpdateQrLocationRequest {
 export interface CreateQrCodeRequest {
   name: string;
   toolboxTalkId?: string;
+  courseId?: string;
   contentMode: string;
 }
 
 export interface UpdateQrCodeRequest {
   name: string;
   toolboxTalkId?: string;
+  courseId?: string;
   contentMode: string;
   isActive: boolean;
 }
