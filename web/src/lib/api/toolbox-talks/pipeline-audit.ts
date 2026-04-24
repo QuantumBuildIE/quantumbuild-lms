@@ -1,6 +1,6 @@
 import { apiClient } from '../client';
 
-const BASE = '/api/toolbox-talks/pipeline';
+const BASE = '/toolbox-talks/pipeline';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
