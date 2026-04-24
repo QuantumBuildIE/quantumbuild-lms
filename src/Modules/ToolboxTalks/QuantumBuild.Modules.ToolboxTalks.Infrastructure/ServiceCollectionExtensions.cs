@@ -297,6 +297,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITranslationDeviationService, TranslationDeviationService>();
         services.AddScoped<IPipelineAuditQueryService, PipelineAuditQueryService>();
 
+        // Register pipeline audit Phase 4 services — Corpus
+        services.AddScoped<ICostEstimationService, CostEstimationService>();
+        services.AddScoped<IAuditCorpusService, AuditCorpusService>();
+        services.AddScoped<CorpusRunJob>();
+
         // Register requirement mapping job HttpClient (calls Claude API for content analysis)
         services.AddHttpClient<RequirementMappingJob>(client =>
         {

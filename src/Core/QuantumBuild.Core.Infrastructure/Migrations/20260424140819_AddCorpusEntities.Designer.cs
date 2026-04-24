@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using QuantumBuild.Core.Infrastructure.Data;
@@ -11,9 +12,11 @@ using QuantumBuild.Core.Infrastructure.Data;
 namespace QuantumBuild.Core.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260424140819_AddCorpusEntities")]
+    partial class AddCorpusEntities
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -193,7 +196,7 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Companies", (string)null);
+                    b.ToTable("Companies");
                 });
 
             modelBuilder.Entity("QuantumBuild.Core.Domain.Entities.Contact", b =>
@@ -272,7 +275,7 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
 
                     b.HasIndex("SiteId");
 
-                    b.ToTable("Contacts", (string)null);
+                    b.ToTable("Contacts");
                 });
 
             modelBuilder.Entity("QuantumBuild.Core.Domain.Entities.DpaAcceptance", b =>
@@ -350,7 +353,7 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                     b.HasIndex("TenantId", "DpaVersion")
                         .HasDatabaseName("IX_DpaAcceptances_TenantId_DpaVersion");
 
-                    b.ToTable("DpaAcceptances", (string)null);
+                    b.ToTable("DpaAcceptances");
                 });
 
             modelBuilder.Entity("QuantumBuild.Core.Domain.Entities.Employee", b =>
@@ -473,7 +476,7 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                         .HasDatabaseName("IX_Employees_TenantId_GeoTrackerID")
                         .HasFilter("\"GeoTrackerID\" IS NOT NULL");
 
-                    b.ToTable("Employees", (string)null);
+                    b.ToTable("Employees");
                 });
 
             modelBuilder.Entity("QuantumBuild.Core.Domain.Entities.LookupCategory", b =>
@@ -784,7 +787,7 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
 
                     b.HasIndex("SiteManagerId");
 
-                    b.ToTable("Sites", (string)null);
+                    b.ToTable("Sites");
                 });
 
             modelBuilder.Entity("QuantumBuild.Core.Domain.Entities.SupervisorAssignment", b =>
@@ -831,7 +834,7 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                         .IsUnique()
                         .HasDatabaseName("IX_SupervisorAssignments_TenantId_SupervisorEmployeeId_OperatorEmployeeId");
 
-                    b.ToTable("SupervisorAssignments", (string)null);
+                    b.ToTable("SupervisorAssignments");
                 });
 
             modelBuilder.Entity("QuantumBuild.Core.Domain.Entities.SystemAuditLog", b =>
@@ -1073,7 +1076,7 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                         .HasDatabaseName("IX_TenantModules_TenantId_ModuleName")
                         .HasFilter("\"IsDeleted\" = false");
 
-                    b.ToTable("TenantModules", (string)null);
+                    b.ToTable("TenantModules");
                 });
 
             modelBuilder.Entity("QuantumBuild.Core.Domain.Entities.TenantSetting", b =>

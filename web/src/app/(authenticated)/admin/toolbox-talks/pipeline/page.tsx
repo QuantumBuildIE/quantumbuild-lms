@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -16,6 +16,14 @@ import {
   ChevronRight,
   Info,
   Lock,
+  Database,
+  Play,
+  RefreshCw,
+  TrendingDown,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  FileText,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth/use-auth';
 import { toast } from 'sonner';
@@ -30,6 +38,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Progress } from '@/components/ui/progress';
 import {
   Tabs,
   TabsContent,
@@ -65,7 +74,21 @@ import {
   useCreateChangeRecord,
   useTermGateSummary,
   useTermGateCheck,
+  useCorpora,
+  useCorpus,
+  useCorpusRuns,
+  useCorpusRunDetail,
+  useCorpusRunDiff,
+  useFreezeCorpus,
+  useLockCorpus,
+  useAddCorpusEntry,
+  useRemoveCorpusEntry,
+  useTriggerCorpusRun,
+  useConfirmCorpusRun,
+  useUpdateChangeStatus,
 } from '@/lib/api/toolbox-talks/use-pipeline-audit';
+import { useToolboxTalks } from '@/lib/api/toolbox-talks/use-toolbox-talks';
+import { useCorpusRunHub } from '@/features/toolbox-talks/hooks/use-corpus-run-hub';
 import type {
   TranslationDeviationDto,
   CreateDeviationRequest,
@@ -74,6 +97,16 @@ import type {
   ModuleOutcomeDto,
   TermGateCheckResult,
   TermGateFailure,
+  AuditCorpusDto,
+  AuditCorpusEntryDto,
+  CorpusRunSummaryDto,
+  CorpusRunDetailDto,
+  CorpusVerdict,
+  PipelineChangeStatus,
+  TriggerCorpusRunResponse,
+  FreezeCorpusRequest,
+  AddCorpusEntryRequest,
+  UpdateChangeStatusRequest,
 } from '@/lib/api/toolbox-talks/pipeline-audit';
 
 // ─── Shared helpers ────────────────────────────────────────────────────────────
@@ -1053,10 +1086,122 @@ function NewChangeRecordDialog({
   );
 }
 
+function ChangeStatusDialog({
+  changeId,
+  currentStatus,
+  open,
+  onOpenChange,
+}: {
+  changeId: string;
+  currentStatus: PipelineChangeStatus;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
+  const updateMutation = useUpdateChangeStatus();
+  const [justification, setJustification] = useState('');
+  const [targetStatus, setTargetStatus] = useState<PipelineChangeStatus | null>(null);
+
+  const transitions: { from: PipelineChangeStatus; to: PipelineChangeStatus; label: string; requiresJustification?: boolean }[] = [
+    { from: 'Draft', to: 'ReadyForReview', label: 'Submit for Review' },
+    { from: 'PendingApproval', to: 'Approved', label: 'Approve' },
+    { from: 'BlockedRegression', to: 'Approved', label: 'Override (Approve Despite Regression)', requiresJustification: true },
+  ];
+
+  const available = transitions.filter((t) => t.from === currentStatus);
+
+  const handle = (to: PipelineChangeStatus) => {
+    const t = transitions.find((tr) => tr.to === to);
+    if (t?.requiresJustification) {
+      setTargetStatus(to);
+    } else {
+      updateMutation.mutate(
+        { id: changeId, request: { status: to } },
+        {
+          onSuccess: () => { toast.success('Status updated'); onOpenChange(false); },
+          onError: () => toast.error('Failed to update status'),
+        }
+      );
+    }
+  };
+
+  const handleConfirmJustification = () => {
+    if (!justification.trim() || !targetStatus) return;
+    updateMutation.mutate(
+      { id: changeId, request: { status: targetStatus, justification } },
+      {
+        onSuccess: () => { toast.success('Status updated'); onOpenChange(false); setTargetStatus(null); setJustification(''); },
+        onError: () => toast.error('Failed to update status'),
+      }
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Update Change Status</DialogTitle>
+        </DialogHeader>
+        {!targetStatus ? (
+          <div className="space-y-3 py-2">
+            {available.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No transitions available from {currentStatus}.</p>
+            ) : (
+              available.map((t) => (
+                <Button
+                  key={t.to}
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => handle(t.to)}
+                  disabled={updateMutation.isPending}
+                >
+                  {t.label}
+                </Button>
+              ))
+            )}
+          </div>
+        ) : (
+          <div className="space-y-3 py-2">
+            <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-950/30">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                You are overriding a regression block. A justification is required.
+              </AlertDescription>
+            </Alert>
+            <div className="space-y-1.5">
+              <Label>Justification <span className="text-destructive">*</span></Label>
+              <Textarea
+                value={justification}
+                onChange={(e) => setJustification(e.target.value)}
+                placeholder="Explain why this regression is acceptable"
+                rows={3}
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setTargetStatus(null); setJustification(''); }}>Back</Button>
+              <Button onClick={handleConfirmJustification} disabled={!justification.trim() || updateMutation.isPending}>
+                Confirm Override
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ChangesTab() {
   const [newOpen, setNewOpen] = useState(false);
+  const [statusDialogId, setStatusDialogId] = useState<string | null>(null);
+  const [statusDialogCurrent, setStatusDialogCurrent] = useState<PipelineChangeStatus>('Draft');
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [page] = useState(1);
   const { data, isLoading } = useChangeRecords({ page, pageSize: 25 });
+
+  const openStatusDialog = (cr: PipelineChangeRecordDto) => {
+    setStatusDialogId(cr.id);
+    setStatusDialogCurrent((cr.status as PipelineChangeStatus) ?? 'Draft');
+    setStatusDialogOpen(true);
+  };
 
   return (
     <div className="space-y-4">
@@ -1096,7 +1241,9 @@ function ChangesTab() {
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Component</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">From → To</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Pipeline v</th>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Justification</th>
+                <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -1119,8 +1266,21 @@ function ChangesTab() {
                       </Badge>
                     )}
                   </td>
+                  <td className="px-4 py-3">
+                    <ChangeStatusBadge status={(cr.status as PipelineChangeStatus) ?? 'Draft'} />
+                  </td>
                   <td className="px-4 py-3 max-w-[240px]">
                     <p className="truncate text-muted-foreground">{cr.justification}</p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => openStatusDialog(cr)}
+                    >
+                      Status →
+                    </Button>
                   </td>
                 </tr>
               ))}
@@ -1135,6 +1295,15 @@ function ChangesTab() {
       )}
 
       <NewChangeRecordDialog open={newOpen} onOpenChange={setNewOpen} />
+
+      {statusDialogId && (
+        <ChangeStatusDialog
+          changeId={statusDialogId}
+          currentStatus={statusDialogCurrent}
+          open={statusDialogOpen}
+          onOpenChange={setStatusDialogOpen}
+        />
+      )}
     </div>
   );
 }
@@ -1458,6 +1627,829 @@ function TermGateTab() {
   );
 }
 
+// ─── Change Status Badge ──────────────────────────────────────────────────────
+
+function ChangeStatusBadge({ status }: { status: PipelineChangeStatus }) {
+  const map: Record<PipelineChangeStatus, { label: string; className: string }> = {
+    Draft: { label: 'Draft', className: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300' },
+    ReadyForReview: { label: 'Ready for Review', className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
+    PendingApproval: { label: 'Pending Approval', className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
+    Approved: { label: 'Approved', className: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
+    BlockedRegression: { label: 'Blocked — Regression', className: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
+  };
+  const s = map[status] ?? map.Draft;
+  return <Badge className={s.className}>{s.label}</Badge>;
+}
+
+// ─── Corpus Verdict Badge ─────────────────────────────────────────────────────
+
+function VerdictBadge({ verdict }: { verdict: CorpusVerdict | undefined | null }) {
+  if (!verdict) return null;
+  if (verdict === 'Pass') {
+    return <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">Pass</Badge>;
+  }
+  if (verdict === 'Fail') {
+    return <Badge className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">Fail</Badge>;
+  }
+  return <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">Inconclusive</Badge>;
+}
+
+// ─── Run Status Badge ─────────────────────────────────────────────────────────
+
+function RunStatusBadge({ status }: { status: string }) {
+  if (status === 'Running') {
+    return <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"><Loader2 className="mr-1 h-3 w-3 animate-spin" />Running</Badge>;
+  }
+  if (status === 'Completed') {
+    return <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"><CheckCircle2 className="mr-1 h-3 w-3" />Completed</Badge>;
+  }
+  if (status === 'Failed') {
+    return <Badge className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"><AlertTriangle className="mr-1 h-3 w-3" />Failed</Badge>;
+  }
+  return <Badge variant="outline"><Clock className="mr-1 h-3 w-3" />Pending</Badge>;
+}
+
+// ─── Corpus Run Detail Dialog ─────────────────────────────────────────────────
+
+function CorpusRunDetailDialog({
+  runId,
+  open,
+  onOpenChange,
+}: {
+  runId: string | null;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
+  const { data: run, isLoading } = useCorpusRunDetail(open ? runId : null);
+  const { data: diff } = useCorpusRunDiff(open && run?.status === 'Completed' ? runId : null);
+  const [showDiff, setShowDiff] = useState(false);
+  const { isConnected, progress, isComplete, verdict, error: hubError, reset } = useCorpusRunHub(
+    run?.status === 'Running' ? runId : null
+  );
+
+  useEffect(() => {
+    if (!open) reset();
+  }, [open, reset]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            Corpus Run Detail
+            {run && <RunStatusBadge status={verdict ? 'Completed' : run.status} />}
+            {(verdict ?? run?.verdict) && <VerdictBadge verdict={(verdict ?? run?.verdict) as CorpusVerdict} />}
+          </DialogTitle>
+          {run && (
+            <DialogDescription>
+              {run.isSmokeTest ? 'Smoke test · ' : ''}{run.triggerType} · {run.totalEntries} entries
+            </DialogDescription>
+          )}
+        </DialogHeader>
+
+        {isLoading ? (
+          <div className="space-y-3 py-4">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-3/4" />
+          </div>
+        ) : run ? (
+          <div className="space-y-4">
+            {/* Live progress */}
+            {run.status === 'Running' && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm">
+                  {isConnected ? (
+                    <span className="text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+                      Live
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">Connecting…</span>
+                  )}
+                  {progress && <span className="text-muted-foreground">{progress.message}</span>}
+                </div>
+                <Progress value={progress?.percentComplete ?? 0} className="h-2" />
+                {hubError && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{hubError}</AlertDescription>
+                  </Alert>
+                )}
+              </div>
+            )}
+
+            {/* Aggregate stats */}
+            {(run.status === 'Completed' || isComplete) && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                <div className="rounded-md border p-3">
+                  <p className="text-xs text-muted-foreground">Pass</p>
+                  <p className="text-lg font-semibold text-green-600">{run.passedEntries}</p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-xs text-muted-foreground">Review</p>
+                  <p className="text-lg font-semibold text-amber-600">{run.reviewEntries}</p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-xs text-muted-foreground">Fail</p>
+                  <p className="text-lg font-semibold text-red-600">{run.failedEntries}</p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-xs text-muted-foreground">Regressions</p>
+                  <p className={`text-lg font-semibold ${run.regressionEntries > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    {run.regressionEntries}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Per-entry results */}
+            {run.results && run.results.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground uppercase">Entry Results</p>
+                <div className="rounded-md border overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Ref</th>
+                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Section</th>
+                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Score</th>
+                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Outcome</th>
+                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Expected</th>
+                        <th className="px-3 py-2 text-left font-medium text-muted-foreground">Δ</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {run.results.map((r) => (
+                        <tr
+                          key={r.id}
+                          className={r.isRegression ? 'bg-red-50/50 dark:bg-red-950/20' : ''}
+                        >
+                          <td className="px-3 py-2 font-mono text-xs">{r.entryRef}</td>
+                          <td className="px-3 py-2 max-w-[160px] truncate">{r.sectionTitle}</td>
+                          <td className="px-3 py-2 tabular-nums font-medium">{Math.round(r.finalScore)}%</td>
+                          <td className="px-3 py-2"><OutcomeBadge outcome={r.outcome} /></td>
+                          <td className="px-3 py-2 text-muted-foreground">{r.expectedOutcome}</td>
+                          <td className="px-3 py-2">
+                            {r.isRegression ? (
+                              <span className="text-red-600 flex items-center gap-0.5 text-xs font-medium">
+                                <TrendingDown className="h-3 w-3" />{Math.round(r.scoreDelta)}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">
+                                {r.scoreDelta >= 0 ? '+' : ''}{Math.round(r.scoreDelta)}
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Diff vs previous run */}
+            {diff && (
+              <div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowDiff((v) => !v)}
+                  className="text-xs"
+                >
+                  {showDiff ? <ChevronUp className="mr-1 h-3 w-3" /> : <ChevronDown className="mr-1 h-3 w-3" />}
+                  Diff vs previous run ({diff.regressionCount} regressions, {diff.improvementCount} improvements)
+                </Button>
+                {showDiff && (
+                  <div className="rounded-md border overflow-hidden mt-2">
+                    <table className="w-full text-xs">
+                      <thead className="bg-muted/50">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-medium text-muted-foreground">Ref</th>
+                          <th className="px-3 py-2 text-left font-medium text-muted-foreground">Current</th>
+                          <th className="px-3 py-2 text-left font-medium text-muted-foreground">Previous</th>
+                          <th className="px-3 py-2 text-left font-medium text-muted-foreground">Score Δ</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {diff.entries.map((e) => (
+                          <tr
+                            key={e.corpusEntryId}
+                            className={
+                              e.isRegression
+                                ? 'bg-red-50/50 dark:bg-red-950/20'
+                                : e.isImprovement
+                                ? 'bg-green-50/50 dark:bg-green-950/20'
+                                : ''
+                            }
+                          >
+                            <td className="px-3 py-2 font-mono">{e.entryRef}</td>
+                            <td className="px-3 py-2">
+                              <OutcomeBadge outcome={e.currentOutcome} />
+                            </td>
+                            <td className="px-3 py-2 text-muted-foreground">
+                              {e.previousOutcome ?? '—'}
+                            </td>
+                            <td className="px-3 py-2 tabular-nums">
+                              {e.previousScore != null ? (
+                                <span className={e.isRegression ? 'text-red-600 font-medium' : e.isImprovement ? 'text-green-600 font-medium' : 'text-muted-foreground'}>
+                                  {e.scoreDelta >= 0 ? '+' : ''}{Math.round(e.scoreDelta)}
+                                </span>
+                              ) : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Freeze Corpus Dialog ─────────────────────────────────────────────────────
+
+function FreezeCorpusDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
+  const [talkId, setTalkId] = useState('');
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const { data: talks } = useToolboxTalks({ pageNumber: 1, pageSize: 100 });
+  const freezeMutation = useFreezeCorpus();
+
+  const handleSubmit = () => {
+    if (!talkId || !name.trim()) {
+      toast.error('Please select a talk and enter a name');
+      return;
+    }
+    const request: FreezeCorpusRequest = {
+      talkId,
+      name: name.trim(),
+      description: description.trim() || undefined,
+      sectionIndexes: [],
+    };
+    freezeMutation.mutate(request, {
+      onSuccess: () => {
+        toast.success('Corpus created from talk');
+        onOpenChange(false);
+        setTalkId('');
+        setName('');
+        setDescription('');
+      },
+      onError: () => toast.error('Failed to create corpus'),
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Create Audit Corpus</DialogTitle>
+          <DialogDescription>
+            Freeze accepted validation results from a talk into a reusable test corpus.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-4 py-2">
+          <div className="space-y-1.5">
+            <Label>Source Talk <span className="text-destructive">*</span></Label>
+            <Select value={talkId} onValueChange={setTalkId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a published talk" />
+              </SelectTrigger>
+              <SelectContent>
+                {talks?.items?.filter((t) => t.status === 'Published').map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.code} — {t.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Corpus Name <span className="text-destructive">*</span></Label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Manual Handling Safety EN→PL Baseline"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Description</Label>
+            <Textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Optional description of this corpus"
+              rows={2}
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit} disabled={freezeMutation.isPending}>
+            {freezeMutation.isPending ? 'Creating…' : 'Create Corpus'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Trigger Run Dialog ───────────────────────────────────────────────────────
+
+function TriggerRunDialog({
+  corpusId,
+  open,
+  onOpenChange,
+  onRunStarted,
+}: {
+  corpusId: string;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onRunStarted: (runId: string) => void;
+}) {
+  const [isSmokeTest, setIsSmokeTest] = useState(false);
+  const [pendingRun, setPendingRun] = useState<TriggerCorpusRunResponse | null>(null);
+  const triggerMutation = useTriggerCorpusRun();
+  const confirmMutation = useConfirmCorpusRun();
+
+  const handleTrigger = () => {
+    triggerMutation.mutate(
+      { corpusId, request: { isSmokeTest } },
+      {
+        onSuccess: (resp) => {
+          if (!resp.requiresConfirmation && !resp.requiresSuperUserApproval) {
+            toast.success('Corpus run queued');
+            onRunStarted(resp.runId);
+            onOpenChange(false);
+          } else {
+            setPendingRun(resp);
+          }
+        },
+        onError: () => toast.error('Failed to trigger run'),
+      }
+    );
+  };
+
+  const handleConfirm = () => {
+    if (!pendingRun) return;
+    confirmMutation.mutate(
+      { corpusId, runId: pendingRun.runId },
+      {
+        onSuccess: () => {
+          toast.success('Corpus run confirmed and queued');
+          onRunStarted(pendingRun.runId);
+          onOpenChange(false);
+          setPendingRun(null);
+        },
+        onError: () => toast.error('Failed to confirm run'),
+      }
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Trigger Corpus Run</DialogTitle>
+          <DialogDescription>
+            Execute the full validation pipeline against the corpus entries.
+          </DialogDescription>
+        </DialogHeader>
+
+        {!pendingRun ? (
+          <div className="space-y-4 py-2">
+            <div className="flex items-center gap-3 rounded-md border p-3">
+              <input
+                type="checkbox"
+                id="smoke-test"
+                checked={isSmokeTest}
+                onChange={(e) => setIsSmokeTest(e.target.checked)}
+                className="rounded"
+              />
+              <div>
+                <label htmlFor="smoke-test" className="text-sm font-medium cursor-pointer">
+                  Smoke test (first 5 entries only)
+                </label>
+                <p className="text-xs text-muted-foreground">Faster and cheaper — good for sanity checks</p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3 py-2">
+            <Alert className={pendingRun.requiresSuperUserApproval
+              ? 'border-red-200 bg-red-50 dark:bg-red-950/30'
+              : 'border-amber-200 bg-amber-50 dark:bg-amber-950/30'
+            }>
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                {pendingRun.requiresSuperUserApproval
+                  ? 'This run requires SuperUser approval due to high estimated cost.'
+                  : 'Please confirm this run.'}
+                <br />
+                Estimated cost:{' '}
+                <span className="font-semibold">
+                  €{pendingRun.estimatedCostEur.toFixed(2)}
+                </span>{' '}
+                for {pendingRun.estimatedEntries} entries.
+              </AlertDescription>
+            </Alert>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => { onOpenChange(false); setPendingRun(null); }}>
+            Cancel
+          </Button>
+          {!pendingRun ? (
+            <Button onClick={handleTrigger} disabled={triggerMutation.isPending}>
+              {triggerMutation.isPending ? 'Preparing…' : 'Trigger Run'}
+            </Button>
+          ) : (
+            <Button onClick={handleConfirm} disabled={confirmMutation.isPending}>
+              {confirmMutation.isPending ? 'Confirming…' : 'Confirm & Queue'}
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Corpus Detail Panel ──────────────────────────────────────────────────────
+
+function CorpusDetailPanel({ corpusId, onBack }: { corpusId: string; onBack: () => void }) {
+  const { data: corpus, isLoading } = useCorpus(corpusId);
+  const { data: runs, isLoading: runsLoading } = useCorpusRuns(corpusId);
+  const lockMutation = useLockCorpus();
+  const removeEntryMutation = useRemoveCorpusEntry();
+  const [triggerOpen, setTriggerOpen] = useState(false);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [runDetailOpen, setRunDetailOpen] = useState(false);
+
+  const handleLock = () => {
+    lockMutation.mutate(
+      { id: corpusId, request: {} },
+      {
+        onSuccess: () => toast.success('Corpus locked'),
+        onError: () => toast.error('Failed to lock corpus'),
+      }
+    );
+  };
+
+  const handleRemoveEntry = (entryId: string, entryRef: string) => {
+    if (!confirm(`Remove entry ${entryRef}?`)) return;
+    removeEntryMutation.mutate(
+      { corpusId, entryId },
+      {
+        onSuccess: () => toast.success('Entry removed'),
+        onError: () => toast.error('Failed to remove entry'),
+      }
+    );
+  };
+
+  const openRunDetail = (runId: string) => {
+    setSelectedRunId(runId);
+    setRunDetailOpen(true);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-6 w-48" />
+        <Skeleton className="h-40 w-full" />
+      </div>
+    );
+  }
+
+  if (!corpus) return null;
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <button
+            onClick={onBack}
+            className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 mb-2"
+          >
+            ← Back to corpora
+          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-lg font-semibold">{corpus.name}</h2>
+            <Badge variant="outline" className="font-mono text-xs">{corpus.corpusId}</Badge>
+            {corpus.isLocked && (
+              <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                <Lock className="mr-1 h-3 w-3" />Locked v{corpus.version}
+              </Badge>
+            )}
+          </div>
+          {corpus.description && (
+            <p className="text-sm text-muted-foreground mt-1">{corpus.description}</p>
+          )}
+          <div className="flex flex-wrap gap-4 mt-2 text-xs text-muted-foreground">
+            <span>Sector: <span className="font-medium">{corpus.sectorKey}</span></span>
+            <span>Language pair: <span className="font-medium">{corpus.languagePair}</span></span>
+            <span>Entries: <span className="font-medium">{corpus.activeEntryCount}/{corpus.entryCount}</span></span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {!corpus.isLocked && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleLock}
+              disabled={lockMutation.isPending || corpus.activeEntryCount === 0}
+            >
+              <Lock className="mr-2 h-4 w-4" />
+              Lock Corpus
+            </Button>
+          )}
+          <Button
+            size="sm"
+            onClick={() => setTriggerOpen(true)}
+            disabled={corpus.activeEntryCount === 0}
+          >
+            <Play className="mr-2 h-4 w-4" />
+            Run
+          </Button>
+        </div>
+      </div>
+
+      {/* Entries table */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <FileText className="h-4 w-4 text-muted-foreground" />
+            Entries ({corpus.activeEntryCount})
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {corpus.entries.length === 0 ? (
+            <p className="px-6 py-8 text-center text-sm text-muted-foreground">
+              No entries in this corpus.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Ref</th>
+                    <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Section</th>
+                    <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Expected</th>
+                    <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Threshold</th>
+                    <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Safety</th>
+                    <th className="px-4 py-2.5" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {corpus.entries.filter((e) => e.isActive).map((entry) => (
+                    <tr key={entry.id} className="hover:bg-muted/30 transition-colors">
+                      <td className="px-4 py-2.5 font-mono text-xs">{entry.entryRef}</td>
+                      <td className="px-4 py-2.5 max-w-[200px] truncate">{entry.sectionTitle}</td>
+                      <td className="px-4 py-2.5"><OutcomeBadge outcome={entry.expectedOutcome} /></td>
+                      <td className="px-4 py-2.5 tabular-nums">{entry.passThreshold}%</td>
+                      <td className="px-4 py-2.5">
+                        {entry.isSafetyCritical && (
+                          <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400 text-xs">
+                            Safety
+                          </Badge>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {!corpus.isLocked && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-muted-foreground hover:text-destructive"
+                            onClick={() => handleRemoveEntry(entry.id, entry.entryRef)}
+                            disabled={removeEntryMutation.isPending}
+                          >
+                            ×
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Run history */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <RefreshCw className="h-4 w-4 text-muted-foreground" />
+            Run History
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {runsLoading ? (
+            <div className="p-4 space-y-2">
+              {[1, 2].map((i) => <Skeleton key={i} className="h-12 w-full" />)}
+            </div>
+          ) : !runs || runs.length === 0 ? (
+            <p className="px-6 py-8 text-center text-sm text-muted-foreground">
+              No runs yet. Click Run to execute the corpus.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Status</th>
+                    <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Verdict</th>
+                    <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Entries</th>
+                    <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Regressions</th>
+                    <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Mean Score</th>
+                    <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Cost</th>
+                    <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Triggered</th>
+                    <th className="px-4 py-2.5" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {runs.map((run) => (
+                    <tr
+                      key={run.id}
+                      className="hover:bg-muted/30 transition-colors cursor-pointer"
+                      onClick={() => openRunDetail(run.id)}
+                    >
+                      <td className="px-4 py-2.5"><RunStatusBadge status={run.status} /></td>
+                      <td className="px-4 py-2.5">
+                        {run.verdict ? <VerdictBadge verdict={run.verdict} /> : <span className="text-muted-foreground">—</span>}
+                      </td>
+                      <td className="px-4 py-2.5 tabular-nums">{run.totalEntries}</td>
+                      <td className="px-4 py-2.5">
+                        {run.regressionEntries > 0 ? (
+                          <span className="text-red-600 font-medium flex items-center gap-1">
+                            <TrendingDown className="h-3.5 w-3.5" />{run.regressionEntries}
+                          </span>
+                        ) : (
+                          <span className="text-green-600">0</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 tabular-nums">
+                        {run.meanScore != null ? `${Math.round(run.meanScore)}%` : '—'}
+                      </td>
+                      <td className="px-4 py-2.5 tabular-nums text-muted-foreground">
+                        {run.actualCostEur != null ? `€${run.actualCostEur.toFixed(3)}` : run.estimatedCostEur != null ? `~€${run.estimatedCostEur.toFixed(3)}` : '—'}
+                      </td>
+                      <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap text-xs">
+                        {formatDistanceToNow(new Date(run.createdAt), { addSuffix: true })}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <TriggerRunDialog
+        corpusId={corpusId}
+        open={triggerOpen}
+        onOpenChange={setTriggerOpen}
+        onRunStarted={(runId) => openRunDetail(runId)}
+      />
+
+      <CorpusRunDetailDialog
+        runId={selectedRunId}
+        open={runDetailOpen}
+        onOpenChange={setRunDetailOpen}
+      />
+    </div>
+  );
+}
+
+// ─── Corpus Tab ───────────────────────────────────────────────────────────────
+
+function CorpusTab() {
+  const [freezeOpen, setFreezeOpen] = useState(false);
+  const [page] = useState(1);
+  const [selectedCorpusId, setSelectedCorpusId] = useState<string | null>(null);
+  const { data, isLoading } = useCorpora({ page, pageSize: 20 });
+
+  if (selectedCorpusId) {
+    return (
+      <CorpusDetailPanel
+        corpusId={selectedCorpusId}
+        onBack={() => setSelectedCorpusId(null)}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <p className="text-sm text-muted-foreground">
+          Audit corpora are frozen sets of validated sections used to regression-test the pipeline.
+        </p>
+        <Button onClick={() => setFreezeOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          New Corpus
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-2">
+          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full" />)}
+        </div>
+      ) : !data || data.items.length === 0 ? (
+        <Card className="p-8 text-center">
+          <div className="flex flex-col items-center gap-2">
+            <Database className="h-8 w-8 text-muted-foreground" />
+            <p className="font-medium">No corpora yet</p>
+            <p className="text-sm text-muted-foreground">
+              Create a corpus by freezing accepted validation results from a published talk.
+            </p>
+            <Button onClick={() => setFreezeOpen(true)} className="mt-2">
+              <Plus className="mr-2 h-4 w-4" />
+              New Corpus
+            </Button>
+          </div>
+        </Card>
+      ) : (
+        <div className="rounded-md border overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50">
+              <tr>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground">ID</th>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Name</th>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Sector</th>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Lang</th>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Entries</th>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Created</th>
+                <th className="px-4 py-3" />
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {data.items.map((corpus) => (
+                <tr
+                  key={corpus.id}
+                  className="hover:bg-muted/30 transition-colors cursor-pointer"
+                  onClick={() => setSelectedCorpusId(corpus.id)}
+                >
+                  <td className="px-4 py-3 font-mono text-xs">{corpus.corpusId}</td>
+                  <td className="px-4 py-3 font-medium max-w-[200px] truncate">{corpus.name}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{corpus.sectorKey}</td>
+                  <td className="px-4 py-3">
+                    <Badge variant="outline" className="font-mono text-xs">{corpus.languagePair}</Badge>
+                  </td>
+                  <td className="px-4 py-3 tabular-nums">{corpus.activeEntryCount}</td>
+                  <td className="px-4 py-3">
+                    {corpus.isLocked ? (
+                      <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 text-xs">
+                        <Lock className="mr-1 h-3 w-3" />Locked
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="text-xs">Draft</Badge>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">
+                    {format(new Date(corpus.createdAt), 'dd MMM yyyy')}
+                  </td>
+                  <td className="px-4 py-3">
+                    <ChevronRight className="h-4 w-4 text-muted-foreground ml-auto" />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {data.totalPages > 1 && (
+            <div className="border-t px-4 py-2 text-xs text-muted-foreground">
+              Showing {data.items.length} of {data.totalCount} corpora
+            </div>
+          )}
+        </div>
+      )}
+
+      <FreezeCorpusDialog open={freezeOpen} onOpenChange={setFreezeOpen} />
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PipelineAuditPage() {
@@ -1503,6 +2495,7 @@ export default function PipelineAuditPage() {
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
           <TabsTrigger value="deviations">Deviations</TabsTrigger>
           <TabsTrigger value="modules">Modules</TabsTrigger>
+          <TabsTrigger value="corpus">Corpus</TabsTrigger>
           <TabsTrigger value="term-gate">Term Gate</TabsTrigger>
           {isSuperUser && <TabsTrigger value="changes">Changes</TabsTrigger>}
         </TabsList>
@@ -1520,6 +2513,10 @@ export default function PipelineAuditPage() {
 
         <TabsContent value="modules" className="mt-6">
           <ModulesTab />
+        </TabsContent>
+
+        <TabsContent value="corpus" className="mt-6">
+          <CorpusTab />
         </TabsContent>
 
         <TabsContent value="term-gate" className="mt-6">

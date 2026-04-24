@@ -52,7 +52,8 @@ public class TranslationValidationService(
         int passThreshold,
         CancellationToken cancellationToken = default,
         Guid tenantId = default,
-        Guid? toolboxTalkId = null)
+        Guid? toolboxTalkId = null,
+        bool persist = true)
     {
         logger.LogInformation(
             "Validating section {Index} '{Title}' for run {RunId}. " +
@@ -209,20 +210,32 @@ public class TranslationValidationService(
             }
         }
 
-        // 8. Upsert the result entity — find existing row for {RunId, SectionIndex} or create new
-        var entity = await dbContext.TranslationValidationResults
-            .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(r => r.ValidationRunId == validationRunId
-                && r.SectionIndex == sectionIndex, cancellationToken);
+        // 8. Build result entity — upsert if persist=true, return in-memory if persist=false (corpus dry-run)
+        TranslationValidationResult entity;
 
-        if (entity == null)
+        if (persist)
         {
+            entity = await dbContext.TranslationValidationResults
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(r => r.ValidationRunId == validationRunId
+                    && r.SectionIndex == sectionIndex, cancellationToken)
+                ?? new TranslationValidationResult
+                {
+                    ValidationRunId = validationRunId,
+                    SectionIndex = sectionIndex
+                };
+
+            if (entity.Id == Guid.Empty)
+                dbContext.TranslationValidationResults.Add(entity);
+        }
+        else
+        {
+            // Dry-run: construct in-memory without touching the DB
             entity = new TranslationValidationResult
             {
                 ValidationRunId = validationRunId,
                 SectionIndex = sectionIndex
             };
-            dbContext.TranslationValidationResults.Add(entity);
         }
 
         entity.SectionTitle = sectionTitle;
@@ -263,16 +276,17 @@ public class TranslationValidationService(
         entity.ReviewerDecision = Domain.Enums.ReviewerDecision.Pending;
         entity.EditedTranslation = null;
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        if (persist)
+            await dbContext.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation(
-            "Section '{Title}' validated. Outcome={Outcome}, FinalScore={Score}, " +
+            "Section '{Title}' validated (persist={Persist}). Outcome={Outcome}, FinalScore={Score}, " +
             "SafetyCritical={Safety}, Rounds={Rounds}, Artefacts={ArtefactCount}, " +
-            "RegistryViolations={ViolationCount}, GlossaryCorrections={CorrectionCount}, ResultId={Id}",
-            sectionTitle, entity.Outcome, entity.FinalScore,
+            "RegistryViolations={ViolationCount}, GlossaryCorrections={CorrectionCount}",
+            sectionTitle, persist, entity.Outcome, entity.FinalScore,
             entity.IsSafetyCritical, entity.RoundsUsed,
             artefactResult.Artefacts.Count, registryResult.Violations.Count,
-            replacementResult.Corrections.Count, entity.Id);
+            replacementResult.Corrections.Count);
 
         return entity;
     }

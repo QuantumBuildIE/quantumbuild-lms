@@ -110,6 +110,13 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
     public DbSet<AiUsageLog> AiUsageLogs => Set<AiUsageLog>();
     public DbSet<AiUsageSummary> AiUsageSummaries => Set<AiUsageSummary>();
 
+    // Corpus audit DbSets
+    public DbSet<AuditCorpus> AuditCorpora => Set<AuditCorpus>();
+    public DbSet<AuditCorpusEntry> AuditCorpusEntries => Set<AuditCorpusEntry>();
+    public DbSet<CorpusRun> CorpusRuns => Set<CorpusRun>();
+    public DbSet<CorpusRunResult> CorpusRunResults => Set<CorpusRunResult>();
+    public DbSet<ProviderResultCache> ProviderResultCache => Set<ProviderResultCache>();
+
     // Audit DbSets
     public DbSet<SystemAuditLog> SystemAuditLogs => Set<SystemAuditLog>();
 
@@ -269,6 +276,11 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.ApplyConfiguration(new AiUsageLogConfiguration());
         modelBuilder.ApplyConfiguration(new AiUsageSummaryConfiguration());
         modelBuilder.ApplyConfiguration(new SystemAuditLogConfiguration());
+        modelBuilder.ApplyConfiguration(new AuditCorpusConfiguration());
+        modelBuilder.ApplyConfiguration(new AuditCorpusEntryConfiguration());
+        modelBuilder.ApplyConfiguration(new CorpusRunConfiguration());
+        modelBuilder.ApplyConfiguration(new CorpusRunResultConfiguration());
+        modelBuilder.ApplyConfiguration(new ProviderResultCacheConfiguration());
 
         // Apply global query filters - Core entities
         // BypassTenantFilter allows SuperUser to see all tenants' data when no tenant is selected
@@ -280,6 +292,8 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.Entity<TenantModule>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<TenantSector>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<RegulatoryRequirementMapping>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
+        modelBuilder.Entity<AuditCorpus>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
+        modelBuilder.Entity<CorpusRun>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<DpaAcceptance>().HasQueryFilter(e => !e.IsDeleted);
 
         // Note: Toolbox Talks query filters are defined in entity configurations

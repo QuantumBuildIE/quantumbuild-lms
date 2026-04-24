@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
+using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Persistence.Configurations;
 
@@ -42,6 +43,11 @@ public class PipelineChangeRecordConfiguration : IEntityTypeConfiguration<Pipeli
 
         builder.Property(cr => cr.DeployedAt)
             .IsRequired();
+
+        builder.Property(cr => cr.Status)
+            .HasConversion<string>()
+            .IsRequired()
+            .HasDefaultValue(PipelineChangeStatus.Draft);
 
         builder.Property(cr => cr.PipelineVersionId)
             .IsRequired();

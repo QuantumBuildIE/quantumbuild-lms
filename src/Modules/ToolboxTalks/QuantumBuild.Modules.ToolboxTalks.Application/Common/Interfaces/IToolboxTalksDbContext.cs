@@ -76,5 +76,12 @@ public interface IToolboxTalksDbContext
     DbSet<AiUsageLog> AiUsageLogs { get; }
     DbSet<AiUsageSummary> AiUsageSummaries { get; }
 
+    // Corpus audit entities
+    DbSet<AuditCorpus> AuditCorpora { get; }
+    DbSet<AuditCorpusEntry> AuditCorpusEntries { get; }
+    DbSet<CorpusRun> CorpusRuns { get; }
+    DbSet<CorpusRunResult> CorpusRunResults { get; }
+    DbSet<ProviderResultCache> ProviderResultCache { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

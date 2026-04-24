@@ -9,6 +9,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.SafetyTermRegis
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Validation;
+using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 
 namespace QuantumBuild.API.Controllers;
@@ -25,6 +26,7 @@ public class PipelineAuditController : ControllerBase
     private readonly ITranslationDeviationService _deviationService;
     private readonly IPipelineAuditQueryService _auditQueryService;
     private readonly IPipelineVersionService _pipelineVersionService;
+    private readonly IAuditCorpusService _corpusService;
     private readonly ICurrentUserService _currentUser;
     private readonly IToolboxTalksDbContext _dbContext;
     private readonly ISafetyTermRegistryService _registryService;
@@ -34,6 +36,7 @@ public class PipelineAuditController : ControllerBase
         ITranslationDeviationService deviationService,
         IPipelineAuditQueryService auditQueryService,
         IPipelineVersionService pipelineVersionService,
+        IAuditCorpusService corpusService,
         ICurrentUserService currentUser,
         IToolboxTalksDbContext dbContext,
         ISafetyTermRegistryService registryService,
@@ -42,6 +45,7 @@ public class PipelineAuditController : ControllerBase
         _deviationService = deviationService;
         _auditQueryService = auditQueryService;
         _pipelineVersionService = pipelineVersionService;
+        _corpusService = corpusService;
         _currentUser = currentUser;
         _dbContext = dbContext;
         _registryService = registryService;
@@ -559,4 +563,459 @@ public class PipelineAuditController : ControllerBase
         "lv" => "Latvian",
         _ => code,
     };
+
+    // ─── Pipeline Change Status ───────────────────────────────────────────────
+
+    /// <summary>
+    /// Update the status of a pipeline change record (SuperUser only).
+    /// Triggers auto corpus runs on Draft → ReadyForReview transition.
+    /// </summary>
+    [HttpPut("changes/{id:guid}/status")]
+    [ProducesResponseType(typeof(PipelineChangeRecordDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateChangeStatus(
+        Guid id,
+        [FromBody] UpdateChangeStatusRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!_currentUser.IsSuperUser)
+            return Forbid();
+
+        if (!Enum.TryParse<PipelineChangeStatus>(request.Status, out var newStatus))
+            return BadRequest(new { message = $"Invalid status '{request.Status}'" });
+
+        try
+        {
+            var change = await _dbContext.PipelineChangeRecords
+                .Include(c => c.PipelineVersion)
+                .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+
+            if (change == null)
+                return NotFound(new { message = $"Change record {id} not found" });
+
+            // Validate transitions
+            var currentStatus = change.Status;
+
+            // BlockedRegression → Approved requires justification
+            if (currentStatus == PipelineChangeStatus.BlockedRegression
+                && newStatus == PipelineChangeStatus.Approved)
+            {
+                if (string.IsNullOrWhiteSpace(request.Justification))
+                    return BadRequest(new { message = "Justification is required when overriding a blocked regression" });
+
+                // Find and close the auto-created deviation
+                var tenantId = _currentUser.TenantId;
+                var deviation = await _dbContext.TranslationDeviations
+                    .Where(d => d.TenantId == tenantId
+                        && d.RootCauseDetail != null
+                        && d.RootCauseDetail.Contains(id.ToString("N").Substring(0, 8)))
+                    .OrderByDescending(d => d.CreatedAt)
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                if (deviation != null)
+                {
+                    deviation.CorrectiveAction = (deviation.CorrectiveAction ?? string.Empty)
+                        + $"\n[SuperUser Override] {request.Justification}";
+                    deviation.Status = DeviationStatus.Closed;
+                    deviation.ClosedBy = _currentUser.UserName;
+                    deviation.ClosedAt = DateTimeOffset.UtcNow;
+                }
+            }
+
+            change.Status = newStatus;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            // Draft → ReadyForReview: auto-trigger corpus runs for locked corpora
+            if (currentStatus == PipelineChangeStatus.Draft
+                && newStatus == PipelineChangeStatus.ReadyForReview)
+            {
+                await TriggerAutoCorpusRunsAsync(change, cancellationToken);
+            }
+
+            _logger.LogInformation(
+                "Pipeline change {ChangeId} status updated {From} → {To} by {User}",
+                change.ChangeId, currentStatus, newStatus, _currentUser.UserName);
+
+            return Ok(new PipelineChangeRecordDto
+            {
+                Id = change.Id,
+                ChangeId = change.ChangeId,
+                Component = change.Component,
+                ChangeFrom = change.ChangeFrom,
+                ChangeTo = change.ChangeTo,
+                Justification = change.Justification,
+                ImpactAssessment = change.ImpactAssessment,
+                PriorModulesAction = change.PriorModulesAction,
+                Approver = change.Approver,
+                DeployedAt = change.DeployedAt,
+                PipelineVersionId = change.PipelineVersionId,
+                PipelineVersionHash = change.PipelineVersion?.Hash,
+                PreviousPipelineVersionId = change.PreviousPipelineVersionId,
+                CreatedAt = change.CreatedAt,
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating pipeline change {Id} status", id);
+            return StatusCode(500, Result.Fail("Error updating change status"));
+        }
+    }
+
+    private async Task TriggerAutoCorpusRunsAsync(
+        PipelineChangeRecord change, CancellationToken ct)
+    {
+        try
+        {
+            var tenantId = _currentUser.TenantId;
+
+            // Find all locked corpora for this tenant
+            var lockedCorpora = await _dbContext.AuditCorpora
+                .Where(c => c.TenantId == tenantId && c.IsLocked && !c.IsDeleted)
+                .ToListAsync(ct);
+
+            foreach (var corpus in lockedCorpora)
+            {
+                try
+                {
+                    await _corpusService.TriggerRunAsync(
+                        corpus.Id,
+                        isSmokeTest: false,
+                        triggerType: CorpusTriggerType.AutoPipelineChange,
+                        linkedPipelineChangeId: change.Id,
+                        ct: ct);
+
+                    _logger.LogInformation(
+                        "Auto-triggered corpus run for corpus {CorpusId} on pipeline change {ChangeId}",
+                        corpus.CorpusId, change.ChangeId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex,
+                        "Failed to auto-trigger corpus run for corpus {CorpusId}: {Message}",
+                        corpus.CorpusId, ex.Message);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error triggering auto corpus runs for change {ChangeId}", change.ChangeId);
+        }
+    }
+
+    // ─── Corpus Management ────────────────────────────────────────────────────
+
+    /// <summary>Paginated list of audit corpora for the current tenant.</summary>
+    [HttpGet("corpus")]
+    [ProducesResponseType(typeof(PaginatedList<AuditCorpusDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetCorpora(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var result = await _corpusService.GetPagedAsync(page, pageSize, cancellationToken);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading corpora");
+            return StatusCode(500, Result.Fail("Error loading corpora"));
+        }
+    }
+
+    /// <summary>Freeze a new corpus from an accepted talk's translation.</summary>
+    [HttpPost("corpus/freeze")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(typeof(AuditCorpusDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> FreezeCorpus(
+        [FromBody] FreezeCorpusRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(request.Name))
+                return BadRequest(new { message = "Name is required" });
+
+            var corpus = await _corpusService.FreezeFromTalkAsync(
+                request.TalkId, request.Name, request.Description,
+                request.SectionIndexes, cancellationToken);
+
+            var dto = await _corpusService.GetByIdAsync(corpus.Id, cancellationToken);
+            return CreatedAtAction(nameof(GetCorpus), new { id = corpus.Id }, dto);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error freezing corpus from talk {TalkId}", request.TalkId);
+            return StatusCode(500, Result.Fail("Error creating corpus"));
+        }
+    }
+
+    /// <summary>Get corpus detail with entries.</summary>
+    [HttpGet("corpus/{id:guid}")]
+    [ProducesResponseType(typeof(AuditCorpusDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetCorpus(Guid id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var dto = await _corpusService.GetByIdAsync(id, cancellationToken);
+            return dto == null ? NotFound() : Ok(dto);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading corpus {Id}", id);
+            return StatusCode(500, Result.Fail("Error loading corpus"));
+        }
+    }
+
+    /// <summary>Lock a corpus — no more entry changes.</summary>
+    [HttpPut("corpus/{id:guid}/lock")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(typeof(AuditCorpusDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> LockCorpus(
+        Guid id,
+        [FromBody] LockCorpusRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(request.SignedBy))
+                return BadRequest(new { message = "SignedBy is required" });
+
+            await _corpusService.LockCorpusAsync(id, request.SignedBy, cancellationToken);
+            var dto = await _corpusService.GetByIdAsync(id, cancellationToken);
+            return Ok(dto);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error locking corpus {Id}", id);
+            return StatusCode(500, Result.Fail("Error locking corpus"));
+        }
+    }
+
+    /// <summary>Add a manual entry to a corpus.</summary>
+    [HttpPost("corpus/{id:guid}/entries")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(typeof(AuditCorpusDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> AddCorpusEntry(
+        Guid id,
+        [FromBody] AddCorpusEntryRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _corpusService.AddEntryAsync(id, request, cancellationToken);
+            var dto = await _corpusService.GetByIdAsync(id, cancellationToken);
+            return Ok(dto);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error adding entry to corpus {Id}", id);
+            return StatusCode(500, Result.Fail("Error adding corpus entry"));
+        }
+    }
+
+    /// <summary>Soft-remove an entry from a corpus.</summary>
+    [HttpDelete("corpus/{id:guid}/entries/{entryId:guid}")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> RemoveCorpusEntry(
+        Guid id, Guid entryId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _corpusService.RemoveEntryAsync(id, entryId, cancellationToken);
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error removing entry {EntryId} from corpus {Id}", entryId, id);
+            return StatusCode(500, Result.Fail("Error removing corpus entry"));
+        }
+    }
+
+    /// <summary>Run history for a corpus.</summary>
+    [HttpGet("corpus/{id:guid}/runs")]
+    [ProducesResponseType(typeof(PaginatedList<CorpusRunSummaryDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetCorpusRuns(
+        Guid id,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var result = await _corpusService.GetRunsAsync(id, page, pageSize, cancellationToken);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading runs for corpus {Id}", id);
+            return StatusCode(500, Result.Fail("Error loading corpus runs"));
+        }
+    }
+
+    // ─── Corpus Runs ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Prepare (estimate) a corpus run. Returns cost and whether confirmation is needed.
+    /// For runs ≤ €3: enqueues immediately (no separate confirm step needed).
+    /// For runs > €3: returns requiresConfirmation = true — call /confirm to actually enqueue.
+    /// </summary>
+    [HttpPost("corpus/{id:guid}/runs")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(typeof(TriggerCorpusRunResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> TriggerCorpusRun(
+        Guid id,
+        [FromBody] TriggerCorpusRunRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var (run, estimatedCost) = await _corpusService.PrepareRunAsync(
+                id, request.IsSmokeTest, CorpusTriggerType.Manual,
+                linkedPipelineChangeId: null, cancellationToken);
+
+            var requiresConfirmation = estimatedCost > 3m;
+            var requiresSuperUserApproval = estimatedCost > 10m;
+
+            if (requiresSuperUserApproval && !_currentUser.IsSuperUser)
+            {
+                return Ok(new TriggerCorpusRunResponse
+                {
+                    CorpusRunId = run.Id,
+                    EstimatedCostEur = estimatedCost,
+                    RequiresConfirmation = true,
+                    RequiresSuperUserApproval = true,
+                });
+            }
+
+            if (!requiresConfirmation)
+            {
+                // Enqueue immediately
+                await _corpusService.EnqueueRunAsync(run.Id, cancellationToken);
+            }
+
+            return Ok(new TriggerCorpusRunResponse
+            {
+                CorpusRunId = run.Id,
+                EstimatedCostEur = estimatedCost,
+                RequiresConfirmation = requiresConfirmation,
+                RequiresSuperUserApproval = requiresSuperUserApproval,
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error preparing corpus run for corpus {Id}", id);
+            return StatusCode(500, Result.Fail("Error preparing corpus run"));
+        }
+    }
+
+    /// <summary>
+    /// Confirm and enqueue a previously prepared corpus run (after cost warning).
+    /// </summary>
+    [HttpPost("corpus/{id:guid}/runs/confirm")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> ConfirmCorpusRun(
+        Guid id,
+        [FromBody] ConfirmCorpusRunRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Validate run belongs to this corpus
+            var run = await _dbContext.CorpusRuns
+                .FirstOrDefaultAsync(r => r.Id == request.CorpusRunId
+                    && r.CorpusId == id
+                    && r.TenantId == _currentUser.TenantId, cancellationToken);
+
+            if (run == null)
+                return NotFound(new { message = "Run not found" });
+
+            if (run.EstimatedCostEur > 10m && !_currentUser.IsSuperUser)
+                return Forbid();
+
+            await _corpusService.EnqueueRunAsync(request.CorpusRunId, cancellationToken);
+
+            return Ok(new { message = "Run enqueued", corpusRunId = request.CorpusRunId });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error confirming corpus run {RunId}", request.CorpusRunId);
+            return StatusCode(500, Result.Fail("Error confirming corpus run"));
+        }
+    }
+
+    /// <summary>Get full detail for a corpus run.</summary>
+    [HttpGet("corpus/runs/{runId:guid}")]
+    [ProducesResponseType(typeof(CorpusRunDetailDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetCorpusRunDetail(
+        Guid runId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var dto = await _corpusService.GetRunDetailAsync(runId, cancellationToken);
+            return dto == null ? NotFound() : Ok(dto);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading corpus run {RunId}", runId);
+            return StatusCode(500, Result.Fail("Error loading corpus run"));
+        }
+    }
+
+    /// <summary>Regression diff for a corpus run — returns entries where outcome worsened.</summary>
+    [HttpGet("corpus/runs/{runId:guid}/diff")]
+    [ProducesResponseType(typeof(CorpusRunDiffDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetCorpusRunDiff(
+        Guid runId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var dto = await _corpusService.GetRunDiffAsync(runId, cancellationToken);
+            return dto == null ? NotFound() : Ok(dto);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading corpus run diff {RunId}", runId);
+            return StatusCode(500, Result.Fail("Error loading corpus run diff"));
+        }
+    }
 }

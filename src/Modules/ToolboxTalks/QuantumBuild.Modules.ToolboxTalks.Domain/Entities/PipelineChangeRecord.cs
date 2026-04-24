@@ -1,4 +1,5 @@
 using QuantumBuild.Core.Domain.Common;
+using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 
@@ -35,6 +36,9 @@ public class PipelineChangeRecord : BaseEntity
 
     /// <summary>UTC timestamp when this change was deployed.</summary>
     public DateTimeOffset DeployedAt { get; set; }
+
+    /// <summary>Workflow status of this change record.</summary>
+    public PipelineChangeStatus Status { get; set; } = PipelineChangeStatus.Draft;
 
     // FK to the new pipeline version this change produced
     public Guid PipelineVersionId { get; set; }

@@ -398,6 +398,7 @@ app.MapControllers();
 app.MapHub<SubtitleProcessingHub>("/api/hubs/subtitle-processing");
 app.MapHub<ContentGenerationHub>("/api/hubs/content-generation");
 app.MapHub<TranslationValidationHub>("/api/hubs/translation-validation");
+app.MapHub<CorpusRunHub>("/api/hubs/corpus-run");
 app.MapHub<LessonParserHub>("/api/hubs/lesson-parser");
 
 // Map health check endpoint
