@@ -127,7 +127,7 @@ function QrCodeDialog({
 }) {
   const [form, setForm] = useState<CodeFormState>({
     name: "",
-    toolboxTalkId: "",
+    toolboxTalkId: "__none__",
     contentMode: "Training",
   });
 
@@ -155,7 +155,7 @@ function QrCodeDialog({
                 <SelectValue placeholder="Select a learning…" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">None</SelectItem>
+                <SelectItem value="__none__">None</SelectItem>
                 {talks.map((t) => (
                   <SelectItem key={t.id} value={t.id}>
                     {t.code} — {t.title}
@@ -370,14 +370,14 @@ function SessionsPanel({ locations }: { locations: QrLocationDto[] }) {
         <div className="space-y-1">
           <Label className="text-xs">Status</Label>
           <Select
-            value={filters.status ?? ""}
-            onValueChange={(v) => setFilter("status", (v || undefined) as QrSessionStatus | undefined)}
+            value={filters.status ?? "all"}
+            onValueChange={(v) => setFilter("status", (v === "all" ? undefined : v) as QrSessionStatus | undefined)}
           >
             <SelectTrigger className="h-8 w-32 text-xs">
               <SelectValue placeholder="All" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All</SelectItem>
+              <SelectItem value="all">All</SelectItem>
               <SelectItem value="Active">Active</SelectItem>
               <SelectItem value="Completed">Completed</SelectItem>
               <SelectItem value="Abandoned">Abandoned</SelectItem>
@@ -388,14 +388,14 @@ function SessionsPanel({ locations }: { locations: QrLocationDto[] }) {
         <div className="space-y-1">
           <Label className="text-xs">Location</Label>
           <Select
-            value={filters.qrCodeId ?? ""}
-            onValueChange={() => {}}
+            value={filters.qrCodeId ?? "all"}
+            onValueChange={(v) => setFilter("qrCodeId", v === "all" ? undefined : v)}
           >
             <SelectTrigger className="h-8 w-40 text-xs">
               <SelectValue placeholder="All locations" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All locations</SelectItem>
+              <SelectItem value="all">All locations</SelectItem>
               {locations.map((loc) => (
                 <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
               ))}
@@ -597,7 +597,7 @@ export default function QrLocationsPage() {
     try {
       await createCode.mutateAsync({
         name: form.name,
-        toolboxTalkId: form.toolboxTalkId || undefined,
+        toolboxTalkId: form.toolboxTalkId === "__none__" ? undefined : form.toolboxTalkId || undefined,
         contentMode: form.contentMode,
       });
       setCodeDialogOpen(false);
