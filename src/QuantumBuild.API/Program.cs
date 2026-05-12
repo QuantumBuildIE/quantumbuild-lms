@@ -35,14 +35,13 @@ var builder = WebApplication.CreateBuilder(args);
 // Add CORS for frontend development
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("Development", policy =>
+    options.AddPolicy("CertifiedIQ", policy =>
     {
-        policy.WithOrigins(
-                "http://localhost:3000",
-                "https://quantumbuild-lms-web-production.up.railway.app",
-                "https://quantumbuild-lms-web-development.up.railway.app",
-                "https://quantumbuild-lms-web-demo.up.railway.app"
-              )
+        var allowedOrigins = builder.Configuration
+            .GetSection("Cors:AllowedOrigins")
+            .Get<string[]>() ?? Array.Empty<string>();
+            
+        policy.WithOrigins(allowedOrigins)
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -383,7 +382,7 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 // Enable CORS for development
-app.UseCors("Development");
+app.UseCors("CertifiedIQ");
 
 // Enable static files (for product images)
 app.UseStaticFiles();
