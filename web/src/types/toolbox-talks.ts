@@ -352,6 +352,8 @@ export interface MyToolboxTalk {
   quizAttemptCount: number;
   lastQuizPassed: boolean | null;
   lastQuizScore: number | null;
+  lastQuizRawScore: number | null;
+  lastQuizMaxScore: number | null;
   hasSlideshow: boolean;
   sections: MyToolboxTalkSection[];
   questions: MyToolboxTalkQuestion[];
