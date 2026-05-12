@@ -100,7 +100,11 @@ export function QuizSettingsPanel({ settings, onChange, isSaving }: QuizSettings
           <Switch
             id="allow-retry"
             checked={settings.allowRetry}
-            onCheckedChange={(v) => updateField('allowRetry', v)}
+            onCheckedChange={(v) => {
+              const updated = { ...settings, allowRetry: v };
+              if (v && !settings.shuffleQuestions) updated.shuffleQuestions = true;
+              onChange(updated);
+            }}
             disabled={isSaving}
           />
         </div>
