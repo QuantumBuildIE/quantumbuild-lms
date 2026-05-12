@@ -46,6 +46,8 @@ public record MyToolboxTalkDto
     public int QuizAttemptCount { get; init; }
     public bool? LastQuizPassed { get; init; }
     public decimal? LastQuizScore { get; init; }
+    public int? LastQuizRawScore { get; init; }
+    public int? LastQuizMaxScore { get; init; }
 
     // Slideshow
     public bool HasSlideshow { get; init; }
