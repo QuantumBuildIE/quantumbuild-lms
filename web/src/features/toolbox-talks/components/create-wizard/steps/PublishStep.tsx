@@ -280,24 +280,36 @@ export function PublishStep({ state, onBack }: PublishStepProps) {
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back
         </Button>
-        <Button
-          size="lg"
-          className="bg-green-600 hover:bg-green-700 text-white gap-2 px-8"
-          onClick={handlePublish}
-          disabled={publish.isPending}
-        >
-          {publish.isPending ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Publishing...
-            </>
-          ) : (
-            <>
-              <Rocket className="h-4 w-4" />
-              Publish
-            </>
+        <div className="flex items-center gap-3">
+          {talkId && (
+            <Button
+              variant="outline"
+              onClick={() => window.open(`/my/toolbox-talks/${talkId}?preview=true`, '_blank')}
+              disabled={publish.isPending}
+            >
+              <Eye className="h-4 w-4 mr-2" />
+              Preview as Learner
+            </Button>
           )}
-        </Button>
+          <Button
+            size="lg"
+            className="bg-green-600 hover:bg-green-700 text-white gap-2 px-8"
+            onClick={handlePublish}
+            disabled={publish.isPending}
+          >
+            {publish.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Publishing...
+              </>
+            ) : (
+              <>
+                <Rocket className="h-4 w-4" />
+                Publish
+              </>
+            )}
+          </Button>
+        </div>
       </div>
     </div>
   );
