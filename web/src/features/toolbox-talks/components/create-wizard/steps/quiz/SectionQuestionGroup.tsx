@@ -18,6 +18,7 @@ interface SectionQuestionGroupProps {
   onCancelEdit: () => void;
   onDeleteQuestion: (questionId: string) => void;
   onAddQuestion: (sectionIndex: number) => void;
+  onRegenerateQuestion?: () => void;
 }
 
 export function SectionQuestionGroup({
@@ -30,6 +31,7 @@ export function SectionQuestionGroup({
   onCancelEdit,
   onDeleteQuestion,
   onAddQuestion,
+  onRegenerateQuestion,
 }: SectionQuestionGroupProps) {
   const [isExpanded, setIsExpanded] = useState(true);
 
@@ -72,6 +74,7 @@ export function SectionQuestionGroup({
               onSave={onSaveQuestion}
               onCancel={onCancelEdit}
               onDelete={() => onDeleteQuestion(question.id)}
+              onRegenerateQuestion={onRegenerateQuestion}
             />
           ))}
 

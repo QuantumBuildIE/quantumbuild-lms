@@ -3,6 +3,17 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { WizardSectionDivider } from '@/components/ui/wizard-section-divider';
 import { Loader2, Sparkles, AlertCircle, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
@@ -279,16 +290,33 @@ export function QuizStep({ state, onNext, onBack }: QuizStepProps) {
             Questions ({totalQuestions})
           </h3>
           {totalQuestions > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleGenerateQuiz}
-              disabled={isGenerating}
-              className="text-xs"
-            >
-              <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-              Regenerate All
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isGenerating}
+                  className="text-xs"
+                >
+                  <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                  Regenerate All
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Regenerate all questions?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will replace all current questions and cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleGenerateQuiz}>
+                    Regenerate
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           )}
         </div>
 
@@ -306,6 +334,7 @@ export function QuizStep({ state, onNext, onBack }: QuizStepProps) {
               onCancelEdit={handleCancelEdit}
               onDeleteQuestion={handleDeleteQuestion}
               onAddQuestion={handleAddQuestion}
+              onRegenerateQuestion={handleGenerateQuiz}
             />
           );
         })}

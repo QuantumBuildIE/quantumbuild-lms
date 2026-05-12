@@ -18,7 +18,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Check, Pencil, Trash2, X, Sparkles } from 'lucide-react';
+import { Check, Pencil, RotateCcw, Trash2, X, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { QuizQuestion, QuestionType } from '@/types/content-creation';
 
@@ -52,6 +52,7 @@ interface QuestionCardProps {
   onSave: (updated: QuizQuestion) => void;
   onCancel: () => void;
   onDelete: () => void;
+  onRegenerateQuestion?: () => void;
 }
 
 export function QuestionCard({
@@ -62,6 +63,7 @@ export function QuestionCard({
   onSave,
   onCancel,
   onDelete,
+  onRegenerateQuestion,
 }: QuestionCardProps) {
   const [draft, setDraft] = useState<QuizQuestion>(question);
 
@@ -262,6 +264,29 @@ export function QuestionCard({
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleStartEdit}>
             <Pencil className="h-3.5 w-3.5" />
           </Button>
+          {onRegenerateQuestion && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground">
+                  <RotateCcw className="h-3.5 w-3.5" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Regenerate this question?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will replace the current question and cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={onRegenerateQuestion}>
+                    Regenerate
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive">

@@ -19,6 +19,7 @@ import {
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import { WizardSectionDivider } from '@/components/ui/wizard-section-divider';
 import {
   AlertTriangle,
@@ -135,6 +136,7 @@ export function InputConfigStep({
   // Local state
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
+  const [videoRightsConfirmed, setVideoRightsConfirmed] = useState(false);
   const [customAuditPurpose, setCustomAuditPurpose] = useState('');
   const [auditPurposeMode, setAuditPurposeMode] = useState<'preset' | 'custom'>(
     state.auditPurpose && !auditPurposes.includes(state.auditPurpose)
@@ -265,7 +267,8 @@ export function InputConfigStep({
       ? state.sourceText.trim().length > 0
       : state.inputMode === 'Pdf'
         ? !!state.sourceFile
-        : !!state.sourceFile || state.videoUrl.trim().length > 0);
+        : !!state.sourceFile ||
+          (state.videoUrl.trim().length > 0 && videoRightsConfirmed));
 
   const handleContinue = async () => {
     if (!canContinue || !state.inputMode) return;
@@ -558,8 +561,29 @@ export function InputConfigStep({
                   <Input
                     placeholder="https://youtube.com/watch?v=... or direct video URL"
                     value={state.videoUrl}
-                    onChange={(e) => updateState({ videoUrl: e.target.value })}
+                    onChange={(e) => {
+                      const url = e.target.value;
+                      updateState({ videoUrl: url });
+                      if (!url.trim()) setVideoRightsConfirmed(false);
+                    }}
                   />
+                  {state.videoUrl.trim().length > 0 && (
+                    <div className="flex items-start gap-2">
+                      <Checkbox
+                        id="video-rights"
+                        checked={videoRightsConfirmed}
+                        onCheckedChange={(checked) =>
+                          setVideoRightsConfirmed(checked === true)
+                        }
+                      />
+                      <label
+                        htmlFor="video-rights"
+                        className="text-sm leading-tight cursor-pointer select-none"
+                      >
+                        I confirm I have the rights to use this content
+                      </label>
+                    </div>
+                  )}
                 </>
               )}
             </div>
