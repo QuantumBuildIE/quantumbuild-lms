@@ -43,6 +43,8 @@ import {
   Plus,
   FileBarChart,
   ShieldCheck,
+  Bot,
+  ExternalLink,
 } from 'lucide-react';
 import { usePermission, useAuth } from '@/lib/auth/use-auth';
 import { useTenantSectors } from '@/lib/api/admin/use-tenant-sectors';
@@ -220,6 +222,41 @@ function RequirementRow({
             )}
           </div>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============================================
+// AI Transparency Tab
+// ============================================
+
+function AiTransparencyTab() {
+  return (
+    <Card className="mt-4">
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Bot className="h-5 w-5 text-muted-foreground" />
+          <CardTitle>AI System Card</CardTitle>
+        </div>
+        <CardDescription>
+          Transparency information about the AI systems used in CertifiedIQ — including model
+          details, capabilities, limitations, and data handling practices.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          The AI System Card details how artificial intelligence assists with content generation,
+          translation validation, regulatory mapping, and other features within this platform.
+          Review it to understand the role AI plays in your compliance workflow and its known
+          limitations.
+        </p>
+        <Button asChild>
+          <a href="/ai-system-card" target="_blank" rel="noopener noreferrer">
+            <ExternalLink className="mr-2 h-4 w-4" />
+            View AI System Card
+          </a>
+        </Button>
       </CardContent>
     </Card>
   );
@@ -483,8 +520,6 @@ export default function ComplianceChecklistPage() {
   }
 
   const sectors = tenantSectors ?? [];
-  const isSingleSector = sectors.length === 1;
-  const isMultiSector = sectors.length > 1;
 
   return (
     <div className="space-y-6">
@@ -518,14 +553,15 @@ export default function ComplianceChecklistPage() {
           </div>
         </div>
       ) : sectors.length === 0 ? (
-        <Card className="p-8 text-center">
-          <p className="text-muted-foreground">
-            No sectors configured for your organisation. Contact your administrator to set up sectors.
-          </p>
-        </Card>
-      ) : isSingleSector ? (
-        <SectorChecklistView sectorKey={sectors[0].sectorKey} />
-      ) : isMultiSector ? (
+        <div className="space-y-4">
+          <Card className="p-8 text-center">
+            <p className="text-muted-foreground">
+              No sectors configured for your organisation. Contact your administrator to set up sectors.
+            </p>
+          </Card>
+          <AiTransparencyTab />
+        </div>
+      ) : (
         <Tabs defaultValue={sectors.find((s) => s.isDefault)?.sectorKey ?? sectors[0].sectorKey}>
           <TabsList>
             {sectors.map((sector) => (
@@ -534,14 +570,21 @@ export default function ComplianceChecklistPage() {
                 {sector.sectorName}
               </TabsTrigger>
             ))}
+            <TabsTrigger value="ai-transparency">
+              <Bot className="mr-1 h-3.5 w-3.5" />
+              AI Transparency
+            </TabsTrigger>
           </TabsList>
           {sectors.map((sector) => (
             <TabsContent key={sector.sectorKey} value={sector.sectorKey}>
               <SectorChecklistView sectorKey={sector.sectorKey} />
             </TabsContent>
           ))}
+          <TabsContent value="ai-transparency">
+            <AiTransparencyTab />
+          </TabsContent>
         </Tabs>
-      ) : null}
+      )}
     </div>
   );
 }
