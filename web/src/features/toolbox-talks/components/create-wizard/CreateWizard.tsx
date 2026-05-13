@@ -176,6 +176,12 @@ export function CreateWizard() {
     }
   };
 
+  const resetWizard = useCallback(() => {
+    setWizardState(initialState);
+    setCurrentStep(1 as WizardStep);
+    setHighestStep(1 as WizardStep);
+  }, []);
+
   const renderStepContent = () => {
     switch (currentStep) {
       case 1:
@@ -197,6 +203,7 @@ export function CreateWizard() {
               updateState={updateState}
               onNext={goToNextStep}
               onBack={goToPreviousStep}
+              onReset={resetWizard}
             />
           </Suspense>
         );

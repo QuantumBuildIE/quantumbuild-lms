@@ -10,6 +10,7 @@ import {
   RefreshCw,
   AlertTriangle,
   Info,
+  Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -17,7 +18,18 @@ import {
   useCreationSession,
   useParseContent,
   useUpdateSections,
+  useAbandonSession,
 } from '@/lib/api/toolbox-talks/use-content-creation';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import type { WizardState } from '../CreateWizard';
 import type {
   ParsedSection,
@@ -48,6 +60,7 @@ interface ParseStepProps {
   updateState: (updates: Partial<WizardState>) => void;
   onNext: () => void;
   onBack: () => void;
+  onReset: () => void;
 }
 
 // ============================================
@@ -63,15 +76,17 @@ interface ParseLogEntry {
 // Component
 // ============================================
 
-export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps) {
+export function ParseStep({ state, updateState, onNext, onBack, onReset }: ParseStepProps) {
   const parseContent = useParseContent();
   const updateSections = useUpdateSections();
+  const abandonSession = useAbandonSession();
 
   // Polling query — enabled only while parsing
   const [isPolling, setIsPolling] = useState(false);
   const { data: session, refetch } = useCreationSession(state.sessionId);
 
   // Local state
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [parseLog, setParseLog] = useState<ParseLogEntry[]>([]);
   const [hasParsed, setHasParsed] = useState(false);
   const [isParseFailed, setIsParseFailed] = useState(false);
@@ -343,6 +358,21 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
   }
 
   // ============================================
+  // Cancel session
+  // ============================================
+
+  async function handleCancelConfirm() {
+    if (!state.sessionId) return;
+    stopPolling();
+    try {
+      await abandonSession.mutateAsync(state.sessionId);
+      onReset();
+    } catch {
+      toast.error('Failed to cancel session, please try again');
+    }
+  }
+
+  // ============================================
   // Section handlers
   // ============================================
 
@@ -490,10 +520,23 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
 
       {/* Bottom Bar */}
       <div className="flex items-center justify-between border-t pt-4">
-        <Button variant="outline" onClick={onBack} disabled={isBusy}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={onBack} disabled={isBusy}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Button>
+          {isParsing && (
+            <Button
+              variant="outline"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30"
+              onClick={() => setShowCancelDialog(true)}
+              disabled={abandonSession.isPending}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Cancel and start over
+            </Button>
+          )}
+        </div>
 
         <div className="flex items-center gap-4">
           {/* Summary info */}
@@ -525,6 +568,27 @@ export function ParseStep({ state, updateState, onNext, onBack }: ParseStepProps
           </Button>
         </div>
       </div>
+
+      <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel and start over?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will abandon the current session and return you to step 1.
+              Your uploaded file will be discarded.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep waiting</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCancelConfirm}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Cancel and start over
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
