@@ -48,6 +48,7 @@ interface QuestionCardProps {
   question: QuizQuestion;
   index: number;
   isEditing: boolean;
+  isRegenerating?: boolean;
   onStartEdit: () => void;
   onSave: (updated: QuizQuestion) => void;
   onCancel: () => void;
@@ -59,6 +60,7 @@ export function QuestionCard({
   question,
   index,
   isEditing,
+  isRegenerating = false,
   onStartEdit,
   onSave,
   onCancel,
@@ -267,8 +269,13 @@ export function QuestionCard({
           {onRegenerateQuestion && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground">
-                  <RotateCcw className="h-3.5 w-3.5" />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                  disabled={isRegenerating}
+                >
+                  <RotateCcw className={cn('h-3.5 w-3.5', isRegenerating && 'animate-spin')} />
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
@@ -311,7 +318,8 @@ export function QuestionCard({
         </div>
       </div>
 
-      {/* Question text */}
+      {/* Question text + options */}
+      <div className={cn(isRegenerating && 'opacity-50')}>
       <p className="text-sm font-medium">{question.questionText}</p>
 
       {/* Options */}
@@ -363,6 +371,7 @@ export function QuestionCard({
           {question.options[0]}
         </div>
       )}
+      </div>
     </div>
   );
 }
