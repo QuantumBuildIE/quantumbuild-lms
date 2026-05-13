@@ -888,8 +888,9 @@ public class ContentCreationSessionService : IContentCreationSessionService
 
         if (session.Status != ContentCreationSessionStatus.Validated &&
             session.Status != ContentCreationSessionStatus.Parsed &&
-            session.Status != ContentCreationSessionStatus.QuizGenerated)
-            throw new InvalidOperationException("Quiz can only be generated from Parsed, Validated, or QuizGenerated status");
+            session.Status != ContentCreationSessionStatus.QuizGenerated &&
+            session.Status != ContentCreationSessionStatus.GeneratingQuiz)
+            throw new InvalidOperationException("Quiz can only be generated from Parsed, Validated, QuizGenerated, or GeneratingQuiz status");
 
         if (string.IsNullOrWhiteSpace(session.ParsedSectionsJson))
             throw new InvalidOperationException("No parsed sections available for quiz generation");
@@ -980,7 +981,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
             try
             {
                 session.Status = ContentCreationSessionStatus.Failed;
-                await _dbContext.SaveChangesAsync(cancellationToken);
+                await _dbContext.SaveChangesAsync(CancellationToken.None);
             }
             catch (Exception cleanupEx)
             {
