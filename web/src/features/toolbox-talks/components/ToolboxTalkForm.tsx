@@ -79,7 +79,7 @@ const toolboxTalkFormSchema = z.object({
   attachmentUrl: z.string().url('Must be a valid URL').optional().nullable().or(z.literal('')),
   minimumVideoWatchPercent: z.number().min(50).max(100),
   requiresQuiz: z.boolean(),
-  passingScore: z.number().min(50).max(100).optional().nullable(),
+  passingScore: z.number().min(50).max(100).nullable().default(70),
   shuffleQuestions: z.boolean(),
   shuffleOptions: z.boolean(),
   useQuestionPool: z.boolean(),
@@ -195,7 +195,7 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
       form.setValue('shuffleOptions', false);
       form.setValue('useQuestionPool', false);
       form.setValue('quizQuestionCount', null);
-    } else if (form.getValues('passingScore') === null) {
+    } else if (form.getValues('passingScore') == null) {
       form.setValue('passingScore', 70);
     }
   }, [watchRequiresQuiz, form]);
@@ -235,6 +235,7 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
         return;
       }
       if (values.passingScore == null) {
+        form.setValue('passingScore', 70);
         form.setError('passingScore', { message: 'Passing score is required when quiz is enabled' });
         return;
       }
