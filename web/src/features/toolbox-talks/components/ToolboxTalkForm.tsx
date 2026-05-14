@@ -319,15 +319,12 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit, (errors) => {
+      <form onSubmit={form.handleSubmit(onSubmit, () => {
           toast.error('Please fix the form errors before saving', {
             description: 'Some required fields are incomplete or invalid.',
           });
-          const firstKey = Object.keys(errors)[0];
-          if (firstKey) {
-            const el = document.querySelector(`[name="${firstKey}"]`);
-            el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }
+          const firstError = document.querySelector('.text-destructive');
+          firstError?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         })} className="space-y-6">
         {/* Basic Information */}
         <Card>
