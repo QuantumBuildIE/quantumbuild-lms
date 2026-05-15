@@ -38,6 +38,8 @@ import {
   contentCreationKeys,
 } from '@/lib/api/toolbox-talks/use-content-creation';
 import { getSessionValidationRun } from '@/lib/api/toolbox-talks/content-creation';
+import { useToolboxTalk } from '@/lib/api/toolbox-talks/use-toolbox-talks';
+import { PreviewModal } from '@/features/toolbox-talks/components/PreviewModal';
 import { useLookupValues } from '@/hooks/use-lookups';
 import { useAvailableSectors } from '@/lib/api/admin/use-tenant-sectors';
 import type { WizardState } from '../CreateWizard';
@@ -124,6 +126,10 @@ export function PublishStep({ state, onBack }: PublishStepProps) {
   // Fetch all validation runs in parallel (stable hook count via useQueries)
   // Validation runs are stored against the draft talk (session.outputTalkId), not the session ID
   const talkId = session?.outputTalkId ?? null;
+
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const { data: previewTalk } = useToolboxTalk(talkId ?? '');
+
   const validationRunQueries = useQueries({
     queries: validationRunIds.map((runId) => ({
       queryKey: contentCreationKeys.validationRun(talkId ?? '', runId),
@@ -281,10 +287,10 @@ export function PublishStep({ state, onBack }: PublishStepProps) {
           Back
         </Button>
         <div className="flex items-center gap-3">
-          {talkId && (
+          {talkId && previewTalk && (
             <Button
               variant="outline"
-              onClick={() => router.push(`/admin/toolbox-talks/talks/${talkId}?preview=true`)}
+              onClick={() => setPreviewOpen(true)}
             >
               <Eye className="h-4 w-4 mr-2" />
               Preview as Learner
@@ -310,6 +316,13 @@ export function PublishStep({ state, onBack }: PublishStepProps) {
           </Button>
         </div>
       </div>
+      {previewTalk && (
+        <PreviewModal
+          open={previewOpen}
+          onOpenChange={setPreviewOpen}
+          talk={previewTalk}
+        />
+      )}
     </div>
   );
 }
