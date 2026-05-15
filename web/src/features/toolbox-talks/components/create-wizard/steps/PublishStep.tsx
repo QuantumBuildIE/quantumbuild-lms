@@ -50,6 +50,7 @@ import type {
   ReviewerDecision,
   PublishResult,
 } from '@/types/content-creation';
+import Link from 'next/link'
 
 // ============================================
 // Props
@@ -240,7 +241,7 @@ export function PublishStep({ state, onBack }: PublishStepProps) {
   // ============================================
   // Summary render
   // ============================================
-
+  console.log('Preview talkId:', talkId, 'session:', session?.outputTalkId);
   return (
     <div className="space-y-6">
       {/* Panel A — Content Summary */}
@@ -282,14 +283,16 @@ export function PublishStep({ state, onBack }: PublishStepProps) {
         </Button>
         <div className="flex items-center gap-3">
           {talkId && (
-            <Button
-              variant="outline"
-              onClick={() => window.open(`/admin/toolbox-talks/talks/${talkId}?preview=true`, '_blank')}
-              disabled={publish.isPending}
+            <Link
+              href={`/admin/toolbox-talks/talks/${talkId}?preview=true`}
+              target="_blank"
+              rel="noopener noreferrer"
             >
-              <Eye className="h-4 w-4 mr-2" />
-              Preview as Learner
-            </Button>
+              <Button variant="outline" disabled={!talkId}>
+                <Eye className="h-4 w-4 mr-2" />
+                Preview as Learner
+              </Button>
+            </Link>
           )}
           <Button
             size="lg"
