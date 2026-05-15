@@ -50,7 +50,6 @@ import type {
   ReviewerDecision,
   PublishResult,
 } from '@/types/content-creation';
-import Link from 'next/link'
 
 // ============================================
 // Props
@@ -283,16 +282,13 @@ export function PublishStep({ state, onBack }: PublishStepProps) {
         </Button>
         <div className="flex items-center gap-3">
           {talkId && (
-            <a
-              href={`/admin/toolbox-talks/talks/${talkId}?preview=true`}
-              target="_blank"
-              rel="noopener noreferrer"
+            <Button
+              variant="outline"
+              onClick={() => router.push(`/admin/toolbox-talks/talks/${talkId}?preview=true`)}
             >
-              <Button variant="outline" disabled={!talkId}>
-                <Eye className="h-4 w-4 mr-2" />
-                Preview as Learner
-              </Button>
-            </a>
+              <Eye className="h-4 w-4 mr-2" />
+              Preview as Learner
+            </Button>
           )}
           <Button
             size="lg"
