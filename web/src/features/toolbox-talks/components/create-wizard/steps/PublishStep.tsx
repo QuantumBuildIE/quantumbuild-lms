@@ -283,7 +283,7 @@ export function PublishStep({ state, onBack }: PublishStepProps) {
         </Button>
         <div className="flex items-center gap-3">
           {talkId && (
-            <Link
+            <a
               href={`/admin/toolbox-talks/talks/${talkId}?preview=true`}
               target="_blank"
               rel="noopener noreferrer"
@@ -292,7 +292,7 @@ export function PublishStep({ state, onBack }: PublishStepProps) {
                 <Eye className="h-4 w-4 mr-2" />
                 Preview as Learner
               </Button>
-            </Link>
+            </a>
           )}
           <Button
             size="lg"
