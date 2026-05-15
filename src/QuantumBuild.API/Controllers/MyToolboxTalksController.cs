@@ -38,6 +38,7 @@ public class MyToolboxTalksController : ControllerBase
     private readonly ICurrentUserService _currentUserService;
     private readonly ISubtitleProcessingOrchestrator _subtitleOrchestrator;
     private readonly IR2StorageService _r2StorageService;
+    private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<MyToolboxTalksController> _logger;
 
     public MyToolboxTalksController(
@@ -45,12 +46,14 @@ public class MyToolboxTalksController : ControllerBase
         ICurrentUserService currentUserService,
         ISubtitleProcessingOrchestrator subtitleOrchestrator,
         IR2StorageService r2StorageService,
+        IHttpClientFactory httpClientFactory,
         ILogger<MyToolboxTalksController> logger)
     {
         _mediator = mediator;
         _currentUserService = currentUserService;
         _subtitleOrchestrator = subtitleOrchestrator;
         _r2StorageService = r2StorageService;
+        _httpClientFactory = httpClientFactory;
         _logger = logger;
     }
 
@@ -988,13 +991,15 @@ public class MyToolboxTalksController : ControllerBase
                 return NotFound(new { message = "Certificate not found" });
             }
 
-            var fileBytes = await _r2StorageService.DownloadFileAsync(result.StoragePath);
-            if (fileBytes == null)
+            using var httpClient = _httpClientFactory.CreateClient();
+            var response = await httpClient.GetAsync(result.StoragePath, HttpCompletionOption.ResponseContentRead);
+            if (!response.IsSuccessStatusCode)
             {
-                return NotFound(new { message = "Certificate file not found in storage" });
+                return NotFound(new { message = "Certificate file not found" });
             }
 
-            return File(fileBytes, "application/pdf", result.FileName);
+            var bytes = await response.Content.ReadAsByteArrayAsync();
+            return File(bytes, "application/pdf", result.FileName);
         }
         catch (Exception ex)
         {

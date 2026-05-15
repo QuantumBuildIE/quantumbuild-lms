@@ -54,6 +54,7 @@ public class ToolboxTalksController : ControllerBase
     private readonly ISupervisorAssignmentService _supervisorAssignmentService;
     private readonly ITenantSectorService _tenantSectorService;
     private readonly UserManager<User> _userManager;
+    private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<ToolboxTalksController> _logger;
 
     public ToolboxTalksController(
@@ -68,6 +69,7 @@ public class ToolboxTalksController : ControllerBase
         ISupervisorAssignmentService supervisorAssignmentService,
         ITenantSectorService tenantSectorService,
         UserManager<User> userManager,
+        IHttpClientFactory httpClientFactory,
         ILogger<ToolboxTalksController> logger)
     {
         _mediator = mediator;
@@ -81,6 +83,7 @@ public class ToolboxTalksController : ControllerBase
         _supervisorAssignmentService = supervisorAssignmentService;
         _tenantSectorService = tenantSectorService;
         _userManager = userManager;
+        _httpClientFactory = httpClientFactory;
         _logger = logger;
     }
 
@@ -1594,13 +1597,15 @@ public class ToolboxTalksController : ControllerBase
                 return NotFound(new { message = "Certificate not found" });
             }
 
-            var fileBytes = await _r2StorageService.DownloadFileAsync(result.StoragePath);
-            if (fileBytes == null)
+            using var httpClient = _httpClientFactory.CreateClient();
+            var response = await httpClient.GetAsync(result.StoragePath, HttpCompletionOption.ResponseContentRead);
+            if (!response.IsSuccessStatusCode)
             {
-                return NotFound(new { message = "Certificate file not found in storage" });
+                return NotFound(new { message = "Certificate file not found" });
             }
 
-            return File(fileBytes, "application/pdf", result.FileName);
+            var bytes = await response.Content.ReadAsByteArrayAsync();
+            return File(bytes, "application/pdf", result.FileName);
         }
         catch (Exception ex)
         {
