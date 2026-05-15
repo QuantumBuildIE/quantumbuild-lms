@@ -284,7 +284,7 @@ export function PublishStep({ state, onBack }: PublishStepProps) {
           {talkId && (
             <Button
               variant="outline"
-              onClick={() => router.push(`/admin/toolbox-talks/talks/${talkId}?preview=true`)}
+              onClick={() => window.open(`/admin/toolbox-talks/talks/${talkId}?preview=true`, '_blank')}
               disabled={publish.isPending}
             >
               <Eye className="h-4 w-4 mr-2" />

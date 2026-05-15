@@ -37,10 +37,16 @@ export default function AdminToolboxTalkDetailPage() {
       )}
 
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => router.push('/admin/toolbox-talks/talks')}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => previewMode ? window.close() : router.push('/admin/toolbox-talks/talks')}
+        >
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <span className="text-muted-foreground">Back to Learnings</span>
+        <span className="text-muted-foreground">
+          {previewMode ? 'Close Preview' : 'Back to Learnings'}
+        </span>
       </div>
 
       <ToolboxTalkDetail
