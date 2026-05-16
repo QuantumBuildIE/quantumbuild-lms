@@ -228,8 +228,8 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
   };
 
   async function onSubmit(values: ToolboxTalkFormValues) {
-    console.log('Form errors on submit:', JSON.stringify(form.formState.errors, null, 2));
-    console.log('Form values on submit:', JSON.stringify(form.getValues(), null, 2));
+    console.log('RHF errors:', JSON.stringify(form.formState.errors, null, 2));
+    console.log('Form values:', JSON.stringify(form.getValues(), null, 2));
     // Custom validation for quiz requirements
     if (values.requiresQuiz) {
       if (!values.questions || values.questions.length === 0) {
