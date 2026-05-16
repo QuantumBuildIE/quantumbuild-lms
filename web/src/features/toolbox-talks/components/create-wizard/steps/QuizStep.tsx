@@ -111,15 +111,19 @@ export function QuizStep({ state, onNext, onBack }: QuizStepProps) {
   // Stop polling when generation completes
   useEffect(() => {
     if (session?.status === 'QuizGenerated' && isGenerating) {
-      setIsGenerating(false);
-      setRegeneratingQuestionId(null);
       if (pollRef.current) clearInterval(pollRef.current);
+      setTimeout(() => {
+        setIsGenerating(false);
+        setRegeneratingQuestionId(null);
+      }, 1500);
     }
     if (session?.status === 'Failed' && isGenerating) {
-      setIsGenerating(false);
-      setRegeneratingQuestionId(null);
-      setGenerateError('Quiz generation failed. Please try again.');
       if (pollRef.current) clearInterval(pollRef.current);
+      setTimeout(() => {
+        setIsGenerating(false);
+        setRegeneratingQuestionId(null);
+        setGenerateError('Quiz generation failed. Please try again.');
+      }, 1500);
     }
   }, [session?.status, isGenerating]);
 
