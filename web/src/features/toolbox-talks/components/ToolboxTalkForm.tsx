@@ -664,6 +664,9 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
 
             {watchRequiresQuiz && (
               <>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Quiz questions are required — see the Quiz Questions section below.
+                </p>
                 <FormField
                   control={form.control}
                   name="passingScore"
