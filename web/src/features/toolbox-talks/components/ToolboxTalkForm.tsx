@@ -50,7 +50,7 @@ import { FREQUENCY_VALUES, FREQUENCY_OPTIONS } from '@/lib/constants/frequency';
 
 const sectionSchema = z.object({
   id: z.string().uuid().optional(),
-  sectionNumber: z.number().min(1),
+  sectionNumber: z.number().min(0),
   title: z.string().min(1, 'Title is required'),
   content: z.string().min(1, 'Content is required'),
   requiresAcknowledgment: z.boolean(),
