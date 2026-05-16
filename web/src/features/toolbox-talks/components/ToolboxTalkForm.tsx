@@ -103,7 +103,6 @@ const toolboxTalkFormSchema = z.object({
   (data) => {
     // Sections are required only if no video is provided (matches backend validation)
     const hasVideo = data.videoUrl && data.videoUrl.trim() !== '' && data.videoSource !== 'None';
-    console.log('Refine check:', { hasVideo, sectionsLength: data.sections.length });
     if (!hasVideo && data.sections.length === 0) {
       return false;
     }
@@ -237,8 +236,6 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
   };
 
   async function onSubmit(values: ToolboxTalkFormValues) {
-    console.log('RHF errors:', JSON.stringify(form.formState.errors, null, 2));
-    console.log('Form values:', JSON.stringify(form.getValues(), null, 2));
     // Custom validation for quiz requirements
     if (values.requiresQuiz) {
       if (!values.questions || values.questions.length === 0) {
