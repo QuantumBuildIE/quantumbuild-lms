@@ -665,7 +665,15 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
             {watchRequiresQuiz && (
               <>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Quiz questions are required — see the Quiz Questions section below.
+                  Quiz questions are required —{' '}
+                  <button
+                    type="button"
+                    className="text-primary underline underline-offset-2 hover:no-underline"
+                    onClick={() => document.getElementById('quiz-questions-section')
+                      ?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                  >
+                    go to Quiz Questions
+                  </button>
                 </p>
                 <FormField
                   control={form.control}
@@ -1017,7 +1025,9 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
 
         {/* Questions (conditional) */}
         {watchRequiresQuiz && (
-          <QuestionEditor form={form} fieldName="questions" />
+          <div id="quiz-questions-section">
+            <QuestionEditor form={form} fieldName="questions" />
+          </div>
         )}
 
         {/* Translation Panels - only visible when editing an existing talk */}
