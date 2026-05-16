@@ -95,6 +95,7 @@ const toolboxTalkFormSchema = z.object({
   (data) => {
     // Sections are required only if no video is provided (matches backend validation)
     const hasVideo = data.videoUrl && data.videoUrl.trim() !== '' && data.videoSource !== 'None';
+    console.log('Refine check:', { hasVideo, sectionsLength: data.sections.length });
     if (!hasVideo && data.sections.length === 0) {
       return false;
     }
@@ -1024,6 +1025,11 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
 
         {/* Sections */}
         <SectionEditor form={form} fieldName="sections" />
+        {(form.formState.errors.sections?.message || (form.formState.errors.sections as { root?: { message?: string } })?.root?.message) && (
+          <p className="text-sm font-medium text-destructive">
+            {form.formState.errors.sections?.message || (form.formState.errors.sections as { root?: { message?: string } })?.root?.message}
+          </p>
+        )}
 
         {/* Questions (conditional) */}
         {watchRequiresQuiz && (
