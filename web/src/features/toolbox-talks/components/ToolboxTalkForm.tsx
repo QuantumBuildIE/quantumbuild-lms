@@ -55,6 +55,14 @@ const sectionSchema = z.object({
   content: z.string().min(1, 'Content is required'),
   requiresAcknowledgment: z.boolean(),
   source: z.enum(['Manual', 'Video', 'Pdf', 'Both'] as const).optional(),
+}).superRefine((data, _ctx) => {
+  console.log('Section validating:', {
+    sectionNumber: data.sectionNumber,
+    title: data.title?.substring(0, 30),
+    contentLength: data.content?.length,
+    source: data.source,
+    hasContent: !!data.content
+  });
 });
 
 const questionSchema = z.object({
