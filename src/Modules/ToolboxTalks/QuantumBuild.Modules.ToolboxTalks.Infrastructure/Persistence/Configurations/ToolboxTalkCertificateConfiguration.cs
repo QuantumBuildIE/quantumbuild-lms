@@ -117,7 +117,5 @@ public class ToolboxTalkCertificateConfiguration : IEntityTypeConfiguration<Tool
         builder.HasIndex(c => new { c.TenantId, c.EmployeeId })
             .HasDatabaseName("ix_toolbox_talk_certificates_tenant_employee");
 
-        // Query filter for soft delete
-        builder.HasQueryFilter(c => !c.IsDeleted);
     }
 }

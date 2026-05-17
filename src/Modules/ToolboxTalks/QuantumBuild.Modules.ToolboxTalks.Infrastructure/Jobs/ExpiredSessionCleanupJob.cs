@@ -28,6 +28,8 @@ public class ExpiredSessionCleanupJob(
         };
 
         var expiredSessions = await dbContext.ContentCreationSessions
+            .IgnoreQueryFilters()
+            .Where(s => !s.IsDeleted)
             .Where(s => s.ExpiresAt < DateTime.UtcNow)
             .Where(s => !terminalStatuses.Contains(s.Status))
             .ToListAsync(cancellationToken);

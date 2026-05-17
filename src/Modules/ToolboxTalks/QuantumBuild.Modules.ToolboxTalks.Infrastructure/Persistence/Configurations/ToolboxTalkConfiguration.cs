@@ -240,7 +240,5 @@ public class ToolboxTalkConfiguration : IEntityTypeConfiguration<ToolboxTalk>
             .HasDatabaseName("ix_toolbox_talks_tenant_video_hash")
             .HasFilter("\"VideoFileHash\" IS NOT NULL");
 
-        // Query filter for soft delete
-        builder.HasQueryFilter(t => !t.IsDeleted);
     }
 }

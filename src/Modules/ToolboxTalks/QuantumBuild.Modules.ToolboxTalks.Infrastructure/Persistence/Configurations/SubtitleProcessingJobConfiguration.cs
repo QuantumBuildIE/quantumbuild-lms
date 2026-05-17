@@ -104,7 +104,5 @@ public class SubtitleProcessingJobConfiguration : IEntityTypeConfiguration<Subti
         builder.HasIndex(j => new { j.TenantId, j.ToolboxTalkId, j.IsDeleted })
             .HasDatabaseName("ix_subtitle_processing_jobs_tenant_talk_deleted");
 
-        // Query filter for soft delete
-        builder.HasQueryFilter(j => !j.IsDeleted);
     }
 }

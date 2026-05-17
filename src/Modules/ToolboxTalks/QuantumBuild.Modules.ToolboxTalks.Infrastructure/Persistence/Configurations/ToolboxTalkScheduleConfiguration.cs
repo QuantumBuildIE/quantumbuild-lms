@@ -95,7 +95,5 @@ public class ToolboxTalkScheduleConfiguration : IEntityTypeConfiguration<Toolbox
         builder.HasIndex(s => s.NextRunDate)
             .HasDatabaseName("ix_toolbox_talk_schedules_next_run");
 
-        // Query filter for soft delete
-        builder.HasQueryFilter(s => !s.IsDeleted);
     }
 }
