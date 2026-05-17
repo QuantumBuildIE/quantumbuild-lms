@@ -13,7 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, User, KeyRound, ClipboardList, Shield } from "lucide-react";
+import { LogOut, User, KeyRound, ClipboardList, Shield, HelpCircle } from "lucide-react";
 import Link from "next/link";
 import { TenantSwitcher } from "@/components/layout/tenant-switcher";
 
@@ -73,7 +73,16 @@ export function TopNav() {
           {user?.isSuperUser && <TenantSwitcher />}
         </div>
 
-        <DropdownMenu>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/help"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            title="Help"
+          >
+            <HelpCircle className="h-5 w-5" />
+          </Link>
+
+          <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
               <Avatar className="h-8 w-8 cursor-pointer">
@@ -154,7 +163,8 @@ export function TopNav() {
               </div>
             </div>
           </DropdownMenuContent>
-        </DropdownMenu>
+          </DropdownMenu>
+        </div>
       </div>
     </header>
   );
