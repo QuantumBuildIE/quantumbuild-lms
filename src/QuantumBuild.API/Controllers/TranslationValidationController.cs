@@ -230,6 +230,17 @@ public class TranslationValidationController : ControllerBase
             result.DecisionAt = DateTime.UtcNow;
             result.DecisionBy = _currentUserService.UserName;
 
+            if (result.EditedTranslation is not null)
+            {
+                var run = result.ValidationRun;
+                if (run.ToolboxTalkId.HasValue)
+                {
+                    await PropagateEditedTranslationAsync(
+                        run.ToolboxTalkId.Value, run.LanguageCode, sectionIndex,
+                        result.EditedTranslation, cancellationToken);
+                }
+            }
+
             await _dbContext.SaveChangesAsync(cancellationToken);
 
             return Ok(new { message = "Section accepted" });
@@ -657,6 +668,48 @@ public class TranslationValidationController : ControllerBase
     }
 
     #region Private Helpers
+
+    private record TranslatedSectionEntry(Guid SectionId, string Title, string Content);
+
+    private async Task PropagateEditedTranslationAsync(
+        Guid toolboxTalkId, string languageCode, int sectionIndex,
+        string editedTranslation, CancellationToken cancellationToken)
+    {
+        var tenantId = _currentUserService.TenantId;
+
+        var sectionIds = await _dbContext.ToolboxTalkSections
+            .Where(s => s.ToolboxTalkId == toolboxTalkId)
+            .OrderBy(s => s.SectionNumber)
+            .Select(s => s.Id)
+            .ToListAsync(cancellationToken);
+
+        if (sectionIndex >= sectionIds.Count)
+            return;
+
+        var sectionId = sectionIds[sectionIndex];
+
+        var translation = await _dbContext.ToolboxTalkTranslations
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(t => t.ToolboxTalkId == toolboxTalkId
+                && t.TenantId == tenantId
+                && t.LanguageCode == languageCode
+                && !t.IsDeleted,
+                cancellationToken);
+
+        if (translation is null)
+            return;
+
+        var translatedSections = JsonSerializer.Deserialize<List<TranslatedSectionEntry>>(
+            translation.TranslatedSections) ?? [];
+
+        var idx = translatedSections.FindIndex(s => s.SectionId == sectionId);
+        if (idx < 0)
+            return;
+
+        translatedSections[idx] = translatedSections[idx] with { Content = editedTranslation };
+        translation.TranslatedSections = JsonSerializer.Serialize(translatedSections);
+        translation.UpdatedAt = DateTime.UtcNow;
+    }
 
     private async Task<TranslationValidationResult?> GetValidationResultAsync(
         Guid talkId, Guid runId, int sectionIndex, CancellationToken cancellationToken)
