@@ -426,7 +426,7 @@ function SectorChecklistView({ sectorKey }: { sectorKey: string }) {
         <div className="ml-auto">
           <Button variant="outline" onClick={() => setReportDialogOpen(true)}>
             <FileBarChart className="mr-2 h-4 w-4" />
-            Generate Inspection Report
+            Generate Training Evidence Pack
           </Button>
         </div>
       </div>

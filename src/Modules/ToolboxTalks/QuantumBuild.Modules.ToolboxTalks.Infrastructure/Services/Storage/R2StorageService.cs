@@ -301,7 +301,7 @@ public class R2StorageService : IR2StorageService, IDisposable
 
     #region Inspection Reports
 
-    private const string InspectionReportsFolder = "inspection-reports";
+    private const string InspectionReportsFolder = "training-evidence-packs";
 
     public async Task<R2UploadResult> UploadInspectionReportAsync(
         Guid tenantId,
@@ -318,7 +318,7 @@ public class R2StorageService : IR2StorageService, IDisposable
             var fileName = $"{sectorKey}/{timestamp}.pdf";
             var key = BuildKey(tenantId, InspectionReportsFolder, fileName);
 
-            _logger.LogInformation("Uploading inspection report to R2: {Key}", key);
+            _logger.LogInformation("Uploading training evidence pack to R2: {Key}", key);
 
             var request = new PutObjectRequest
             {

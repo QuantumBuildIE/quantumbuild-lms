@@ -61,7 +61,7 @@ export function GenerateReportDialog({
           setResult(data);
         },
         onError: () => {
-          toast.error('Failed to generate inspection report');
+          toast.error('Failed to generate training evidence pack');
         },
       }
     );
@@ -79,7 +79,7 @@ export function GenerateReportDialog({
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Generate Inspection Report</DialogTitle>
+          <DialogTitle>Generate Training Evidence Pack</DialogTitle>
           <DialogDescription>
             {sectorName} — {regulatoryBody}
           </DialogDescription>

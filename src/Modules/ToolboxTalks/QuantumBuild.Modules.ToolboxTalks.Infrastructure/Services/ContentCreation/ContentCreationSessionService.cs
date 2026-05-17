@@ -609,7 +609,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
         foreach (var runId in runIds)
         {
             BackgroundJob.Enqueue<TranslationValidationJob>(
-                job => job.ExecuteAsync(runId, tenantId, CancellationToken.None));
+                job => job.ExecuteAsync(runId, tenantId, null, CancellationToken.None));
         }
 
         // Start subtitle processing for video-based sessions

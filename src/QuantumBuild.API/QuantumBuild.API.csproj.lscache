@@ -60,6 +60,7 @@ Controllers/
  ContentCreationController.cs
  DpaController.cs
  EmployeesController.cs
+ HelpChatController.cs
  LessonParserController.cs
  LookupsController.cs
  MyToolboxTalksController.cs

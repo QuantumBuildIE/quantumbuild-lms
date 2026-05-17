@@ -272,9 +272,11 @@ public class TranslationValidationService(
             ? JsonSerializer.Serialize(replacementResult.Corrections, CamelCase)
             : null;
         entity.GlossaryHardBlockApplied = replacementResult.WasModified ? true : null;
-        // Reset reviewer decision on re-validation
-        entity.ReviewerDecision = Domain.Enums.ReviewerDecision.Pending;
-        entity.EditedTranslation = null;
+        if (entity.Id == Guid.Empty)
+        {
+            entity.ReviewerDecision = Domain.Enums.ReviewerDecision.Pending;
+            entity.EditedTranslation = null;
+        }
 
         if (persist)
             await dbContext.SaveChangesAsync(cancellationToken);

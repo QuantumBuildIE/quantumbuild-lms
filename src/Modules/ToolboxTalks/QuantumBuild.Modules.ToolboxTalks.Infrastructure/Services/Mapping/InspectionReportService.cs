@@ -52,7 +52,7 @@ public class InspectionReportService : IInspectionReportService
         GenerateInspectionReportRequest request,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Generating inspection readiness report for sector {SectorKey}", sectorKey);
+        _logger.LogInformation("Generating training evidence pack for sector {SectorKey}", sectorKey);
 
         // 1. Load compliance checklist data — reuse existing service
         var checklist = await _mappingService.GetComplianceChecklistAsync(sectorKey, cancellationToken);
@@ -66,7 +66,7 @@ public class InspectionReportService : IInspectionReportService
         // 3. Generate PDF
         var generatedAt = DateTimeOffset.UtcNow;
         var reportDate = generatedAt.ToString("dd MMMM yyyy");
-        var pdfBytes = GeneratePdf(checklist, request, organisationName, reportDate, generatedAt);
+        var pdfBytes = GeneratePdf(checklist, request, organisationName, reportDate, generatedAt, sectorKey);
 
         // 4. Upload to R2
         var stream = new MemoryStream(pdfBytes);
@@ -77,11 +77,11 @@ public class InspectionReportService : IInspectionReportService
 
         if (!uploadResult.Success)
         {
-            _logger.LogError("Failed to upload inspection report: {Error}", uploadResult.ErrorMessage);
+            _logger.LogError("Failed to upload training evidence pack: {Error}", uploadResult.ErrorMessage);
             throw new InvalidOperationException($"Failed to store report: {uploadResult.ErrorMessage}");
         }
 
-        _logger.LogInformation("Inspection report uploaded to {Url} ({Size} bytes)",
+        _logger.LogInformation("Training evidence pack uploaded to {Url} ({Size} bytes)",
             uploadResult.PublicUrl, pdfBytes.Length);
 
         // 5. Return result
@@ -103,7 +103,8 @@ public class InspectionReportService : IInspectionReportService
         GenerateInspectionReportRequest request,
         string organisationName,
         string reportDate,
-        DateTimeOffset generatedAt)
+        DateTimeOffset generatedAt,
+        string sectorKey)
     {
         QuestPDF.Settings.License = LicenseType.Community;
 
@@ -133,10 +134,10 @@ public class InspectionReportService : IInspectionReportService
                     col.Item().Height(50);
 
                     // Document title
-                    col.Item().AlignCenter().Text("INSPECTION READINESS")
+                    col.Item().AlignCenter().Text("TRAINING EVIDENCE")
                         .FontSize(28).Bold().FontColor(BrandBlue);
                     col.Item().Height(4);
-                    col.Item().AlignCenter().Text("REPORT")
+                    col.Item().AlignCenter().Text("PACK")
                         .FontSize(28).Bold().FontColor(BrandBlue);
 
                     col.Item().Height(30);
@@ -192,7 +193,7 @@ public class InspectionReportService : IInspectionReportService
                 {
                     col.Item().Row(row =>
                     {
-                        row.RelativeItem().Text("CertifiedIQ Inspection Readiness Report")
+                        row.RelativeItem().Text("CertifiedIQ Training Evidence Pack")
                             .FontSize(10).Bold().FontColor(BrandBlue);
                         row.RelativeItem().AlignRight().Text(organisationName)
                             .FontSize(9).FontColor(TextMuted);
@@ -432,6 +433,58 @@ public class InspectionReportService : IInspectionReportService
                     }
 
                     // =====================
+                    // Sector Appendix — food only
+                    // =====================
+                    if (sectorKey.Equals("food", StringComparison.OrdinalIgnoreCase))
+                    {
+                        col.Item().PageBreak();
+
+                        col.Item().Text("Appendix: Other Records Required for a Full Inspection")
+                            .FontSize(16).Bold().FontColor(BrandBlue);
+                        col.Item().Height(10);
+
+                        col.Item().Text(
+                            "The following records are also required by inspectors and are not covered by this Training Evidence Pack. " +
+                            "Ensure these are maintained and available for inspection.")
+                            .FontSize(10).FontColor(TextMuted);
+                        col.Item().Height(14);
+
+                        var appendixItems = new[]
+                        {
+                            ("HACCP File",
+                             "Hazard Analysis and Critical Control Points documentation including flow diagrams, hazard analysis, control measures and monitoring procedures"),
+                            ("Temperature Logs",
+                             "Daily refrigeration, freezer and cooking temperature records with corrective action notes"),
+                            ("Cleaning Records",
+                             "Signed cleaning schedules and verification records for all food contact surfaces and equipment"),
+                            ("Pest Control Reports",
+                             "Current contract and inspection reports from a licensed pest control contractor"),
+                            ("Allergen Matrix",
+                             "Written allergen information for all menu items or products, including cross-contamination controls"),
+                            ("Traceability Records",
+                             "Supplier delivery dockets, batch codes and recall/withdrawal procedures"),
+                            ("Previous EHO Report",
+                             "Most recent inspection report and documented close-out of any actions raised"),
+                        };
+
+                        foreach (var (itemTitle, itemDesc) in appendixItems)
+                        {
+                            col.Item().EnsureSpace(40).Row(row =>
+                            {
+                                row.ConstantItem(22).PaddingTop(2).Text("□")
+                                    .FontSize(13).FontColor(TextMuted);
+                                row.RelativeItem().Column(c =>
+                                {
+                                    c.Item().Text(itemTitle).FontSize(10).Bold().FontColor(TextDark);
+                                    c.Item().Height(2);
+                                    c.Item().Text(itemDesc).FontSize(9).FontColor(TextMuted);
+                                });
+                            });
+                            col.Item().Height(10);
+                        }
+                    }
+
+                    // =====================
                     // Declaration and Disclaimer
                     // =====================
                     col.Item().PageBreak();
@@ -471,10 +524,11 @@ public class InspectionReportService : IInspectionReportService
                             .FontSize(10).Bold().FontColor(TextMuted);
                         disclaimer.Item().Height(6);
                         disclaimer.Item().Text(
-                            "This report is generated from training content and AI-assisted requirement mappings within CertifiedIQ. " +
-                            "It is the organisation's responsibility to ensure all regulatory requirements are met and that mappings accurately reflect " +
-                            "their training programme. CertifiedIQ does not provide legal or regulatory advice. " +
-                            "This report does not constitute legal compliance certification.")
+                            "This Training Evidence Pack documents employee training and competency records managed within CertifiedIQ. " +
+                            "It covers the training and competence element of a regulatory inspection. " +
+                            "It does not cover HACCP, temperature monitoring, cleaning records, pest control, allergen management, traceability, " +
+                            "or other operational compliance records required by inspectors. " +
+                            "CertifiedIQ does not provide legal or regulatory advice and this document does not constitute legal compliance certification.")
                             .FontSize(9).FontColor(TextMuted);
                     });
                 });
