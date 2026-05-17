@@ -37,7 +37,7 @@ public class HelpChatController : ControllerBase
     [HttpPost("chat")]
     public async Task<IActionResult> Chat([FromBody] HelpChatRequest request, CancellationToken cancellationToken)
     {
-        var apiKey = _configuration["Anthropic:ApiKey"];
+        var apiKey = _configuration["SubtitleProcessing:Claude:ApiKey"];
         if (string.IsNullOrEmpty(apiKey))
             return StatusCode(503, new { error = "AI service not configured." });
 

@@ -242,7 +242,7 @@ export function HelpAssistant() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
+    <div className="flex h-[calc(100vh-3.5rem-50px)] overflow-hidden">
       {/* Sidebar */}
       <aside className="hidden w-[280px] shrink-0 border-r bg-muted/30 md:flex md:flex-col">
         <div className="border-b px-4 py-4">
