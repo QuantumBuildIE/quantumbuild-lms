@@ -89,7 +89,5 @@ public class ToolboxTalkTranslationConfiguration : IEntityTypeConfiguration<Tool
         builder.HasIndex(t => t.TenantId)
             .HasDatabaseName("ix_toolbox_talk_translations_tenant");
 
-        // Query filter for soft delete
-        builder.HasQueryFilter(t => !t.IsDeleted);
     }
 }

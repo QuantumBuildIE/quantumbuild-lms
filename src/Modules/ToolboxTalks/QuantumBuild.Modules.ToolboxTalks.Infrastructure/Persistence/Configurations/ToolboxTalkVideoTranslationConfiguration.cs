@@ -87,7 +87,5 @@ public class ToolboxTalkVideoTranslationConfiguration : IEntityTypeConfiguration
         builder.HasIndex(v => v.Status)
             .HasDatabaseName("ix_toolbox_talk_video_translations_status");
 
-        // Query filter for soft delete
-        builder.HasQueryFilter(v => !v.IsDeleted);
     }
 }

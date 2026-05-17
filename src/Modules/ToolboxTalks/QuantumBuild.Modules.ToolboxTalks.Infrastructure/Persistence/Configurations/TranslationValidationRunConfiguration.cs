@@ -162,7 +162,5 @@ public class TranslationValidationRunConfiguration : IEntityTypeConfiguration<Tr
         builder.HasIndex(r => new { r.TenantId, r.CourseId, r.LanguageCode })
             .HasDatabaseName("ix_translation_validation_runs_tenant_course_lang");
 
-        // Query filter for soft delete
-        builder.HasQueryFilter(r => !r.IsDeleted);
     }
 }

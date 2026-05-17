@@ -65,7 +65,5 @@ public class ToolboxTalkSlideConfiguration : IEntityTypeConfiguration<ToolboxTal
             .HasFilter("\"IsDeleted\" = false")
             .HasDatabaseName("ix_toolbox_talk_slides_talk_page");
 
-        // Query filter for soft delete
-        builder.HasQueryFilter(s => !s.IsDeleted);
     }
 }

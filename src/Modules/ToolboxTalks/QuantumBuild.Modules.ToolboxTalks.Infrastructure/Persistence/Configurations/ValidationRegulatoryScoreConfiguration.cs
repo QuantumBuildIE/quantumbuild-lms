@@ -107,7 +107,5 @@ public class ValidationRegulatoryScoreConfiguration : IEntityTypeConfiguration<V
         builder.HasIndex(s => s.RegulatoryProfileId)
             .HasDatabaseName("ix_validation_regulatory_scores_regulatory_profile");
 
-        // Query filter for soft delete
-        builder.HasQueryFilter(s => !s.IsDeleted);
     }
 }

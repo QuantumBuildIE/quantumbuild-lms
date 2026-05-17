@@ -161,7 +161,5 @@ public class ScheduledTalkConfiguration : IEntityTypeConfiguration<ScheduledTalk
         builder.HasIndex(s => s.OriginalScheduledTalkId)
             .HasDatabaseName("ix_scheduled_talks_original");
 
-        // Query filter for soft delete
-        builder.HasQueryFilter(s => !s.IsDeleted);
     }
 }

@@ -91,7 +91,5 @@ public class ToolboxTalkCourseConfiguration : IEntityTypeConfiguration<ToolboxTa
         builder.HasIndex(x => new { x.TenantId, x.IsActive })
             .HasDatabaseName("ix_toolbox_talk_courses_tenant_active");
 
-        // Query filter for soft delete
-        builder.HasQueryFilter(x => !x.IsDeleted);
     }
 }

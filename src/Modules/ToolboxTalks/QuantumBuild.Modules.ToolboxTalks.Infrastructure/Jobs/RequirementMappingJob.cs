@@ -64,7 +64,7 @@ public class RequirementMappingJob
         try
         {
             // Step 1 — Load content
-            var contentString = await BuildContentStringAsync(toolboxTalkId, courseId, cancellationToken);
+            var contentString = await BuildContentStringAsync(toolboxTalkId, courseId, tenantId, cancellationToken);
             if (string.IsNullOrWhiteSpace(contentString))
             {
                 _logger.LogWarning("No content found for mapping — TalkId={TalkId}, CourseId={CourseId}",
@@ -111,14 +111,14 @@ public class RequirementMappingJob
     }
 
     private async Task<string?> BuildContentStringAsync(
-        Guid? toolboxTalkId, Guid? courseId, CancellationToken cancellationToken)
+        Guid? toolboxTalkId, Guid? courseId, Guid tenantId, CancellationToken cancellationToken)
     {
         if (toolboxTalkId.HasValue)
         {
             var talk = await _dbContext.ToolboxTalks
                 .IgnoreQueryFilters()
                 .Include(t => t.Sections)
-                .FirstOrDefaultAsync(t => t.Id == toolboxTalkId.Value && !t.IsDeleted, cancellationToken);
+                .FirstOrDefaultAsync(t => t.Id == toolboxTalkId.Value && t.TenantId == tenantId && !t.IsDeleted, cancellationToken);
 
             if (talk == null) return null;
 
@@ -140,7 +140,7 @@ public class RequirementMappingJob
                 .Include(c => c.CourseItems)
                     .ThenInclude(ci => ci.ToolboxTalk)
                         .ThenInclude(t => t.Sections)
-                .FirstOrDefaultAsync(c => c.Id == courseId.Value && !c.IsDeleted, cancellationToken);
+                .FirstOrDefaultAsync(c => c.Id == courseId.Value && c.TenantId == tenantId && !c.IsDeleted, cancellationToken);
 
             if (course == null) return null;
 

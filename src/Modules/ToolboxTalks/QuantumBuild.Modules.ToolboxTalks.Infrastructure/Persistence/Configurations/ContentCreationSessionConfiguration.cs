@@ -160,7 +160,5 @@ public class ContentCreationSessionConfiguration : IEntityTypeConfiguration<Cont
         builder.HasIndex(s => new { s.TenantId, s.Status })
             .HasDatabaseName("ix_content_creation_sessions_tenant_status");
 
-        // Query filter for soft delete
-        builder.HasQueryFilter(s => !s.IsDeleted);
     }
 }

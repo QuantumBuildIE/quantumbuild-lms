@@ -63,6 +63,7 @@ public class CorpusRunJob
         {
             // Load the run with corpus and entries
             var run = await _dbContext.CorpusRuns
+                .IgnoreQueryFilters()
                 .Include(r => r.AuditCorpus)
                     .ThenInclude(c => c.Entries)
                 .FirstOrDefaultAsync(r => r.Id == corpusRunId && r.TenantId == tenantId,
@@ -111,6 +112,7 @@ public class CorpusRunJob
 
             // Find most recent previous run for score delta calculation
             var previousRun = await _dbContext.CorpusRuns
+                .IgnoreQueryFilters()
                 .Where(r => r.CorpusId == run.CorpusId
                     && r.Id != run.Id
                     && r.Status == CorpusRunStatus.Completed
@@ -254,6 +256,7 @@ public class CorpusRunJob
             try
             {
                 var run = await _dbContext.CorpusRuns
+                    .IgnoreQueryFilters()
                     .FirstOrDefaultAsync(r => r.Id == corpusRunId, CancellationToken.None);
 
                 if (run != null)
@@ -435,6 +438,7 @@ public class CorpusRunJob
         try
         {
             var logs = await _dbContext.AiUsageLogs
+                .IgnoreQueryFilters()
                 .Where(l => l.ReferenceEntityId == corpusRunId && l.TenantId == tenantId)
                 .ToListAsync(ct);
 

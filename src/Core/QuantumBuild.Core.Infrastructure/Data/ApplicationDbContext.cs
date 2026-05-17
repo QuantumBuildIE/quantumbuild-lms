@@ -307,10 +307,21 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.Entity<QrSession>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<DpaAcceptance>().HasQueryFilter(e => !e.IsDeleted);
 
-        // Note: Toolbox Talks query filters are defined in entity configurations
-        // TenantEntity-based: ToolboxTalk, ToolboxTalkCourse, ToolboxTalkSchedule, ScheduledTalk, ToolboxTalkTranslation, ToolboxTalkVideoTranslation, ToolboxTalkCertificate, SubtitleProcessingJob, ToolboxTalkSlide, TranslationValidationRun, ContentCreationSession, ValidationRegulatoryScore
-        // BaseEntity-based (not tenant-scoped): ToolboxTalkSlideshowTranslation, SafetyGlossary, SafetyGlossaryTerm, RegulatoryBody, RegulatoryDocument, RegulatoryProfile, RegulatoryCriteria, RegulatoryRequirement
-        // BaseEntity-based (not tenant-scoped): ToolboxTalkSection, ToolboxTalkQuestion, ToolboxTalkCourseItem, ToolboxTalkCourseTranslation,
+        // Toolbox Talks tenant + soft-delete filters (centralised here — removed from entity configurations)
+        modelBuilder.Entity<ToolboxTalk>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
+        modelBuilder.Entity<ToolboxTalkCourse>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
+        modelBuilder.Entity<ToolboxTalkSchedule>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
+        modelBuilder.Entity<ScheduledTalk>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
+        modelBuilder.Entity<ToolboxTalkTranslation>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
+        modelBuilder.Entity<ToolboxTalkVideoTranslation>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
+        modelBuilder.Entity<ToolboxTalkCertificate>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
+        modelBuilder.Entity<SubtitleProcessingJob>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
+        modelBuilder.Entity<ToolboxTalkSlide>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
+        modelBuilder.Entity<TranslationValidationRun>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
+        modelBuilder.Entity<ContentCreationSession>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
+        modelBuilder.Entity<ValidationRegulatoryScore>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
+        // BaseEntity-only (not tenant-scoped): ToolboxTalkSlideshowTranslation, SafetyGlossary, SafetyGlossaryTerm, RegulatoryBody, RegulatoryDocument, RegulatoryProfile, RegulatoryCriteria, RegulatoryRequirement
+        // BaseEntity-only (not tenant-scoped): ToolboxTalkSection, ToolboxTalkQuestion, ToolboxTalkCourseItem, ToolboxTalkCourseTranslation,
         //   ToolboxTalkScheduleAssignment, ScheduledTalkSectionProgress, ScheduledTalkQuizAttempt, ScheduledTalkCompletion, ToolboxTalkSettings, SubtitleTranslation, ToolboxTalkSlideTranslation, TranslationValidationResult
 
         // Apply query filters for Lookup entities
