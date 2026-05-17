@@ -3,8 +3,20 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { WizardSectionDivider } from '@/components/ui/wizard-section-divider';
 import { Loader2, Sparkles, AlertCircle, RotateCcw } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import {
   useCreationSession,
@@ -48,6 +60,7 @@ export function QuizStep({ state, onNext, onBack }: QuizStepProps) {
   const [settings, setSettings] = useState<QuizSettings>(DEFAULT_SETTINGS);
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [regeneratingQuestionId, setRegeneratingQuestionId] = useState<string | null>(null);
   const [generateError, setGenerateError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -98,24 +111,32 @@ export function QuizStep({ state, onNext, onBack }: QuizStepProps) {
   // Stop polling when generation completes
   useEffect(() => {
     if (session?.status === 'QuizGenerated' && isGenerating) {
-      setIsGenerating(false);
       if (pollRef.current) clearInterval(pollRef.current);
+      setTimeout(() => {
+        setIsGenerating(false);
+        setRegeneratingQuestionId(null);
+      }, 1500);
     }
     if (session?.status === 'Failed' && isGenerating) {
-      setIsGenerating(false);
-      setGenerateError('Quiz generation failed. Please try again.');
       if (pollRef.current) clearInterval(pollRef.current);
+      setTimeout(() => {
+        setIsGenerating(false);
+        setRegeneratingQuestionId(null);
+        setGenerateError('Quiz generation failed. Please try again.');
+      }, 1500);
     }
   }, [session?.status, isGenerating]);
 
-  const handleGenerateQuiz = useCallback(async () => {
+  const handleGenerateQuiz = useCallback(async (questionId?: string) => {
     if (!sessionId) return;
+    if (questionId) setRegeneratingQuestionId(questionId);
     setIsGenerating(true);
     setGenerateError(null);
     try {
       await generateQuiz.mutateAsync(sessionId);
     } catch (err) {
       setIsGenerating(false);
+      setRegeneratingQuestionId(null);
       setGenerateError(err instanceof Error ? err.message : 'Quiz generation failed');
     }
   }, [sessionId, generateQuiz]);
@@ -227,8 +248,8 @@ export function QuizStep({ state, onNext, onBack }: QuizStepProps) {
     );
   }
 
-  // Generating state
-  if (isGenerating) {
+  // Full-screen generating state — only on initial generation (no questions yet)
+  if (isGenerating && questions.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 gap-4">
         <div className="flex items-center gap-2">
@@ -251,7 +272,7 @@ export function QuizStep({ state, onNext, onBack }: QuizStepProps) {
           <AlertCircle className="h-4 w-4" />
           <AlertDescription className="flex items-center justify-between">
             <span>{generateError}</span>
-            <Button variant="outline" size="sm" onClick={handleGenerateQuiz}>
+            <Button variant="outline" size="sm" onClick={() => handleGenerateQuiz()}>
               <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
               Retry
             </Button>
@@ -279,19 +300,41 @@ export function QuizStep({ state, onNext, onBack }: QuizStepProps) {
             Questions ({totalQuestions})
           </h3>
           {totalQuestions > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleGenerateQuiz}
-              disabled={isGenerating}
-              className="text-xs"
-            >
-              <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-              Regenerate All
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isGenerating}
+                  className="text-xs"
+                >
+                  {isGenerating ? (
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                  )}
+                  Regenerate All
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Regenerate all questions?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will replace all current questions and cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => handleGenerateQuiz()}>
+                    Regenerate
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           )}
         </div>
 
+        <div className={cn(isGenerating && 'opacity-50 pointer-events-none')}>
         {sections.map((section) => {
           const sectionQuestions = questionsBySection.get(section.suggestedOrder) ?? [];
           return (
@@ -301,14 +344,17 @@ export function QuizStep({ state, onNext, onBack }: QuizStepProps) {
               sectionTitle={section.title}
               questions={sectionQuestions}
               editingQuestionId={editingQuestionId}
+              regeneratingQuestionId={regeneratingQuestionId}
               onStartEdit={setEditingQuestionId}
               onSaveQuestion={handleSaveQuestion}
               onCancelEdit={handleCancelEdit}
               onDeleteQuestion={handleDeleteQuestion}
               onAddQuestion={handleAddQuestion}
+              onRegenerateQuestion={handleGenerateQuiz}
             />
           );
         })}
+        </div>
 
         {sections.length === 0 && (
           <p className="text-sm text-muted-foreground text-center py-8">

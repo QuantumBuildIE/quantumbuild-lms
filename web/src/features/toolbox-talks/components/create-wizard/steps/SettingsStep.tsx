@@ -63,6 +63,11 @@ export function SettingsStep({ state, onNext, onBack }: SettingsStepProps) {
 
     let merged = { ...DEFAULT_SETTINGS, ...serverSettings };
 
+    // PDF source: default generateSlideshow to true
+    if (session?.inputMode === 'Pdf' && !merged.generateSlideshow) {
+      merged = { ...merged, generateSlideshow: true };
+    }
+
     // If title is still empty, derive from parsed sections
     if (!merged.title && session?.parsedSectionsJson) {
       try {

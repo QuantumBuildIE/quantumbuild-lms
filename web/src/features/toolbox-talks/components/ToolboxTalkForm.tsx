@@ -50,11 +50,19 @@ import { FREQUENCY_VALUES, FREQUENCY_OPTIONS } from '@/lib/constants/frequency';
 
 const sectionSchema = z.object({
   id: z.string().uuid().optional(),
-  sectionNumber: z.number().min(1),
+  sectionNumber: z.number().min(0),
   title: z.string().min(1, 'Title is required'),
   content: z.string().min(1, 'Content is required'),
   requiresAcknowledgment: z.boolean(),
   source: z.enum(['Manual', 'Video', 'Pdf', 'Both'] as const).optional(),
+}).superRefine((data, _ctx) => {
+  console.log('Section validating:', {
+    sectionNumber: data.sectionNumber,
+    title: data.title?.substring(0, 30),
+    contentLength: data.content?.length,
+    source: data.source,
+    hasContent: !!data.content
+  });
 });
 
 const questionSchema = z.object({
@@ -79,7 +87,7 @@ const toolboxTalkFormSchema = z.object({
   attachmentUrl: z.string().url('Must be a valid URL').optional().nullable().or(z.literal('')),
   minimumVideoWatchPercent: z.number().min(50).max(100),
   requiresQuiz: z.boolean(),
-  passingScore: z.number().min(50).max(100).optional().nullable(),
+  passingScore: z.number().min(50).max(100).nullable().default(70),
   shuffleQuestions: z.boolean(),
   shuffleOptions: z.boolean(),
   useQuestionPool: z.boolean(),
@@ -195,7 +203,7 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
       form.setValue('shuffleOptions', false);
       form.setValue('useQuestionPool', false);
       form.setValue('quizQuestionCount', null);
-    } else if (form.getValues('passingScore') === null) {
+    } else if (form.getValues('passingScore') == null) {
       form.setValue('passingScore', 70);
     }
   }, [watchRequiresQuiz, form]);
@@ -235,6 +243,7 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
         return;
       }
       if (values.passingScore == null) {
+        form.setValue('passingScore', 70);
         form.setError('passingScore', { message: 'Passing score is required when quiz is enabled' });
         return;
       }
@@ -319,15 +328,12 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit, (errors) => {
+      <form onSubmit={form.handleSubmit(onSubmit, () => {
           toast.error('Please fix the form errors before saving', {
             description: 'Some required fields are incomplete or invalid.',
           });
-          const firstKey = Object.keys(errors)[0];
-          if (firstKey) {
-            const el = document.querySelector(`[name="${firstKey}"]`);
-            el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }
+          const firstError = document.querySelector('.text-destructive');
+          firstError?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         })} className="space-y-6">
         {/* Basic Information */}
         <Card>
@@ -666,6 +672,17 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
 
             {watchRequiresQuiz && (
               <>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Quiz questions are required —{' '}
+                  <button
+                    type="button"
+                    className="text-primary underline underline-offset-2 hover:no-underline"
+                    onClick={() => document.getElementById('quiz-questions-section')
+                      ?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                  >
+                    go to Quiz Questions
+                  </button>
+                </p>
                 <FormField
                   control={form.control}
                   name="passingScore"
@@ -1013,10 +1030,17 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
 
         {/* Sections */}
         <SectionEditor form={form} fieldName="sections" />
+        {(form.formState.errors.sections?.message || (form.formState.errors.sections as { root?: { message?: string } })?.root?.message) && (
+          <p className="text-sm font-medium text-destructive">
+            {form.formState.errors.sections?.message || (form.formState.errors.sections as { root?: { message?: string } })?.root?.message}
+          </p>
+        )}
 
         {/* Questions (conditional) */}
         {watchRequiresQuiz && (
-          <QuestionEditor form={form} fieldName="questions" />
+          <div id="quiz-questions-section">
+            <QuestionEditor form={form} fieldName="questions" />
+          </div>
         )}
 
         {/* Translation Panels - only visible when editing an existing talk */}

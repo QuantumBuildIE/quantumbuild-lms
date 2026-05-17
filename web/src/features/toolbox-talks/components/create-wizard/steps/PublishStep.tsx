@@ -38,6 +38,8 @@ import {
   contentCreationKeys,
 } from '@/lib/api/toolbox-talks/use-content-creation';
 import { getSessionValidationRun } from '@/lib/api/toolbox-talks/content-creation';
+import { useToolboxTalk } from '@/lib/api/toolbox-talks/use-toolbox-talks';
+import { PreviewModal } from '@/features/toolbox-talks/components/PreviewModal';
 import { useLookupValues } from '@/hooks/use-lookups';
 import { useAvailableSectors } from '@/lib/api/admin/use-tenant-sectors';
 import type { WizardState } from '../CreateWizard';
@@ -124,6 +126,10 @@ export function PublishStep({ state, onBack }: PublishStepProps) {
   // Fetch all validation runs in parallel (stable hook count via useQueries)
   // Validation runs are stored against the draft talk (session.outputTalkId), not the session ID
   const talkId = session?.outputTalkId ?? null;
+
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const { data: previewTalk } = useToolboxTalk(talkId ?? '');
+
   const validationRunQueries = useQueries({
     queries: validationRunIds.map((runId) => ({
       queryKey: contentCreationKeys.validationRun(talkId ?? '', runId),
@@ -240,7 +246,7 @@ export function PublishStep({ state, onBack }: PublishStepProps) {
   // ============================================
   // Summary render
   // ============================================
-
+  console.log('Preview talkId:', talkId, 'session:', session?.outputTalkId);
   return (
     <div className="space-y-6">
       {/* Panel A — Content Summary */}
@@ -280,25 +286,43 @@ export function PublishStep({ state, onBack }: PublishStepProps) {
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back
         </Button>
-        <Button
-          size="lg"
-          className="bg-green-600 hover:bg-green-700 text-white gap-2 px-8"
-          onClick={handlePublish}
-          disabled={publish.isPending}
-        >
-          {publish.isPending ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Publishing...
-            </>
-          ) : (
-            <>
-              <Rocket className="h-4 w-4" />
-              Publish
-            </>
+        <div className="flex items-center gap-3">
+          {talkId && previewTalk && (
+            <Button
+              variant="outline"
+              onClick={() => setPreviewOpen(true)}
+            >
+              <Eye className="h-4 w-4 mr-2" />
+              Preview as Learner
+            </Button>
           )}
-        </Button>
+          <Button
+            size="lg"
+            className="bg-green-600 hover:bg-green-700 text-white gap-2 px-8"
+            onClick={handlePublish}
+            disabled={publish.isPending}
+          >
+            {publish.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Publishing...
+              </>
+            ) : (
+              <>
+                <Rocket className="h-4 w-4" />
+                Publish
+              </>
+            )}
+          </Button>
+        </div>
       </div>
+      {previewTalk && (
+        <PreviewModal
+          open={previewOpen}
+          onOpenChange={setPreviewOpen}
+          talk={previewTalk}
+        />
+      )}
     </div>
   );
 }

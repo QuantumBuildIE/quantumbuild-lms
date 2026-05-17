@@ -18,7 +18,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Check, Pencil, Trash2, X, Sparkles } from 'lucide-react';
+import { Check, Pencil, RotateCcw, Trash2, X, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { QuizQuestion, QuestionType } from '@/types/content-creation';
 
@@ -48,20 +48,24 @@ interface QuestionCardProps {
   question: QuizQuestion;
   index: number;
   isEditing: boolean;
+  isRegenerating?: boolean;
   onStartEdit: () => void;
   onSave: (updated: QuizQuestion) => void;
   onCancel: () => void;
   onDelete: () => void;
+  onRegenerateQuestion?: () => void;
 }
 
 export function QuestionCard({
   question,
   index,
   isEditing,
+  isRegenerating = false,
   onStartEdit,
   onSave,
   onCancel,
   onDelete,
+  onRegenerateQuestion,
 }: QuestionCardProps) {
   const [draft, setDraft] = useState<QuizQuestion>(question);
 
@@ -262,6 +266,34 @@ export function QuestionCard({
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleStartEdit}>
             <Pencil className="h-3.5 w-3.5" />
           </Button>
+          {onRegenerateQuestion && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                  disabled={isRegenerating}
+                >
+                  <RotateCcw className={cn('h-3.5 w-3.5', isRegenerating && 'animate-spin')} />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Regenerate this question?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will replace the current question and cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={onRegenerateQuestion}>
+                    Regenerate
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive">
@@ -286,7 +318,8 @@ export function QuestionCard({
         </div>
       </div>
 
-      {/* Question text */}
+      {/* Question text + options */}
+      <div className={cn(isRegenerating && 'opacity-50')}>
       <p className="text-sm font-medium">{question.questionText}</p>
 
       {/* Options */}
@@ -338,6 +371,7 @@ export function QuestionCard({
           {question.options[0]}
         </div>
       )}
+      </div>
     </div>
   );
 }

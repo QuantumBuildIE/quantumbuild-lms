@@ -357,9 +357,11 @@ export function QuestionEditor({ form, fieldName = 'questions' }: QuestionEditor
         )}
 
         {/* Validation error for questions array */}
-        {form.formState.errors[fieldName]?.root && (
+        {(form.formState.errors[fieldName]?.root?.message ||
+          form.formState.errors[fieldName]?.message) && (
           <p className="text-sm text-destructive">
-            {form.formState.errors[fieldName]?.root?.message as string}
+            {(form.formState.errors[fieldName]?.root?.message ||
+              form.formState.errors[fieldName]?.message) as string}
           </p>
         )}
       </CardContent>

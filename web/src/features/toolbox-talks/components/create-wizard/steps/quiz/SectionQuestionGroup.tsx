@@ -13,11 +13,13 @@ interface SectionQuestionGroupProps {
   sectionTitle: string;
   questions: QuizQuestion[];
   editingQuestionId: string | null;
+  regeneratingQuestionId?: string | null;
   onStartEdit: (questionId: string) => void;
   onSaveQuestion: (question: QuizQuestion) => void;
   onCancelEdit: () => void;
   onDeleteQuestion: (questionId: string) => void;
   onAddQuestion: (sectionIndex: number) => void;
+  onRegenerateQuestion?: (questionId: string) => void;
 }
 
 export function SectionQuestionGroup({
@@ -25,11 +27,13 @@ export function SectionQuestionGroup({
   sectionTitle,
   questions,
   editingQuestionId,
+  regeneratingQuestionId,
   onStartEdit,
   onSaveQuestion,
   onCancelEdit,
   onDeleteQuestion,
   onAddQuestion,
+  onRegenerateQuestion,
 }: SectionQuestionGroupProps) {
   const [isExpanded, setIsExpanded] = useState(true);
 
@@ -68,10 +72,14 @@ export function SectionQuestionGroup({
               question={question}
               index={qIdx}
               isEditing={editingQuestionId === question.id}
+              isRegenerating={regeneratingQuestionId === question.id}
               onStartEdit={() => onStartEdit(question.id)}
               onSave={onSaveQuestion}
               onCancel={onCancelEdit}
               onDelete={() => onDeleteQuestion(question.id)}
+              onRegenerateQuestion={
+                onRegenerateQuestion ? () => onRegenerateQuestion(question.id) : undefined
+              }
             />
           ))}
 

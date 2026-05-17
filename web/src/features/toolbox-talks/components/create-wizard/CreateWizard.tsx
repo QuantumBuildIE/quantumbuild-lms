@@ -4,7 +4,7 @@ import { useState, useCallback, lazy, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Check, ChevronLeft, Loader2 } from 'lucide-react';
+import { Check, CheckCircle, ChevronLeft, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTenantSettings } from '@/lib/api/admin/use-tenant-settings';
 import type { WizardStep, InputMode, OutputType, ParsedSection } from '@/types/content-creation';
@@ -176,6 +176,12 @@ export function CreateWizard() {
     }
   };
 
+  const resetWizard = useCallback(() => {
+    setWizardState(initialState);
+    setCurrentStep(1 as WizardStep);
+    setHighestStep(1 as WizardStep);
+  }, []);
+
   const renderStepContent = () => {
     switch (currentStep) {
       case 1:
@@ -197,6 +203,7 @@ export function CreateWizard() {
               updateState={updateState}
               onNext={goToNextStep}
               onBack={goToPreviousStep}
+              onReset={resetWizard}
             />
           </Suspense>
         );
@@ -277,6 +284,12 @@ export function CreateWizard() {
               AI-powered content creation with translation validation
             </p>
           </div>
+          {wizardState.sessionId && (
+            <div className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
+              <CheckCircle className="h-3.5 w-3.5" />
+              <span>Progress saved</span>
+            </div>
+          )}
         </div>
       </div>
 

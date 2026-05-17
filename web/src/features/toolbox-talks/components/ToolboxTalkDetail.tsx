@@ -43,9 +43,10 @@ interface ToolboxTalkDetailProps {
   onSchedule?: (talk: ToolboxTalk) => void;
   /** Base path for navigation (default: /admin/toolbox-talks/talks) */
   basePath?: string;
+  previewMode?: boolean;
 }
 
-export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolbox-talks/talks' }: ToolboxTalkDetailProps) {
+export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolbox-talks/talks', previewMode = false }: ToolboxTalkDetailProps) {
   const router = useRouter();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -130,43 +131,45 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => setPreviewOpen(true)}>
-            <EyeIcon className="mr-2 h-4 w-4" />
-            Preview as Employee
-          </Button>
-          {canManage && (
-            <Button variant="outline" onClick={() => router.push(`${basePath}/${talk.id}/edit`)}>
-              <PencilIcon className="mr-2 h-4 w-4" />
-              Edit
+        {!previewMode && (
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => setPreviewOpen(true)}>
+              <EyeIcon className="mr-2 h-4 w-4" />
+              Preview as Employee
             </Button>
-          )}
-          {canSchedule && (
-            <Button
-              variant="outline"
-              onClick={() => onSchedule?.(talk)}
-              disabled={!talk.isActive}
-              title={!talk.isActive ? 'Only active talks can be scheduled' : undefined}
-            >
-              <CalendarClockIcon className="mr-2 h-4 w-4" />
-              Schedule
-            </Button>
-          )}
-          {canManage && (
-            <Button
-              variant="outline"
-              className="text-destructive hover:text-destructive"
-              onClick={() => setDeleteDialogOpen(true)}
-            >
-              <TrashIcon className="mr-2 h-4 w-4" />
-              Delete
-            </Button>
-          )}
-        </div>
+            {canManage && (
+              <Button variant="outline" onClick={() => router.push(`${basePath}/${talk.id}/edit`)}>
+                <PencilIcon className="mr-2 h-4 w-4" />
+                Edit
+              </Button>
+            )}
+            {canSchedule && (
+              <Button
+                variant="outline"
+                onClick={() => onSchedule?.(talk)}
+                disabled={!talk.isActive}
+                title={!talk.isActive ? 'Only active talks can be scheduled' : undefined}
+              >
+                <CalendarClockIcon className="mr-2 h-4 w-4" />
+                Schedule
+              </Button>
+            )}
+            {canManage && (
+              <Button
+                variant="outline"
+                className="text-destructive hover:text-destructive"
+                onClick={() => setDeleteDialogOpen(true)}
+              >
+                <TrashIcon className="mr-2 h-4 w-4" />
+                Delete
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Statistics */}
-      {stats && (
+      {!previewMode && stats && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -219,7 +222,7 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
       <Tabs defaultValue="overview">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          {!isPartOfCourse && (
+          {!isPartOfCourse && !previewMode && (
             <TabsTrigger value="validation">Validation</TabsTrigger>
           )}
         </TabsList>
@@ -308,21 +311,23 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
             </Card>
 
             {/* Recent Completions placeholder */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Recent Completions</CardTitle>
-                <CardDescription>Latest employees to complete this talk</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground text-center py-8">
-                  View completions in the Assignments tab
-                </p>
-              </CardContent>
-            </Card>
+            {!previewMode && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Recent Completions</CardTitle>
+                  <CardDescription>Latest employees to complete this talk</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground text-center py-8">
+                    View completions in the Assignments tab
+                  </p>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Translation note */}
-          {(talk.videoSource !== 'None' || talk.sections.length > 0 || talk.questions.length > 0) && (
+          {!previewMode && (talk.videoSource !== 'None' || talk.sections.length > 0 || talk.questions.length > 0) && (
             <p className="text-sm text-muted-foreground">
               To generate translations or subtitles, use the{' '}
               <Link href={`${basePath}/${talk.id}/edit`} className="underline text-primary hover:text-primary/80">
@@ -431,7 +436,7 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
           )}
         </TabsContent>
 
-        {!isPartOfCourse && (
+        {!isPartOfCourse && !previewMode && (
           <TabsContent value="validation" className="mt-4">
             <ValidationHistoryTab talkId={talkId} basePath={basePath} />
           </TabsContent>
@@ -439,21 +444,25 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
       </Tabs>
 
       {/* Delete confirmation dialog */}
-      <DeleteConfirmationDialog
-        open={deleteDialogOpen}
-        onOpenChange={setDeleteDialogOpen}
-        title="Delete Learning"
-        description={`Are you sure you want to delete "${talk.title}"? This action cannot be undone and will also delete all associated schedules and assignments.`}
-        onConfirm={handleDelete}
-        isLoading={deleteMutation.isPending}
-      />
+      {!previewMode && (
+        <DeleteConfirmationDialog
+          open={deleteDialogOpen}
+          onOpenChange={setDeleteDialogOpen}
+          title="Delete Learning"
+          description={`Are you sure you want to delete "${talk.title}"? This action cannot be undone and will also delete all associated schedules and assignments.`}
+          onConfirm={handleDelete}
+          isLoading={deleteMutation.isPending}
+        />
+      )}
 
       {/* Preview as Employee modal */}
-      <PreviewModal
-        open={previewOpen}
-        onOpenChange={setPreviewOpen}
-        talk={talk}
-      />
+      {!previewMode && (
+        <PreviewModal
+          open={previewOpen}
+          onOpenChange={setPreviewOpen}
+          talk={talk}
+        />
+      )}
     </div>
   );
 }
