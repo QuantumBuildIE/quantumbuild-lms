@@ -40,7 +40,7 @@ public class EmailService : IEmailService
 
         var pinSection = qrPin is not null ? BuildPinSection(qrPin) : string.Empty;
 
-        var subject = "Welcome to QUANTUMBUILD - Set Up Your Account";
+        var subject = "Welcome to CertifiedIQ - Set Up Your Account";
         var body = $@"
 <!DOCTYPE html>
 <html>
@@ -59,11 +59,11 @@ public class EmailService : IEmailService
 <body>
     <div class='container'>
         <div class='header'>
-            <h1>Welcome to QUANTUMBUILD</h1>
+            <h1>Welcome to CertifiedIQ</h1>
         </div>
         <div class='content'>
             <p>Dear {firstName},</p>
-            <p>An account has been created for you in the QUANTUMBUILD Business Suite. Please click the link below to set your password and activate your account:</p>
+            <p>An account has been created for you in the CertifiedIQ Business Suite. Please click the link below to set your password and activate your account:</p>
             <p style='text-align: center;'>
                 <a href='{resetUrl}' class='button'>Set Up My Password</a>
             </p>
@@ -75,7 +75,7 @@ public class EmailService : IEmailService
             {pinSection}
         </div>
         <div class='footer'>
-            <p>Thank you,<br>QUANTUMBUILD Team</p>
+            <p>Thank you,<br>The CertifiedIQ Team</p>
             <p>This is an automated message. Please do not reply to this email.</p>
         </div>
     </div>
@@ -115,7 +115,7 @@ public class EmailService : IEmailService
 <body>
     <div class='container'>
         <div class='header'>
-            <h1>QUANTUMBUILD</h1>
+            <h1>CertifiedIQ</h1>
         </div>
         <div class='content'>
             <p>Dear {firstName},</p>
@@ -123,7 +123,7 @@ public class EmailService : IEmailService
             {pinSection}
         </div>
         <div class='footer'>
-            <p>Thank you,<br>QUANTUMBUILD Team</p>
+            <p>Thank you,<br>The CertifiedIQ Team</p>
             <p>This is an automated message. Please do not reply to this email.</p>
         </div>
     </div>

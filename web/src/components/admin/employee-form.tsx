@@ -421,7 +421,7 @@ export function EmployeeForm({ employee, onSuccess, onCancel }: EmployeeFormProp
           name="primarySiteId"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Default Site</FormLabel>
+              <FormLabel>Default Location</FormLabel>
               <Select
                 onValueChange={(value) => field.onChange(value === "__none__" ? "" : value)}
                 value={field.value || "__none__"}
