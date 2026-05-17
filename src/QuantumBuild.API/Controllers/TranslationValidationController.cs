@@ -96,7 +96,7 @@ public class TranslationValidationController : ControllerBase
             await _dbContext.SaveChangesAsync(cancellationToken);
 
             var jobId = BackgroundJob.Enqueue<TranslationValidationJob>(
-                job => job.ExecuteAsync(run.Id, tenantId, CancellationToken.None));
+                job => job.ExecuteAsync(run.Id, tenantId, null, CancellationToken.None));
 
             _logger.LogInformation(
                 "Translation validation started for talk {TalkId}, language {Language}, runId {RunId}, jobId {JobId}",
@@ -320,7 +320,7 @@ public class TranslationValidationController : ControllerBase
                 .FirstAsync(r => r.Id == runId, cancellationToken);
 
             var jobId = BackgroundJob.Enqueue<TranslationValidationJob>(
-                job => job.ExecuteAsync(runId, _currentUserService.TenantId, CancellationToken.None));
+                job => job.ExecuteAsync(runId, _currentUserService.TenantId, new[] { sectionIndex }, CancellationToken.None));
 
             _logger.LogInformation(
                 "Re-validation enqueued for run {RunId} section {SectionIndex}, jobId {JobId}",
@@ -370,7 +370,7 @@ public class TranslationValidationController : ControllerBase
             await _dbContext.SaveChangesAsync(cancellationToken);
 
             var jobId = BackgroundJob.Enqueue<TranslationValidationJob>(
-                job => job.ExecuteAsync(runId, _currentUserService.TenantId, CancellationToken.None));
+                job => job.ExecuteAsync(runId, _currentUserService.TenantId, new[] { sectionIndex }, CancellationToken.None));
 
             _logger.LogInformation(
                 "Retry enqueued for run {RunId} section {SectionIndex}, jobId {JobId}",

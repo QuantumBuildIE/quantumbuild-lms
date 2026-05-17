@@ -72,6 +72,7 @@ public class TranslationValidationJob
     public async Task ExecuteAsync(
         Guid validationRunId,
         Guid tenantId,
+        IReadOnlyList<int>? sectionIndices = null,
         CancellationToken cancellationToken = default)
     {
         var stopwatch = Stopwatch.StartNew();
@@ -144,6 +145,7 @@ public class TranslationValidationJob
             for (int i = 0; i < sections.Count; i++)
             {
                 var section = sections[i];
+                if (sectionIndices != null && !sectionIndices.Contains(section.Index)) continue;
                 var percentComplete = (int)((double)(i + 1) / sections.Count * 90) + 5; // 5-95%
 
                 await SendProgressAsync(validationRunId,
@@ -430,6 +432,13 @@ public class TranslationValidationJob
             return [];
         }
 
+        // Load reviewer edits so re-validation uses the corrected text
+        var existingEdits = await _dbContext.TranslationValidationResults
+            .IgnoreQueryFilters()
+            .Where(r => r.ValidationRunId == run.Id && r.EditedTranslation != null)
+            .Select(r => new { r.SectionIndex, r.EditedTranslation })
+            .ToDictionaryAsync(r => r.SectionIndex, r => r.EditedTranslation!, cancellationToken);
+
         // Pair original and translated sections
         var pairs = new List<SectionPair>();
         for (int i = 0; i < originalSections.Count; i++)
@@ -439,7 +448,9 @@ public class TranslationValidationJob
             {
                 // Strip HTML tags for text comparison
                 var originalText = StripHtml(orig.Content);
-                var translatedText = StripHtml(translated.Content);
+                var translatedText = existingEdits.TryGetValue(i, out var edited)
+                    ? edited
+                    : StripHtml(translated.Content);
 
                 if (!string.IsNullOrWhiteSpace(originalText) && !string.IsNullOrWhiteSpace(translatedText))
                 {
