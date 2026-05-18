@@ -88,5 +88,8 @@ public interface IToolboxTalksDbContext
     DbSet<QrCode> QrCodes { get; }
     DbSet<QrSession> QrSessions { get; }
 
+    // Monitoring
+    DbSet<CustomerUsageReportState> CustomerUsageReportStates { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

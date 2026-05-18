@@ -125,6 +125,9 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
     // Audit DbSets
     public DbSet<SystemAuditLog> SystemAuditLogs => Set<SystemAuditLog>();
 
+    // Monitoring DbSets
+    public DbSet<CustomerUsageReportState> CustomerUsageReportStates => Set<CustomerUsageReportState>();
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         base.OnConfiguring(optionsBuilder);
@@ -289,6 +292,7 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.ApplyConfiguration(new QrLocationConfiguration());
         modelBuilder.ApplyConfiguration(new QrCodeConfiguration());
         modelBuilder.ApplyConfiguration(new QrSessionConfiguration());
+        modelBuilder.ApplyConfiguration(new CustomerUsageReportStateConfiguration());
 
         // Apply global query filters - Core entities
         // BypassTenantFilter allows SuperUser to see all tenants' data when no tenant is selected
