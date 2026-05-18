@@ -106,7 +106,7 @@ export default function AdminSettingsGeneralPage() {
                   <FormItem>
                     <FormLabel>Email Team Name</FormLabel>
                     <FormControl>
-                      <Input placeholder="Training Team" {...field} />
+                      <Input placeholder="Learning Team" {...field} />
                     </FormControl>
                     <FormDescription>
                       The team name used in outgoing email sign-offs

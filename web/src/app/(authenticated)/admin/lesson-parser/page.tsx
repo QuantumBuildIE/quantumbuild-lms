@@ -215,7 +215,7 @@ export default function LessonParserPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Lesson Parser</h1>
         <p className="text-muted-foreground">
-          Convert existing training documents into Learnings automatically
+          Convert existing learning documents into Learnings automatically
         </p>
       </div>
 
@@ -327,7 +327,7 @@ export default function LessonParserPage() {
                 <div className="space-y-2">
                   <Label>Document Content</Label>
                   <Textarea
-                    placeholder="Paste your training document content here..."
+                    placeholder="Paste your learning document content here..."
                     rows={12}
                     value={content}
                     onChange={(e) => setContent(e.target.value)}

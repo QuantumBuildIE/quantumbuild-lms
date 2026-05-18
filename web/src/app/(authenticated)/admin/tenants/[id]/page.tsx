@@ -277,7 +277,7 @@ export default function TenantDetailPage() {
         <CardContent>
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-medium">Reset Training Data</p>
+              <p className="font-medium">Reset Learning Data</p>
               <p className="text-sm text-muted-foreground">
                 Permanently deletes all talks, courses, schedules, assignments,
                 completions, certificates and AI usage logs for this tenant.
@@ -288,7 +288,7 @@ export default function TenantDetailPage() {
               variant="destructive"
               onClick={() => setShowResetDialog(true)}
             >
-              Reset Training Data
+              Reset Learning Data
             </Button>
           </div>
         </CardContent>
@@ -297,10 +297,10 @@ export default function TenantDetailPage() {
       <TypeToConfirmDialog
         open={showResetDialog}
         onOpenChange={setShowResetDialog}
-        title="Reset Tenant Training Data"
+        title="Reset Tenant Learning Data"
         description={
           <span>
-            This will permanently delete <strong>all training data</strong> for{" "}
+            This will permanently delete <strong>all learning data</strong> for{" "}
             <strong>{tenant.name}</strong>, including talks, courses, schedules,
             assignments, completions, certificates, validation runs, AI usage
             logs, and all associated files in R2 storage. This action cannot be
@@ -308,20 +308,20 @@ export default function TenantDetailPage() {
           </span>
         }
         confirmPhrase={tenant.name}
-        confirmLabel="Reset Training Data"
+        confirmLabel="Reset Learning Data"
         destructiveMessage="This is a destructive operation that cannot be reversed."
         isLoading={resetData.isPending}
         onConfirm={() => {
           resetData.mutate(tenantId, {
             onSuccess: () => {
-              toast.success("Training data reset successfully");
+              toast.success("Learning data reset successfully");
               setShowResetDialog(false);
             },
             onError: (error) => {
               toast.error(
                 error instanceof Error
                   ? error.message
-                  : "Failed to reset training data"
+                  : "Failed to reset learning data"
               );
             },
           });

@@ -7,6 +7,7 @@ using QuestPDF.Infrastructure;
 using QuantumBuild.Core.Application.Features.TenantSettings;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Storage;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Application.Features.Certificates.DTOs;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 
@@ -85,6 +86,7 @@ public class CertificateGenerationService(
             EmployeeName = employee.FullName,
             EmployeeCode = employee.EmployeeCode,
             TrainingTitle = talk.Title,
+            LearningCode = talk.Code,
             SignatureDataUrl = signatureDataUrl
         };
 
@@ -147,7 +149,7 @@ public class CertificateGenerationService(
 
         var includedTalks = course.CourseItems
             .OrderBy(ci => ci.OrderIndex)
-            .Select(ci => ci.ToolboxTalk.Title)
+            .Select(ci => new CertificateTalkItem(ci.ToolboxTalk.Title, ci.ToolboxTalk.Code))
             .ToList();
 
         var now = DateTime.UtcNow;
@@ -223,7 +225,7 @@ public class CertificateGenerationService(
         return result.PublicUrl;
     }
 
-    private static byte[] GenerateCertificatePdf(ToolboxTalkCertificate cert, List<string>? includedTalks)
+    private static byte[] GenerateCertificatePdf(ToolboxTalkCertificate cert, List<CertificateTalkItem>? includedTalks)
     {
         QuestPDF.Settings.License = LicenseType.Community;
 
@@ -240,7 +242,7 @@ public class CertificateGenerationService(
                     .Column(column =>
                     {
                         // Decorative header
-                        column.Item().AlignCenter().Text("\u2726 \u2726 \u2726")
+                        column.Item().AlignCenter().Text("\u2022 \u2022 \u2022")
                             .FontSize(16).FontColor(Colors.Grey.Darken2);
                         column.Item().Height(15);
 
@@ -271,13 +273,20 @@ public class CertificateGenerationService(
                         }
 
                         column.Item().Height(20);
-                        column.Item().AlignCenter().Text("has successfully completed the training")
+                        column.Item().AlignCenter().Text("has successfully completed the learning")
                             .FontSize(14).Italic().FontColor(Colors.Grey.Darken2);
                         column.Item().Height(15);
 
                         // Training title
                         column.Item().AlignCenter().Text(cert.TrainingTitle)
                             .FontSize(22).Bold().FontColor(Colors.Grey.Darken4);
+
+                        if (!string.IsNullOrEmpty(cert.LearningCode))
+                        {
+                            column.Item().Height(5);
+                            column.Item().AlignCenter().Text($"Learning Code: {cert.LearningCode}")
+                                .FontSize(11).FontColor(Colors.Grey.Darken1);
+                        }
 
                         // Included talks for course certificates
                         if (includedTalks is { Count: > 0 })
@@ -289,7 +298,10 @@ public class CertificateGenerationService(
 
                             foreach (var talk in includedTalks)
                             {
-                                column.Item().AlignCenter().Text($"\u2022 {talk}")
+                                var label = !string.IsNullOrEmpty(talk.Code)
+                                    ? $"\u2022 {talk.Title} ({talk.Code})"
+                                    : $"\u2022 {talk.Title}";
+                                column.Item().AlignCenter().Text(label)
                                     .FontSize(10).FontColor(Colors.Grey.Darken2);
                             }
                         }

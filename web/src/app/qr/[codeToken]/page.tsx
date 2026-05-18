@@ -547,7 +547,7 @@ export default function QrScanPage() {
           {step === "complete" && sessionData && (
             <div className="bg-white rounded-xl shadow p-8 text-center">
               <div className="text-5xl mb-4">✅</div>
-              <h2 className="text-2xl font-bold text-green-700 mb-2">Training Complete</h2>
+              <h2 className="text-2xl font-bold text-green-700 mb-2">Learning Complete</h2>
               <p className="text-gray-700 font-medium mb-1">{sessionData.employeeName}</p>
               <p className="text-gray-500 text-sm mb-1">{sessionData.talk?.title}</p>
               {completedAt && (

@@ -11,7 +11,7 @@ export interface CertificateDto {
   certificateType: string; // "Talk" or "Course"
   trainingCode: string;
   trainingTitle: string;
-  includedTalks?: string[];
+  includedTalks?: { title: string; code: string | null }[];
   issuedAt: string;
   expiresAt?: string;
   isExpired: boolean;

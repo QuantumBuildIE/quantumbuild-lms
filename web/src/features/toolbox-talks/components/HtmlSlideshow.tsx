@@ -154,7 +154,7 @@ export function HtmlSlideshow({ html, className }: HtmlSlideshowProps) {
           isFullscreen ? 'flex-1' : 'h-[600px] md:h-[700px]'
         )}
         sandbox="allow-scripts allow-same-origin"
-        title="Safety Training Slideshow"
+        title="Safety Learning Slideshow"
       />
 
       {/* Navigation controls */}

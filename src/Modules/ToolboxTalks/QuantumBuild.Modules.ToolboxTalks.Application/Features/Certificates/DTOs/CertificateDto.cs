@@ -7,7 +7,7 @@ public class CertificateDto
     public string CertificateType { get; set; } = string.Empty;
     public string TrainingCode { get; set; } = string.Empty;
     public string TrainingTitle { get; set; } = string.Empty;
-    public List<string>? IncludedTalks { get; set; }
+    public List<CertificateTalkItem>? IncludedTalks { get; set; }
     public DateTime IssuedAt { get; set; }
     public DateTime? ExpiresAt { get; set; }
     public bool IsExpired => ExpiresAt.HasValue && ExpiresAt.Value < DateTime.UtcNow;

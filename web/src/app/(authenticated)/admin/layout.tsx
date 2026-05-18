@@ -96,11 +96,11 @@ export default function AdminLayout({
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">
-          {isSupervisorOnly ? "Training Management" : "Administration"}
+          {isSupervisorOnly ? "Learning Management" : "Administration"}
         </h1>
         <p className="text-muted-foreground">
           {isSupervisorOnly
-            ? "Manage schedules and training reports"
+            ? "Manage schedules and learning reports"
             : "Manage employees and users"}
         </p>
       </div>

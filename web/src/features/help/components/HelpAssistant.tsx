@@ -112,26 +112,26 @@ function renderInline(text: string): React.ReactNode {
 // ============================================
 
 const EMPLOYEE_SHORTCUTS: TopicShortcut[] = [
-  { label: "Find my assigned training", prompt: "Where do I find my assigned training?" },
+  { label: "Find my assigned learning", prompt: "Where do I find my assigned learning?" },
   { label: "Retry a failed quiz", prompt: "How do I retry a failed quiz?" },
   { label: "View my certificates", prompt: "Where are my certificates?" },
   { label: "Video won't play", prompt: "My video won't play" },
-  { label: "Training showing as overdue", prompt: "Why is my training showing as overdue?" },
+  { label: "Learning showing as overdue", prompt: "Why is my learning showing as overdue?" },
 ];
 
 const SUPERVISOR_SHORTCUTS: TopicShortcut[] = [
   { label: "Assign an operator to my team", prompt: "How do I assign an operator to my team?" },
   { label: "Read the Skills Matrix", prompt: "How do I read the Skills Matrix?" },
-  { label: "See team's overdue training", prompt: "How do I see my team's overdue training?" },
+  { label: "See team's overdue learning", prompt: "How do I see my team's overdue learning?" },
 ];
 
 const ADMIN_SHORTCUTS: TopicShortcut[] = [
   { label: "Create a new Toolbox Talk", prompt: "How do I create a new Toolbox Talk?" },
-  { label: "Schedule training for my team", prompt: "How do I schedule training for my team?" },
+  { label: "Schedule learning for my team", prompt: "How do I schedule learning for my team?" },
   { label: "Run a translation validation", prompt: "How do I run a translation validation?" },
   { label: "Find the compliance reports", prompt: "Where are the compliance reports?" },
   { label: "Add a new employee", prompt: "How do I add a new employee?" },
-  { label: "Assign training to an employee", prompt: "How do I assign training to an employee?" },
+  { label: "Assign learning to an employee", prompt: "How do I assign learning to an employee?" },
 ];
 
 const SUPERUSER_SHORTCUTS: TopicShortcut[] = [

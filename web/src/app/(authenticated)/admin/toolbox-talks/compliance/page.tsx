@@ -528,7 +528,7 @@ export default function ComplianceChecklistPage() {
           Compliance Checklist
         </h1>
         <p className="text-muted-foreground">
-          Regulatory requirement coverage across your training content.
+          Regulatory requirement coverage across your learning content.
         </p>
       </div>
 
@@ -536,9 +536,9 @@ export default function ComplianceChecklistPage() {
       <Alert className="border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/30">
         <Info className="h-4 w-4 text-blue-600" />
         <AlertDescription className="text-blue-800 dark:text-blue-300 text-sm">
-          This checklist is generated from your training content and AI-assisted mappings.
+          This checklist is generated from your learning content and AI-assisted mappings.
           It is your organisation&apos;s responsibility to ensure all regulatory requirements are met
-          and that mappings accurately reflect your training programme.
+          and that mappings accurately reflect your learning programme.
           CertifiedIQ does not provide legal or regulatory advice.
         </AlertDescription>
       </Alert>

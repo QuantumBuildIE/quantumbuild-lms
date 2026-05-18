@@ -466,7 +466,7 @@ export function VideoPlayer({
     <Card className={className}>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base">Training Video</CardTitle>
+          <CardTitle className="text-base">Learning Video</CardTitle>
           {requirementMet ? (
             <div className="flex items-center gap-1 text-sm text-green-600">
               <Check className="h-4 w-4" />
@@ -489,7 +489,7 @@ export function VideoPlayer({
               className="w-full h-full"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
-              title="Training Video"
+              title="Learning Video"
               onLoad={() => setError(null)}
               // Note: onError for iframes doesn't reliably detect content loading issues
               // for cross-origin iframes like Google Drive, YouTube, etc.

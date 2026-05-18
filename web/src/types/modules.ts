@@ -13,7 +13,7 @@ export const availableModules: Module[] = [
   {
     id: "toolbox-talks",
     name: "Learnings",
-    description: "Safety training and compliance tracking",
+    description: "Safety learning and compliance tracking",
     icon: ClipboardList,
     path: "/toolbox-talks",
     requiredPermission: "Learnings.View",

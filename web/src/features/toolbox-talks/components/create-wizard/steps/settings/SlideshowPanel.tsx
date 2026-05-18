@@ -44,7 +44,7 @@ export function SlideshowPanel({ settings, onChange, inputMode, isSaving }: Slid
   return (
     <div className="rounded-lg border bg-muted/30 p-4 space-y-5">
       <p className="text-xs text-muted-foreground">
-        Automatically generate a visual slideshow from this content. Learners can use it as a quick reference after completing the training.
+        Automatically generate a visual slideshow from this content. Learners can use it as a quick reference after completing the learning.
       </p>
 
       <div className="flex items-center justify-between gap-3">

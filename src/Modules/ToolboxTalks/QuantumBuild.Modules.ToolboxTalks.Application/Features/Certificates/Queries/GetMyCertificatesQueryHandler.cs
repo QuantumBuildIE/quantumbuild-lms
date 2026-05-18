@@ -1,4 +1,3 @@
-using System.Text.Json;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
@@ -43,9 +42,7 @@ public class GetMyCertificatesQueryHandler : IRequestHandler<GetMyCertificatesQu
             CertificateType = c.CertificateType,
             TrainingCode = c.TrainingCode,
             TrainingTitle = c.TrainingTitle,
-            IncludedTalks = c.IncludedTalksJson != null
-                ? JsonSerializer.Deserialize<List<string>>(c.IncludedTalksJson)
-                : null,
+            IncludedTalks = CertificateTalkItemSerializer.Deserialize(c.IncludedTalksJson),
             IssuedAt = c.IssuedAt,
             ExpiresAt = c.ExpiresAt,
             IsRefresher = c.IsRefresher,

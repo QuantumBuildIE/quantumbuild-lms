@@ -6,13 +6,13 @@ export const MODULE_NAMES = {
 export const MODULE_CONFIG = {
   Learnings: {
     label: 'Learnings',
-    description: 'Safety training, toolbox talks, and compliance tracking',
+    description: 'Safety learning, toolbox talks, and compliance tracking',
     href: '/toolbox-talks',
     icon: 'BookOpen',
   },
   LessonParser: {
     label: 'Lesson Parser',
-    description: 'Convert existing training documents into Learnings automatically',
+    description: 'Convert existing learning documents into Learnings automatically',
     href: '/admin/lesson-parser',
     icon: 'FileSearch',
   },

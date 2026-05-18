@@ -198,7 +198,7 @@ export default function PendingMappingsPage() {
           Pending Requirement Mappings
         </h1>
         <p className="text-muted-foreground">
-          Review AI-suggested mappings between your training content and
+          Review AI-suggested mappings between your learning content and
           regulatory requirements.
         </p>
       </div>

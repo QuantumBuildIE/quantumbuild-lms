@@ -87,6 +87,11 @@ public class ToolboxTalkCertificate : TenantEntity
     public string TrainingTitle { get; set; } = string.Empty;
 
     /// <summary>
+    /// Code of the learning (talk or course code) at time of issue
+    /// </summary>
+    public string? LearningCode { get; set; }
+
+    /// <summary>
     /// JSON snapshot of included talks for course certificates
     /// </summary>
     public string? IncludedTalksJson { get; set; }

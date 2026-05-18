@@ -41,7 +41,7 @@ export default function AdminToolboxTalksReportsPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Learnings Reports</h1>
         <p className="text-muted-foreground">
-          Compliance reports and analytics for learning training
+          Compliance reports and analytics for workplace learning
         </p>
       </div>
 
