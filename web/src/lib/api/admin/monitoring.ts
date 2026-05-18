@@ -1,5 +1,4 @@
 import { apiClient } from "@/lib/api/client";
-import type { ApiResponse } from "@/types/auth";
 
 export interface TenantUsageRowDto {
   tenantId: string;
@@ -34,14 +33,13 @@ export async function getCustomerUsageReport(
   const url = queryString
     ? `/admin/monitoring/customer-usage?${queryString}`
     : "/admin/monitoring/customer-usage";
-  const response =
-    await apiClient.get<ApiResponse<CustomerUsageReportDto>>(url);
-  return response.data.data;
+  const response = await apiClient.get<CustomerUsageReportDto>(url);
+  return response.data;
 }
 
 export async function markReviewed(): Promise<MarkReviewedResponseDto> {
-  const response = await apiClient.post<ApiResponse<MarkReviewedResponseDto>>(
+  const response = await apiClient.post<MarkReviewedResponseDto>(
     "/admin/monitoring/customer-usage/mark-reviewed"
   );
-  return response.data.data;
+  return response.data;
 }
