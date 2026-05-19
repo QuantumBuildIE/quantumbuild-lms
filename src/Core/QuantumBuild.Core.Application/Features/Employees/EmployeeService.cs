@@ -248,7 +248,7 @@ public class EmployeeService : IEmployeeService
             }
 
             // Auto-generate EmployeeCode (EMP001, EMP002, etc.) - ignore any value from frontend
-            var employeeCode = await GenerateNextEmployeeCodeAsync(tenantId);
+            var employeeCode = await GenerateEmployeeCodeAsync(tenantId);
 
             // Validate email uniqueness if creating a user account
             if (dto.CreateUserAccount && !string.IsNullOrWhiteSpace(dto.Email))
@@ -527,7 +527,7 @@ public class EmployeeService : IEmployeeService
         return $"Temp{Guid.NewGuid():N}!Aa1";
     }
 
-    private async Task<string> GenerateNextEmployeeCodeAsync(Guid tenantId)
+    public async Task<string> GenerateEmployeeCodeAsync(Guid tenantId)
     {
         // Get ALL existing employee codes for this tenant (including soft-deleted, to avoid reuse)
         var existingCodes = await _context.Employees

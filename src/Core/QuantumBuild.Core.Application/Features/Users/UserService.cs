@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using QuantumBuild.Core.Application.Constants;
+using QuantumBuild.Core.Application.Features.Employees;
 using QuantumBuild.Core.Application.Features.Users.DTOs;
 using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Core.Application.Models;
@@ -15,19 +16,22 @@ public class UserService : IUserService
     private readonly ICurrentUserService _currentUserService;
     private readonly ICoreDbContext _context;
     private readonly ISystemAuditLogger _auditLogger;
+    private readonly IEmployeeService _employeeService;
 
     public UserService(
         UserManager<User> userManager,
         RoleManager<Role> roleManager,
         ICurrentUserService currentUserService,
         ICoreDbContext context,
-        ISystemAuditLogger auditLogger)
+        ISystemAuditLogger auditLogger,
+        IEmployeeService employeeService)
     {
         _userManager = userManager;
         _roleManager = roleManager;
         _currentUserService = currentUserService;
         _context = context;
         _auditLogger = auditLogger;
+        _employeeService = employeeService;
     }
 
     public async Task<Result<List<UserDto>>> GetAllAsync()
@@ -275,13 +279,23 @@ public class UserService : IUserService
                         return Result.Fail<UserDto>("NewEmployee data is required when creating a new employee");
                     }
 
-                    // Validate employee code uniqueness within tenant (include soft-deleted to avoid hitting the unique index)
-                    var duplicateCode = await _context.Employees
-                        .IgnoreQueryFilters()
-                        .AnyAsync(e => e.TenantId == tenantId && e.EmployeeCode == dto.NewEmployee.EmployeeCode);
-                    if (duplicateCode)
+                    // Resolve employee code: use the provided value or auto-generate one
+                    string employeeCode;
+                    if (!string.IsNullOrWhiteSpace(dto.NewEmployee.EmployeeCode))
                     {
-                        return Result.Fail<UserDto>($"Employee with code '{dto.NewEmployee.EmployeeCode}' already exists");
+                        // Manual override — validate uniqueness (include soft-deleted to avoid hitting the unique index)
+                        var duplicateCode = await _context.Employees
+                            .IgnoreQueryFilters()
+                            .AnyAsync(e => e.TenantId == tenantId && e.EmployeeCode == dto.NewEmployee.EmployeeCode);
+                        if (duplicateCode)
+                        {
+                            return Result.Fail<UserDto>($"Employee with code '{dto.NewEmployee.EmployeeCode}' already exists");
+                        }
+                        employeeCode = dto.NewEmployee.EmployeeCode.Trim();
+                    }
+                    else
+                    {
+                        employeeCode = await _employeeService.GenerateEmployeeCodeAsync(tenantId);
                     }
 
                     // Validate PrimarySiteId if provided
@@ -298,7 +312,7 @@ public class UserService : IUserService
                     var newEmployee = new Employee
                     {
                         Id = Guid.NewGuid(),
-                        EmployeeCode = dto.NewEmployee.EmployeeCode,
+                        EmployeeCode = employeeCode,
                         FirstName = dto.FirstName,
                         LastName = dto.LastName,
                         Email = dto.Email,

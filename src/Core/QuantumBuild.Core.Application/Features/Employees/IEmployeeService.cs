@@ -48,4 +48,10 @@ public interface IEmployeeService
     /// Returns a failure result if QR Location Training is not enabled for the tenant.
     /// </summary>
     Task<Result> ResetPinAsync(Guid employeeId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Generates the next available employee code for the tenant (e.g. EMP001, EMP002).
+    /// Skips soft-deleted codes to avoid reuse.
+    /// </summary>
+    Task<string> GenerateEmployeeCodeAsync(Guid tenantId);
 }

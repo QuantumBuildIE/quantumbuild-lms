@@ -23,7 +23,7 @@ export interface User {
 export type EmployeeLinkOption = "None" | "LinkExisting" | "CreateNew";
 
 export interface CreateUserEmployeeDto {
-  employeeCode: string;
+  employeeCode?: string;
   phone?: string;
   mobile?: string;
   jobTitle?: string;

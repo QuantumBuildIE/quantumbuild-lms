@@ -5,7 +5,7 @@ namespace QuantumBuild.Core.Application.Features.Users.DTOs;
 /// FirstName, LastName, and Email are copied from the User being created.
 /// </summary>
 public record CreateUserEmployeeDto(
-    string EmployeeCode,
+    string? EmployeeCode,
     string? Phone,
     string? Mobile,
     string? JobTitle,
