@@ -1203,6 +1203,14 @@ Archived notes 1-89 are in CLAUDE-archive.md
 - Move Regulatory section under tenant admin (keep the SU version intact), only show regulatory areas associted with the tenant.  We'll need a lookup for this at the SuperUser level.
 
 ### Medium
+- Bulk import partial-row recovery —
+  if a process restart interrupts the job between creating an employee
+  and creating its linked user account, the re-run classifies that row
+  as AlreadyExisted but the missing user account is never created — the
+  row looks successful but the person has no login. Build a proper fix
+  that REUSES EmployeeService's linked-user-account creation (do not
+  duplicate that logic into the job). Edge case; low real-world
+  frequency.
 - Long-running job UX — fire-and-notify — bulk import (and other long jobs: content generation, translation validation, corpus runs) currently expect the user to wait on-screen for completion. Move to a "kick off and get notified when done" model so users aren't tied to a progress screen. Notification mechanism (in-app, email) to be decided. Cross-cutting — not specific to one feature
 - Unify user creation on throwaway-password flow — the UI user-create path has the admin set a password manually (EmailConfirmed = true); the employee path uses a throwaway password + set-password email (EmailConfirmed = false). Change the user path to match: throwaway password, EmailConfirmed = false, invitation email. UI retrofit: remove the password / confirm-password fields from the user-create form. When built, verify the set-password completion step sets EmailConfirmed = true
 - Evaluate per-tenant email uniqueness — email is currently globally unique, enforced twice: RequireUniqueEmail = true (Identity) and the UserNameIndex unique constraint (UserName = email). This blocks the moving-employee scenario (same person, new tenant, same personal email). Changing to per-tenant uniqueness is an auth-architecture change: needs a composite {TenantId, NormalizedEmail} index, altering/removing UserNameIndex, login disambiguation (which tenant for a given email), and ripple into password reset, set-password invitations, and live-data migration. Its own scoped project — not a quick fix. Potential UI retrofit: login flow gains tenant disambiguation

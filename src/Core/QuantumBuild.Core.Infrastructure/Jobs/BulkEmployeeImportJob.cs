@@ -9,6 +9,7 @@ using QuantumBuild.Core.Application.Features.BulkImport;
 using QuantumBuild.Core.Application.Features.Employees;
 using QuantumBuild.Core.Application.Features.Employees.DTOs;
 using QuantumBuild.Core.Application.Interfaces;
+using QuantumBuild.Core.Application.Models;
 using QuantumBuild.Core.Domain.Entities;
 using QuantumBuild.Core.Domain.Enums;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Storage;
@@ -208,11 +209,6 @@ public class BulkEmployeeImportJob : IBulkEmployeeImportJob
         }
     }
 
-    // Error message substrings produced by EmployeeService for duplicate-email scenarios.
-    // Checked only on re-run sessions — on a normal first run every failure stays Failed.
-    private static readonly string[] DuplicateEmailPhrases =
-        ["already exists", "already in use"];
-
     private async Task ProcessRowAsync(
         BulkImportRowResult row,
         Guid tenantId,
@@ -278,8 +274,7 @@ public class BulkEmployeeImportJob : IBulkEmployeeImportJob
                 // interrupted first run. Record it as AlreadyExisted so the results report
                 // shows it as a prior success rather than a new failure.
                 // Any other failure — and every failure on a normal first run — stays Failed.
-                if (isRerun && DuplicateEmailPhrases.Any(p =>
-                        reason.Contains(p, StringComparison.OrdinalIgnoreCase)))
+                if (isRerun && result.ErrorCode == FailureCode.DuplicateEmail)
                 {
                     _logger.LogInformation(
                         "BulkEmployeeImportJob: row {RowNumber} re-run — email already existed from previous run (session {SessionId})",

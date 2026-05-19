@@ -5,6 +5,7 @@ public class Result
     public bool Success { get; set; }
     public string? Message { get; set; }
     public List<string> Errors { get; set; } = new();
+    public FailureCode? ErrorCode { get; set; }
 
     public static Result Ok()
     {
@@ -40,6 +41,16 @@ public class Result
         {
             Success = false,
             Errors = new List<string> { error }
+        };
+    }
+
+    public static Result<T> Fail<T>(string error, FailureCode code)
+    {
+        return new Result<T>
+        {
+            Success = false,
+            Errors = new List<string> { error },
+            ErrorCode = code
         };
     }
 

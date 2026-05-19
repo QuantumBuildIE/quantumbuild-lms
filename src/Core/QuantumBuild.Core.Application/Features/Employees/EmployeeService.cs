@@ -265,7 +265,9 @@ public class EmployeeService : IEmployeeService
 
                 if (existingEmployee)
                 {
-                    return Result.Fail<EmployeeDto>($"An employee with email '{dto.Email}' already exists");
+                    return Result.Fail<EmployeeDto>(
+                        $"An employee with email '{dto.Email}' already exists",
+                        FailureCode.DuplicateEmail);
                 }
 
                 // Check for existing user with same email
@@ -275,7 +277,9 @@ public class EmployeeService : IEmployeeService
 
                 if (existingUser != null)
                 {
-                    return Result.Fail<EmployeeDto>($"A user account with email '{dto.Email}' already exists");
+                    return Result.Fail<EmployeeDto>(
+                        $"A user account with email '{dto.Email}' already exists",
+                        FailureCode.DuplicateEmail);
                 }
             }
 
