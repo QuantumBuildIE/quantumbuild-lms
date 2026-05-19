@@ -1190,8 +1190,56 @@ Archived notes 1-89 are in CLAUDE-archive.md
 15. **TransVal reviewer-edit workflow defects (A–D) fixed** — Four defects in the section reviewer-edit flow resolved: **(A)** `ValidateSectionAsync` no longer wipes `ReviewerDecision`/`EditedTranslation` on re-validation — those fields are only cleared on first-time entity creation (`Id == Guid.Empty`). **(B)** `LoadSectionsAsync` now loads existing reviewer edits into a dictionary and substitutes `EditedTranslation` for the published translation before scoring, so re-validation scores the corrected text. **(C)** `TranslationValidationJob.ExecuteAsync` gains an optional `sectionIndices` parameter — `EditSection` and `RetrySection` pass `[sectionIndex]` to re-validate a single section only; initial validate and wizard flow pass `null` for a full run. **(D)** `AcceptSection` in `TranslationValidationController` now calls `PropagateEditedTranslationAsync` when `EditedTranslation` is non-null — resolves `SectionIndex` to `SectionId` via `ToolboxTalkSections` ordered by `SectionNumber`, deserialises `TranslatedSections` JSON, replaces matching section `Content`, and flushes both mutations in a single atomic `SaveChangesAsync` — employees see the reviewer's corrected translation immediately on acceptance.
 16. **AI Help Assistant (CertifiedIQ)** — In-app role-aware chat assistant at `/help`. Backend: `HelpChatController` at `POST /api/help/chat` — selects system prompt based on user role (SuperUser/Admin/Supervisor/Employee); Anthropic API called server-side so the API key is never exposed to the browser; role-scoped system prompts prevent cross-role information leakage; `IHttpClientFactory` registered for Anthropic API calls. Frontend: full-page chat interface (`features/help/components/HelpAssistant.tsx`) with left sidebar of role-aware topic shortcut buttons, multi-turn conversation history sent on every request, typing indicator, basic markdown rendering (bold, code, lists, headings), welcome message on load without API call. TopNav has a `HelpCircle` icon linking to `/help`. The Anthropic API key env var must be named correctly — a mismatch was found and corrected after initial deployment.
 17. **Training Evidence Pack (formerly Inspection Report)** — `InspectionReportService` renamed PDF title, cover page, headings and filename from "Inspection Report" to "Training Evidence Pack". Disclaimer updated to explicitly scope the document as training/competence evidence and list what it does not cover. Sector-aware appendix added for food/FSAI sector listing 7 records EHOs will ask for that are outside CertifiedIQ's scope (HACCP file, temperature logs, cleaning records, pest control, allergen matrix, traceability, previous EHO report); non-food sectors skip the appendix. `R2StorageService` filename pattern updated to `training-evidence-pack`. Frontend: button label in `compliance/page.tsx` and dialog title/error toast in `GenerateReportDialog.tsx` updated; internal TypeScript identifiers unchanged.
+18. **Two API response conventions — match the controller's existing pattern** — Core CRUD controllers (Employees, Users, Sites, Companies, Contacts, Tenants, Roles, SupervisorAssignments, ToolboxTalks most endpoints, Reports, Certificates, CourseAssignments, Schedules, LessonParser) return `Result<T>` envelopes: `{ success, data, errors }`. Frontend reads `response.data.data`. Newer controllers (Monitoring, PipelineAudit, RegulatoryIngestion, RequirementMapping, SafetyGlossary, TenantSettings, TenantSectors, TenantModules, QrLocation, TranslationValidation GetById endpoints) return DTOs directly. Frontend reads `response.data`. The tell-tale sign on the backend is `if (!result.Success) return BadRequest(result)` before `return Ok(result)` — that means `Result<T>` envelope. Before writing a new frontend API function, check what the corresponding controller action returns.
+
+## Backlog
+
+### Critical
+- Issue 2: Course assignment deletion orphans completion records — DeleteCourseAssignmentCommandHandler soft-deletes completed ScheduledTalk rows when an in-progress course assignment is deleted, orphaning their ScheduledTalkCompletion records (guard only blocks deletion when the whole assignment is Completed). Causes silent under-counting in any report reading completions through ScheduledTalk: compliance, skills matrix, completion history. Cross-feature blast radius — scope and test deliberately
+
+### High
+- Bulk User import — allow admins to upload multiple users with employee records as background batch job with notification
+- Bulk SOP import — allow admins to upload multiple SOPs as background batch job with notification
+- Cost analysis of running the application, breakdown by number of employees, video sizes, PDF sizes, translations, number of languages, re-translations, validation etc.
+
+- Demo deploy — push current code to the decoupled demo Railway instance. Blocked on Railway CLI account-scoping issue (company projects not visible from CLI). Requires: 14 missing env vars (TranslationValidation block + Cors__AllowedOrigins), demo database backup, then deploy. Re-test User Creation page afterward (expected to self-resolve as a staleness artifact)
+- Employee edit-form role edge case — filtered role dropdown (Operator/Supervisor only) cannot display a legacy role an employee already holds; a save could silently drop it. Decide: leave as-is, or include the employee's current role as an option
+
+### Medium
+- Customer Usage Analytics — Phase 2 — scheduled/emailed version of the report (on-demand SuperUser page now built)
+- CLAUDE.md — document API response conventions — record the two conventions (Result<T> envelope → frontend reads response.data.data; direct DTO → response.data) so the monitoring.ts-style bug does not recur
+- Video dubbing feature — currently pure scaffolding (entity, enum, settings flag only; no service/job/API/UI). A real build, not a toggle. Needs client scoping first: automated vs reviewed dubbing, language/video volume. The "dubbing OR subtitles" toggle is the trivial last 1%
+- AI Chat Assistant — UI Help — knowledge base needs UI navigation paths augmented over time based on user questions
+- Auto reschedule testing — verify refresher/reschedule flow at 6 month and 1 year intervals
+- Translations as background task — run translation pipeline as background task with notification when complete
+- Clickable wizard progress indicator — allow jumping back to any previously completed step
+- Translation Pass Threshold plain language — replace 75% with Strict/Standard/Lenient labels
+- Passing Score input improvement — add numeric input or slider alongside +/- buttons
+- Auto-assign and Due-in-days visual grouping
+- Source language detection audit
+- Translation Quality Phase 2 — Safety term registry maintenance UI
+- R2 Orphan File Cleanup — Nightly Hangfire job
+- Expand Content Creation E2E Tests
+- YouTube Caption Integration
+- Two-Factor Authentication (2FA)
+- Cross-section remediation — document-level analysis
+- Employee Training Audit & Reporting
+- Dialect detection UI
+- Sector preset quick-add
+- Iteration guard
+- Training Evidence Pack — extend sector-aware appendix to remaining sectors: Healthcare/HIQA, Construction/HSA, Homecare/HIQA, Manufacturing/HSA, Transport, General
+
+### Low
+- Pre-existing technical warnings — Model.Validation[10622] query-filter warnings on required relationships; DataProtection ephemeral keys on Railway. Noted, not urgent, not regressions
+- AI Chat Assistant — Data Q&A — deferred until demand confirmed
+- AI quiz generation on existing lesson edit
+- Mixed voice in parse log
+- Wizard step descriptions on hover
+- Drag-to-reorder discoverability
+- My Learnings no-op fix
+- Active Learnings count clickable
 
 ---
 
-*Last Updated: May 18, 2026 (cross-tenant security fix, TransVal reviewer-edit defects A–D, AI Help Assistant, Training Evidence Pack)*
+*Last Updated: May 18, 2026 (cross-tenant security fix, TransVal reviewer-edit defects A–D, AI Help Assistant, Training Evidence Pack, API response convention audit)*
 *Architecture: Modular Monolith with Clean Architecture*
