@@ -27,4 +27,20 @@ public class BulkImportSession : TenantEntity
     /// Stage 2: the Hangfire job deserialises this to determine which rows to create.
     /// </summary>
     public string? ValidationResultJson { get; set; }
+
+    /// <summary>
+    /// Set by the Stage 2 Hangfire job the moment it transitions the session to Processing.
+    /// Null means the job has never started.
+    /// Stage 4: if ProcessingStartedAt is non-null and now - ProcessingStartedAt exceeds the
+    /// Hangfire.PostgreSql InvisibilityTimeout (default 30 min), the session is stuck after
+    /// a mid-job process restart and the Stage 4 trigger endpoint should allow re-triggering.
+    /// </summary>
+    public DateTimeOffset? ProcessingStartedAt { get; set; }
+
+    /// <summary>
+    /// JSON-serialised BulkImportProcessingResult. Null until the Stage 2 job runs.
+    /// Set when Status transitions to Completed or when the job fails after processing at
+    /// least one row (partial results are preserved so the admin can see what succeeded).
+    /// </summary>
+    public string? ProcessingResultJson { get; set; }
 }

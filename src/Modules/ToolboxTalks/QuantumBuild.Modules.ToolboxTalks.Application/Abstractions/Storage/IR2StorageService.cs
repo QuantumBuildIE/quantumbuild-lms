@@ -155,6 +155,13 @@ public interface IR2StorageService
     string GeneratePublicUrl(Guid tenantId, string folder, string fileName);
 
     /// <summary>
+    /// Deletes a single object by its R2 storage key.
+    /// Used for cleaning up bulk-import CSVs and other one-off deletions.
+    /// No-ops silently if the key does not exist.
+    /// </summary>
+    Task DeleteFileAsync(string key, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Builds a public URL from a pre-built storage key.
     /// </summary>
     string GetPublicUrl(string key);

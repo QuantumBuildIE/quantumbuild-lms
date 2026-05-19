@@ -24,7 +24,12 @@ public class BulkImportSessionConfiguration : IEntityTypeConfiguration<BulkImpor
         builder.Property(e => e.UploadedAt)
             .IsRequired();
 
+        builder.Property(e => e.ProcessingStartedAt);
+
         builder.Property(e => e.ValidationResultJson)
+            .HasColumnType("text");
+
+        builder.Property(e => e.ProcessingResultJson)
             .HasColumnType("text");
 
         builder.Property(e => e.TenantId)

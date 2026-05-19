@@ -26,6 +26,7 @@ using QuantumBuild.Modules.LessonParser.Infrastructure.Jobs;
 using QuantumBuild.Core.Application.Http;
 using QuantumBuild.Modules.LessonParser.Infrastructure.Persistence;
 using QuantumBuild.Core.Application.Abstractions;
+using QuantumBuild.Core.Application.Features.BulkImport;
 using QuantumBuild.Core.Infrastructure.Jobs;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -107,6 +108,9 @@ builder.Services.AddScoped<ISystemAuditLogger, SystemAuditLogger>();
 builder.Services.Configure<EmailProviderSettings>(
     builder.Configuration.GetSection(EmailProviderSettings.SectionName));
 
+builder.Services.Configure<BulkImportSettings>(
+    builder.Configuration.GetSection(BulkImportSettings.SectionName));
+
 var emailProvider = builder.Configuration.GetValue<string>("EmailProvider:Provider");
 if (string.Equals(emailProvider, "MailerSend", StringComparison.OrdinalIgnoreCase))
 {
@@ -136,6 +140,7 @@ builder.Services.AddScoped<ContentCreationParseJob>();
 builder.Services.AddScoped<RequirementIngestionJob>();
 builder.Services.AddScoped<AggregateAiUsageJob>();
 builder.Services.AddScoped<IGenerateEmployeePinsJob, GenerateEmployeePinsJob>();
+builder.Services.AddScoped<IBulkEmployeeImportJob, BulkEmployeeImportJob>();
 
 // Add Hangfire with PostgreSQL storage
 builder.Services.AddHangfire(config => config

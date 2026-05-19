@@ -729,6 +729,24 @@ public class R2StorageService : IR2StorageService, IDisposable
 
     #endregion
 
+    #region Single-key delete
+
+    public async Task DeleteFileAsync(string key, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _s3Client.DeleteObjectAsync(_settings.BucketName, key, cancellationToken);
+            _logger.LogInformation("Deleted R2 object: {Key}", key);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete R2 object: {Key}", key);
+            throw;
+        }
+    }
+
+    #endregion
+
     #region Utilities
 
     public string GeneratePublicUrl(Guid tenantId, string folder, string fileName)
