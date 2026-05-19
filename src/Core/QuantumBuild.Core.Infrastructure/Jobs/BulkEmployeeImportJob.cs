@@ -118,7 +118,7 @@ public class BulkEmployeeImportJob : IBulkEmployeeImportJob
             foreach (var row in rowsToProcess)
             {
                 ct.ThrowIfCancellationRequested();
-                await ProcessRowAsync(row, tenantId, outcomes, pendingInvitations, sessionId);
+                await ProcessRowAsync(row, tenantId, outcomes, pendingInvitations, sessionId, session.IsRerun);
             }
 
             // --- Rate-limited invitation email phase ---
@@ -145,12 +145,11 @@ public class BulkEmployeeImportJob : IBulkEmployeeImportJob
                     await Task.Delay(_settings.InvitationEmailDelayMs, ct);
             }
 
-            // Stamp outcomes where the invitation email was actually sent
+            // Stamp outcomes where the invitation email was actually sent.
             for (int i = 0; i < outcomes.Count; i++)
             {
-                var o = outcomes[i];
-                if (o.Status == BulkImportRowOutcomeStatus.Created && sentRowNumbers.Contains(o.RowNumber))
-                    outcomes[i] = o with { InvitationEmailSent = true };
+                if (sentRowNumbers.Contains(outcomes[i].RowNumber))
+                    outcomes[i] = outcomes[i] with { InvitationEmailSent = true };
             }
 
             var processingResult = BuildResult(outcomes, emailsSent);
@@ -161,8 +160,9 @@ public class BulkEmployeeImportJob : IBulkEmployeeImportJob
 
             _logger.LogInformation(
                 "BulkEmployeeImportJob: session {SessionId} completed — " +
-                "{Created} created, {Failed} failed, {Emails} invitation emails sent",
-                sessionId, processingResult.CreatedCount, processingResult.FailedCount, emailsSent);
+                "{Created} created, {AlreadyExisted} already-existed, {Failed} failed, {Emails} invitation emails sent",
+                sessionId, processingResult.CreatedCount, processingResult.AlreadyExistedCount,
+                processingResult.FailedCount, emailsSent);
 
             // R2 cleanup — delete the CSV now the session is permanently Completed.
             // On failure, leave the file for investigation (see catch block below).
@@ -208,12 +208,18 @@ public class BulkEmployeeImportJob : IBulkEmployeeImportJob
         }
     }
 
+    // Error message substrings produced by EmployeeService for duplicate-email scenarios.
+    // Checked only on re-run sessions — on a normal first run every failure stays Failed.
+    private static readonly string[] DuplicateEmailPhrases =
+        ["already exists", "already in use"];
+
     private async Task ProcessRowAsync(
         BulkImportRowResult row,
         Guid tenantId,
         List<BulkImportRowOutcome> outcomes,
         List<PendingInvitation> pendingInvitations,
-        Guid sessionId)
+        Guid sessionId,
+        bool isRerun)
     {
         try
         {
@@ -267,16 +273,37 @@ public class BulkEmployeeImportJob : IBulkEmployeeImportJob
             else
             {
                 var reason = string.Join("; ", result.Errors);
-                _logger.LogWarning(
-                    "BulkEmployeeImportJob: row {RowNumber} failed for session {SessionId}: {Reason}",
-                    row.RowNumber, sessionId, reason);
 
-                outcomes.Add(new BulkImportRowOutcome
+                // On a re-run, a duplicate-email failure means the row was created by the
+                // interrupted first run. Record it as AlreadyExisted so the results report
+                // shows it as a prior success rather than a new failure.
+                // Any other failure — and every failure on a normal first run — stays Failed.
+                if (isRerun && DuplicateEmailPhrases.Any(p =>
+                        reason.Contains(p, StringComparison.OrdinalIgnoreCase)))
                 {
-                    RowNumber = row.RowNumber,
-                    Status = BulkImportRowOutcomeStatus.Failed,
-                    FailureReason = reason
-                });
+                    _logger.LogInformation(
+                        "BulkEmployeeImportJob: row {RowNumber} re-run — email already existed from previous run (session {SessionId})",
+                        row.RowNumber, sessionId);
+
+                    outcomes.Add(new BulkImportRowOutcome
+                    {
+                        RowNumber = row.RowNumber,
+                        Status = BulkImportRowOutcomeStatus.AlreadyExisted
+                    });
+                }
+                else
+                {
+                    _logger.LogWarning(
+                        "BulkEmployeeImportJob: row {RowNumber} failed for session {SessionId}: {Reason}",
+                        row.RowNumber, sessionId, reason);
+
+                    outcomes.Add(new BulkImportRowOutcome
+                    {
+                        RowNumber = row.RowNumber,
+                        Status = BulkImportRowOutcomeStatus.Failed,
+                        FailureReason = reason
+                    });
+                }
             }
         }
         catch (Exception ex)
@@ -335,6 +362,7 @@ public class BulkEmployeeImportJob : IBulkEmployeeImportJob
             TotalAttempted = outcomes.Count,
             CreatedCount = outcomes.Count(o => o.Status == BulkImportRowOutcomeStatus.Created),
             FailedCount = outcomes.Count(o => o.Status == BulkImportRowOutcomeStatus.Failed),
+            AlreadyExistedCount = outcomes.Count(o => o.Status == BulkImportRowOutcomeStatus.AlreadyExisted),
             InvitationEmailsSent = emailsSent,
             Rows = outcomes
         };

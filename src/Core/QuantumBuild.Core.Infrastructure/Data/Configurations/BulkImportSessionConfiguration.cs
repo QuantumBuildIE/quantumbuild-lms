@@ -32,6 +32,10 @@ public class BulkImportSessionConfiguration : IEntityTypeConfiguration<BulkImpor
         builder.Property(e => e.ProcessingResultJson)
             .HasColumnType("text");
 
+        builder.Property(e => e.IsRerun)
+            .IsRequired()
+            .HasDefaultValue(false);
+
         builder.Property(e => e.TenantId)
             .IsRequired();
 

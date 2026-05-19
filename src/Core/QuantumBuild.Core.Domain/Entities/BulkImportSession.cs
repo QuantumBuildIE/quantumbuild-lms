@@ -43,4 +43,12 @@ public class BulkImportSession : TenantEntity
     /// least one row (partial results are preserved so the admin can see what succeeded).
     /// </summary>
     public string? ProcessingResultJson { get; set; }
+
+    /// <summary>
+    /// True when this session was re-triggered via the Stage 4 stuck-session recovery path.
+    /// When true, the Hangfire job classifies duplicate-email failures as AlreadyExisted
+    /// (rows successfully created by the interrupted first run) rather than Failed.
+    /// False on all normal first-time confirm flows.
+    /// </summary>
+    public bool IsRerun { get; set; } = false;
 }

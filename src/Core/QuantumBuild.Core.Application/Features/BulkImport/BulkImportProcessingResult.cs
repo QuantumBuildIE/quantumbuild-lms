@@ -3,7 +3,14 @@ namespace QuantumBuild.Core.Application.Features.BulkImport;
 public enum BulkImportRowOutcomeStatus
 {
     Created = 1,
-    Failed = 2
+    Failed = 2,
+
+    /// <summary>
+    /// Set on re-run sessions only: the row's email was already present from the interrupted
+    /// first run. The employee/user was created successfully in that run, so this row does
+    /// not represent a real failure and is excluded from the failed-rows download.
+    /// </summary>
+    AlreadyExisted = 3
 }
 
 /// <summary>
@@ -16,6 +23,12 @@ public sealed record BulkImportProcessingResult
     public int TotalAttempted { get; init; }
     public int CreatedCount { get; init; }
     public int FailedCount { get; init; }
+
+    /// <summary>
+    /// Rows that were successfully created by the interrupted first run and therefore
+    /// raised duplicate-email errors on this re-run. Non-zero only when IsRerun is true.
+    /// </summary>
+    public int AlreadyExistedCount { get; init; }
 
     /// <summary>
     /// Number of invitation emails successfully sent (subset of CreatedCount where
