@@ -96,9 +96,12 @@ export async function uploadBulkImport({
   const formData = new FormData();
   formData.append("file", file);
 
-  // Do NOT set Content-Type manually — Axios sets the correct
-  // multipart/form-data boundary automatically from FormData.
-  const headers: Record<string, string> = {};
+  // Clear the instance-default Content-Type so the browser can set the correct
+  // multipart/form-data boundary automatically. Setting to undefined removes it
+  // from the Axios header merge; omitting it would leave application/json in place.
+  const headers: Record<string, string | undefined> = {
+    "Content-Type": undefined,
+  };
   if (targetTenantId) {
     headers["X-Tenant-Id"] = targetTenantId;
   }
