@@ -7,6 +7,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using QuantumBuild.Core.Application.Abstractions;
+using QuantumBuild.Core.Application.Features.BulkImport;
 using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Core.Domain.Entities;
 using QuantumBuild.Core.Infrastructure.Services;
@@ -108,6 +109,9 @@ public static class IdentityServiceExtensions
         // Register PIN services
         services.AddScoped<IPasswordHasher<Employee>, PasswordHasher<Employee>>();
         services.AddScoped<IEmployeePinService, EmployeePinService>();
+
+        // Register bulk import services
+        services.AddScoped<IBulkEmployeeImportValidationService, BulkEmployeeImportValidationService>();
 
         return services;
     }
