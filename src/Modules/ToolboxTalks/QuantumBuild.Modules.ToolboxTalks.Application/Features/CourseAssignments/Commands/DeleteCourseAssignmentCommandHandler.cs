@@ -29,11 +29,13 @@ public class DeleteCourseAssignmentCommandHandler : IRequestHandler<DeleteCourse
         if (assignment.Status == CourseAssignmentStatus.Completed)
             throw new InvalidOperationException("Cannot delete a completed course assignment.");
 
-        // Soft delete the assignment and all its scheduled talks
+        // Soft delete the assignment. Skip completed talks so their completion records
+        // remain visible in reports and employee history.
         assignment.IsDeleted = true;
         foreach (var scheduledTalk in assignment.ScheduledTalks)
         {
-            scheduledTalk.IsDeleted = true;
+            if (scheduledTalk.Status != ScheduledTalkStatus.Completed)
+                scheduledTalk.IsDeleted = true;
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
