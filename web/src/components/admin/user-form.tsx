@@ -367,7 +367,7 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
                     Loading roles...
                   </div>
                 ) : roles && roles.length > 0 ? (
-                  roles.map((role: Role) => {
+                  roles.filter((role: Role) => role.name !== "SuperUser").map((role: Role) => {
                     const currentRoles = form.watch("roleIds") as string[];
                     const isChecked = currentRoles.includes(role.id);
                     return (

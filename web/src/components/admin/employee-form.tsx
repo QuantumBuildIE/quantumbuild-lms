@@ -352,7 +352,9 @@ export function EmployeeForm({ employee, onSuccess, onCancel }: EmployeeFormProp
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {roles?.filter((role) => role.name === "Operator" || role.name === "Supervisor").map((role) => (
+                          {roles?.filter((role) =>
+                            role.name === "Operator" || role.name === "Supervisor"
+                          ).map((role) => (
                             <SelectItem key={role.id} value={role.name}>
                               {role.name}
                             </SelectItem>

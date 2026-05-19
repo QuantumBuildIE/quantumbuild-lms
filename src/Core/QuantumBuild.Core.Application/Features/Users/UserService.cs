@@ -207,6 +207,11 @@ public class UserService : IUserService
                 return Result.Fail<UserDto>("One or more role IDs are invalid");
             }
 
+            if (roles.Any(r => r.NormalizedName == "SUPERUSER"))
+            {
+                return Result.Fail<UserDto>("The SuperUser role cannot be assigned through this operation");
+            }
+
             var user = new User
             {
                 UserName = dto.Email,
@@ -377,6 +382,11 @@ public class UserService : IUserService
             if (roles.Count != dto.RoleIds.Count)
             {
                 return Result.Fail<UserDto>("One or more role IDs are invalid");
+            }
+
+            if (roles.Any(r => r.NormalizedName == "SUPERUSER"))
+            {
+                return Result.Fail<UserDto>("The SuperUser role cannot be assigned through this operation");
             }
 
             // Update user properties
