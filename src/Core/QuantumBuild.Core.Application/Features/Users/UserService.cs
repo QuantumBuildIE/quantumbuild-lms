@@ -275,9 +275,10 @@ public class UserService : IUserService
                         return Result.Fail<UserDto>("NewEmployee data is required when creating a new employee");
                     }
 
-                    // Validate employee code uniqueness within tenant
+                    // Validate employee code uniqueness within tenant (include soft-deleted to avoid hitting the unique index)
                     var duplicateCode = await _context.Employees
-                        .AnyAsync(e => e.EmployeeCode == dto.NewEmployee.EmployeeCode);
+                        .IgnoreQueryFilters()
+                        .AnyAsync(e => e.TenantId == tenantId && e.EmployeeCode == dto.NewEmployee.EmployeeCode);
                     if (duplicateCode)
                     {
                         return Result.Fail<UserDto>($"Employee with code '{dto.NewEmployee.EmployeeCode}' already exists");
