@@ -1201,9 +1201,9 @@ Archived notes 1-89 are in CLAUDE-archive.md
 - Bulk User import — allow admins to upload multiple users with employee records as background batch job with notification
 - Bulk SOP import — allow admins to upload multiple SOPs as background batch job with notification
 - Cost analysis of running the application, breakdown by number of employees, video sizes, PDF sizes, translations, number of languages, re-translations, validation etc.
-
 - Demo deploy — push current code to the decoupled demo Railway instance. Blocked on Railway CLI account-scoping issue (company projects not visible from CLI). Requires: 14 missing env vars (TranslationValidation block + Cors__AllowedOrigins), demo database backup, then deploy. Re-test User Creation page afterward (expected to self-resolve as a staleness artifact)
 - Employee edit-form role edge case — filtered role dropdown (Operator/Supervisor only) cannot display a legacy role an employee already holds; a save could silently drop it. Decide: leave as-is, or include the employee's current role as an option
+- Move Regulatory section under tenant admin (keep the SU version intact), only show regulatory areas associted with the tenant.  We'll need a lookup for this at the SuperUser level.
 
 ### Medium
 - Customer Usage Analytics — Phase 2 — scheduled/emailed version of the report (on-demand SuperUser page now built)
