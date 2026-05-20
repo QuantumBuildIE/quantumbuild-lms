@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ChevronDown, ChevronUp, Download, Upload } from "lucide-react";
+import { Download, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -69,7 +69,6 @@ export function BulkImportUploadPanel({ onSuccess }: UploadPanelProps) {
   const isSuperUser = useIsSuperUser();
   const [file, setFile] = React.useState<File | null>(null);
   const [targetTenantId, setTargetTenantId] = React.useState("");
-  const [showInstructions, setShowInstructions] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const uploadMutation = useUploadBulkImport();
@@ -109,138 +108,182 @@ export function BulkImportUploadPanel({ onSuccess }: UploadPanelProps) {
     (!isSuperUser || targetTenantId !== "");
 
   return (
-    <Card className="max-w-2xl">
-      <CardHeader>
-        <CardTitle>Import Employees</CardTitle>
-        <CardDescription>
-          Upload a CSV file to create multiple employee records at once.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Template download */}
-          <div className="rounded-md border bg-muted/50 p-4 flex items-start justify-between gap-4">
-            <div>
-              <p className="text-sm font-medium">CSV Template</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Download the template with required column headers and example rows
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleDownloadTemplate}
-              disabled={downloadTemplate.isPending}
-              className="shrink-0"
-            >
-              <Download className="mr-2 h-4 w-4" />
-              {downloadTemplate.isPending ? "Downloading..." : "Download Template"}
-            </Button>
-          </div>
-
-          {/* SuperUser tenant picker — only rendered when user is SuperUser */}
-          {isSuperUser && (
-            <TenantSelect value={targetTenantId} onChange={setTargetTenantId} />
-          )}
-
-          {/* File picker */}
-          <div className="space-y-2">
-            <Label>CSV File</Label>
-            <div className="flex items-center gap-3">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv"
-                onChange={handleFileChange}
-                className="hidden"
-              />
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* Left column: form */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Import Employees</CardTitle>
+          <CardDescription>
+            Upload a CSV file to create multiple employee records at once.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Template download */}
+            <div className="rounded-md border bg-muted/50 p-4 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium">CSV Template</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Download the template with all column headers and example rows
+                </p>
+              </div>
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => fileInputRef.current?.click()}
+                size="sm"
+                onClick={handleDownloadTemplate}
+                disabled={downloadTemplate.isPending}
+                className="shrink-0"
               >
-                {file ? "Change file" : "Choose file"}
+                <Download className="mr-2 h-4 w-4" />
+                {downloadTemplate.isPending ? "Downloading..." : "Download Template"}
               </Button>
-              <span className="text-sm text-muted-foreground truncate max-w-xs">
-                {file ? file.name : "No file chosen"}
-              </span>
             </div>
-            <p className="text-xs text-muted-foreground">Accepts .csv files only</p>
-          </div>
 
-          {/* Collapsible instructions */}
-          <div>
-            <button
-              type="button"
-              onClick={() => setShowInstructions((v) => !v)}
-              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              {showInstructions ? (
-                <ChevronUp className="h-3.5 w-3.5" />
-              ) : (
-                <ChevronDown className="h-3.5 w-3.5" />
-              )}
-              Import instructions
-            </button>
-            {showInstructions && (
-              <div className="mt-3 rounded-md border bg-muted/30 p-4 text-sm space-y-3">
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1.5">
-                    Required columns
-                  </p>
-                  <ul className="space-y-1 text-muted-foreground">
-                    <li>
-                      <span className="font-medium text-foreground">FirstName</span>,{" "}
-                      <span className="font-medium text-foreground">LastName</span> — employee name
-                    </li>
-                    <li>
-                      <span className="font-medium text-foreground">Email</span> — used for login;
-                      must be unique
-                    </li>
-                  </ul>
-                </div>
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1.5">
-                    Optional columns
-                  </p>
-                  <ul className="space-y-1 text-muted-foreground">
-                    <li>
-                      <span className="font-medium text-foreground">JobTitle</span>,{" "}
-                      <span className="font-medium text-foreground">Phone</span>,{" "}
-                      <span className="font-medium text-foreground">Mobile</span>
-                    </li>
-                    <li>
-                      <span className="font-medium text-foreground">SiteCode</span> — assigns the
-                      employee to a site (must match an existing site code)
-                    </li>
-                    <li>
-                      <span className="font-medium text-foreground">Role</span> — defaults to{" "}
-                      <span className="font-medium text-foreground">Operator</span> if omitted
-                    </li>
-                    <li>
-                      <span className="font-medium text-foreground">SendInvite</span> — true/false;
-                      defaults to true; sends a set-password invitation email
-                    </li>
-                  </ul>
-                </div>
-                <p className="text-xs text-muted-foreground border-t pt-2">
-                  Rows with validation errors are skipped. Valid and warning rows are still created.
-                  You can correct failed rows and re-import.
-                </p>
-              </div>
+            {/* SuperUser tenant picker — only rendered when user is SuperUser */}
+            {isSuperUser && (
+              <TenantSelect value={targetTenantId} onChange={setTargetTenantId} />
             )}
+
+            {/* File picker */}
+            <div className="space-y-2">
+              <Label>CSV File</Label>
+              <div className="flex items-center gap-3">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {file ? "Change file" : "Choose file"}
+                </Button>
+                <span className="text-sm text-muted-foreground truncate max-w-xs">
+                  {file ? file.name : "No file chosen"}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">Accepts .csv files only</p>
+            </div>
+
+            {/* Submit */}
+            <div className="flex justify-end pt-2">
+              <Button type="submit" disabled={!canSubmit}>
+                <Upload className="mr-2 h-4 w-4" />
+                {uploadMutation.isPending ? "Uploading..." : "Upload & Validate"}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      {/* Right column: instructions (always visible) */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Import Instructions</CardTitle>
+          <CardDescription>
+            What to include in your CSV and how each column works
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5 text-sm">
+          {/* Required columns */}
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
+              Required columns
+            </p>
+            <ul className="space-y-2 text-muted-foreground">
+              <li>
+                <span className="font-medium text-foreground">FirstName</span>,{" "}
+                <span className="font-medium text-foreground">LastName</span>{" "}
+                — employee name
+              </li>
+              <li>
+                <span className="font-medium text-foreground">Email</span>{" "}
+                — required on every row regardless of account type. An email already
+                registered as a user anywhere in the system cannot be reused — that
+                row will fail.
+              </li>
+              <li>
+                <span className="font-medium text-foreground">CreateUserAccount</span>{" "}
+                — <span className="font-medium text-foreground">Yes</span> or{" "}
+                <span className="font-medium text-foreground">No</span> (default{" "}
+                <span className="font-medium text-foreground">Yes</span>).{" "}
+                <span className="font-medium text-foreground">Yes</span> creates a
+                login and sends an invitation email so the employee can set their
+                password.{" "}
+                <span className="font-medium text-foreground">No</span> creates an
+                employee record only — the employee still receives training
+                notifications at their email address.
+              </li>
+            </ul>
           </div>
 
-          {/* Submit */}
-          <div className="flex justify-end pt-2">
-            <Button type="submit" disabled={!canSubmit}>
-              <Upload className="mr-2 h-4 w-4" />
-              {uploadMutation.isPending ? "Uploading..." : "Upload & Validate"}
-            </Button>
+          {/* Optional columns */}
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
+              Optional columns
+            </p>
+            <ul className="space-y-2 text-muted-foreground">
+              <li>
+                <span className="font-medium text-foreground">
+                  Phone, Mobile, JobTitle, Department, Notes
+                </span>{" "}
+                — contact and profile details
+              </li>
+              <li>
+                <span className="font-medium text-foreground">
+                  StartDate, EndDate
+                </span>{" "}
+                — employment dates in{" "}
+                <span className="font-medium text-foreground">YYYY-MM-DD</span>{" "}
+                format; end date must be after start date
+              </li>
+              <li>
+                <span className="font-medium text-foreground">PreferredLanguage</span>{" "}
+                — 2-letter ISO code (e.g.{" "}
+                <span className="font-medium text-foreground">en</span>,{" "}
+                <span className="font-medium text-foreground">fr</span>,{" "}
+                <span className="font-medium text-foreground">pl</span>); blank or
+                unrecognised defaults to{" "}
+                <span className="font-medium text-foreground">en</span>
+              </li>
+              <li>
+                <span className="font-medium text-foreground">UserRole</span>{" "}
+                — accepts{" "}
+                <span className="font-medium text-foreground">Operator</span> or{" "}
+                <span className="font-medium text-foreground">Supervisor</span>;
+                blank or any other value defaults to{" "}
+                <span className="font-medium text-foreground">Operator</span>
+              </li>
+            </ul>
           </div>
-        </form>
-      </CardContent>
-    </Card>
+
+          {/* Processing notes */}
+          <div className="space-y-2 text-muted-foreground border-t pt-4">
+            <p>
+              Employee codes are generated automatically — do not include them as a
+              column in your CSV.
+            </p>
+            <p>
+              Imported employees are active immediately and will appear in compliance
+              and training reports straight away, including before their first login.
+            </p>
+            <p>
+              Rows with errors are skipped without blocking the rest of the import.
+              After the job completes you can download a CSV of just the failed rows,
+              correct them, and re-upload.
+            </p>
+            <p>
+              Site assignment is not part of the import — assign sites afterward in
+              the employee record.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
