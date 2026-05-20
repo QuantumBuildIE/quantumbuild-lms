@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Validation;
 
@@ -15,14 +16,39 @@ namespace QuantumBuild.API.Controllers;
 public class RegulatoryIngestionController : ControllerBase
 {
     private readonly IRequirementIngestionService _ingestionService;
+    private readonly ICurrentUserService _currentUserService;
     private readonly ILogger<RegulatoryIngestionController> _logger;
 
     public RegulatoryIngestionController(
         IRequirementIngestionService ingestionService,
+        ICurrentUserService currentUserService,
         ILogger<RegulatoryIngestionController> logger)
     {
         _ingestionService = ingestionService;
+        _currentUserService = currentUserService;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Tenant-admin browse: approved requirements filtered to the caller's assigned sectors.
+    /// Drafts and Rejected requirements are excluded.
+    /// </summary>
+    [HttpGet("browse")]
+    [Authorize(Policy = "Learnings.Admin")]
+    [ProducesResponseType(typeof(List<RegulatoryBrowseBodyDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Browse(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var tenantId = _currentUserService.TenantId;
+            var result = await _ingestionService.GetBrowsableRequirementsAsync(tenantId, cancellationToken);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error browsing regulatory requirements for tenant {TenantId}", _currentUserService.TenantId);
+            return StatusCode(500, new { message = "Error retrieving regulatory requirements" });
+        }
     }
 
     /// <summary>

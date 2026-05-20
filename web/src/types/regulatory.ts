@@ -1,4 +1,41 @@
 // ============================================
+// Tenant-admin browse types
+// ============================================
+
+export interface RegulatoryBrowseRequirement {
+  id: string;
+  title: string;
+  description: string;
+  priority: "high" | "med" | "low";
+  section: string | null;
+  sectionLabel: string | null;
+  sectorKey: string;
+  sectorName: string;
+}
+
+export interface RegulatoryBrowsePrincipleGroup {
+  principle: string | null;
+  principleLabel: string | null;
+  requirements: RegulatoryBrowseRequirement[];
+}
+
+export interface RegulatoryBrowseDocument {
+  id: string;
+  title: string;
+  version: string | null;
+  sectorKeys: string[];
+  principleGroups: RegulatoryBrowsePrincipleGroup[];
+}
+
+export interface RegulatoryBrowseBody {
+  id: string;
+  name: string;
+  code: string;
+  country: string | null;
+  documents: RegulatoryBrowseDocument[];
+}
+
+// ============================================
 // Regulatory Document & Ingestion Types
 // ============================================
 

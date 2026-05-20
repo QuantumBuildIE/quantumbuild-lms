@@ -8,6 +8,7 @@ import {
   rejectRequirement,
   updateDraftRequirement,
   approveAllDrafts,
+  getBrowsableRequirements,
 } from "./regulatory-ingestion";
 import type {
   StartIngestionRequest,
@@ -22,6 +23,7 @@ export const regulatoryKeys = {
     ["regulatory-ingestion-status", documentId] as const,
   draftRequirements: (documentId: string) =>
     ["regulatory-draft-requirements", documentId] as const,
+  browse: () => ["regulatory-browse"] as const,
 };
 
 export function useRegulatoryDocuments() {
@@ -140,6 +142,14 @@ export function useUpdateDraftRequirement(documentId: string) {
         queryKey: regulatoryKeys.draftRequirements(documentId),
       });
     },
+  });
+}
+
+export function useBrowsableRequirements() {
+  return useQuery({
+    queryKey: regulatoryKeys.browse(),
+    queryFn: () => getBrowsableRequirements(),
+    staleTime: 60 * 1000,
   });
 }
 
