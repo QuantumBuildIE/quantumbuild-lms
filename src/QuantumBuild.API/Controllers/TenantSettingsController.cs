@@ -5,6 +5,7 @@ using QuantumBuild.Core.Application.Abstractions;
 using QuantumBuild.Core.Application.Features.TenantSettings;
 using QuantumBuild.Core.Application.Features.TenantSettings.DTOs;
 using QuantumBuild.Core.Application.Interfaces;
+using QuantumBuild.Core.Infrastructure.Jobs;
 
 namespace QuantumBuild.API.Controllers;
 
@@ -53,7 +54,9 @@ public class TenantSettingsController(
 
         if (shouldEnqueuePinJob)
         {
-            BackgroundJob.Enqueue<IGenerateEmployeePinsJob>(
+            // Enqueue via the concrete class so Hangfire reads [AutomaticRetry(Attempts=1)]
+            // from the class-level attribute. Enqueueing via the interface loses class attributes.
+            BackgroundJob.Enqueue<GenerateEmployeePinsJob>(
                 j => j.ExecuteAsync(tenantId, CancellationToken.None));
         }
 

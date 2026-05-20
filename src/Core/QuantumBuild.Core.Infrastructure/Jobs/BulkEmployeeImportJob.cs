@@ -2,6 +2,7 @@ using System.Text.Json;
 using Hangfire;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using QuantumBuild.Core.Application.Abstractions;
@@ -35,7 +36,7 @@ public class BulkEmployeeImportJob : IBulkEmployeeImportJob
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
 
     private readonly ICoreDbContext _context;
-    private readonly IEmployeeService _employeeService;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly IEmailService _emailService;
     private readonly UserManager<User> _userManager;
     private readonly IR2StorageService _storageService;
@@ -44,7 +45,7 @@ public class BulkEmployeeImportJob : IBulkEmployeeImportJob
 
     public BulkEmployeeImportJob(
         ICoreDbContext context,
-        IEmployeeService employeeService,
+        IServiceScopeFactory scopeFactory,
         IEmailService emailService,
         UserManager<User> userManager,
         IR2StorageService storageService,
@@ -52,7 +53,7 @@ public class BulkEmployeeImportJob : IBulkEmployeeImportJob
         ILogger<BulkEmployeeImportJob> logger)
     {
         _context = context;
-        _employeeService = employeeService;
+        _scopeFactory = scopeFactory;
         _emailService = emailService;
         _userManager = userManager;
         _storageService = storageService;
@@ -115,11 +116,15 @@ public class BulkEmployeeImportJob : IBulkEmployeeImportJob
                 sessionId, rowsToProcess.Count, tenantId);
 
             // --- Creation phase ---
-            // Each row is independent: failures are recorded and the loop continues.
+            // Each row runs in its own DI scope so a DbContext constraint violation on row N
+            // cannot leave a bad entity in the change tracker and cascade into row N+1 or
+            // the session status writes.
             foreach (var row in rowsToProcess)
             {
                 ct.ThrowIfCancellationRequested();
-                await ProcessRowAsync(row, tenantId, outcomes, pendingInvitations, sessionId, session.IsRerun);
+                await using var rowScope = _scopeFactory.CreateAsyncScope();
+                var employeeService = rowScope.ServiceProvider.GetRequiredService<IEmployeeService>();
+                await ProcessRowAsync(row, tenantId, outcomes, pendingInvitations, sessionId, session.IsRerun, employeeService);
             }
 
             // --- Rate-limited invitation email phase ---
@@ -215,7 +220,8 @@ public class BulkEmployeeImportJob : IBulkEmployeeImportJob
         List<BulkImportRowOutcome> outcomes,
         List<PendingInvitation> pendingInvitations,
         Guid sessionId,
-        bool isRerun)
+        bool isRerun,
+        IEmployeeService employeeService)
     {
         try
         {
@@ -243,7 +249,7 @@ public class BulkEmployeeImportJob : IBulkEmployeeImportJob
                 PreferredLanguage: row.PreferredLanguage
             );
 
-            var result = await _employeeService.CreateAsync(
+            var result = await employeeService.CreateAsync(
                 dto,
                 sendInvitationEmail: false,
                 tenantIdOverride: tenantId);

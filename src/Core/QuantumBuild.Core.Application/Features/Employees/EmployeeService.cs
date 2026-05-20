@@ -312,6 +312,7 @@ public class EmployeeService : IEmployeeService
                 employee.FloatLinkedAt = DateTime.UtcNow;
             }
 
+            employee.TenantId = tenantId;
             _context.Employees.Add(employee);
 
             User? createdUser = null;

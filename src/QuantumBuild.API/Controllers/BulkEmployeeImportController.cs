@@ -10,6 +10,7 @@ using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Core.Application.Models;
 using QuantumBuild.Core.Domain.Entities;
 using QuantumBuild.Core.Domain.Enums;
+using QuantumBuild.Core.Infrastructure.Jobs;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Storage;
 
 namespace QuantumBuild.API.Controllers;
@@ -236,7 +237,9 @@ public class BulkEmployeeImportController : ControllerBase
                 $"Session is '{session.Status}' and cannot be confirmed. Only Validated sessions can be started."));
         }
 
-        var jobId = BackgroundJob.Enqueue<IBulkEmployeeImportJob>(
+        // Enqueue via the concrete class so Hangfire reads [AutomaticRetry(Attempts=0)]
+        // from the class-level attribute. Enqueueing via the interface loses class attributes.
+        var jobId = BackgroundJob.Enqueue<BulkEmployeeImportJob>(
             j => j.ExecuteAsync(id, CancellationToken.None));
 
         _logger.LogInformation(
