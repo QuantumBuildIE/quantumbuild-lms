@@ -30,28 +30,6 @@ public class RegulatoryIngestionController : ControllerBase
     }
 
     /// <summary>
-    /// Tenant-admin browse: approved requirements filtered to the caller's assigned sectors.
-    /// Drafts and Rejected requirements are excluded.
-    /// </summary>
-    [HttpGet("browse")]
-    [Authorize(Policy = "Learnings.Admin")]
-    [ProducesResponseType(typeof(List<RegulatoryBrowseBodyDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> Browse(CancellationToken cancellationToken)
-    {
-        try
-        {
-            var tenantId = _currentUserService.TenantId;
-            var result = await _ingestionService.GetBrowsableRequirementsAsync(tenantId, cancellationToken);
-            return Ok(result);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error browsing regulatory requirements for tenant {TenantId}", _currentUserService.TenantId);
-            return StatusCode(500, new { message = "Error retrieving regulatory requirements" });
-        }
-    }
-
-    /// <summary>
     /// List all regulatory documents with body, profiles, and requirement counts
     /// </summary>
     [HttpGet("documents")]
