@@ -13,7 +13,8 @@ const adminNavItems = [
   { href: "/admin/settings", label: "Settings", superUserOnly: false, tenantScoped: true, permissions: ["Learnings.Admin", "Core.ManageUsers"] },
   { href: "/admin/lesson-parser", label: "Lesson Parser", superUserOnly: false, tenantScoped: true, permissions: ["LessonParser.Use"] },
   { href: "/admin/tenants", label: "Tenant Management", superUserOnly: true, tenantScoped: false },
-  { href: "/admin/regulatory", label: "Regulatory", superUserOnly: true, tenantScoped: false },
+  { href: "/admin/regulatory", label: "Regulatory", superUserOnly: false, tenantScoped: false, permissions: ["Learnings.Admin"] },
+  { href: "/admin/monitoring", label: "Monitoring", superUserOnly: true, tenantScoped: false },
 ];
 
 const corePermissions = [
@@ -96,11 +97,11 @@ export default function AdminLayout({
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">
-          {isSupervisorOnly ? "Training Management" : "Administration"}
+          {isSupervisorOnly ? "Learning Management" : "Administration"}
         </h1>
         <p className="text-muted-foreground">
           {isSupervisorOnly
-            ? "Manage schedules and training reports"
+            ? "Manage schedules and learning reports"
             : "Manage employees and users"}
         </p>
       </div>

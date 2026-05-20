@@ -25,7 +25,7 @@ const systemOverview = [
   {
     label: "Intended Purpose",
     value:
-      "AI-assisted translation, transcription, and training delivery for workplace safety compliance",
+      "AI-assisted translation, transcription, and learning delivery for workplace safety compliance",
   },
   {
     label: "Target Sectors",
@@ -40,10 +40,10 @@ const systemOverview = [
 ];
 
 const doesItems = [
-  "Translates safety training content into multiple languages",
+  "Translates safety learning content into multiple languages",
   "Produces quality scores for translations via back-translation consensus",
   "Transcribes audio/video into subtitle files",
-  "Delivers structured training with quizzes and certificates",
+  "Delivers structured learning with quizzes and certificates",
   "Generates a full audit trail for compliance reporting",
 ];
 
@@ -301,7 +301,7 @@ export default function AISystemCardPage() {
                 generated, translated, or transcribed within CertifiedIQ is
                 produced with the assistance of artificial intelligence. All
                 AI-generated outputs are clearly labelled and subject to human
-                review before deployment in safety-critical training
+                review before deployment in safety-critical learning
                 materials.&rdquo;
               </p>
               <p className="text-xs text-muted-foreground">

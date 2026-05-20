@@ -14,7 +14,7 @@ export default function AdminSettingsLookupsPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Lookups</h1>
         <p className="text-muted-foreground">
-          Manage training categories, departments, and job titles. Drag to reorder.
+          Manage learning categories, departments, and job titles. Drag to reorder.
         </p>
       </div>
 

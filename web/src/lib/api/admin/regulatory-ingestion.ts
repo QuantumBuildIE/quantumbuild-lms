@@ -8,6 +8,7 @@ import type {
   UpdateDraftRequirementRequest,
   StartIngestionRequest,
   RejectRequirementRequest,
+  RegulatoryBrowseBody,
 } from "@/types/regulatory";
 
 export async function getRegulatoryDocuments(): Promise<RegulatoryDocumentListItem[]> {
@@ -83,6 +84,13 @@ export async function approveAllDrafts(
 ): Promise<{ approved: number }> {
   const response = await apiClient.post<{ approved: number }>(
     `/regulatory/documents/${documentId}/approve-all`
+  );
+  return response.data;
+}
+
+export async function getBrowsableRequirements(): Promise<RegulatoryBrowseBody[]> {
+  const response = await apiClient.get<RegulatoryBrowseBody[]>(
+    "/regulatory/browse"
   );
   return response.data;
 }

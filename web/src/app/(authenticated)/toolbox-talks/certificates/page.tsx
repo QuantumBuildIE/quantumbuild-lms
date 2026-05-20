@@ -60,7 +60,7 @@ export default function CertificatesPage() {
           <div>
             <h1 className="text-2xl font-bold">My Certificates</h1>
             <p className="text-muted-foreground">
-              Your training completion certificates
+              Your learning completion certificates
             </p>
           </div>
         </div>
@@ -76,10 +76,10 @@ export default function CertificatesPage() {
             <Award className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-medium">No certificates yet</h3>
             <p className="text-muted-foreground text-center mt-1">
-              Complete your assigned training to earn certificates
+              Complete your assigned learning to earn certificates
             </p>
             <Link href="/toolbox-talks" className="mt-4">
-              <Button>View My Training</Button>
+              <Button>View My Learning</Button>
             </Link>
           </CardContent>
         </Card>
@@ -141,7 +141,7 @@ export default function CertificatesPage() {
                     <ul className="list-disc list-inside space-y-0.5">
                       {cert.includedTalks.slice(0, 3).map((talk, i) => (
                         <li key={i} className="truncate">
-                          {talk}
+                          {talk.code ? `${talk.title} (${talk.code})` : talk.title}
                         </li>
                       ))}
                       {cert.includedTalks.length > 3 && (

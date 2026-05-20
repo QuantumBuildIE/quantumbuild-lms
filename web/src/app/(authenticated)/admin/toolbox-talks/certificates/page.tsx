@@ -102,7 +102,7 @@ export default function AdminCertificatesReportPage() {
       'Certificate Number',
       'Employee Name',
       'Employee Code',
-      'Training Title',
+      'Learning Title',
       'Type',
       'Issued',
       'Expires',
@@ -168,7 +168,7 @@ export default function AdminCertificatesReportPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Certificate Report</h1>
           <p className="text-muted-foreground">
-            All training certificates across employees
+            All learning certificates across employees
           </p>
         </div>
         <Button variant="outline" onClick={handleExportCsv} disabled={isLoading || !report?.items.length}>
@@ -251,7 +251,7 @@ export default function AdminCertificatesReportPage() {
               <label className="text-sm font-medium">Search</label>
               <div className="flex gap-2">
                 <Input
-                  placeholder="Employee name, training title, or code..."
+                  placeholder="Employee name, learning title, or code..."
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
                   onKeyDown={handleKeyDown}
@@ -306,7 +306,7 @@ export default function AdminCertificatesReportPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Employee</TableHead>
-                <TableHead>Training</TableHead>
+                <TableHead>Learning</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Issued</TableHead>
                 <TableHead>Expires</TableHead>

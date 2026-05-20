@@ -128,7 +128,7 @@ export function PendingTrainingBanner() {
             )}
           >
             <Link href="/toolbox-talks" className="flex items-center gap-1">
-              View Training
+              View Learning
               <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </Button>

@@ -418,7 +418,7 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
                       </SelectContent>
                     </Select>
                     <FormDescription>
-                      The safety category this training falls under
+                      The safety category this learning falls under
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

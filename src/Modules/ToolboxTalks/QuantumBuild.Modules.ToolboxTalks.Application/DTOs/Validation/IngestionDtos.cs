@@ -94,6 +94,48 @@ public record RejectRequirementRequest
     public string Notes { get; init; } = string.Empty;
 }
 
+// ─── Tenant-admin browse DTOs ─────────────────────────────────────────────
+
+/// <summary>
+/// Top-level browse node: a regulatory body and its documents relevant to the caller's sectors
+/// </summary>
+public record RegulatoryBrowseBodyDto
+{
+    public Guid Id { get; init; }
+    public string Name { get; init; } = string.Empty;
+    public string Code { get; init; } = string.Empty;
+    public string? Country { get; init; }
+    public List<RegulatoryBrowseDocumentDto> Documents { get; init; } = new();
+}
+
+public record RegulatoryBrowseDocumentDto
+{
+    public Guid Id { get; init; }
+    public string Title { get; init; } = string.Empty;
+    public string? Version { get; init; }
+    public List<string> SectorKeys { get; init; } = new();
+    public List<RegulatoryBrowsePrincipleGroupDto> PrincipleGroups { get; init; } = new();
+}
+
+public record RegulatoryBrowsePrincipleGroupDto
+{
+    public string? Principle { get; init; }
+    public string? PrincipleLabel { get; init; }
+    public List<RegulatoryBrowseRequirementDto> Requirements { get; init; } = new();
+}
+
+public record RegulatoryBrowseRequirementDto
+{
+    public Guid Id { get; init; }
+    public string Title { get; init; } = string.Empty;
+    public string Description { get; init; } = string.Empty;
+    public string Priority { get; init; } = "med";
+    public string? Section { get; init; }
+    public string? SectionLabel { get; init; }
+    public string SectorKey { get; init; } = string.Empty;
+    public string SectorName { get; init; } = string.Empty;
+}
+
 /// <summary>
 /// Regulatory document with body, profiles, and requirement counts
 /// </summary>

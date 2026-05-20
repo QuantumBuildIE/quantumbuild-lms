@@ -114,7 +114,7 @@ export function CompletionSuccess({
                 Learning Completed!
               </h1>
               <p className="text-green-700 dark:text-green-300 mt-1">
-                Well done! You have successfully completed this training.
+                Well done! You have successfully completed this learning.
               </p>
             </div>
           </div>
@@ -228,8 +228,8 @@ export function CompletionSuccess({
       <Card className="bg-muted/30">
         <CardContent className="py-4">
           <p className="text-sm text-center text-muted-foreground">
-            This completion record has been saved. Your supervisor can view your training history
-            at any time. If you have any questions about this training, please contact your
+            This completion record has been saved. Your supervisor can view your learning history
+            at any time. If you have any questions about this learning, please contact your
             supervisor.
           </p>
         </CardContent>

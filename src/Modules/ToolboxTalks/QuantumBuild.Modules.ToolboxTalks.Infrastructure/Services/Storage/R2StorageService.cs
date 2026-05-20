@@ -729,6 +729,53 @@ public class R2StorageService : IR2StorageService, IDisposable
 
     #endregion
 
+    #region Bulk Import
+
+    private const string BulkImportFolder = "bulk-import";
+
+    public async Task<string> UploadBulkImportCsvAsync(
+        Guid tenantId,
+        Guid sessionId,
+        Stream content,
+        CancellationToken cancellationToken = default)
+    {
+        var key = BuildKey(tenantId, BulkImportFolder, $"{sessionId}.csv");
+
+        var request = new PutObjectRequest
+        {
+            BucketName = _settings.BucketName,
+            Key = key,
+            InputStream = content,
+            ContentType = "text/csv",
+            DisablePayloadSigning = true,
+            UseChunkEncoding = false
+        };
+
+        await _s3Client.PutObjectAsync(request, cancellationToken);
+        _logger.LogInformation("Uploaded bulk import CSV to R2: {Key}", key);
+        return key;
+    }
+
+    #endregion
+
+    #region Single-key delete
+
+    public async Task DeleteFileAsync(string key, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _s3Client.DeleteObjectAsync(_settings.BucketName, key, cancellationToken);
+            _logger.LogInformation("Deleted R2 object: {Key}", key);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete R2 object: {Key}", key);
+            throw;
+        }
+    }
+
+    #endregion
+
     #region Utilities
 
     public string GeneratePublicUrl(Guid tenantId, string folder, string fileName)

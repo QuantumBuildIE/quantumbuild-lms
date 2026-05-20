@@ -20,7 +20,7 @@ export function EmployeeCertificatesSection({ employeeId }: EmployeeCertificates
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Award className="h-5 w-5" />
-            Training Certificates
+            Learning Certificates
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -38,7 +38,7 @@ export function EmployeeCertificatesSection({ employeeId }: EmployeeCertificates
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Award className="h-5 w-5" />
-          Training Certificates
+          Learning Certificates
           {certificates.length > 0 && (
             <Badge variant="secondary">{certificates.length}</Badge>
           )}

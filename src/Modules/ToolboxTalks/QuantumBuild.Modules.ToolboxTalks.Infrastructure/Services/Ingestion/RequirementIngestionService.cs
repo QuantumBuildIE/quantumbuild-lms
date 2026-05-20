@@ -258,6 +258,84 @@ public class RequirementIngestionService : IRequirementIngestionService
         return result;
     }
 
+    public async Task<List<RegulatoryBrowseBodyDto>> GetBrowsableRequirementsAsync(
+        Guid tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        // Resolve which sector keys this tenant has assigned
+        var tenantSectorKeys = await _dbContext.TenantSectors
+            .Where(ts => ts.TenantId == tenantId && !ts.IsDeleted)
+            .Include(ts => ts.Sector)
+            .Select(ts => ts.Sector.Key)
+            .ToListAsync(cancellationToken);
+
+        if (tenantSectorKeys.Count == 0)
+            return new List<RegulatoryBrowseBodyDto>();
+
+        // Load approved requirements whose profile matches a tenant sector key
+        var requirements = await _dbContext.RegulatoryRequirements
+            .IgnoreQueryFilters()
+            .Include(r => r.RegulatoryProfile)
+                .ThenInclude(p => p.Sector)
+            .Include(r => r.RegulatoryProfile)
+                .ThenInclude(p => p.RegulatoryDocument)
+                    .ThenInclude(d => d.RegulatoryBody)
+            .Where(r => !r.IsDeleted
+                && r.IngestionStatus == RequirementIngestionStatus.Approved
+                && tenantSectorKeys.Contains(r.RegulatoryProfile.SectorKey))
+            .OrderBy(r => r.RegulatoryProfile.RegulatoryDocument.RegulatoryBody.Name)
+            .ThenBy(r => r.RegulatoryProfile.RegulatoryDocument.Title)
+            .ThenBy(r => r.Principle)
+            .ThenBy(r => r.DisplayOrder)
+            .ToListAsync(cancellationToken);
+
+        // Group: Body → Document → PrincipleGroup
+        var result = requirements
+            .GroupBy(r => r.RegulatoryProfile.RegulatoryDocument.RegulatoryBody)
+            .Select(bodyGroup => new RegulatoryBrowseBodyDto
+            {
+                Id = bodyGroup.Key.Id,
+                Name = bodyGroup.Key.Name,
+                Code = bodyGroup.Key.Code,
+                Country = bodyGroup.Key.Country,
+                Documents = bodyGroup
+                    .GroupBy(r => r.RegulatoryProfile.RegulatoryDocument)
+                    .Select(docGroup => new RegulatoryBrowseDocumentDto
+                    {
+                        Id = docGroup.Key.Id,
+                        Title = docGroup.Key.Title,
+                        Version = docGroup.Key.Version,
+                        SectorKeys = docGroup
+                            .Select(r => r.RegulatoryProfile.SectorKey)
+                            .Distinct()
+                            .ToList(),
+                        PrincipleGroups = docGroup
+                            .GroupBy(r => new { r.Principle, r.PrincipleLabel })
+                            .Select(pg => new RegulatoryBrowsePrincipleGroupDto
+                            {
+                                Principle = pg.Key.Principle,
+                                PrincipleLabel = pg.Key.PrincipleLabel,
+                                Requirements = pg.Select(r => new RegulatoryBrowseRequirementDto
+                                {
+                                    Id = r.Id,
+                                    Title = r.Title,
+                                    Description = r.Description,
+                                    Priority = r.Priority,
+                                    Section = r.Section,
+                                    SectionLabel = r.SectionLabel,
+                                    SectorKey = r.RegulatoryProfile.SectorKey,
+                                    SectorName = r.RegulatoryProfile.Sector.Name,
+                                }).ToList(),
+                            })
+                            .ToList(),
+                    })
+                    .ToList(),
+            })
+            .ToList();
+
+        return result;
+    }
+
     private async Task<IngestionSessionDto> BuildIngestionSessionDto(
         Domain.Entities.RegulatoryDocument document,
         string status,

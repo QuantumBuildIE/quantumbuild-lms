@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Validation;
 
@@ -15,13 +16,16 @@ namespace QuantumBuild.API.Controllers;
 public class RegulatoryIngestionController : ControllerBase
 {
     private readonly IRequirementIngestionService _ingestionService;
+    private readonly ICurrentUserService _currentUserService;
     private readonly ILogger<RegulatoryIngestionController> _logger;
 
     public RegulatoryIngestionController(
         IRequirementIngestionService ingestionService,
+        ICurrentUserService currentUserService,
         ILogger<RegulatoryIngestionController> logger)
     {
         _ingestionService = ingestionService;
+        _currentUserService = currentUserService;
         _logger = logger;
     }
 

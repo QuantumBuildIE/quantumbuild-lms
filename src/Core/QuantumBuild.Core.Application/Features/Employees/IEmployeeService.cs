@@ -8,7 +8,18 @@ public interface IEmployeeService
     Task<Result<List<EmployeeDto>>> GetAllAsync();
     Task<Result<PaginatedList<EmployeeDto>>> GetPaginatedAsync(GetEmployeesQueryDto query);
     Task<Result<EmployeeDto>> GetByIdAsync(Guid id);
-    Task<Result<EmployeeDto>> CreateAsync(CreateEmployeeDto dto);
+    /// <param name="sendInvitationEmail">
+    /// When false, skips sending the password-setup invitation email. Pass false from
+    /// background jobs that manage email delivery separately (e.g. bulk import).
+    /// </param>
+    /// <param name="tenantIdOverride">
+    /// When provided, overrides ICurrentUserService.TenantId. Required when called from
+    /// a Hangfire job that has no HTTP context (and therefore no JWT-derived tenant).
+    /// </param>
+    Task<Result<EmployeeDto>> CreateAsync(
+        CreateEmployeeDto dto,
+        bool sendInvitationEmail = true,
+        Guid? tenantIdOverride = null);
     Task<Result<EmployeeDto>> UpdateAsync(Guid id, UpdateEmployeeDto dto);
     Task<Result> DeleteAsync(Guid id);
     Task<Result<List<EmployeeDto>>> GetUnlinkedAsync();
@@ -48,4 +59,10 @@ public interface IEmployeeService
     /// Returns a failure result if QR Location Training is not enabled for the tenant.
     /// </summary>
     Task<Result> ResetPinAsync(Guid employeeId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Generates the next available employee code for the tenant (e.g. EMP001, EMP002).
+    /// Skips soft-deleted codes to avoid reuse.
+    /// </summary>
+    Task<string> GenerateEmployeeCodeAsync(Guid tenantId);
 }

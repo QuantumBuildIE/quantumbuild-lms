@@ -69,7 +69,7 @@ const DEFAULT_PASS_THRESHOLDS = [50, 60, 70, 75, 80, 85, 90, 95];
 
 const DEFAULT_AUDIT_PURPOSES = [
   'Regulatory Compliance',
-  'Internal Training',
+  'Internal Learning',
   'Safety Certification',
   'Client Requirement',
   'Quality Assurance',
@@ -388,7 +388,7 @@ export function InputConfigStep({
               <Label htmlFor="source-text">Content Text</Label>
               <Textarea
                 id="source-text"
-                placeholder="Paste or type your training content here..."
+                placeholder="Paste or type your learning content here..."
                 value={state.sourceText}
                 onChange={(e) => updateState({ sourceText: e.target.value })}
                 rows={8}

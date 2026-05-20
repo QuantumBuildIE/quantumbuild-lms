@@ -379,8 +379,8 @@ export default function DpaAcceptancePage() {
                     physical, physiological, genetic, mental, economic, cultural,
                     or social identity of that natural person. In the context of
                     this Agreement, Personal Data includes but is not limited to
-                    employee names, email addresses, training completion records,
-                    digital signatures, geolocation data captured during training
+                    employee names, email addresses, learning completion records,
+                    digital signatures, geolocation data captured during learning
                     sessions, and IP addresses logged for audit purposes.
                   </p>
 

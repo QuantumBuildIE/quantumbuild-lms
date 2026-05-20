@@ -143,7 +143,7 @@ export function TopNav() {
                 <DropdownMenuItem asChild>
                   <Link href={isSupervisorOnly ? "/admin/toolbox-talks" : "/admin"}>
                     <Shield className="mr-2 h-4 w-4" />
-                    <span>{isSupervisorOnly ? "Training Management" : "Administration"}</span>
+                    <span>{isSupervisorOnly ? "Learning Management" : "Administration"}</span>
                   </Link>
                 </DropdownMenuItem>
               </>

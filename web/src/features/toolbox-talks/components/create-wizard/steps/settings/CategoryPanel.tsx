@@ -27,7 +27,7 @@ export function CategoryPanel({ settings, onChange, isSaving }: CategoryPanelPro
 
       <div className="space-y-1.5">
         <Label htmlFor="settings-category" className="text-sm">
-          Training Category
+          Learning Category
         </Label>
         <Select
           value={settings.category ?? ''}

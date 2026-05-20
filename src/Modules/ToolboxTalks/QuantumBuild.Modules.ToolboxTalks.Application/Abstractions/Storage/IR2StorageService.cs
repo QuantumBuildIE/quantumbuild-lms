@@ -142,6 +142,17 @@ public interface IR2StorageService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Uploads a bulk employee import CSV to R2 storage (internal use only — not publicly accessible).
+    /// Path: {tenantId}/bulk-import/{sessionId}.csv
+    /// Returns the R2 key; CSVs are deleted by BulkEmployeeImportJob on successful completion.
+    /// </summary>
+    Task<string> UploadBulkImportCsvAsync(
+        Guid tenantId,
+        Guid sessionId,
+        Stream content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Deletes all files stored under a tenant's prefix.
     /// Used for complete tenant data removal.
     /// </summary>
@@ -153,6 +164,13 @@ public interface IR2StorageService
     /// Generates the public URL for a file in the R2 bucket.
     /// </summary>
     string GeneratePublicUrl(Guid tenantId, string folder, string fileName);
+
+    /// <summary>
+    /// Deletes a single object by its R2 storage key.
+    /// Used for cleaning up bulk-import CSVs and other one-off deletions.
+    /// No-ops silently if the key does not exist.
+    /// </summary>
+    Task DeleteFileAsync(string key, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Builds a public URL from a pre-built storage key.

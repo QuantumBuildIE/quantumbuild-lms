@@ -267,9 +267,14 @@ export default function EmployeesPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Employees</h1>
           <p className="text-muted-foreground">Manage company employees</p>
         </div>
-        <Button asChild>
-          <Link href="/admin/employees/new">Add Employee</Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" asChild>
+            <Link href="/admin/employees/bulk-import">Bulk Import</Link>
+          </Button>
+          <Button asChild>
+            <Link href="/admin/employees/new">Add Employee</Link>
+          </Button>
+        </div>
       </div>
 
       <div className="flex items-center gap-4">

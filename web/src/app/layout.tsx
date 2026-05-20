@@ -15,7 +15,7 @@ const dmSans = DM_Sans({
 
 export const metadata: Metadata = {
   title: "CertifiedIQ",
-  description: "Learning Management System for workplace safety training and compliance",
+  description: "Learning Management System for workplace safety learning and compliance",
 };
 
 export default function RootLayout({

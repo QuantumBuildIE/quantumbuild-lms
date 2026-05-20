@@ -10,7 +10,7 @@ export const FREQUENCY_OPTIONS: { value: ToolboxTalkFrequency; label: string }[]
 ];
 
 export const FREQUENCY_OPTIONS_WITH_DESCRIPTIONS = [
-  { value: 'Once', label: 'Once', description: 'One-time training' },
+  { value: 'Once', label: 'Once', description: 'One-time learning' },
   { value: 'Weekly', label: 'Weekly', description: 'Repeat every week' },
   { value: 'Monthly', label: 'Monthly', description: 'Repeat every month' },
   { value: 'Annually', label: 'Annually', description: 'Repeat every year' },

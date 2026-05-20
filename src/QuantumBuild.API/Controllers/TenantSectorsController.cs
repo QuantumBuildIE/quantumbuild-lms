@@ -33,18 +33,24 @@ public class TenantSectorsController(
     }
 
     /// <summary>
-    /// Assign a sector to a tenant (restore-on-reassign if previously soft-deleted)
+    /// Assign a sector to a tenant (restore-on-reassign if previously soft-deleted).
+    /// Allowed if: (a) caller holds Learnings.Admin and is assigning to their own tenant, or (b) caller is SuperUser.
     /// </summary>
     [HttpPost]
-    [Authorize(Policy = "Tenant.Manage")]
     [ProducesResponseType(typeof(TenantSectorDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> AssignSector(
         Guid tenantId,
         [FromBody] AssignTenantSectorRequest request,
         CancellationToken cancellationToken)
     {
+        var isLearningsAdmin = User.HasClaim("permission", "Learnings.Admin");
+        var ownTenant = currentUserService.TenantId == tenantId;
+        if (!currentUserService.IsSuperUser && !(isLearningsAdmin && ownTenant))
+            return Forbid();
+
         var validationResult = await validator.ValidateAsync(request, cancellationToken);
         if (!validationResult.IsValid)
             return BadRequest(new { errors = validationResult.Errors.Select(e => e.ErrorMessage) });

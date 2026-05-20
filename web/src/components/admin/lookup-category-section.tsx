@@ -22,7 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 const CATEGORY_DISPLAY_NAMES: Record<string, { title: string; description: string }> = {
   TrainingCategory: {
-    title: "Training Categories",
+    title: "Learning Categories",
     description: "Categories used to classify learnings (e.g., Safety, Compliance, Orientation)",
   },
   Department: {

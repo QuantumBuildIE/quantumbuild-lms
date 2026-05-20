@@ -193,7 +193,7 @@ export function MyTalksList() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">My Learnings</h1>
           <p className="text-muted-foreground">
-            Complete your assigned safety training talks
+            Complete your assigned safety learning talks
           </p>
         </div>
         <div className="flex items-center gap-2">

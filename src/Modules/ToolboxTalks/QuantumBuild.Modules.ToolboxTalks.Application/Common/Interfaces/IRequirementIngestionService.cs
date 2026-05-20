@@ -67,4 +67,12 @@ public interface IRequirementIngestionService
     /// </summary>
     Task<List<RegulatoryDocumentListDto>> GetDocumentsAsync(
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns approved regulatory requirements scoped to the tenant's assigned sectors.
+    /// Drafts and Rejected requirements are excluded — mid-workflow data invisible to tenant admins.
+    /// </summary>
+    Task<List<RegulatoryBrowseBodyDto>> GetBrowsableRequirementsAsync(
+        Guid tenantId,
+        CancellationToken cancellationToken = default);
 }

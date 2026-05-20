@@ -229,17 +229,21 @@ public class EmployeeService : IEmployeeService
         }
     }
 
-    public async Task<Result<EmployeeDto>> CreateAsync(CreateEmployeeDto dto)
+    public async Task<Result<EmployeeDto>> CreateAsync(
+        CreateEmployeeDto dto,
+        bool sendInvitationEmail = true,
+        Guid? tenantIdOverride = null)
     {
         try
         {
-            var tenantId = _currentUserService.TenantId;
+            var tenantId = tenantIdOverride ?? _currentUserService.TenantId;
 
             // Validate that PrimarySiteId exists if provided
             if (dto.PrimarySiteId.HasValue)
             {
                 var siteExists = await _context.Sites
-                    .AnyAsync(s => s.Id == dto.PrimarySiteId.Value);
+                    .IgnoreQueryFilters()
+                    .AnyAsync(s => s.TenantId == tenantId && !s.IsDeleted && s.Id == dto.PrimarySiteId.Value);
 
                 if (!siteExists)
                 {
@@ -248,18 +252,22 @@ public class EmployeeService : IEmployeeService
             }
 
             // Auto-generate EmployeeCode (EMP001, EMP002, etc.) - ignore any value from frontend
-            var employeeCode = await GenerateNextEmployeeCodeAsync(tenantId);
+            var employeeCode = await GenerateEmployeeCodeAsync(tenantId);
 
             // Validate email uniqueness if creating a user account
             if (dto.CreateUserAccount && !string.IsNullOrWhiteSpace(dto.Email))
             {
-                // Check for existing employee with same email
+                // Check for existing employee with same email (explicit tenant filter —
+                // safe in both HTTP and background-job contexts where query filter may not apply)
                 var existingEmployee = await _context.Employees
-                    .AnyAsync(e => e.Email == dto.Email);
+                    .IgnoreQueryFilters()
+                    .AnyAsync(e => e.TenantId == tenantId && !e.IsDeleted && e.Email == dto.Email);
 
                 if (existingEmployee)
                 {
-                    return Result.Fail<EmployeeDto>($"An employee with email '{dto.Email}' already exists");
+                    return Result.Fail<EmployeeDto>(
+                        $"An employee with email '{dto.Email}' already exists",
+                        FailureCode.DuplicateEmail);
                 }
 
                 // Check for existing user with same email
@@ -269,7 +277,9 @@ public class EmployeeService : IEmployeeService
 
                 if (existingUser != null)
                 {
-                    return Result.Fail<EmployeeDto>($"A user account with email '{dto.Email}' already exists");
+                    return Result.Fail<EmployeeDto>(
+                        $"A user account with email '{dto.Email}' already exists",
+                        FailureCode.DuplicateEmail);
                 }
             }
 
@@ -302,6 +312,7 @@ public class EmployeeService : IEmployeeService
                 employee.FloatLinkedAt = DateTime.UtcNow;
             }
 
+            employee.TenantId = tenantId;
             _context.Employees.Add(employee);
 
             User? createdUser = null;
@@ -386,8 +397,10 @@ public class EmployeeService : IEmployeeService
                 }
             }
 
-            // Send password setup email if user was created
-            if (createdUser != null && !string.IsNullOrWhiteSpace(dto.Email))
+            // Send password setup email if user was created and caller has not opted out.
+            // Callers that manage email delivery separately (e.g. bulk import job) pass
+            // sendInvitationEmail: false and handle the sends with rate limiting.
+            if (sendInvitationEmail && createdUser != null && !string.IsNullOrWhiteSpace(dto.Email))
             {
                 try
                 {
@@ -409,10 +422,12 @@ public class EmployeeService : IEmployeeService
                 }
             }
 
-            // Reload with related entities to get site name
+            // Reload with related entities to get site name. IgnoreQueryFilters so this
+            // works correctly when called from a background job (no HTTP/JWT context).
             var createdEmployee = await _context.Employees
+                .IgnoreQueryFilters()
                 .Include(e => e.PrimarySite)
-                .FirstAsync(e => e.Id == employee.Id);
+                .FirstAsync(e => e.Id == employee.Id && !e.IsDeleted);
 
             var employeeDto = new EmployeeDto(
                 createdEmployee.Id,
@@ -527,7 +542,7 @@ public class EmployeeService : IEmployeeService
         return $"Temp{Guid.NewGuid():N}!Aa1";
     }
 
-    private async Task<string> GenerateNextEmployeeCodeAsync(Guid tenantId)
+    public async Task<string> GenerateEmployeeCodeAsync(Guid tenantId)
     {
         // Get ALL existing employee codes for this tenant (including soft-deleted, to avoid reuse)
         var existingCodes = await _context.Employees

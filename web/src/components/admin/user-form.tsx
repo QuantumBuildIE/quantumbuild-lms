@@ -94,18 +94,7 @@ const createUserSchema = z
       path: ["existingEmployeeId"],
     }
   )
-  .refine(
-    (data) => {
-      if (data.employeeLinkOption === "CreateNew") {
-        return !!data.newEmployeeCode && data.newEmployeeCode.trim().length > 0;
-      }
-      return true;
-    },
-    {
-      message: "Employee code is required",
-      path: ["newEmployeeCode"],
-    }
-  );
+;
 
 const updateUserSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -201,7 +190,7 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
           payload.existingEmployeeId = createValues.existingEmployeeId;
         } else if (linkOption === "CreateNew") {
           payload.newEmployee = {
-            employeeCode: createValues.newEmployeeCode!,
+            employeeCode: createValues.newEmployeeCode?.trim() || undefined,
             phone: createValues.newEmployeePhone || undefined,
             mobile: createValues.newEmployeeMobile || undefined,
             jobTitle: createValues.newEmployeeJobTitle || undefined,
@@ -367,7 +356,7 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
                     Loading roles...
                   </div>
                 ) : roles && roles.length > 0 ? (
-                  roles.map((role: Role) => {
+                  roles.filter((role: Role) => role.name !== "SuperUser").map((role: Role) => {
                     const currentRoles = form.watch("roleIds") as string[];
                     const isChecked = currentRoles.includes(role.id);
                     return (
@@ -498,10 +487,13 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
                     name={"newEmployeeCode" as any}
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Employee Code *</FormLabel>
+                        <FormLabel>Employee Code</FormLabel>
                         <FormControl>
-                          <Input placeholder="e.g., EMP001" {...field} />
+                          <Input placeholder="e.g., EMP001 (auto-generated if left blank)" {...field} />
                         </FormControl>
+                        <FormDescription>
+                          Leave blank to auto-generate (e.g., EMP001). Enter a value to use a code from a legacy system.
+                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
