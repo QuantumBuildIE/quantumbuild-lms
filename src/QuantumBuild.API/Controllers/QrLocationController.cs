@@ -531,20 +531,25 @@ public class QrLocationController : ControllerBase
                 .ToList();
             double? avgScore = completedScores.Count > 0 ? completedScores.Average() : null;
 
-            var byLocation = await _dbContext.QrSessions
+            var byLocationRaw = await _dbContext.QrSessions
                 .Where(s => s.TenantId == tenantId)
-                .Select(s => new { LocationName = s.QrCode.QrLocation.Name })
-                .GroupBy(s => s.LocationName)
-                .Select(g => new QrSessionsByLocationItem(g.Key, g.Count()))
-                .OrderByDescending(x => x.Count)
+                .GroupBy(s => s.QrCode.QrLocation.Name)
+                .Select(g => new { LocationName = g.Key, Count = g.Count() })
+                .OrderByDescending(g => g.Count)
                 .ToListAsync(cancellationToken);
+            var byLocation = byLocationRaw
+                .Select(x => new QrSessionsByLocationItem(x.LocationName, x.Count))
+                .ToList();
 
-            var byLanguage = await _dbContext.QrSessions
+            var byLanguageRaw = await _dbContext.QrSessions
                 .Where(s => s.TenantId == tenantId)
                 .GroupBy(s => s.Language)
-                .Select(g => new QrSessionsByLanguageItem(g.Key, g.Count()))
-                .OrderByDescending(x => x.Count)
+                .Select(g => new { Language = g.Key, Count = g.Count() })
+                .OrderByDescending(g => g.Count)
                 .ToListAsync(cancellationToken);
+            var byLanguage = byLanguageRaw
+                .Select(x => new QrSessionsByLanguageItem(x.Language, x.Count))
+                .ToList();
 
             return Ok(new QrSessionSummaryDto(
                 total, completed, abandoned, active, avgScore, byLocation, byLanguage));
