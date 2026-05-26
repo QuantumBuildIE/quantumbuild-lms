@@ -1439,6 +1439,7 @@ Archived notes 1-89 are in CLAUDE-archive.md
 - Drag-to-reorder discoverability
 - My Learnings no-op fix
 - Active Learnings count clickable
+- Demo deployment workflow — currently freeze-by-disconnect-from-GitHub. Each Demo refresh requires reconnecting, redeploying, then disconnecting. Cleaner pattern: a dedicated demo branch that Railway watches, with promotions done by git merge transval → demo. Lets Demo stay auto-deploy-from-its-own-branch while still being controlled (no accidental updates from Development churn). Same pattern that exists between transval (Development) and main (Production).
 - **Tenant `IsActive` / sector remove for tenant admins**. `My Sectors` is add-only by design (avoids data-orphaning risk from removing a sector that's referenced by existing content). If demand emerges: either a soft-deactivation flag, or SuperUser-only remove with explicit confirmation.
 - **SuperUser lockdown may be too strict on role assignment**. SuperUser currently cannot assign the Admin role to a user via UI — requires a DB workaround. If creating admin users becomes a frequent need, consider relaxing to "SuperUser can assign any role including Admin; non-SuperUsers cannot assign Admin."
 - **Next.js 15+ `params` shape**. The redirect stubs created for moved regulatory routes use synchronous `params`. Next 16 may eventually require `await params`. Not breaking yet; apply when Next escalates the deprecation.
