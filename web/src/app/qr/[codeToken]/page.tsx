@@ -5,24 +5,18 @@ import { useParams } from "next/navigation";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5222/api";
 
-const SUPPORTED_LANGUAGES = [
-  { code: "en", label: "English" },
-  { code: "es", label: "Español" },
-  { code: "fr", label: "Français" },
-  { code: "pl", label: "Polski" },
-  { code: "ro", label: "Română" },
-  { code: "uk", label: "Українська" },
-  { code: "pt", label: "Português" },
-  { code: "lt", label: "Lietuvių" },
-  { code: "de", label: "Deutsch" },
-  { code: "lv", label: "Latviešu" },
-];
-
-function detectBrowserLanguage(): string {
-  if (typeof navigator === "undefined") return "en";
-  const lang = (navigator.language ?? "en").slice(0, 2).toLowerCase();
-  return SUPPORTED_LANGUAGES.some((l) => l.code === lang) ? lang : "en";
-}
+const LANGUAGE_NAMES: Record<string, string> = {
+  en: "English",
+  es: "Spanish",
+  fr: "French",
+  pl: "Polish",
+  ro: "Romanian",
+  uk: "Ukrainian",
+  pt: "Portuguese",
+  lt: "Lithuanian",
+  de: "German",
+  lv: "Latvian",
+};
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -269,7 +263,6 @@ export default function QrScanPage() {
 
   const [step, setStep] = useState<Step>("loading");
   const [codeInfo, setCodeInfo] = useState<CodeInfo | null>(null);
-  const [language, setLanguage] = useState("en");
   const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -281,7 +274,6 @@ export default function QrScanPage() {
   const [completedAt, setCompletedAt] = useState<Date | null>(null);
 
   useEffect(() => {
-    setLanguage(detectBrowserLanguage());
     loadCodeInfo();
   }, [codeToken]);
 
@@ -435,20 +427,6 @@ export default function QrScanPage() {
                 <p className="text-center text-gray-500 text-sm mb-6">{codeInfo.talkTitle}</p>
               )}
 
-              {/* Language selector */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Language</label>
-                <select
-                  value={language}
-                  onChange={(e) => setLanguage(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-                >
-                  {SUPPORTED_LANGUAGES.map((l) => (
-                    <option key={l.code} value={l.code}>{l.label}</option>
-                  ))}
-                </select>
-              </div>
-
               <p className="text-center text-sm text-gray-600 mb-4 font-medium">Enter your 6-digit PIN</p>
 
               <PinInput onSubmit={handlePinSubmit} disabled={pinLoading} />
@@ -478,6 +456,13 @@ export default function QrScanPage() {
                 {sessionData.talk.description && (
                   <p className="text-sm text-gray-500 mt-1">{sessionData.talk.description}</p>
                 )}
+                <p className="text-xs text-gray-400 mt-3">
+                  Training will be shown in{" "}
+                  <span className="font-medium text-gray-500">
+                    {LANGUAGE_NAMES[sessionData.language] ?? sessionData.language}
+                  </span>
+                  . To change your preferred language, please contact your administrator.
+                </p>
               </div>
 
               {/* Sections phase */}
