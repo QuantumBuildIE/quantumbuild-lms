@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Plus, MapPin, QrCode, Download, Pencil, Trash2, X, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -72,6 +72,10 @@ function LocationDialog({
   const [form, setForm] = useState<LocationFormState>(
     initial ?? { name: "", description: "", address: "" }
   );
+
+  useEffect(() => {
+    setForm(initial ?? { name: "", description: "", address: "" });
+  }, [initial]);
 
   const set = (k: keyof LocationFormState) => (v: string) =>
     setForm((f) => ({ ...f, [k]: v }));
