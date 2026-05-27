@@ -159,6 +159,58 @@ public class EmailService : IEmailService
             </div>";
     }
 
+    public async Task SendUserCreatedEmailAsync(
+        string email,
+        string firstName,
+        CancellationToken cancellationToken = default)
+    {
+        var baseUrl = _configuration["AppSettings:BaseUrl"] ?? "https://quantumbuild-lms-web-production.up.railway.app";
+        var loginUrl = $"{baseUrl}/login";
+
+        var subject = "Your CertifiedIQ Account Has Been Created";
+        var body = $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8'>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background-color: #28a745; color: white; padding: 20px; text-align: center; }}
+        .content {{ padding: 20px; background-color: #f9f9f9; }}
+        .button {{ display: inline-block; background-color: #28a745; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; margin-top: 15px; }}
+        .footer {{ padding: 20px; text-align: center; color: #666; font-size: 12px; }}
+        .info {{ background-color: #e8f5e9; border: 1px solid #a5d6a7; padding: 15px; border-radius: 5px; margin-top: 15px; }}
+    </style>
+</head>
+<body>
+    <div class='container'>
+        <div class='header'>
+            <h1>Welcome to CertifiedIQ</h1>
+        </div>
+        <div class='content'>
+            <p>Dear {firstName},</p>
+            <p>Your account on CertifiedIQ has been created. You can log in using the details below:</p>
+            <div class='info'>
+                <p><strong>Login URL:</strong> <a href='{loginUrl}'>{loginUrl}</a></p>
+                <p><strong>Email address:</strong> {email}</p>
+            </div>
+            <p>Contact your administrator for your initial password.</p>
+            <p style='text-align: center; margin-top: 20px;'>
+                <a href='{loginUrl}' class='button'>Go to Login</a>
+            </p>
+        </div>
+        <div class='footer'>
+            <p>Thank you,<br>The CertifiedIQ Team</p>
+            <p>This is an automated message. Please do not reply to this email.</p>
+        </div>
+    </div>
+</body>
+</html>";
+
+        await SendEmailAsync(email, subject, body, cancellationToken);
+    }
+
     public async Task SendEmailAsync(
         string to,
         string subject,
