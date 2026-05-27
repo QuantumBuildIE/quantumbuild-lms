@@ -36,4 +36,14 @@ public interface IEmailService
         string subject,
         string introText,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Sends a welcome notification to a newly created user account.
+    /// Informs the user that their account exists and how to log in.
+    /// Does not include password — admin provides it separately.
+    /// </summary>
+    Task SendUserCreatedEmailAsync(
+        string email,
+        string firstName,
+        CancellationToken cancellationToken = default);
 }

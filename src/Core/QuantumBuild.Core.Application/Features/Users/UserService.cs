@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using QuantumBuild.Core.Application.Constants;
 using QuantumBuild.Core.Application.Features.Employees;
 using QuantumBuild.Core.Application.Features.Users.DTOs;
@@ -17,6 +18,8 @@ public class UserService : IUserService
     private readonly ICoreDbContext _context;
     private readonly ISystemAuditLogger _auditLogger;
     private readonly IEmployeeService _employeeService;
+    private readonly IEmailService _emailService;
+    private readonly ILogger<UserService> _logger;
 
     public UserService(
         UserManager<User> userManager,
@@ -24,7 +27,9 @@ public class UserService : IUserService
         ICurrentUserService currentUserService,
         ICoreDbContext context,
         ISystemAuditLogger auditLogger,
-        IEmployeeService employeeService)
+        IEmployeeService employeeService,
+        IEmailService emailService,
+        ILogger<UserService> logger)
     {
         _userManager = userManager;
         _roleManager = roleManager;
@@ -32,6 +37,8 @@ public class UserService : IUserService
         _context = context;
         _auditLogger = auditLogger;
         _employeeService = employeeService;
+        _emailService = emailService;
+        _logger = logger;
     }
 
     public async Task<Result<List<UserDto>>> GetAllAsync()
@@ -363,6 +370,20 @@ public class UserService : IUserService
                     ? createdUser.Employee.FirstName + " " + createdUser.Employee.LastName
                     : null
             );
+
+            try
+            {
+                await _emailService.SendUserCreatedEmailAsync(createdUser.Email!, createdUser.FirstName);
+                _logger.LogInformation(
+                    "Sent account creation email to {Email} for User {UserId}",
+                    createdUser.Email, createdUser.Id);
+            }
+            catch (Exception emailEx)
+            {
+                _logger.LogWarning(emailEx,
+                    "Failed to send account creation email to {Email} for User {UserId}",
+                    createdUser.Email, createdUser.Id);
+            }
 
             return Result.Ok(userDto);
         }
