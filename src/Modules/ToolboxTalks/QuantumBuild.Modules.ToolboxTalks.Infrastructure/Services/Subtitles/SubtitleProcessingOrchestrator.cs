@@ -143,7 +143,7 @@ public class SubtitleProcessingOrchestrator : ISubtitleProcessingOrchestrator
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         // Queue the background job
-        _backgroundJobClient.Enqueue<ISubtitleProcessingOrchestrator>(
+        _backgroundJobClient.Enqueue<SubtitleProcessingOrchestrator>(
             orchestrator => orchestrator.ProcessAsync(job.Id, CancellationToken.None));
 
         _logger.LogInformation("Subtitle processing job {JobId} created and queued for ToolboxTalk {TalkId}",
@@ -156,9 +156,10 @@ public class SubtitleProcessingOrchestrator : ISubtitleProcessingOrchestrator
     public async Task ProcessAsync(Guid jobId, CancellationToken cancellationToken = default)
     {
         var job = await _dbContext.SubtitleProcessingJobs
+            .IgnoreQueryFilters()
             .Include(j => j.Translations)
             .Include(j => j.ToolboxTalk)
-            .FirstOrDefaultAsync(j => j.Id == jobId, cancellationToken);
+            .FirstOrDefaultAsync(j => j.Id == jobId && !j.IsDeleted, cancellationToken);
 
         if (job == null)
         {
@@ -504,7 +505,7 @@ public class SubtitleProcessingOrchestrator : ISubtitleProcessingOrchestrator
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         // Queue retry background job
-        _backgroundJobClient.Enqueue<ISubtitleProcessingOrchestrator>(
+        _backgroundJobClient.Enqueue<SubtitleProcessingOrchestrator>(
             orchestrator => orchestrator.ProcessRetryAsync(job.Id, CancellationToken.None));
 
         return job.Id;
@@ -516,9 +517,10 @@ public class SubtitleProcessingOrchestrator : ISubtitleProcessingOrchestrator
     public async Task ProcessRetryAsync(Guid jobId, CancellationToken cancellationToken = default)
     {
         var job = await _dbContext.SubtitleProcessingJobs
+            .IgnoreQueryFilters()
             .Include(j => j.Translations)
             .Include(j => j.ToolboxTalk)
-            .FirstOrDefaultAsync(j => j.Id == jobId, cancellationToken);
+            .FirstOrDefaultAsync(j => j.Id == jobId && !j.IsDeleted, cancellationToken);
 
         if (job == null)
         {
