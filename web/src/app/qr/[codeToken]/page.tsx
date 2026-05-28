@@ -12,6 +12,7 @@ const LANGUAGE_NAMES: Record<string, string> = {
   pl: "Polish",
   ro: "Romanian",
   uk: "Ukrainian",
+  ru: "Russian",
   pt: "Portuguese",
   lt: "Lithuanian",
   de: "German",
@@ -51,6 +52,7 @@ interface SessionTalk {
   title: string;
   description: string | null;
   videoUrl: string | null;
+  subtitleLanguageCodes: string[];
   requiresQuiz: boolean;
   passingScore: number;
   sections: SessionSection[];
@@ -83,7 +85,17 @@ function getQrVideoEmbed(url: string): { embedUrl: string; isIframe: boolean } {
   return { embedUrl: url, isIframe: false };
 }
 
-function QrVideoPlayer({ videoUrl }: { videoUrl: string }) {
+function QrVideoPlayer({
+  videoUrl,
+  sessionToken,
+  sessionLanguage,
+  subtitleLanguageCodes,
+}: {
+  videoUrl: string;
+  sessionToken: string;
+  sessionLanguage: string;
+  subtitleLanguageCodes: string[];
+}) {
   const { embedUrl, isIframe } = getQrVideoEmbed(videoUrl);
   return (
     <div className="bg-black rounded-xl overflow-hidden">
@@ -102,7 +114,18 @@ function QrVideoPlayer({ videoUrl }: { videoUrl: string }) {
             className="absolute inset-0 w-full h-full"
             controls
             playsInline
-          />
+          >
+            {subtitleLanguageCodes.map((code) => (
+              <track
+                key={code}
+                kind="subtitles"
+                src={`${API_BASE}/qr/session/${sessionToken}/subtitles/${code}`}
+                srcLang={code}
+                label={LANGUAGE_NAMES[code] ?? code}
+                default={code === sessionLanguage}
+              />
+            ))}
+          </video>
         )}
       </div>
     </div>
@@ -509,7 +532,12 @@ export default function QrScanPage() {
               {/* Video phase */}
               {contentPhase === "video" && sessionData.talk.videoUrl && (
                 <>
-                  <QrVideoPlayer videoUrl={sessionData.talk.videoUrl} />
+                  <QrVideoPlayer
+                    videoUrl={sessionData.talk.videoUrl}
+                    sessionToken={sessionData.sessionToken}
+                    sessionLanguage={sessionData.language}
+                    subtitleLanguageCodes={sessionData.talk.subtitleLanguageCodes}
+                  />
                   <button
                     onClick={() => setContentPhase("sections")}
                     className="w-full py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors shadow"

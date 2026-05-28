@@ -704,7 +704,7 @@ public class MyToolboxTalksController : ControllerBase
 
             if (format.Equals("vtt", StringComparison.OrdinalIgnoreCase))
             {
-                content = ConvertSrtToVtt(srtContent);
+                content = SubtitleConverter.SrtToVtt(srtContent);
                 contentType = "text/vtt; charset=utf-8";
             }
             else
@@ -721,32 +721,6 @@ public class MyToolboxTalksController : ControllerBase
             _logger.LogError(ex, "Error getting subtitle file for talk {ScheduledTalkId}, language {Language}", id, languageCode);
             return StatusCode(500, new { message = "Error getting subtitle file" });
         }
-    }
-
-    /// <summary>
-    /// Converts SRT subtitle format to WebVTT format for browser video players
-    /// </summary>
-    private static string ConvertSrtToVtt(string srtContent)
-    {
-        var lines = srtContent.Split('\n');
-        var vttLines = new List<string> { "WEBVTT", "" };
-
-        foreach (var line in lines)
-        {
-            var trimmedLine = line.TrimEnd('\r');
-
-            // Convert timestamp format: 00:00:00,000 --> 00:00:00.000
-            if (trimmedLine.Contains(" --> "))
-            {
-                vttLines.Add(trimmedLine.Replace(',', '.'));
-            }
-            else
-            {
-                vttLines.Add(trimmedLine);
-            }
-        }
-
-        return string.Join("\n", vttLines);
     }
 
     /// <summary>
