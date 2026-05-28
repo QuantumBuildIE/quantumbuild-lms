@@ -68,6 +68,47 @@ interface SessionData {
   talk: SessionTalk | null;
 }
 
+// ── Video helpers ─────────────────────────────────────────────────────────────
+
+function getQrVideoEmbed(url: string): { embedUrl: string; isIframe: boolean } {
+  const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/);
+  if (yt) return { embedUrl: `https://www.youtube.com/embed/${yt[1]}`, isIframe: true };
+
+  const vimeo = url.match(/vimeo\.com\/(\d+)/);
+  if (vimeo) return { embedUrl: `https://player.vimeo.com/video/${vimeo[1]}`, isIframe: true };
+
+  const drive = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (drive) return { embedUrl: `https://drive.google.com/file/d/${drive[1]}/preview`, isIframe: true };
+
+  return { embedUrl: url, isIframe: false };
+}
+
+function QrVideoPlayer({ videoUrl }: { videoUrl: string }) {
+  const { embedUrl, isIframe } = getQrVideoEmbed(videoUrl);
+  return (
+    <div className="bg-black rounded-xl overflow-hidden">
+      <div className="relative" style={{ paddingTop: "56.25%" }}>
+        {isIframe ? (
+          <iframe
+            src={embedUrl}
+            className="absolute inset-0 w-full h-full"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            title="Training Video"
+          />
+        ) : (
+          <video
+            src={embedUrl}
+            className="absolute inset-0 w-full h-full"
+            controls
+            playsInline
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── PIN Input ─────────────────────────────────────────────────────────────────
 
 function PinInput({
@@ -255,7 +296,7 @@ function Quiz({
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 type Step = "loading" | "pin" | "content" | "complete" | "error";
-type ContentPhase = "sections" | "quiz" | "signoff";
+type ContentPhase = "video" | "sections" | "quiz" | "signoff";
 
 export default function QrScanPage() {
   const params = useParams();
@@ -338,7 +379,7 @@ export default function QrScanPage() {
       }
       const session: SessionData = await sessionRes.json();
       setSessionData(session);
-      setContentPhase("sections");
+      setContentPhase(session.talk?.videoUrl ? "video" : "sections");
       setStep("content");
     } catch {
       setPinError("Network error. Please try again.");
@@ -464,6 +505,19 @@ export default function QrScanPage() {
                   . To change your preferred language, please contact your administrator.
                 </p>
               </div>
+
+              {/* Video phase */}
+              {contentPhase === "video" && sessionData.talk.videoUrl && (
+                <>
+                  <QrVideoPlayer videoUrl={sessionData.talk.videoUrl} />
+                  <button
+                    onClick={() => setContentPhase("sections")}
+                    className="w-full py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors shadow"
+                  >
+                    Continue to Content
+                  </button>
+                </>
+              )}
 
               {/* Sections phase */}
               {contentPhase === "sections" && (
