@@ -212,7 +212,7 @@ public class SubtitleProcessingController : ControllerBase
     {
         try
         {
-            var srtContent = await _orchestrator.GetSrtContentAsync(toolboxTalkId, languageCode, cancellationToken);
+            var srtContent = await _orchestrator.GetSrtContentAsync(toolboxTalkId, languageCode, cancellationToken: cancellationToken);
 
             if (srtContent == null)
                 return NotFound(new { Error = $"No completed subtitle found for language code '{languageCode}'" });

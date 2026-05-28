@@ -542,7 +542,7 @@ public class QrScanController : ControllerBase
             if (talkId == null)
                 return BadRequest(new { message = "Subtitles are not available for course-based sessions." });
 
-            var srtContent = await _subtitleOrchestrator.GetSrtContentAsync(talkId.Value, languageCode, cancellationToken);
+            var srtContent = await _subtitleOrchestrator.GetSrtContentAsync(talkId.Value, languageCode, bypassTenantFilter: true, cancellationToken);
             if (srtContent == null)
                 return NotFound(new { message = $"No subtitle found for language '{languageCode}'." });
 
