@@ -1388,6 +1388,8 @@ Archived notes 1-89 are in CLAUDE-archive.md
 
 **Note 26 — Development default tenant**: The default tenant in Development (ID `11111111-1111-1111-1111-111111111111`) has been renamed from "QuantumBuild" to "CertifiedIQ System". It is a system fixture, not an operational tenant — it exists to give the SuperUser account a valid `TenantId` FK. Do not assign customer employees, content, or other operational data to this tenant.
 
+**Note 27 — QrPinPlain security trade-off (product decision, 2026-05-28)**: `Employee.QrPinPlain` stores QR PINs in plaintext. Visible on the employee detail view to SuperUsers and tenant Admins (admins are scoped to their own tenant's employees via existing tenant filtering). Explicit product decision (boss request) to allow admins to read out PINs to employees who have forgotten them. Known trade-offs: plaintext PINs are recoverable from any DB access or backup; all tenant admins — not just internal staff — can read them. Revisit if a more secure approach becomes viable (e.g. one-time reveal at reset time only, or encryption with an external key that DB access alone cannot decrypt).
+
 ## Backlog
 
 ### High
