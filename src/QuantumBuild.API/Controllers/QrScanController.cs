@@ -9,6 +9,7 @@ using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Core.Application.Models;
 using QuantumBuild.Core.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Application.Services.Subtitles;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 
@@ -52,6 +53,7 @@ public record QrSessionTalkDto(
     string Title,
     string? Description,
     string? VideoUrl,
+    List<string> SubtitleLanguageCodes,
     bool RequiresQuiz,
     int PassingScore,
     List<QrSessionSectionDto> Sections,
@@ -78,6 +80,7 @@ public class QrScanController : ControllerBase
     private readonly ICoreDbContext _coreDb;
     private readonly IEmployeePinService _pinService;
     private readonly IPasswordHasher<Employee> _passwordHasher;
+    private readonly ISubtitleProcessingOrchestrator _subtitleOrchestrator;
     private readonly ILogger<QrScanController> _logger;
 
     public QrScanController(
@@ -85,12 +88,14 @@ public class QrScanController : ControllerBase
         ICoreDbContext coreDb,
         IEmployeePinService pinService,
         IPasswordHasher<Employee> passwordHasher,
+        ISubtitleProcessingOrchestrator subtitleOrchestrator,
         ILogger<QrScanController> logger)
     {
         _db = db;
         _coreDb = coreDb;
         _pinService = pinService;
         _passwordHasher = passwordHasher;
+        _subtitleOrchestrator = subtitleOrchestrator;
         _logger = logger;
     }
 
@@ -297,6 +302,7 @@ public class QrScanController : ControllerBase
                     courseTitle,
                     null,
                     null,
+                    new List<string>(),
                     requiresQuiz,
                     passingScore,
                     allSections,
@@ -343,11 +349,24 @@ public class QrScanController : ControllerBase
                         q.Points);
                 }).ToList();
 
+                var subtitleJob = await _db.SubtitleProcessingJobs
+                    .IgnoreQueryFilters()
+                    .Where(j => !j.IsDeleted && j.ToolboxTalkId == talk.Id)
+                    .OrderByDescending(j => j.CreatedAt)
+                    .Include(j => j.Translations)
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                var subtitleLanguageCodes = subtitleJob?.Translations
+                    .Where(t => t.Status == SubtitleTranslationStatus.Completed)
+                    .Select(t => t.LanguageCode)
+                    .ToList() ?? new List<string>();
+
                 talkDto = new QrSessionTalkDto(
                     talk.Id,
                     translation?.TranslatedTitle ?? talk.Title,
                     translation?.TranslatedDescription ?? talk.Description,
                     talk.VideoUrl,
+                    subtitleLanguageCodes,
                     talk.RequiresQuiz,
                     talk.PassingScore ?? 80,
                     sections,
@@ -494,6 +513,45 @@ public class QrScanController : ControllerBase
         {
             _logger.LogError(ex, "Error abandoning QR session {Token}", sessionToken);
             return StatusCode(500, Result.Fail("Error abandoning session."));
+        }
+    }
+
+    // ── GET /session/{sessionToken}/subtitles/{languageCode} ─────────────────
+
+    [HttpGet("session/{sessionToken:guid}/subtitles/{languageCode}")]
+    public async Task<IActionResult> GetSubtitleFile(
+        Guid sessionToken,
+        string languageCode,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var session = await _db.QrSessions
+                .IgnoreQueryFilters()
+                .Where(s => !s.IsDeleted && s.SessionToken == sessionToken)
+                .Include(s => s.QrCode)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (session == null)
+                return NotFound();
+
+            if (session.Status == QrSessionStatus.Completed || session.Status == QrSessionStatus.Abandoned)
+                return StatusCode(410, new { message = "Session has ended." });
+
+            var talkId = session.QrCode.ToolboxTalkId;
+            if (talkId == null)
+                return BadRequest(new { message = "Subtitles are not available for course-based sessions." });
+
+            var srtContent = await _subtitleOrchestrator.GetSrtContentAsync(talkId.Value, languageCode, bypassTenantFilter: true, cancellationToken);
+            if (srtContent == null)
+                return NotFound(new { message = $"No subtitle found for language '{languageCode}'." });
+
+            return Content(SubtitleConverter.SrtToVtt(srtContent), "text/vtt; charset=utf-8");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting subtitle for QR session {Token}, language {Language}", sessionToken, languageCode);
+            return StatusCode(500, new { message = "Error getting subtitle file." });
         }
     }
 

@@ -705,13 +705,21 @@ public class SubtitleProcessingOrchestrator : ISubtitleProcessingOrchestrator
     public async Task<string?> GetSrtContentAsync(
         Guid toolboxTalkId,
         string languageCode,
+        bool bypassTenantFilter = false,
         CancellationToken cancellationToken = default)
     {
-        var job = await _dbContext.SubtitleProcessingJobs
-            .Include(j => j.Translations)
-            .Where(j => j.ToolboxTalkId == toolboxTalkId && !j.IsDeleted)
-            .OrderByDescending(j => j.CreatedAt)
-            .FirstOrDefaultAsync(cancellationToken);
+        var query = bypassTenantFilter
+            ? _dbContext.SubtitleProcessingJobs
+                .IgnoreQueryFilters()
+                .Include(j => j.Translations)
+                .Where(j => j.ToolboxTalkId == toolboxTalkId && !j.IsDeleted)
+                .OrderByDescending(j => j.CreatedAt)
+            : _dbContext.SubtitleProcessingJobs
+                .Include(j => j.Translations)
+                .Where(j => j.ToolboxTalkId == toolboxTalkId && !j.IsDeleted)
+                .OrderByDescending(j => j.CreatedAt);
+
+        var job = await query.FirstOrDefaultAsync(cancellationToken);
 
         if (job == null)
             return null;

@@ -84,11 +84,17 @@ public interface ISubtitleProcessingOrchestrator
     /// </summary>
     /// <param name="toolboxTalkId">The toolbox talk ID</param>
     /// <param name="languageCode">ISO 639-1 language code</param>
+    /// <param name="bypassTenantFilter">
+    /// When true, skips the EF tenant query filter (use for unauthenticated call paths such as
+    /// the QR scan endpoint where TenantId is Guid.Empty). Access must already be scoped by the
+    /// caller (e.g. resolved from a validated session token). Default is false.
+    /// </param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>SRT content if found and completed, null otherwise</returns>
     Task<string?> GetSrtContentAsync(
         Guid toolboxTalkId,
         string languageCode,
+        bool bypassTenantFilter = false,
         CancellationToken cancellationToken = default);
 
     /// <summary>

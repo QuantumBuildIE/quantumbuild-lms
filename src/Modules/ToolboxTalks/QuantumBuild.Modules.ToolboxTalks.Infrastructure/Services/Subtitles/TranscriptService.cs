@@ -31,7 +31,7 @@ public class TranscriptService : ITranscriptService
         try
         {
             // Try to get English SRT first (primary transcript language)
-            var srtContent = await _orchestrator.GetSrtContentAsync(toolboxTalkId, "en", cancellationToken);
+            var srtContent = await _orchestrator.GetSrtContentAsync(toolboxTalkId, "en", cancellationToken: cancellationToken);
 
             if (string.IsNullOrWhiteSpace(srtContent))
             {
