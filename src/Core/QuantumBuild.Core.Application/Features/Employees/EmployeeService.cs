@@ -80,7 +80,8 @@ public class EmployeeService : IEmployeeService
                     e.PreferredLanguage,
                     e.FloatPersonId,
                     e.FloatLinkedAt,
-                    e.FloatLinkMethod
+                    e.FloatLinkMethod,
+                    null
                 ))
                 .ToListAsync();
 
@@ -147,7 +148,8 @@ public class EmployeeService : IEmployeeService
                     e.PreferredLanguage,
                     e.FloatPersonId,
                     e.FloatLinkedAt,
-                    e.FloatLinkMethod
+                    e.FloatLinkMethod,
+                    null
                 ))
                 .ToListAsync();
 
@@ -186,6 +188,9 @@ public class EmployeeService : IEmployeeService
     {
         try
         {
+            var canViewPin = _currentUserService.IsSuperUser ||
+                             _currentUserService.HasPermission("Learnings.Admin");
+
             var employee = await _context.Employees
                 .Include(e => e.PrimarySite)
                 .Where(e => e.Id == id)
@@ -212,7 +217,8 @@ public class EmployeeService : IEmployeeService
                     e.PreferredLanguage,
                     e.FloatPersonId,
                     e.FloatLinkedAt,
-                    e.FloatLinkMethod
+                    e.FloatLinkMethod,
+                    canViewPin ? e.QrPinPlain : null
                 ))
                 .FirstOrDefaultAsync();
 
@@ -939,7 +945,8 @@ public class EmployeeService : IEmployeeService
                     e.PreferredLanguage,
                     e.FloatPersonId,
                     e.FloatLinkedAt,
-                    e.FloatLinkMethod
+                    e.FloatLinkMethod,
+                    null
                 ))
                 .ToListAsync();
 

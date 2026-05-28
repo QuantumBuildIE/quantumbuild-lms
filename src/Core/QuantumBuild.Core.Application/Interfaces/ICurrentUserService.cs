@@ -32,6 +32,12 @@ public interface ICurrentUserService
     bool IsSuperUser { get; }
 
     /// <summary>
+    /// Whether the current user holds a specific permission claim.
+    /// SuperUsers implicitly hold all permissions.
+    /// </summary>
+    bool HasPermission(string permission);
+
+    /// <summary>
     /// Current user's linked Employee ID (null if not linked to an employee)
     /// </summary>
     Guid? EmployeeId { get; }

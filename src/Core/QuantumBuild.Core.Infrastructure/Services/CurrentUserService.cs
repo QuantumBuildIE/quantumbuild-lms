@@ -71,6 +71,18 @@ public class CurrentUserService : ICurrentUserService
     }
 
     /// <summary>
+    /// Whether the current user holds a specific permission claim.
+    /// SuperUsers implicitly hold all permissions.
+    /// </summary>
+    public bool HasPermission(string permission)
+    {
+        if (IsSuperUser) return true;
+        return _httpContextAccessor.HttpContext?.User
+            .FindAll("permission")
+            .Any(c => c.Value == permission) ?? false;
+    }
+
+    /// <summary>
     /// Current user's linked Employee ID from JWT claim (null if not linked)
     /// </summary>
     public Guid? EmployeeId

@@ -46,6 +46,7 @@ public class EmployeePinService : IEmployeePinService
     public async Task<string> SetPinAsync(Employee employee, string rawPin, CancellationToken ct = default)
     {
         employee.QrPin = _hasher.HashPassword(employee, rawPin);
+        employee.QrPinPlain = rawPin;
         employee.QrPinIsSet = true;
         employee.QrPinGeneratedAt = DateTimeOffset.UtcNow;
         employee.QrPinFailedAttempts = 0;
