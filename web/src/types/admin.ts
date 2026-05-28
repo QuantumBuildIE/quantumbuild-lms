@@ -38,6 +38,8 @@ export interface Employee {
   linkedUserId?: string;
   /** Preferred language for Learning subtitles and notifications (ISO 639-1 code) */
   preferredLanguage: string;
+  /** Plaintext QR PIN — only populated for SuperUser callers. Null if not a SuperUser or if the PIN predates plaintext storage. */
+  qrPinPlain?: string | null;
 }
 
 export interface CreateEmployeeRequest {

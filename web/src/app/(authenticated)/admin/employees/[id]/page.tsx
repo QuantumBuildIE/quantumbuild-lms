@@ -28,6 +28,7 @@ import { ChevronLeft, Pencil, KeyRound, ScanLine } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { usePermission } from "@/lib/auth/use-auth";
 
 const CONTENT_MODE_LABELS: Record<string, string> = {
   ViewOnly: "View Only",
@@ -136,6 +137,7 @@ export default function EmployeeDetailPage() {
   const { data: languages = [] } = useLookupValues("Language");
   const { data: settings } = useTenantSettings();
   const qrEnabled = settings?.["QrLocationTrainingEnabled"] === "true";
+  const canViewPin = usePermission("Learnings.Admin");
   const resetPinMutation = useResetEmployeePin();
   const [pinResetConfirmOpen, setPinResetConfirmOpen] = useState(false);
 
@@ -280,6 +282,18 @@ export default function EmployeeDetailPage() {
             {employee.notes && (
               <div className="sm:col-span-2">
                 <DetailItem label="Notes" value={employee.notes} />
+              </div>
+            )}
+            {qrEnabled && canViewPin && (
+              <div className="sm:col-span-2">
+                <DetailItem
+                  label="Workstation PIN (SuperUser)"
+                  value={
+                    employee.qrPinPlain
+                      ? employee.qrPinPlain
+                      : "Not captured — reset PIN to reveal"
+                  }
+                />
               </div>
             )}
           </dl>

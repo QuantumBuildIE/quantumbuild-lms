@@ -157,4 +157,11 @@ public class Employee : TenantEntity
     /// If set and in the future, PIN entry is locked until this time
     /// </summary>
     public DateTimeOffset? QrPinLockedUntil { get; set; }
+
+    /// <summary>
+    /// Plaintext PIN stored for SuperUser audit access. Never returned in API responses
+    /// unless the requesting user is a SuperUser. Null for employees created before this
+    /// field was added — reset the PIN to populate it.
+    /// </summary>
+    public string? QrPinPlain { get; set; }
 }

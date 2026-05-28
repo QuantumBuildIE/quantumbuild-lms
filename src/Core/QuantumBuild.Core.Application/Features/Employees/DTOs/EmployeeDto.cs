@@ -44,5 +44,11 @@ public record EmployeeDto(
     /// <summary>
     /// How this employee was linked to Float (Auto-Email, Auto-Name, Manual)
     /// </summary>
-    string? FloatLinkMethod = null
+    string? FloatLinkMethod = null,
+    /// <summary>
+    /// Plaintext PIN — only populated when the requesting user is a SuperUser.
+    /// Null either because the user is not a SuperUser, or because the PIN was
+    /// generated before plaintext storage was introduced (reset PIN to reveal).
+    /// </summary>
+    string? QrPinPlain = null
 );

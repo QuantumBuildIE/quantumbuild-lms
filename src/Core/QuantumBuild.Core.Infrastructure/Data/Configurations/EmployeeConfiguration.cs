@@ -62,6 +62,7 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
         builder.Property(e => e.QrPinLastUsedAt);
         builder.Property(e => e.QrPinFailedAttempts).HasDefaultValue(0);
         builder.Property(e => e.QrPinLockedUntil);
+        builder.Property(e => e.QrPinPlain).HasMaxLength(6);
 
         // Ignore computed property
         builder.Ignore(e => e.FullName);
