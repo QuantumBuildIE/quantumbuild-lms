@@ -114,6 +114,7 @@ function QrVideoPlayer({
             className="absolute inset-0 w-full h-full"
             controls
             playsInline
+            crossOrigin="anonymous"
           >
             {subtitleLanguageCodes.map((code) => (
               <track
