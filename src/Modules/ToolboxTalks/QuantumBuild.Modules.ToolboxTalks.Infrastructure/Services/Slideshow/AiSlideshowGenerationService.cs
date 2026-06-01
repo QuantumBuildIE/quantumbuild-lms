@@ -547,7 +547,7 @@ public class AiSlideshowGenerationService : IAiSlideshowGenerationService
         var d=e.data;
         if(!d||!d.type)return;
         if(d.type==='goToSlide'){
-          if(_goTo)_goTo(d.slide);
+          if(_goTo)_goTo(d.index);
           setTimeout(notifyParent,350);
         }else if(d.type==='nextSlide'){
           if(_next)_next();else fallbackNext();
