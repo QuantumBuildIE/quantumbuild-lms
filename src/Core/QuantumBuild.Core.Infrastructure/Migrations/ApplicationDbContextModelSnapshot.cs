@@ -1733,6 +1733,13 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(true);
 
+                    b.Property<string>("AudienceRole")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasDefaultValue("Operator");
+
                     b.Property<string>("InputMode")
                         .IsRequired()
                         .HasMaxLength(20)

@@ -51,6 +51,7 @@ export interface ContentCreationSession {
   targetLanguageCodes: string | null;
   passThreshold: number;
   includeQuiz: boolean;
+  audienceRole: string;
   sectorKey: string | null;
   reviewerName: string | null;
   reviewerOrg: string | null;
@@ -93,6 +94,7 @@ export interface CreateSessionRequest {
   sectorKey?: string;
   passThreshold?: number;
   includeQuiz?: boolean;
+  audienceRole?: string;
   reviewerName?: string;
   reviewerOrg?: string;
   reviewerRole?: string;

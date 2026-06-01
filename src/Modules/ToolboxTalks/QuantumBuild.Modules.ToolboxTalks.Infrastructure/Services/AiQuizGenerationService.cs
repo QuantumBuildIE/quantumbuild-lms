@@ -43,6 +43,7 @@ public class AiQuizGenerationService : IAiQuizGenerationService
         Guid tenantId,
         Guid? userId = null,
         int minimumQuestions = 5,
+        string audienceRole = "Operator",
         CancellationToken cancellationToken = default)
     {
         try
@@ -74,7 +75,8 @@ public class AiQuizGenerationService : IAiQuizGenerationService
                 videoFinalPortionContent,
                 hasVideoContent,
                 hasPdfContent,
-                minimumQuestions);
+                minimumQuestions,
+                audienceRole);
 
             var requestBody = new
             {
