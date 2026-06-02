@@ -249,9 +249,7 @@ public class TranslationValidationJob
                 run.OverallScore, run.OverallOutcome,
                 run.SafetyVerdict);
 
-            await SendCompletionAsync(validationRunId, true,
-                $"Validation complete: {run.PassedSections}/{run.TotalSections} passed, " +
-                $"score {run.OverallScore}%");
+            await SendCompletionAsync(validationRunId, true, "Validation complete");
 
             // If this run belongs to a creation session, check if all runs are done
             await TryUpdateSessionStatusAsync(validationRunId, tenantId);

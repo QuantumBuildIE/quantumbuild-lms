@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueries } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
@@ -511,7 +511,8 @@ function ThreeColumnSummary({
       {/* Translations column */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium text-muted-foreground">Translations</CardTitle>
+          <CardTitle className="text-sm font-medium text-muted-foreground">Back-translation scores</CardTitle>
+          <CardDescription className="text-xs">Consensus back-translation score per target language</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           {targetLanguageCodes.length === 0 ? (

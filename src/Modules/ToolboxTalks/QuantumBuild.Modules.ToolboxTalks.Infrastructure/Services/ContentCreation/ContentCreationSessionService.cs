@@ -543,10 +543,15 @@ public class ContentCreationSessionService : IContentCreationSessionService
             }
         }
 
-        // No target languages — sync the draft talk but skip translation/validation entirely
-        if (request.TargetLanguageCodes.Count == 0)
+        // Filter source language from targets — source→source validation is a tautology
+        var filteredCodes = request.TargetLanguageCodes
+            .Where(c => !c.Equals("en", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        // No effective target languages — sync the draft talk but skip translation/validation entirely
+        if (filteredCodes.Count == 0)
         {
-            session.TargetLanguageCodes = JsonSerializer.Serialize(request.TargetLanguageCodes);
+            session.TargetLanguageCodes = JsonSerializer.Serialize(filteredCodes);
             session.Status = ContentCreationSessionStatus.Validated;
 
             if (newDraftTalk != null)
@@ -568,12 +573,12 @@ public class ContentCreationSessionService : IContentCreationSessionService
             return MapToDto(session);
         }
 
-        session.TargetLanguageCodes = JsonSerializer.Serialize(request.TargetLanguageCodes);
+        session.TargetLanguageCodes = JsonSerializer.Serialize(filteredCodes);
         session.Status = ContentCreationSessionStatus.TranslatingValidating;
 
         // Create a TranslationValidationRun per language and enqueue Hangfire jobs
         var runIds = new List<Guid>();
-        foreach (var langCode in request.TargetLanguageCodes)
+        foreach (var langCode in filteredCodes)
         {
             var run = new TranslationValidationRun
             {

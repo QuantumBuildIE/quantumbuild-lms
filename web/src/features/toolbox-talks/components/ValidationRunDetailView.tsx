@@ -245,6 +245,7 @@ export function ValidationRunDetailView({
         safetyVerdict={run.safetyVerdict}
         sourceDialect={run.sourceDialect}
         progressMessage={`${run.totalSections} / ${run.totalSections} sections`}
+        passThreshold={run.passThreshold}
         isConnected={false}
       />
 

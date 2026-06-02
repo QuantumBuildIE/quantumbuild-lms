@@ -52,6 +52,12 @@ export function ValidateStep({
 
   const { data: session } = useCreationSession(sessionId);
 
+  // Effective language codes come from the session (source language already filtered out server-side)
+  const sessionLanguageCodes = useMemo<string[]>(() => {
+    if (!session?.targetLanguageCodes) return [];
+    try { return JSON.parse(session.targetLanguageCodes); } catch { return []; }
+  }, [session?.targetLanguageCodes]);
+
   const runEntries = useMemo<RunEntry[]>(() => {
     if (!session?.validationRunIds) return [];
     try {
@@ -59,12 +65,12 @@ export function ValidateStep({
       if (!Array.isArray(parsed)) return [];
       return parsed.map((id: string, i: number) => ({
         runId: id,
-        languageCode: state.targetLanguageCodes[i] ?? 'unknown',
+        languageCode: sessionLanguageCodes[i] ?? state.targetLanguageCodes[i] ?? 'unknown',
       }));
     } catch {
       return [];
     }
-  }, [session?.validationRunIds, state.targetLanguageCodes]);
+  }, [session?.validationRunIds, sessionLanguageCodes, state.targetLanguageCodes]);
 
   const [activeIndex, setActiveIndex] = useState(0);
   const activeEntry = runEntries[activeIndex] ?? null;
@@ -211,6 +217,7 @@ export function ValidateStep({
         safetyVerdict={safetyVerdict}
         sourceDialect={sourceDialect}
         progressMessage=""
+        passThreshold={passThreshold}
         isConnected={false}
       />
 
