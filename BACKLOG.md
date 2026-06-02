@@ -1,6 +1,6 @@
 # CertifiedIQ — Backlog (Source of Truth)
 
-**Last updated:** 28 May 2026
+**Last updated:** 2 June 2026
 **Purpose:** Comprehensive record of every known item — bug, feature, refactor, product decision — across the CertifiedIQ LMS. This is the long reference. For the active prioritised list, see `SPRINT.md`.
 
 ## Conventions
@@ -72,20 +72,14 @@ Source: `CertifiedIQ_Translator_UAT_Brief_Ryans_Bakery_v3.pdf` (27 May 2026). Re
 #### 1.1.4 Slideshow counter mismatch ("Slide 1 of 6" when on slide 4)
 - **Priority:** P1
 - **Origin:** `[UAT]`
-- **Status:** Open
-- **Description:** Slideshow iframe header reads 4/6; parent footer shows "Slide 1 of 6". Back button on footer disabled.
-- **Cause:** Slideshow HTML never posts `slideChanged` outbound messages. Parent listens but never receives.
-- **Files:** `HtmlSlideshow.tsx:36-48, 117`, `SlideshowGenerationPrompts.cs:187, 414, 556`
-- **Fix direction:** **Prompt-only change** — tell AI to post `slideChanged` on every slide transition, respond to `getSlideCount` immediately. See Prompt 3 in original brief. No frontend change needed.
-- **Acceptance:** Header and footer indices always match. Back active whenever index > 1. Fixes 1.1.5 too.
+- **Status:** ✅ Done (2 Jun 2026)
+- **Resolution:** Two-part fix. Prompt change in `SlideshowGenerationPrompts.cs` told AI-generated slideshows to natively post `slideChanged` messages on every navigation. Then a second fix removed the legacy `InjectPostMessageBridge` script entirely from `AiSlideshowGenerationService.cs` — it was racing the AI's own messages and overwriting them with `current: 0` because its `currentSlide()` fallback couldn't read the AI's slide-index variable. Verified on Development: counter syncs and stays correct, Back button activates after slide 1.
 
 #### 1.1.5 Slideshow Back button doesn't navigate
 - **Priority:** P1
 - **Origin:** `[UAT]`
-- **Status:** Open
-- **Description:** Back inactive or returns to create flow instead of previous slide.
-- **Cause:** Same as 1.1.4 — `currentSlide` never increments past 0, so `isFirstSlide` evaluates true.
-- **Fix:** Resolved by 1.1.4 prompt fix.
+- **Status:** ✅ Done (2 Jun 2026)
+- **Resolution:** Same root cause as 1.1.4 (currentSlide stuck at 0 due to bridge reset); resolved by the same fix.
 
 #### 1.1.6 "Continue" wedged inactive after early Next on Input step
 - **Priority:** P1
@@ -132,11 +126,8 @@ Source: `CertifiedIQ_Translator_UAT_Brief_Ryans_Bakery_v3.pdf` (27 May 2026). Re
 #### 1.1.10 AI rewrites SOP wording; no "verbatim" mode
 - **Priority:** P2
 - **Origin:** `[UAT]`
-- **Status:** Open
-- **Description:** Pasted SOP comes back with rephrased headings and added flair. Customer wants option to keep wording exactly as written.
-- **Cause:** Section prompt instructs "summarize the key points" / "clear, simple language suitable for all employees". No verbatim parameter.
-- **Files:** `SectionGenerationPrompts.cs:11-64`, `InputConfigStep.tsx` (new toggle)
-- **Fix direction:** **Prompt + small UI** — add `verbatim` toggle to Step 1, pipe `preserveSourceWording` flag to `BuildSectionPrompt`. See Prompt 1 in original brief.
+- **Status:** ✅ Done (2 Jun 2026)
+- **Resolution:** Prompt change in `SectionGenerationPrompts.cs` plus full plumbing chain (DTO, entity, EF config, migration `AddPreserveSourceWordingToContentCreationSession`, service methods including the Hangfire video-path job, frontend wizard state, Step 1 toggle). When `preserveSourceWording` is on, the AI is instructed to identify section breaks but preserve source wording exactly — no rewriting, no rephrasing, no added safety advice. Verified end-to-end on Development: off-mode paraphrases as before, on-mode reproduces source content verbatim.
 
 #### 1.1.11 Word document (.docx) input not supported
 - **Priority:** P2
@@ -167,20 +158,14 @@ Source: `CertifiedIQ_Translator_UAT_Brief_Ryans_Bakery_v3.pdf` (27 May 2026). Re
 #### 1.1.14 Slide colour contrast / accessibility
 - **Priority:** P2
 - **Origin:** `[UAT]`
-- **Status:** Open
-- **Description:** Section headers render as faded text on deep purple background — barely legible. Below WCAG AA 4.5:1 body threshold.
-- **Cause:** Slideshow prompt uses `rgba(255,255,255,0.5)` for secondary text.
-- **Files:** `SlideshowGenerationPrompts.cs:154-160, 381-387, 523-529`
-- **Fix direction:** **Prompt-only** — lift body opacity to 0.95, secondary to 0.75. Add WCAG AA constraint, no-colour-only-signalling rule. See Prompt 3 in original brief.
+- **Status:** ✅ Done (2 Jun 2026)
+- **Resolution:** Prompt change in `SlideshowGenerationPrompts.cs` (all three prompt blocks). Body text opacity lifted from 0.75 to 0.95; secondary from 0.5 to 0.75. WCAG AA 4.5:1 contrast constraint and no-colour-only-signalling rule added. Verified on Development.
 
 #### 1.1.15 Quiz questions too hard for floor audience
 - **Priority:** P2
 - **Origin:** `[UAT]`
-- **Status:** Open
-- **Description:** Generated questions ask operators to recall RA numbers, use close distractors. Too hard for the actual audience.
-- **Cause:** Quiz prompt has no audience-awareness, no rule against identifier recall, vague distractor guidance.
-- **Files:** `QuizGenerationPrompts.cs:11-58`
-- **Fix direction:** **Prompt-only** — add `audienceRole` parameter to `BuildQuizPrompt`. Explicit rules against identifier recall for Operators. Stronger distractor diversity. See Prompt 2 in original brief.
+- **Status:** ✅ Done (2 Jun 2026)
+- **Resolution:** Prompt change in `QuizGenerationPrompts.cs` plus full plumbing chain (parameter, DTO, entity, EF config, migration `AddAudienceRoleToContentCreationSession`, service methods, frontend wizard state, Step 1 dropdown with three values: Operator / Supervisor / Auditor). Operator quizzes explicitly forbid identifier-recall questions; distractor diversity rule added; plain-language requirement added. Verified end-to-end on Development with a healthcare CMS access policy document — Operator quiz is procedural (no identifier recall), Auditor quiz has appropriately formal compliance framing.
 
 #### 1.1.16 Quiz: deleted questions cannot be restored after back-nav
 - **Priority:** P2
@@ -198,7 +183,7 @@ Source: `CertifiedIQ_Translator_UAT_Brief_Ryans_Bakery_v3.pdf` (27 May 2026). Re
 - **Description:** Customer wants to globally set target languages and content options rather than picking per-SOP.
 - **Cause:** Not a bug — feature request. Wizard initialises empty; no tenant-defaults lookup.
 - **Files:** Infrastructure exists — `TenantSetting.cs`, `useTenantSettings()` hook
-- **Fix direction:** New tenant-settings keys under `Module = ToolboxTalks.Defaults`: target languages, sector, include-quiz, pass threshold, reviewer role. Read in `InputConfigStep` on mount; allow per-import override. Settings UI in `/admin/toolbox-talks/settings`.
+- **Fix direction:** New tenant-settings keys under `Module = ToolboxTalks.Defaults`: target languages, sector, include-quiz, pass threshold, reviewer role, audience role, verbatim mode. Read in `InputConfigStep` on mount; allow per-import override. Settings UI in `/admin/toolbox-talks/settings`.
 
 ---
 
@@ -318,6 +303,13 @@ Source: `CertifiedIQ_Translator_UAT_Brief_Ryans_Bakery_v3.pdf` (27 May 2026). Re
 - **Origin:** `[Engineering]`
 - **Status:** Open
 - **Description:** No automated E2E tests covering the full content creation wizard. Every change risks regression that only surfaces in manual testing.
+
+#### 1.3.8 File upload size display rounds small files to "0.0 MB"
+- **Priority:** P3
+- **Origin:** `[Internal-QA]`
+- **Status:** Open (new — 2 Jun 2026)
+- **Description:** File upload component displays size in MB to one decimal. Files smaller than ~50KB show as "0.0 MB" which reads as "no file uploaded".
+- **Fix direction:** Switch to KB for files < 1MB, MB for files ≥ 1MB. Simple formatting fix in the upload component.
 
 ---
 
@@ -530,45 +522,118 @@ Removed from Employee:
 - **Fix direction:** Systematic audit: every query against a tenant-filtered entity that runs in a Hangfire job OR an unauthenticated endpoint must either use `IgnoreQueryFilters()` with explicit predicates, OR take an explicit `bypassTenantFilter` parameter. Grep all `[AllowAnonymous]` controllers and all Hangfire job classes; cross-reference every DB query inside them.
 - **Closes:** Prevents the fourth instance.
 
-#### 5.2 Migration Designer.cs guard
+#### 5.2 Migration creation process & Designer.cs guard
+- **Priority:** P1 (escalated from P2 — 2 Jun 2026)
+- **Origin:** `[Production-incident]` `[Engineering]`
+- **Status:** Open
+- **Description:** **Four documented instances** of missing Designer.cs files causing silent migration skips this session alone (one production bug `AddGlossaryCorrectionsToTranslationValidationResult`, plus three drift cases discovered while investigating, plus one new migration `AddAudienceRoleToContentCreationSession` that broke Development on push).
+  Root cause confirmed: migrations have been routinely **hand-written** rather than generated via `dotnet ef migrations add`. The CLI generates both the `.cs` AND `.Designer.cs` files together; hand-writing the `.cs` alone results in EF silently skipping the migration on every startup because the `[Migration]` attribute lives on the Designer.cs partial class declaration.
+- **Fix direction (two parts):**
+  - **Process change:** all migrations must be created via `dotnet ef migrations add <Name>`, never hand-written. Add explicit directive to CLAUDE.md so Claude Code follows it on every future schema change prompt.
+  - **Build-time guard:** check that every migration `.cs` file has a matching `.Designer.cs`. Fail build if mismatched. Catches both accidental hand-writing and future deletions.
+- **Closes:** Prevents recurrence of the silent-skip pattern that's cost ~3 hours of debugging this week.
+
+#### 5.3 Migration forensic audit — find any remaining missing Designer.cs files
+- **Priority:** P2
+- **Origin:** `[Engineering]`
+- **Status:** Open (new — 2 Jun 2026)
+- **Description:** Given the discovery that the codebase routinely hand-writes migrations, there may be other Designer.cs files missing besides the four already found and fixed. Some may have happened to work for unrelated reasons (`[Migration]` attribute on the wrong file, applied long ago with history intact, etc) but represent latent drift.
+- **Fix direction:** One-pass forensic scan of `src/Core/QuantumBuild.Core.Infrastructure/Migrations/` reporting:
+  - Every migration `.cs` without a matching `.Designer.cs`
+  - Every migration `.cs` with inline `[Migration(...)]` attribute (suggests hand-writing)
+  - Every migration with a synthetic timestamp (e.g. `*_000001` pattern) vs real timestamps
+  - Whether any of the above will cause issues on a fresh-environment migration replay
+- **Acceptance:** Confidence that no more silent-skip surprises lurk.
+
+#### 5.4 Development DB drift sweep
 - **Priority:** P2
 - **Origin:** `[Production-incident]`
 - **Status:** Open
-- **Description:** Hand-written migrations can be missing their `.Designer.cs` companion file. EF Core discovers migrations via `[Migration]` attribute on Designer.cs — without it, EF silently skips the migration on every startup. One instance silently broken for over a month before discovery this session.
-- **Fix direction:** Either mandate `dotnet ef migrations add` (which generates both files) via team practice, OR add a build-time / startup-time check that compares migration `.cs` files to their `.Designer.cs` counterparts and fails if mismatched. Either prevents recurrence.
+- **Description:** Multiple drift cases found this session — schema present without history rows (`GlossaryCorrectionsJson`, the three QR-related migrations on both Dev and Prod). Other drift may exist.
+- **Fix direction:** One-pass comparison of every migration's expected schema vs actual schema on all environments (Development, Production, and Demo once it's brought up). Identify drift, decide fix per case. Consider a startup verification routine that warns on detected drift (informational, not blocking).
 
-#### 5.3 Development DB drift sweep
-- **Priority:** P2
-- **Origin:** `[Production-incident]`
-- **Status:** Open
-- **Description:** During the Designer.cs fix, Development DB was found to have `GlossaryCorrectionsJson` columns present without corresponding rows in `__EFMigrationsHistory`. Origin unknown — likely partial migration apply (DDL committed, history row failed) or manual schema change. Other drift may exist.
-- **Fix direction:** One-pass comparison of every migration's expected schema vs actual schema on Development. Identify drift, decide fix per case. Consider a startup verification routine that warns on detected drift (informational, not blocking).
-
-#### 5.4 R2 orphan file cleanup nightly job
+#### 5.5 R2 orphan file cleanup nightly job
 - **Priority:** P2
 - **Origin:** `[Engineering]`
 - **Status:** Open
 - **Description:** Files uploaded to R2 that are no longer referenced by any DB record accumulate over time. Need a nightly Hangfire job to identify and delete orphans.
 
-#### 5.5 MailerSendEmailProvider 429 handling
+#### 5.6 MailerSendEmailProvider 429 handling
 - **Priority:** P2
 - **Origin:** `[Engineering]`
 - **Status:** Open
 - **Description:** Currently silently drops on 429 (rate limit). Should retry with backoff, log clearly, alert if persistent.
 
-#### 5.6 Demo deployment workflow
-- **Priority:** P3
-- **Origin:** `[Engineering]`
-- **Status:** Open
-- **Description:** Currently Demo is "frozen" by disconnecting GitHub. Each refresh requires reconnect → redeploy → disconnect. Cleaner pattern: a dedicated `demo` branch that Railway watches, with promotions done by `git merge transval → demo`. Lets Demo stay auto-deploy-from-its-own-branch while still being controlled (no accidental updates from Development churn).
+#### 5.7 Demo environment refresh and three-tier promotion workflow
+- **Priority:** P1
+- **Origin:** `[Engineering]` `[Boss]`
+- **Status:** Open (new — 2 Jun 2026)
+- **Description:** Bring the Demo Railway environment from its disconnected/frozen state to a fully working, auto-deploying instance on a dedicated `demo` branch. Establish ongoing three-tier workflow: Development for build/test, Demo for business sign-off and prospect demos, Production for customer release.
 
-#### 5.7 Next.js 15+ params shape
+**Pre-requisite decision required before starting:**
+- R2 bucket sharing — Option A: shared with Dev/Prod (zero setup, demo media available immediately, tenant-folder isolation only partially mitigates pollution risk). Option B: separate Demo bucket (clean isolation, but QR images / subtitles / certificates all missing until regenerated). Recommendation: **Option A** for initial bring-up, promote to isolated buckets before external customer demo sessions.
+
+**Missing environment variables (organised by block, see detailed spec in session notes):**
+- Block 1: Database (1 demo-specific var)
+- Block 2: JWT (1 demo-specific, 2 copied from Dev)
+- Block 3: CORS (1-2 demo-specific)
+- Block 4: TranslationValidation (12 keys, all known values copied from Dev)
+- Block 5: Email (Provider=Stub initially to prevent real emails)
+- Block 6: R2 / Cloudflare Storage (7 keys copied from Dev)
+- Block 7: External APIs (4 keys copied from Dev)
+- Block 8: App Settings (2 demo-specific)
+- Block 9: Needs research (`BulkImport__InvitationEmailDelayMs`, `SubtitleProcessing__ElevenLabs__Model`)
+
+**Ordered task list — 20 tasks across 6 phases:**
+
+*Phase 0 — Preparation:*
+1. Create `demo` branch off `main`, immediately merge `transval` (main is behind by Designer.cs restoration commits)
+2. Collect env var values from Development Railway service
+3. Generate fresh JWT secret for Demo
+4. Provision Demo PostgreSQL database on Railway
+
+*Phase 1 — Railway Reconnect:*
+5. Reconnect Demo API service to GitHub (branch: `demo`)
+6. Reconnect Demo web service to GitHub
+7. Set all env vars on Demo API
+8. Set `NEXT_PUBLIC_API_URL` on Demo web service
+9. Verify CORS origin is exact match (no trailing slash)
+
+*Phase 2 — Database Migration:*
+10. Run migrations locally against Demo DB via `dotnet ef database update`
+11. Confirm migration applied cleanly (top entry should be `AddPreserveSourceWordingToContentCreationSession`)
+
+*Phase 3 — First Deploy:*
+12. Trigger first manual deploy of Demo API; watch Railway logs for: migrations (0 pending, already applied), seeder (creates System tenant + SuperUser + roles + permissions), Hangfire init
+13. Deploy Demo web service
+
+*Phase 4 — Demo Tenant and Test Data:*
+14. Create Demo tenant ("CertifiedIQ Demo"); note UUID (R2 folder prefix)
+15. Create Demo Admin user under Demo tenant
+16. Assign at least one sector to Demo tenant
+17. Create one demo toolbox talk for smoke testing
+
+*Phase 5 — Smoke Test and Handoff:*
+18. Execute smoke test checklist (15 items: login, token refresh, user creation, talk creation, employee completion, CORS, TransVal, QR setup, QR scan, Skills Matrix, bulk import, certificates, Help Assistant, R2 isolation)
+19. Re-test User Creation page
+20. Update CLAUDE.md deployment section with three-tier workflow
+
+**Migration risk:** All migrations apply fresh on empty DB — lowest-risk scenario possible. The four Designer.cs restorations are now in place on `transval`/`main`, so a `demo` branch off `main` (with `transval` merged in) will have them.
+
+**Ongoing workflow post-setup:**
+- Daily development: `transval` → Railway auto-deploys Development
+- Promote to Production: `git checkout main && git merge transval && git push company main && git push origin main`
+- Promote to Demo: `git checkout demo && git merge transval && git push company demo && git push origin demo` — run this before any scheduled customer demo session
+- Never commit directly to `demo`
+- Keep `origin` and `company` in sync on all three branches
+
+#### 5.8 Next.js 15+ params shape
 - **Priority:** P3
 - **Origin:** `[Engineering]`
 - **Status:** Open
 - **Description:** Synchronous `params` access in redirect stubs. Not breaking yet but Next.js is moving toward async params. Will need updating before a future Next.js upgrade.
 
-#### 5.8 AI Chat Assistant — UI Help / Data Q&A
+#### 5.9 AI Chat Assistant — UI Help / Data Q&A
 - **Priority:** P3
 - **Origin:** `[Roadmap]`
 - **Status:** Open
@@ -595,19 +660,31 @@ These are not backlog items — they're explicit product decisions with known tr
 
 ---
 
-# 7. Recently Closed (last sprint)
+# 7. Recently Closed
 
 Kept here for trail; prune periodically.
 
-- **Migration Designer.cs missing for `AddGlossaryCorrectionsToTranslationValidationResult`** — Production-incident. Fixed 28 May 2026.
-- **QR sessions summary 500 (EF Core 9 LINQ translation failure)** — Production-incident. Fixed 28 May 2026.
-- **QR scan language selector disconnected from backend** — Internal-QA. Removed 28 May 2026.
-- **QR location edit dialog not pre-filling form** — Internal-QA. Fixed 28 May 2026.
-- **Welcome email not sent on UI user creation** — Production-incident. Targeted patch 28 May 2026 (proper unified flow remains as 3.1).
-- **Subtitle processing job stuck at 0% (tenant filter trap)** — Production-incident. Fixed 28 May 2026.
-- **QR video display not implemented** — Boss / Demo-critical. Built 28 May 2026 (single-talk only; course branch deferred).
-- **QR video subtitles — backend tenant filter + frontend CORS** — Boss / Demo-critical. Fixed 28 May 2026.
-- **PIN visible to SuperUser + Admin on employee detail** — Boss. Built 28 May 2026.
+## 2 June 2026 — "Translator polish" batch (shipped to Production)
+- **1.1.4** Slideshow counter mismatch — prompt change + bridge removal
+- **1.1.5** Slideshow Back button — same fix as 1.1.4
+- **1.1.10** Verbatim parse mode — full feature shipped end-to-end
+- **1.1.14** Slide WCAG contrast — prompt change applied to all three blocks
+- **1.1.15** Audience-aware quiz generation — full feature shipped (Operator / Supervisor / Auditor)
+- Section divider styling — wizard sections darker/more legible across all steps
+- Designer.cs restoration for `AddEmployeePinFields`, `AddQrLocationAndQrCode`, `AddQrSession` migrations
+- `AddAudienceRoleToContentCreationSession` migration (with Designer.cs from CLI)
+- `AddPreserveSourceWordingToContentCreationSession` migration (with Designer.cs from CLI)
+
+## 28 May 2026 — Pre-demo fixes (shipped to Production)
+- Migration Designer.cs missing for `AddGlossaryCorrectionsToTranslationValidationResult`
+- QR sessions summary 500 (EF Core 9 LINQ translation failure)
+- QR scan language selector disconnected from backend — removed entirely
+- QR location edit dialog not pre-filling form
+- Welcome email not sent on UI user creation (targeted patch — proper unified flow remains as 3.1)
+- Subtitle processing job stuck at 0% (tenant filter trap)
+- QR video display (single-talk only; course branch deferred)
+- QR video subtitles — backend tenant filter + frontend CORS + endpoint addition
+- PIN visible to SuperUser + Admin on employee detail (with plaintext storage decision recorded as 6.1)
 
 ---
 
