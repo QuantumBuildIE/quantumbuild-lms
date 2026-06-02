@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.ContentCreation;
+using QuantumBuild.Modules.ToolboxTalks.Application.Prompts;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
 
@@ -38,6 +39,7 @@ public class ContentParserService : IContentParserService
         InputMode inputModeHint,
         Guid tenantId,
         Guid? userId = null,
+        bool preserveSourceWording = false,
         CancellationToken cancellationToken = default)
     {
         try
@@ -61,7 +63,7 @@ public class ContentParserService : IContentParserService
                     ErrorMessage: "No content provided for parsing");
             }
 
-            var sourceHint = inputModeHint switch
+            var sourceDescription = inputModeHint switch
             {
                 InputMode.Pdf => "extracted from a PDF document",
                 InputMode.Video => "transcribed from a video",
@@ -69,7 +71,13 @@ public class ContentParserService : IContentParserService
                 _ => "provided as raw content"
             };
 
-            var prompt = BuildParsePrompt(rawText, sourceHint);
+            var prompt = SectionGenerationPrompts.BuildSectionPrompt(
+                content: rawText,
+                sourceDescription: sourceDescription,
+                minimumSections: 2,
+                hasVideo: inputModeHint == InputMode.Video,
+                hasPdf: inputModeHint == InputMode.Pdf,
+                preserveSourceWording: preserveSourceWording);
 
             var requestBody = new
             {
@@ -89,7 +97,8 @@ public class ContentParserService : IContentParserService
                 Encoding.UTF8,
                 "application/json");
 
-            _logger.LogInformation("[ContentParserService] Parsing content ({InputMode}) with Claude AI", inputModeHint);
+            _logger.LogInformation("[ContentParserService] Parsing content ({InputMode}, verbatim={Verbatim}) with Claude AI",
+                inputModeHint, preserveSourceWording);
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
             var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -217,9 +226,12 @@ public class ContentParserService : IContentParserService
             {
                 var title = element.GetProperty("title").GetString() ?? "Untitled";
                 var sectionContent = element.GetProperty("content").GetString() ?? "";
-                var suggestedOrder = element.TryGetProperty("suggestedOrder", out var order)
-                    ? order.GetInt32()
-                    : sections.Count + 1;
+                // BuildSectionPrompt emits "sortOrder"; fall back to "suggestedOrder" for
+                // any cached responses produced by the legacy BuildParsePrompt shape.
+                var suggestedOrder =
+                    (element.TryGetProperty("sortOrder", out var so) ? (int?)so.GetInt32() : null)
+                    ?? (element.TryGetProperty("suggestedOrder", out var sgo) ? (int?)sgo.GetInt32() : null)
+                    ?? (sections.Count + 1);
 
                 sections.Add(new ParsedSection(title, sectionContent, suggestedOrder));
             }

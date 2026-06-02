@@ -136,6 +136,7 @@ public record CreateSessionRequest
     public int PassThreshold { get; init; } = 75;
     public bool IncludeQuiz { get; init; } = true;
     public string? AudienceRole { get; init; }
+    public bool PreserveSourceWording { get; init; } = false;
 
     // Audit metadata
     public string? ReviewerName { get; init; }
@@ -195,6 +196,7 @@ public record ContentCreationSessionDto
     public string? TargetLanguageCodes { get; init; }
     public int PassThreshold { get; init; }
     public bool IncludeQuiz { get; init; }
+    public bool PreserveSourceWording { get; init; }
     public string? SectorKey { get; init; }
     public string? ReviewerName { get; init; }
     public string? ReviewerOrg { get; init; }

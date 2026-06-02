@@ -291,6 +291,7 @@ export function InputConfigStep({
           passThreshold: state.passThreshold,
           includeQuiz: state.includeQuiz,
           audienceRole: state.audienceRole,
+          preserveSourceWording: state.preserveSourceWording,
           reviewerName: state.reviewerName || undefined,
           reviewerOrg: state.reviewerOrg || undefined,
           reviewerRole: state.reviewerRole || undefined,
@@ -707,6 +708,24 @@ export function InputConfigStep({
             </Select>
           </div>
         </div>
+      </div>
+
+      {/* Verbatim Parse Mode */}
+      <div className="flex items-center justify-between rounded-lg border p-4">
+        <div className="space-y-0.5">
+          <Label htmlFor="preserve-source-wording" className="text-sm font-medium">
+            Preserve source wording (verbatim)
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            When on, the AI keeps your source text exactly as written instead of rewriting for clarity.
+            Useful for SOPs or approved policy text that must not be paraphrased.
+          </p>
+        </div>
+        <Switch
+          id="preserve-source-wording"
+          checked={state.preserveSourceWording}
+          onCheckedChange={(checked) => updateState({ preserveSourceWording: checked })}
+        />
       </div>
 
       {/* 1d — Sector */}

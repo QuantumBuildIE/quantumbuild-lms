@@ -91,6 +91,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
             PassThreshold = request.PassThreshold,
             IncludeQuiz = request.IncludeQuiz,
             AudienceRole = request.AudienceRole ?? "Operator",
+            PreserveSourceWording = request.PreserveSourceWording,
             SectorKey = request.SectorKey,
             ReviewerName = request.ReviewerName,
             ReviewerOrg = request.ReviewerOrg,
@@ -270,7 +271,10 @@ public class ContentCreationSessionService : IContentCreationSessionService
         try
         {
             var parseResult = await _parserService.ParseContentAsync(
-                rawText, session.InputMode, tenantId, userId: null, cancellationToken);
+                rawText, session.InputMode, tenantId,
+                userId: null,
+                preserveSourceWording: session.PreserveSourceWording,
+                cancellationToken);
 
             if (!parseResult.Success)
             {
@@ -2280,6 +2284,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
             PassThreshold = session.PassThreshold,
             IncludeQuiz = session.IncludeQuiz,
             AudienceRole = session.AudienceRole,
+            PreserveSourceWording = session.PreserveSourceWording,
             SectorKey = session.SectorKey,
             ReviewerName = session.ReviewerName,
             ReviewerOrg = session.ReviewerOrg,

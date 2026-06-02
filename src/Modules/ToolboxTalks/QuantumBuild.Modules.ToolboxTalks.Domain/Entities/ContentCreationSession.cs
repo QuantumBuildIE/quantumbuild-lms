@@ -43,6 +43,9 @@ public class ContentCreationSession : TenantEntity
     // Quiz audience — determines question style (Operator/Supervisor/Auditor)
     public string AudienceRole { get; set; } = "Operator";
 
+    // Parse mode — when true the AI copies source text verbatim instead of rewriting for clarity
+    public bool PreserveSourceWording { get; set; } = false;
+
     // Audit metadata
     public string? ReviewerName { get; set; }
     public string? ReviewerOrg { get; set; }

@@ -15,6 +15,7 @@ public interface IContentParserService
         InputMode inputModeHint,
         Guid tenantId,
         Guid? userId = null,
+        bool preserveSourceWording = false,
         CancellationToken cancellationToken = default);
 
     /// <summary>
