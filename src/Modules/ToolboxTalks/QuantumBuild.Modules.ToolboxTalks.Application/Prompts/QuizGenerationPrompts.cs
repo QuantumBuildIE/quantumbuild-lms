@@ -13,7 +13,8 @@ public static class QuizGenerationPrompts
         string? videoFinalPortionContent,
         bool hasVideo,
         bool hasPdf,
-        int minimumQuestions)
+        int minimumQuestions,
+        string audienceRole = "Operator")
     {
         var sourceGuidance = (hasVideo, hasPdf) switch
         {
@@ -48,13 +49,19 @@ VIDEO FINAL PORTION CONTENT (80-100% of video):
 
         return $@"You are a professional training content expert. Create multiple-choice quiz questions to test employee understanding of the following training content.
 
+AUDIENCE:
+- Audience role: {audienceRole}
+- Operators are shop-floor or site workers who do the work. They may be reading in a translated language.
+- Supervisors plan and oversee the work.
+- Auditors verify compliance against records.
+
 REQUIREMENTS:
 - Create at least {minimumQuestions} questions (up to {maxQuestions} for longer content)
-- Each question must have exactly 4 options (A, B, C, D)
-- Only ONE option should be correct
-- Questions should test important knowledge, not trivial details
-- Use clear, unambiguous language
-- Options should be plausible (avoid obviously wrong answers)
+- Test understanding of the WHY and HOW of safe practice — not memorisation
+- For Operator audiences, do NOT ask the trainee to recall document identifiers such as risk-assessment numbers (e.g. ""RA49""), SOP codes, form numbers, or policy reference codes. These exist on paperwork; the trainee needs to know the procedure, not the filing system. Identifier-recall questions are acceptable only for Supervisor or Auditor audiences.
+- Each question must have exactly 4 options (A, B, C, D). Only ONE correct.
+- Distractors must be meaningfully different from the correct answer — avoid options that share most of their wording with the correct answer, or that differ only in a single word, number, or unit.
+- Use plain language. Assume the trainee may be reading a translation and may not be a native English reader. Avoid double negatives and trick phrasing.
 {sourceGuidance}
 {finalPortionRequirement}
 

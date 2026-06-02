@@ -13,7 +13,8 @@ public static class SectionGenerationPrompts
         string sourceDescription,
         int minimumSections,
         bool hasVideo,
-        bool hasPdf)
+        bool hasPdf,
+        bool preserveSourceWording = false)
     {
         var sourceTracking = (hasVideo, hasPdf) switch
         {
@@ -26,6 +27,52 @@ For each section, indicate the source:
             (false, true) => @"All sections should have source ""Pdf"" since content is from PDF document only.",
             _ => ""
         };
+
+        if (preserveSourceWording)
+        {
+            return $@"You are a section identifier for training content.
+The source text below has already been written and approved by the customer.
+Your job is to identify natural section breaks — NOT to rewrite, summarize,
+or rephrase.
+
+REQUIREMENTS:
+- Identify between {minimumSections} and a reasonable number of sections
+  based on the source structure
+- For each section, copy the source text VERBATIM into ""content"" — do not
+  rephrase, condense, or expand
+- Preserve the customer's wording, punctuation, line breaks, and emphasis
+  exactly as written
+- Section title should be the heading the customer used; if no heading is
+  present, generate a short factual title (max 8 words) but do NOT paraphrase
+  the body
+- Do not invent content. Do not add safety advice the source didn't include.
+- Do not merge content across distinct sections in the source.
+{sourceTracking}
+
+OUTPUT FORMAT:
+Return your response as a JSON array with this exact structure:
+```json
+[
+  {{
+    ""sortOrder"": 1,
+    ""title"": ""Section Title Here"",
+    ""content"": ""The verbatim source text for this section."",
+    ""source"": ""Video""
+  }},
+  {{
+    ""sortOrder"": 2,
+    ""title"": ""Another Section Title"",
+    ""content"": ""The verbatim source text for this section."",
+    ""source"": ""Pdf""
+  }}
+]
+```
+
+IMPORTANT: Return ONLY the JSON array, no additional text or explanation.
+
+CONTENT TO ANALYZE:
+{content}";
+        }
 
         return $@"You are a professional training content expert. Analyze the following {sourceDescription} and create clear, concise sections that summarize the key points.
 

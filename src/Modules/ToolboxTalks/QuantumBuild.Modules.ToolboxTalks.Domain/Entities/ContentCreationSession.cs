@@ -40,6 +40,12 @@ public class ContentCreationSession : TenantEntity
     // Quiz inclusion — when false, skip quiz generation and set RequiresQuiz = false on publish
     public bool IncludeQuiz { get; set; } = true;
 
+    // Quiz audience — determines question style (Operator/Supervisor/Auditor)
+    public string AudienceRole { get; set; } = "Operator";
+
+    // Parse mode — when true the AI copies source text verbatim instead of rewriting for clarity
+    public bool PreserveSourceWording { get; set; } = false;
+
     // Audit metadata
     public string? ReviewerName { get; set; }
     public string? ReviewerOrg { get; set; }

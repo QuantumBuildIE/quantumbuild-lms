@@ -66,6 +66,7 @@ public class ContentCreationParseJob(
                 inputModeHint: session.InputMode,
                 tenantId: tenantId,
                 userId: null,
+                preserveSourceWording: session.PreserveSourceWording,
                 cancellationToken: cancellationToken);
 
             if (!result.Success)

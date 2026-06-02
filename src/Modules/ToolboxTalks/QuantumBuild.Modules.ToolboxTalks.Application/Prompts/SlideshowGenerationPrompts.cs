@@ -155,7 +155,9 @@ The HTML must be a dark-themed, mobile-friendly animated slideshow with these ch
 - VARY the gradients across slides — use deep blues, purples, dark teals, charcoals, dark reds, dark greens
 - Body background: #0a0a0f
 - Card/container background: #111
-- Text colors: white for headings, rgba(255,255,255,0.75) for body, rgba(255,255,255,0.5) for secondary
+- Text colors: white for headings, rgba(255,255,255,0.95) for body, rgba(255,255,255,0.75) for secondary
+- All text must meet WCAG 2.1 AA contrast (4.5:1 for body, 3:1 for large headings) against its background. If you choose a lighter accent color for a slide, lift body opacity higher rather than letting it fall below 0.85.
+- Never rely on color alone to convey meaning — every coloured chip or status indicator must also carry an icon or text label
 - Accent colors — rotate through these across slides: #E63946 (red), #F4A261 (amber), #E76F51 (coral), #2A9D8F (teal), #E9C46A (gold), #264653 (dark teal), #8338EC (purple), #06D6A0 (green)
 - Each slide's accent color should be used for: the top bar title, progress bar, check icons, and card borders
 
@@ -184,7 +186,17 @@ Every element must animate in when the slide appears. Use CSS transitions trigge
 - Use a single render function that builds HTML from the slide data
 - Animations triggered by adding CSS classes after a requestAnimationFrame or setTimeout
 
-IMPORTANT: Navigation functions must be globally accessible. Expose these as `window.goToSlide(n)`, `window.nextSlide()`, `window.prevSlide()`, and `window.getSlideCount()`. The parent application will call these via postMessage. `goToSlide(n)` receives a 0-based slide index.
+IMPORTANT: Navigation functions must be globally accessible. Expose these as `window.goToSlide(n)`, `window.nextSlide()`, `window.prevSlide()`, and `window.getSlideCount()`. `goToSlide(n)` receives a 0-based slide index.
+
+CRITICAL: After ANY slide change — whether triggered by these window functions, by an internal button inside a slide, by autoplay, or by a keyboard shortcut — you MUST post a message to the parent window so the parent's slide counter and Back/Next buttons stay in sync. Use exactly this format:
+
+window.parent.postMessage(
+  { type: 'slideChanged',
+    current: <zero-based-index>,
+    total: <total-slide-count> },
+  '*');
+
+Also respond to incoming messages from the parent: when you receive { type: 'getSlideCount' }, immediately post a slideChanged message with the current index and total. When you receive { type: 'nextSlide' }, { type: 'prevSlide' }, or { type: 'goToSlide', index: n }, navigate accordingly and post a slideChanged message afterwards.
 
 ## SLIDE DATA STRUCTURE
 
@@ -382,7 +394,9 @@ The HTML must be a dark-themed, mobile-friendly animated slideshow with these ch
 - VARY the gradients across slides — use deep blues, purples, dark teals, charcoals, dark reds, dark greens
 - Body background: #0a0a0f
 - Card/container background: #111
-- Text colors: white for headings, rgba(255,255,255,0.75) for body, rgba(255,255,255,0.5) for secondary
+- Text colors: white for headings, rgba(255,255,255,0.95) for body, rgba(255,255,255,0.75) for secondary
+- All text must meet WCAG 2.1 AA contrast (4.5:1 for body, 3:1 for large headings) against its background. If you choose a lighter accent color for a slide, lift body opacity higher rather than letting it fall below 0.85.
+- Never rely on color alone to convey meaning — every coloured chip or status indicator must also carry an icon or text label
 - Accent colors — rotate through these across slides: #E63946 (red), #F4A261 (amber), #E76F51 (coral), #2A9D8F (teal), #E9C46A (gold), #264653 (dark teal), #8338EC (purple), #06D6A0 (green)
 - Each slide's accent color should be used for: the top bar title, progress bar, check icons, and card borders
 
@@ -411,7 +425,17 @@ Every element must animate in when the slide appears. Use CSS transitions trigge
 - Use a single render function that builds HTML from the slide data
 - Animations triggered by adding CSS classes after a requestAnimationFrame or setTimeout
 
-IMPORTANT: Navigation functions must be globally accessible. Expose these as `window.goToSlide(n)`, `window.nextSlide()`, `window.prevSlide()`, and `window.getSlideCount()`. The parent application will call these via postMessage. `goToSlide(n)` receives a 0-based slide index.
+IMPORTANT: Navigation functions must be globally accessible. Expose these as `window.goToSlide(n)`, `window.nextSlide()`, `window.prevSlide()`, and `window.getSlideCount()`. `goToSlide(n)` receives a 0-based slide index.
+
+CRITICAL: After ANY slide change — whether triggered by these window functions, by an internal button inside a slide, by autoplay, or by a keyboard shortcut — you MUST post a message to the parent window so the parent's slide counter and Back/Next buttons stay in sync. Use exactly this format:
+
+window.parent.postMessage(
+  { type: 'slideChanged',
+    current: <zero-based-index>,
+    total: <total-slide-count> },
+  '*');
+
+Also respond to incoming messages from the parent: when you receive { type: 'getSlideCount' }, immediately post a slideChanged message with the current index and total. When you receive { type: 'nextSlide' }, { type: 'prevSlide' }, or { type: 'goToSlide', index: n }, navigate accordingly and post a slideChanged message afterwards.
 
 ## SLIDE DATA STRUCTURE
 
@@ -524,7 +548,9 @@ The HTML must be a dark-themed, mobile-friendly animated slideshow with these ch
 - VARY the gradients across slides — use deep blues, purples, dark teals, charcoals, dark reds, dark greens
 - Body background: #0a0a0f
 - Card/container background: #111
-- Text colors: white for headings, rgba(255,255,255,0.75) for body, rgba(255,255,255,0.5) for secondary
+- Text colors: white for headings, rgba(255,255,255,0.95) for body, rgba(255,255,255,0.75) for secondary
+- All text must meet WCAG 2.1 AA contrast (4.5:1 for body, 3:1 for large headings) against its background. If you choose a lighter accent color for a slide, lift body opacity higher rather than letting it fall below 0.85.
+- Never rely on color alone to convey meaning — every coloured chip or status indicator must also carry an icon or text label
 - Accent colors — rotate through these across slides: #E63946 (red), #F4A261 (amber), #E76F51 (coral), #2A9D8F (teal), #E9C46A (gold), #264653 (dark teal), #8338EC (purple), #06D6A0 (green)
 - Each slide's accent color should be used for: the top bar title, progress bar, check icons, and card borders
 
@@ -553,7 +579,17 @@ Every element must animate in when the slide appears. Use CSS transitions trigge
 - Use a single render function that builds HTML from the slide data
 - Animations triggered by adding CSS classes after a requestAnimationFrame or setTimeout
 
-IMPORTANT: Navigation functions must be globally accessible. Expose these as `window.goToSlide(n)`, `window.nextSlide()`, `window.prevSlide()`, and `window.getSlideCount()`. The parent application will call these via postMessage. `goToSlide(n)` receives a 0-based slide index.
+IMPORTANT: Navigation functions must be globally accessible. Expose these as `window.goToSlide(n)`, `window.nextSlide()`, `window.prevSlide()`, and `window.getSlideCount()`. `goToSlide(n)` receives a 0-based slide index.
+
+CRITICAL: After ANY slide change — whether triggered by these window functions, by an internal button inside a slide, by autoplay, or by a keyboard shortcut — you MUST post a message to the parent window so the parent's slide counter and Back/Next buttons stay in sync. Use exactly this format:
+
+window.parent.postMessage(
+  { type: 'slideChanged',
+    current: <zero-based-index>,
+    total: <total-slide-count> },
+  '*');
+
+Also respond to incoming messages from the parent: when you receive { type: 'getSlideCount' }, immediately post a slideChanged message with the current index and total. When you receive { type: 'nextSlide' }, { type: 'prevSlide' }, or { type: 'goToSlide', index: n }, navigate accordingly and post a slideChanged message afterwards.
 
 ## SLIDE DATA STRUCTURE
 

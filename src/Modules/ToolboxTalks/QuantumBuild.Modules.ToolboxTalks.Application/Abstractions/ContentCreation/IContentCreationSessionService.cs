@@ -135,6 +135,8 @@ public record CreateSessionRequest
     public string? SectorKey { get; init; }
     public int PassThreshold { get; init; } = 75;
     public bool IncludeQuiz { get; init; } = true;
+    public string? AudienceRole { get; init; }
+    public bool PreserveSourceWording { get; init; } = false;
 
     // Audit metadata
     public string? ReviewerName { get; init; }
@@ -194,6 +196,7 @@ public record ContentCreationSessionDto
     public string? TargetLanguageCodes { get; init; }
     public int PassThreshold { get; init; }
     public bool IncludeQuiz { get; init; }
+    public bool PreserveSourceWording { get; init; }
     public string? SectorKey { get; init; }
     public string? ReviewerName { get; init; }
     public string? ReviewerOrg { get; init; }
@@ -201,6 +204,7 @@ public record ContentCreationSessionDto
     public string? DocumentRef { get; init; }
     public string? ClientName { get; init; }
     public string? AuditPurpose { get; init; }
+    public string AudienceRole { get; init; } = "Operator";
     public DateTime ExpiresAt { get; init; }
     public string? ValidationRunIds { get; init; }
     public string? QuestionsJson { get; init; }

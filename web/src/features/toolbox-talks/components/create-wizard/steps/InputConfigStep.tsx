@@ -290,6 +290,8 @@ export function InputConfigStep({
           sectorKey: state.sectorKey || undefined,
           passThreshold: state.passThreshold,
           includeQuiz: state.includeQuiz,
+          audienceRole: state.audienceRole,
+          preserveSourceWording: state.preserveSourceWording,
           reviewerName: state.reviewerName || undefined,
           reviewerOrg: state.reviewerOrg || undefined,
           reviewerRole: state.reviewerRole || undefined,
@@ -674,6 +676,55 @@ export function InputConfigStep({
           id="include-quiz"
           checked={state.includeQuiz}
           onCheckedChange={(checked) => updateState({ includeQuiz: checked })}
+        />
+      </div>
+
+      {/* Audience Role */}
+      <div className="rounded-lg border p-4">
+        <div className="flex items-start gap-4">
+          <div className="min-w-0 flex-1">
+            <Label htmlFor="audience-role" className="text-sm font-medium">
+              Audience
+            </Label>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Determines quiz question style. Operators focus on the procedure
+              (no identifier recall); Supervisors plan and oversee; Auditors
+              verify compliance.
+            </p>
+          </div>
+          <div className="w-44 shrink-0">
+            <Select
+              value={state.audienceRole}
+              onValueChange={(v) => updateState({ audienceRole: v })}
+            >
+              <SelectTrigger id="audience-role">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Operator">Operator</SelectItem>
+                <SelectItem value="Supervisor">Supervisor</SelectItem>
+                <SelectItem value="Auditor">Auditor</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
+
+      {/* Verbatim Parse Mode */}
+      <div className="flex items-center justify-between rounded-lg border p-4">
+        <div className="space-y-0.5">
+          <Label htmlFor="preserve-source-wording" className="text-sm font-medium">
+            Preserve source wording (verbatim)
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            When on, the AI keeps your source text exactly as written instead of rewriting for clarity.
+            Useful for SOPs or approved policy text that must not be paraphrased.
+          </p>
+        </div>
+        <Switch
+          id="preserve-source-wording"
+          checked={state.preserveSourceWording}
+          onCheckedChange={(checked) => updateState({ preserveSourceWording: checked })}
         />
       </div>
 

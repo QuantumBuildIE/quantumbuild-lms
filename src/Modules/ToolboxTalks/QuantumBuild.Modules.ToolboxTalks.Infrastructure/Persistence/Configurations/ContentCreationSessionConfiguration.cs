@@ -69,6 +69,15 @@ public class ContentCreationSessionConfiguration : IEntityTypeConfiguration<Cont
             .IsRequired()
             .HasDefaultValue(true);
 
+        builder.Property(s => s.AudienceRole)
+            .IsRequired()
+            .HasMaxLength(50)
+            .HasDefaultValue("Operator");
+
+        builder.Property(s => s.PreserveSourceWording)
+            .IsRequired()
+            .HasDefaultValue(false);
+
         // Audit metadata
         builder.Property(s => s.ReviewerName)
             .HasMaxLength(200);

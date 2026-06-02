@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using QuantumBuild.Core.Infrastructure.Data;
@@ -11,13 +12,15 @@ using QuantumBuild.Core.Infrastructure.Data;
 namespace QuantumBuild.Core.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260424200000_AddQrLocationAndQrCode")]
+    partial class AddQrLocationAndQrCode
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.16")
+                .HasAnnotation("ProductVersion", "9.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -108,79 +111,6 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                     b.HasKey("UserId", "LoginProvider", "Name");
 
                     b.ToTable("UserTokens", (string)null);
-                });
-
-            modelBuilder.Entity("QuantumBuild.Core.Domain.Entities.BulkImportSession", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("CreatedBy")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<string>("CsvR2Key")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<string>("DeletedBy")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<bool>("IsRerun")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<string>("ProcessingResultJson")
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset?>("ProcessingStartedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasDefaultValue("Uploaded");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<DateTimeOffset>("UploadedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ValidationResultJson")
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UploadedAt")
-                        .HasDatabaseName("IX_BulkImportSessions_UploadedAt");
-
-                    b.HasIndex("TenantId", "Status")
-                        .HasDatabaseName("IX_BulkImportSessions_TenantId_Status");
-
-                    b.ToTable("BulkImportSessions");
                 });
 
             modelBuilder.Entity("QuantumBuild.Core.Domain.Entities.Company", b =>
@@ -536,10 +466,6 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
 
                     b.Property<DateTimeOffset?>("QrPinLockedUntil")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("QrPinPlain")
-                        .HasMaxLength(6)
-                        .HasColumnType("character varying(6)");
 
                     b.Property<DateTime?>("StartDate")
                         .HasColumnType("timestamp with time zone");
@@ -1699,13 +1625,6 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<string>("AudienceRole")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasDefaultValue("Operator");
-
                     b.Property<string>("AuditPurpose")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
@@ -1767,11 +1686,6 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
                         .HasDefaultValue(75);
-
-                    b.Property<bool>("PreserveSourceWording")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
 
                     b.Property<string>("QuestionsJson")
                         .HasColumnType("text");
@@ -2102,44 +2016,6 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                     b.ToTable("CorpusRunResults", "toolbox_talks");
                 });
 
-            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.CustomerUsageReportState", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("CreatedBy")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<string>("DeletedBy")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<DateTimeOffset?>("LastReviewedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("CustomerUsageReportStates", "toolbox_talks");
-                });
-
             modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.PipelineChangeRecord", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2353,7 +2229,6 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
 
                     b.ToTable("ProviderResultCache", "toolbox_talks");
                 });
-
             modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.QrCode", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2369,9 +2244,6 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
-
-                    b.Property<Guid?>("CourseId")
-                        .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -2424,8 +2296,6 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                     b.HasIndex("CodeToken")
                         .IsUnique()
                         .HasDatabaseName("ix_qr_codes_token");
-
-                    b.HasIndex("CourseId");
 
                     b.HasIndex("QrLocationId");
 
@@ -2493,92 +2363,6 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                         .HasDatabaseName("ix_qr_locations_tenant");
 
                     b.ToTable("QrLocations", "toolbox_talks");
-                });
-
-            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.QrSession", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset?>("CompletedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ContentMode")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("CreatedBy")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<string>("DeletedBy")
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("EmployeeId")
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<string>("Language")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
-
-                    b.Property<Guid>("QrCodeId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int?>("Score")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("SessionToken")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset?>("SignedOffAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset>("StartedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasDefaultValue("Active");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("EmployeeId");
-
-                    b.HasIndex("QrCodeId");
-
-                    b.HasIndex("SessionToken")
-                        .IsUnique()
-                        .HasDatabaseName("ix_qr_sessions_token");
-
-                    b.HasIndex("TenantId")
-                        .HasDatabaseName("ix_qr_sessions_tenant");
-
-                    b.ToTable("QrSessions", "toolbox_talks");
                 });
 
             modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.RegulatoryBody", b =>
@@ -4151,9 +3935,6 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
 
                     b.Property<DateTime>("IssuedAt")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("LearningCode")
-                        .HasColumnType("text");
 
                     b.Property<string>("PdfStoragePath")
                         .IsRequired()
@@ -6112,11 +5893,6 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
 
             modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.QrCode", b =>
                 {
-                    b.HasOne("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.ToolboxTalkCourse", "Course")
-                        .WithMany()
-                        .HasForeignKey("CourseId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.QrLocation", "QrLocation")
                         .WithMany("QrCodes")
                         .HasForeignKey("QrLocationId")
@@ -6128,30 +5904,9 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                         .HasForeignKey("ToolboxTalkId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.Navigation("Course");
-
                     b.Navigation("QrLocation");
 
                     b.Navigation("ToolboxTalk");
-                });
-
-            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.QrSession", b =>
-                {
-                    b.HasOne("QuantumBuild.Core.Domain.Entities.Employee", "Employee")
-                        .WithMany()
-                        .HasForeignKey("EmployeeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.QrCode", "QrCode")
-                        .WithMany()
-                        .HasForeignKey("QrCodeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Employee");
-
-                    b.Navigation("QrCode");
                 });
 
             modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.RegulatoryCriteria", b =>

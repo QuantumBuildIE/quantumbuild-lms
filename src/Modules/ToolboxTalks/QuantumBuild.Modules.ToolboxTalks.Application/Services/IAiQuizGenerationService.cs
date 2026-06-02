@@ -28,6 +28,7 @@ public interface IAiQuizGenerationService
         Guid tenantId,
         Guid? userId = null,
         int minimumQuestions = 5,
+        string audienceRole = "Operator",
         CancellationToken cancellationToken = default);
 }
 

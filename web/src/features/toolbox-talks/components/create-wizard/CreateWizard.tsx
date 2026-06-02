@@ -60,6 +60,8 @@ export interface WizardState {
   targetLanguageCodes: string[];
   passThreshold: number;
   includeQuiz: boolean;
+  audienceRole: string;
+  preserveSourceWording: boolean;
   // Audit metadata
   reviewerName: string;
   reviewerOrg: string;
@@ -87,6 +89,8 @@ const initialState: WizardState = {
   targetLanguageCodes: [],
   passThreshold: 75,
   includeQuiz: true,
+  audienceRole: 'Operator',
+  preserveSourceWording: false,
   reviewerName: '',
   reviewerOrg: '',
   reviewerRole: '',

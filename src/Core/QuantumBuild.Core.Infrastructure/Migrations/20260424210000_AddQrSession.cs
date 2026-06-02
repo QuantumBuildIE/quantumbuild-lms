@@ -5,8 +5,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace QuantumBuild.Core.Infrastructure.Migrations;
 
-[Migration("20260424210000_AddQrSession")]
-public class AddQrSession : Migration
+public partial class AddQrSession : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
     {
