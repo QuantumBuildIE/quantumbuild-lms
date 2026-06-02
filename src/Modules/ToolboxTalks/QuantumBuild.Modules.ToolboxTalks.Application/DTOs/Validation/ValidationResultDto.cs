@@ -45,6 +45,7 @@ public record ValidationResultDto
     // Reviewer decision
     public ReviewerDecision ReviewerDecision { get; init; }
     public string? EditedTranslation { get; init; }
+    public string? EditedSource { get; init; }
     public DateTime? DecisionAt { get; init; }
     public string? DecisionBy { get; init; }
 }

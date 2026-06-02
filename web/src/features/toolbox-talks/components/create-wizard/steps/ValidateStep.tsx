@@ -130,7 +130,8 @@ export function ValidateStep({
     (
       sectionIndex: number,
       action: 'accept' | 'edit' | 'retry',
-      editedTranslation?: string
+      editedTranslation?: string,
+      editedOriginalText?: string
     ) => {
       if (!talkId || !activeEntry?.runId) return;
 
@@ -141,6 +142,7 @@ export function ValidateStep({
           sectionIndex,
           action,
           editedTranslation,
+          editedOriginalText,
         },
         {
           onSuccess: () => {
@@ -154,10 +156,15 @@ export function ValidateStep({
             // Refetch after a brief delay to pick up the updated decision
             setTimeout(() => refetchRun(), 1500);
           },
-          onError: (error) => {
-            toast.error('Action failed', {
-              description:
-                error instanceof Error ? error.message : 'Unknown error',
+          onError: (error: unknown) => {
+            const isConflict =
+              error instanceof Error && error.message.includes('409');
+            toast.error(isConflict ? 'Revalidation already in progress' : 'Action failed', {
+              description: isConflict
+                ? 'A revalidation is already running for this section. Wait for it to complete.'
+                : error instanceof Error
+                  ? error.message
+                  : 'Unknown error',
             });
           },
         }
@@ -233,7 +240,9 @@ export function ValidateStep({
             languageCode={languageCode}
             passThreshold={passThreshold}
             onAccept={() => handleSectionAction(section.index, 'accept')}
-            onEdit={(text) => handleSectionAction(section.index, 'edit', text)}
+            onEdit={(editedTranslation, editedOriginalText) =>
+              handleSectionAction(section.index, 'edit', editedTranslation, editedOriginalText)
+            }
             onRetry={() => handleSectionAction(section.index, 'retry')}
             isDecisionPending={sectionDecision.isPending}
             defaultExpanded={section.result?.outcome === 'Review'}

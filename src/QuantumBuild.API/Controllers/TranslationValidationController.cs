@@ -230,14 +230,21 @@ public class TranslationValidationController : ControllerBase
             result.DecisionAt = DateTime.UtcNow;
             result.DecisionBy = _currentUserService.UserName;
 
-            if (result.EditedTranslation is not null)
+            var validationRun = result.ValidationRun;
+            if (validationRun.ToolboxTalkId.HasValue)
             {
-                var run = result.ValidationRun;
-                if (run.ToolboxTalkId.HasValue)
+                if (result.EditedTranslation is not null)
                 {
                     await PropagateEditedTranslationAsync(
-                        run.ToolboxTalkId.Value, run.LanguageCode, sectionIndex,
+                        validationRun.ToolboxTalkId.Value, validationRun.LanguageCode, sectionIndex,
                         result.EditedTranslation, cancellationToken);
+                }
+
+                if (result.EditedSource is not null)
+                {
+                    await PropagateEditedSourceAsync(
+                        validationRun.ToolboxTalkId.Value, validationRun.LanguageCode, sectionIndex,
+                        result.EditedSource, cancellationToken);
                 }
             }
 
@@ -291,9 +298,11 @@ public class TranslationValidationController : ControllerBase
     /// </summary>
     [HttpPut("runs/{runId:guid}/sections/{sectionIndex:int}/edit")]
     [Authorize(Policy = "Learnings.Admin")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> EditSection(
         Guid talkId,
         Guid runId,
@@ -303,12 +312,27 @@ public class TranslationValidationController : ControllerBase
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(request.EditedTranslation))
-                return BadRequest(new { message = "Edited translation is required" });
+            var hasTranslationEdit = !string.IsNullOrWhiteSpace(request.EditedTranslation);
+            var hasSourceEdit = !string.IsNullOrWhiteSpace(request.EditedOriginalText);
+
+            if (!hasTranslationEdit && !hasSourceEdit)
+                return BadRequest(new { message = "Edited translation or edited source text is required" });
 
             var result = await GetValidationResultAsync(talkId, runId, sectionIndex, cancellationToken);
             if (result == null)
                 return NotFound(new { message = "Validation result not found" });
+
+            // Concurrency guard: refuse a source-edit revalidation if a job is already running
+            if (hasSourceEdit && request.Revalidate)
+            {
+                var runStatus = await _dbContext.TranslationValidationRuns
+                    .Where(r => r.Id == runId)
+                    .Select(r => r.Status)
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                if (runStatus == ValidationRunStatus.Running)
+                    return Conflict(new { message = "A revalidation is already in progress for this section" });
+            }
 
             // Record implicit rejection for audit trail if not already accepted
             if (result.ReviewerDecision != ReviewerDecision.Accepted)
@@ -320,24 +344,38 @@ public class TranslationValidationController : ControllerBase
             }
 
             result.ReviewerDecision = ReviewerDecision.Edited;
-            result.EditedTranslation = request.EditedTranslation;
+            if (hasTranslationEdit)
+                result.EditedTranslation = request.EditedTranslation;
+            if (hasSourceEdit)
+                result.EditedSource = request.EditedOriginalText;
             result.DecisionAt = DateTime.UtcNow;
             result.DecisionBy = _currentUserService.UserName;
 
             await _dbContext.SaveChangesAsync(cancellationToken);
 
-            // Re-validate the edited section
-            var run = await _dbContext.TranslationValidationRuns
-                .FirstAsync(r => r.Id == runId, cancellationToken);
+            // Trigger re-validation:
+            //   - translation-only edit → always revalidate (existing behaviour)
+            //   - source edit + revalidate: true → revalidate with new source
+            //   - source edit + revalidate: false → save only (draft)
+            var shouldRevalidate = hasTranslationEdit || (hasSourceEdit && request.Revalidate);
 
-            var jobId = BackgroundJob.Enqueue<TranslationValidationJob>(
-                job => job.ExecuteAsync(runId, _currentUserService.TenantId, new[] { sectionIndex }, CancellationToken.None));
+            if (shouldRevalidate)
+            {
+                var jobId = BackgroundJob.Enqueue<TranslationValidationJob>(
+                    job => job.ExecuteAsync(runId, _currentUserService.TenantId, new[] { sectionIndex }, CancellationToken.None));
+
+                _logger.LogInformation(
+                    "Re-validation enqueued for run {RunId} section {SectionIndex}, jobId {JobId}",
+                    runId, sectionIndex, jobId);
+
+                return Accepted(new { message = "Section edited and re-validation enqueued", jobId });
+            }
 
             _logger.LogInformation(
-                "Re-validation enqueued for run {RunId} section {SectionIndex}, jobId {JobId}",
-                runId, sectionIndex, jobId);
+                "Section {SectionIndex} source edit saved (no revalidation) for run {RunId}",
+                sectionIndex, runId);
 
-            return Accepted(new { message = "Section edited and re-validation enqueued", jobId });
+            return Ok(new { message = "Section source edit saved" });
         }
         catch (Exception ex)
         {
@@ -711,6 +749,36 @@ public class TranslationValidationController : ControllerBase
         translation.UpdatedAt = DateTime.UtcNow;
     }
 
+    private async Task PropagateEditedSourceAsync(
+        Guid toolboxTalkId, string currentLanguageCode, int sectionIndex,
+        string editedSource, CancellationToken cancellationToken)
+    {
+        var tenantId = _currentUserService.TenantId;
+
+        var sections = await _dbContext.ToolboxTalkSections
+            .Where(s => s.ToolboxTalkId == toolboxTalkId)
+            .OrderBy(s => s.SectionNumber)
+            .ToListAsync(cancellationToken);
+
+        if (sectionIndex >= sections.Count)
+            return;
+
+        // Propagate edited source text to the underlying section
+        sections[sectionIndex].Content = editedSource;
+
+        // Mark all other-language translations as needing re-validation
+        var otherTranslations = await _dbContext.ToolboxTalkTranslations
+            .IgnoreQueryFilters()
+            .Where(t => t.ToolboxTalkId == toolboxTalkId
+                && t.TenantId == tenantId
+                && t.LanguageCode != currentLanguageCode
+                && !t.IsDeleted)
+            .ToListAsync(cancellationToken);
+
+        foreach (var t in otherTranslations)
+            t.NeedsRevalidation = true;
+    }
+
     private async Task<TranslationValidationResult?> GetValidationResultAsync(
         Guid talkId, Guid runId, int sectionIndex, CancellationToken cancellationToken)
     {
@@ -781,6 +849,7 @@ public class TranslationValidationController : ControllerBase
                 EffectiveThreshold = r.EffectiveThreshold,
                 ReviewerDecision = r.ReviewerDecision,
                 EditedTranslation = r.EditedTranslation,
+                EditedSource = r.EditedSource,
                 DecisionAt = r.DecisionAt,
                 DecisionBy = r.DecisionBy
             }).ToList()

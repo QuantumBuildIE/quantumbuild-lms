@@ -58,6 +58,12 @@ public class ToolboxTalkTranslation : TenantEntity
     /// </summary>
     public string TranslationProvider { get; set; } = string.Empty;
 
+    /// <summary>
+    /// True when the English source text for one or more sections has been edited via a reviewer
+    /// acceptance and these translations have not yet been re-validated against the new source.
+    /// </summary>
+    public bool NeedsRevalidation { get; set; } = false;
+
     // Navigation properties
 
     /// <summary>

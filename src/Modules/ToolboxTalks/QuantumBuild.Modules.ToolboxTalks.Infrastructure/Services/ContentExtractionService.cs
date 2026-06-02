@@ -12,6 +12,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Services.Subtitles;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
+using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Subtitles;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services;
 
@@ -575,7 +576,7 @@ public class ContentExtractionService : IContentExtractionService
             // Step 8: Queue background job to process translations
             if (hasTranslationsToProcess)
             {
-                _backgroundJobClient.Enqueue<ISubtitleProcessingOrchestrator>(
+                _backgroundJobClient.Enqueue<SubtitleProcessingOrchestrator>(
                     orchestrator => orchestrator.ProcessRetryAsync(subtitleJob.Id, CancellationToken.None));
 
                 _logger.LogInformation(

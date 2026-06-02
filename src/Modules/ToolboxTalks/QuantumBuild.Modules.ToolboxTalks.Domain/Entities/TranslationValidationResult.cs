@@ -55,6 +55,7 @@ public class TranslationValidationResult : BaseEntity
     // Reviewer decision
     public ReviewerDecision ReviewerDecision { get; set; } = ReviewerDecision.Pending;
     public string? EditedTranslation { get; set; }
+    public string? EditedSource { get; set; }
     public DateTime? DecisionAt { get; set; }
     public string? DecisionBy { get; set; }
 

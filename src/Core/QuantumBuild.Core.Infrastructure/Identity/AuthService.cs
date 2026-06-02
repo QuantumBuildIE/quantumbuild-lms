@@ -296,7 +296,8 @@ public class AuthService : IAuthService
         var enabledModules = user.IsSuperUser
             ? ModuleNames.All
             : await _db.TenantModules
-                .Where(m => m.TenantId == user.TenantId)
+                .IgnoreQueryFilters()
+                .Where(m => m.TenantId == user.TenantId && !m.IsDeleted)
                 .Select(m => m.ModuleName)
                 .ToArrayAsync();
 
