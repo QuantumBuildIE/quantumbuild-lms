@@ -45,7 +45,7 @@ export function HtmlSlideshow({ html, className }: HtmlSlideshowProps) {
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [iframeReady]);
+  }, []);
 
   // Request slide count once iframe loads
   const handleIframeLoad = useCallback(() => {
