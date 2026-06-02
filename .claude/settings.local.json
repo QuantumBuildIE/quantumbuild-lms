@@ -87,7 +87,14 @@
       "Bash(pwsh -Command '$pw = \"\"Admin123!\"\"; $body = @{email=\"\"admin@quantumbuild.ai\"\";password=$pw} | ConvertTo-Json; $body = $body -replace \"\"\\\\\\\\\\\\\\\\!\"\", \"\"!\"\"; \"\"JSON: $body\"\"')",
       "Bash(pwsh -Command '[System.Text.Json.JsonSerializer.Serialize\\(@{email=\"\"admin@quantumbuild.ai\"\";password=\"\"Admin123!\"\"}\\)]')",
       "Bash(pwsh -Command '$h = @{email=\"\"admin@quantumbuild.ai\"\";password=\"\"Admin123!\"\"}; $j = [System.Text.Json.JsonSerializer]::Serialize\\($h\\); \"\"JSON: $j\"\"')",
-      "Bash(pwsh -Command '$pw = \"\"SuperUser123!\"\"; $body = \"\"{`\"\"email`\"\":`\"\"superuser@certifiediq.ai`\"\",`\"\"password`\"\":`\"\"$pw`\"\"}\"\"; \"\"Body: $body\"\"; $r = Invoke-WebRequest -Uri \"\"http://localhost:5222/api/auth/login\"\" -Method POST -ContentType \"\"application/json\"\" -Body $body -SkipHttpErrorCheck; \"\"Status: $\\($r.StatusCode\\)\"\"; if \\($r.Content -is [byte[]]\\) { [System.Text.Encoding]::UTF8.GetString\\($r.Content\\).Substring\\(0,200\\) } else { $r.Content.Substring\\(0, [Math]::Min\\(200, $r.Content.Length\\)\\) }')"
+      "Bash(pwsh -Command '$pw = \"\"SuperUser123!\"\"; $body = \"\"{`\"\"email`\"\":`\"\"superuser@certifiediq.ai`\"\",`\"\"password`\"\":`\"\"$pw`\"\"}\"\"; \"\"Body: $body\"\"; $r = Invoke-WebRequest -Uri \"\"http://localhost:5222/api/auth/login\"\" -Method POST -ContentType \"\"application/json\"\" -Body $body -SkipHttpErrorCheck; \"\"Status: $\\($r.StatusCode\\)\"\"; if \\($r.Content -is [byte[]]\\) { [System.Text.Encoding]::UTF8.GetString\\($r.Content\\).Substring\\(0,200\\) } else { $r.Content.Substring\\(0, [Math]::Min\\(200, $r.Content.Length\\)\\) }')",
+      "Bash(Get-ChildItem \"src/Core/QuantumBuild.Core.Infrastructure/Migrations\" -Filter \"*.cs\")",
+      "Bash(Sort-Object Name)",
+      "Bash(Select-Object -ExpandProperty Name)",
+      "Bash(Get-ChildItem -Path \"c:\\\\WORK\\\\Contracts - RASCORE\\\\Applications\\\\quantumbuild-lms\\\\src\\\\Core\\\\QuantumBuild.Core.Infrastructure\\\\Migrations\" -Filter \"*.cs\")",
+      "Bash(Select-Object -First 20)",
+      "Bash(Select-Object Name)",
+      "Bash(Format-Table -AutoSize)"
     ]
   }
 }
