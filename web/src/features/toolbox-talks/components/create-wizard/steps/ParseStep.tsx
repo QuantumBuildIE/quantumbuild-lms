@@ -449,6 +449,18 @@ export function ParseStep({ state, updateState, onNext, onBack, onReset }: Parse
   // Continue — save sections then advance
   // ============================================
 
+  const refreshSnapshot = () => {
+    updateState({
+      parsedSectionsSnapshot: {
+        sections: state.parsedSections.map((s) => ({
+          title: s.title,
+          content: s.content,
+          suggestedOrder: s.suggestedOrder,
+        })),
+      },
+    });
+  };
+
   const executeSectionsSave = async (outputType: OutputType) => {
     if (!state.sessionId) return;
     try {
@@ -463,6 +475,7 @@ export function ParseStep({ state, updateState, onNext, onBack, onReset }: Parse
           outputType,
         },
       });
+      refreshSnapshot();
       onNext();
     } catch (error) {
       let message = 'Failed to proceed';
