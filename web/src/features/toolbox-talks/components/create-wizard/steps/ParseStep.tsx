@@ -123,6 +123,16 @@ export function ParseStep({ state, updateState, onNext, onBack, onReset }: Parse
   useEffect(() => {
     if (!state.sessionId) return;
 
+    // Back-nav remount: wizard state already holds parsed sections but hasParsed
+    // was reset on unmount. Session status may be beyond 'Parsed' (QuizGenerated,
+    // TranslateValidate, etc.) so the status-gated branches below won't fire.
+    // Wizard state is the source of truth here — no server hydration needed.
+    if (state.parsedSections.length > 0 && !hasParsed) {
+      parseTriggered.current = true;
+      setHasParsed(true);
+      return;
+    }
+
     const status = session?.status;
 
     // Already parsed — hydrate sections from session. This must run even
