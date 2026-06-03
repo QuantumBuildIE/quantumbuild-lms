@@ -55,6 +55,12 @@ export function TranslateStep({
 
   const { data: session, refetch: refetchSession } = useCreationSession(sessionId);
 
+  // Effective language codes come from the session (source language already filtered out server-side)
+  const sessionLanguageCodes = useMemo<string[]>(() => {
+    if (!session?.targetLanguageCodes) return [];
+    try { return JSON.parse(session.targetLanguageCodes); } catch { return []; }
+  }, [session?.targetLanguageCodes]);
+
   // Parse validation run entries from session JSON
   const runEntries = useMemo<RunEntry[]>(() => {
     if (!session?.validationRunIds) return [];
@@ -63,12 +69,12 @@ export function TranslateStep({
       if (!Array.isArray(parsed)) return [];
       return parsed.map((id: string, i: number) => ({
         runId: id,
-        languageCode: state.targetLanguageCodes[i] ?? 'unknown',
+        languageCode: sessionLanguageCodes[i] ?? state.targetLanguageCodes[i] ?? 'unknown',
       }));
     } catch {
       return [];
     }
-  }, [session?.validationRunIds, state.targetLanguageCodes]);
+  }, [session?.validationRunIds, sessionLanguageCodes, state.targetLanguageCodes]);
 
   // Active language tab (for multi-language support)
   const [activeIndex, setActiveIndex] = useState(0);
@@ -226,6 +232,7 @@ export function TranslateStep({
         safetyVerdict={safetyVerdict}
         sourceDialect={sourceDialect}
         progressMessage={hub.progress?.message ?? ''}
+        passThreshold={runDetail?.passThreshold ?? state.passThreshold}
         isConnected={hub.isConnected}
       />
 

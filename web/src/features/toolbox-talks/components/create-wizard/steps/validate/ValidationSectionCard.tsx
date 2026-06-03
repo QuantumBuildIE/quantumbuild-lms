@@ -66,7 +66,7 @@ interface ValidationSectionCardProps {
   languageCode: string;
   passThreshold: number;
   onAccept: () => void;
-  onEdit: (editedTranslation: string) => void;
+  onEdit: (editedTranslation: string | undefined, editedOriginalText?: string) => void;
   onRetry: () => void;
   isDecisionPending: boolean;
   defaultExpanded?: boolean;
@@ -159,7 +159,8 @@ export function ValidationSectionCard({
 }: ValidationSectionCardProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const [isEditing, setIsEditing] = useState(false);
-  const [editText, setEditText] = useState('');
+  const [editTranslationText, setEditTranslationText] = useState('');
+  const [editSourceText, setEditSourceText] = useState('');
 
   // Auto-collapse when a section is accepted
   const prevDecision = useRef(result?.reviewerDecision);
@@ -215,21 +216,35 @@ export function ValidationSectionCard({
   // ============================================
 
   function startEdit() {
-    setEditText(result?.editedTranslation ?? result?.translatedText ?? '');
+    setEditTranslationText(result?.editedTranslation ?? result?.translatedText ?? '');
+    setEditSourceText(result?.editedSource ?? result?.originalText ?? '');
     setIsEditing(true);
   }
 
   function cancelEdit() {
     setIsEditing(false);
-    setEditText('');
+    setEditTranslationText('');
+    setEditSourceText('');
   }
 
   function submitEdit() {
-    if (editText.trim()) {
-      onEdit(editText.trim());
-      setIsEditing(false);
-    }
+    const originalSourceText = result?.editedSource ?? result?.originalText ?? '';
+    const originalTranslationText = result?.editedTranslation ?? result?.translatedText ?? '';
+
+    const translationChanged = editTranslationText.trim() !== originalTranslationText.trim();
+    const sourceChanged = editSourceText.trim() !== originalSourceText.trim();
+
+    if (!translationChanged && !sourceChanged) return;
+
+    const newTranslation = translationChanged ? editTranslationText.trim() : undefined;
+    const newSource = sourceChanged ? editSourceText.trim() : undefined;
+
+    onEdit(newTranslation, newSource);
+    setIsEditing(false);
   }
+
+  const canSubmitEdit =
+    editTranslationText.trim() !== '' && editSourceText.trim() !== '' && !isDecisionPending;
 
   // ============================================
   // Render: Header (always visible)
@@ -370,44 +385,43 @@ export function ValidationSectionCard({
       <div className="space-y-4 border-t px-4 py-4">
         {/* Original / Translation side-by-side */}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {/* Original (English) pane */}
           <div className="space-y-1">
             <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
               Original (English)
             </div>
-            <div className="rounded-md border bg-muted/20 p-3 text-sm leading-relaxed">
-              {result.originalText}
-            </div>
+            {isEditing ? (
+              <div className="space-y-2">
+                {/* Inline warning */}
+                <div className="flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  Editing the source affects all translations of this section, and may simplify the formatting of structured content (lists, headings) into plain paragraphs.
+                </div>
+                <Textarea
+                  value={editSourceText}
+                  onChange={(e) => setEditSourceText(e.target.value)}
+                  className="min-h-[120px] text-sm"
+                />
+              </div>
+            ) : (
+              <div className="rounded-md border bg-muted/20 p-3 text-sm leading-relaxed">
+                {result.editedSource ?? result.originalText}
+              </div>
+            )}
           </div>
+
+          {/* Translation pane */}
           <div className="space-y-1">
             <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
               Translation ({languageCode.toUpperCase()})
             </div>
             {isEditing ? (
-              <div className="space-y-2">
-                <Textarea
-                  value={editText}
-                  onChange={(e) => setEditText(e.target.value)}
-                  className="min-h-[120px] text-sm"
-                  autoFocus
-                />
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    onClick={submitEdit}
-                    disabled={!editText.trim() || isDecisionPending}
-                  >
-                    {isDecisionPending ? (
-                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                    ) : (
-                      <RefreshCw className="mr-1 h-3 w-3" />
-                    )}
-                    Re-validate
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={cancelEdit}>
-                    Cancel
-                  </Button>
-                </div>
-              </div>
+              <Textarea
+                value={editTranslationText}
+                onChange={(e) => setEditTranslationText(e.target.value)}
+                className="min-h-[120px] text-sm"
+                autoFocus
+              />
             ) : (
               <div className="rounded-md border bg-muted/20 p-3 text-sm leading-relaxed">
                 {result.editedTranslation ?? result.translatedText}
@@ -415,6 +429,27 @@ export function ValidationSectionCard({
             )}
           </div>
         </div>
+
+        {/* Edit action buttons (shown only in edit mode) */}
+        {isEditing && (
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              onClick={submitEdit}
+              disabled={!canSubmitEdit}
+            >
+              {isDecisionPending ? (
+                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-1 h-3 w-3" />
+              )}
+              Re-validate
+            </Button>
+            <Button size="sm" variant="outline" onClick={cancelEdit}>
+              Cancel
+            </Button>
+          </div>
+        )}
 
         {/* Glossary mismatch warning */}
         {glossaryMismatches.length > 0 && (
@@ -600,7 +635,7 @@ export function ValidationSectionCard({
                     moduleRef: '',
                     lessonRef: sectionTitle,
                     languagePair: languageCode ? `en-${languageCode}` : '',
-                    sourceExcerpt: result.originalText?.slice(0, 300) ?? '',
+                    sourceExcerpt: (result.editedSource ?? result.originalText)?.slice(0, 300) ?? '',
                     targetExcerpt: (result.editedTranslation ?? result.translatedText)?.slice(0, 300) ?? '',
                   })
                 }
@@ -625,7 +660,7 @@ export function ValidationSectionCard({
                   moduleRef: '',
                   lessonRef: sectionTitle,
                   languagePair: languageCode ? `en-${languageCode}` : '',
-                  sourceExcerpt: result!.originalText?.slice(0, 300) ?? '',
+                  sourceExcerpt: (result!.editedSource ?? result!.originalText)?.slice(0, 300) ?? '',
                   targetExcerpt: (result!.editedTranslation ?? result!.translatedText)?.slice(0, 300) ?? '',
                 })
               }

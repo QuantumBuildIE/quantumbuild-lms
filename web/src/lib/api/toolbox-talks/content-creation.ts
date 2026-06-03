@@ -482,17 +482,20 @@ export async function rejectSection(
 }
 
 /**
- * Edit a section translation and re-validate
+ * Edit a section translation and/or source, optionally triggering re-validation.
+ * At least one of editedTranslation or editedOriginalText must be provided.
  */
 export async function editSection(
   talkId: string,
   runId: string,
   sectionIndex: number,
-  editedTranslation: string
+  editedTranslation: string | undefined,
+  editedOriginalText?: string,
+  revalidate: boolean = true
 ): Promise<void> {
   await apiClient.put(
     `/toolbox-talks/${talkId}/validation/runs/${runId}/sections/${sectionIndex}/edit`,
-    { editedTranslation }
+    { editedTranslation, editedOriginalText, revalidate }
   );
 }
 
@@ -581,15 +584,17 @@ export async function rejectSessionSection(
 }
 
 /**
- * Edit a section translation via session context
+ * Edit a section translation and/or source via session context
  */
 export async function editSessionSection(
   talkId: string,
   runId: string,
   sectionIndex: number,
-  editedTranslation: string
+  editedTranslation: string | undefined,
+  editedOriginalText?: string,
+  revalidate: boolean = true
 ): Promise<void> {
-  return editSection(talkId, runId, sectionIndex, editedTranslation);
+  return editSection(talkId, runId, sectionIndex, editedTranslation, editedOriginalText, revalidate);
 }
 
 /**

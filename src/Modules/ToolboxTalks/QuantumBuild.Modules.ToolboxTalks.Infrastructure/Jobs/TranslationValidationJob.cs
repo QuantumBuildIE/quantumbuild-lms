@@ -249,9 +249,7 @@ public class TranslationValidationJob
                 run.OverallScore, run.OverallOutcome,
                 run.SafetyVerdict);
 
-            await SendCompletionAsync(validationRunId, true,
-                $"Validation complete: {run.PassedSections}/{run.TotalSections} passed, " +
-                $"score {run.OverallScore}%");
+            await SendCompletionAsync(validationRunId, true, "Validation complete");
 
             // If this run belongs to a creation session, check if all runs are done
             await TryUpdateSessionStatusAsync(validationRunId, tenantId);
@@ -435,9 +433,9 @@ public class TranslationValidationJob
         // Load reviewer edits so re-validation uses the corrected text
         var existingEdits = await _dbContext.TranslationValidationResults
             .IgnoreQueryFilters()
-            .Where(r => r.ValidationRunId == run.Id && r.EditedTranslation != null)
-            .Select(r => new { r.SectionIndex, r.EditedTranslation })
-            .ToDictionaryAsync(r => r.SectionIndex, r => r.EditedTranslation!, cancellationToken);
+            .Where(r => r.ValidationRunId == run.Id && (r.EditedTranslation != null || r.EditedSource != null))
+            .Select(r => new { r.SectionIndex, r.EditedTranslation, r.EditedSource })
+            .ToDictionaryAsync(r => r.SectionIndex, cancellationToken);
 
         // Pair original and translated sections
         var pairs = new List<SectionPair>();
@@ -446,11 +444,12 @@ public class TranslationValidationJob
             var orig = originalSections[i];
             if (translatedSections.TryGetValue(orig.Id, out var translated))
             {
-                // Strip HTML tags for text comparison
-                var originalText = StripHtml(orig.Content);
-                var translatedText = existingEdits.TryGetValue(i, out var edited)
-                    ? edited
-                    : StripHtml(translated.Content);
+                // If the reviewer edited the source text, use that; otherwise use the stored section content
+                var editEntry = existingEdits.GetValueOrDefault(i);
+                var originalText = editEntry?.EditedSource
+                    ?? StripHtml(orig.Content);
+                var translatedText = editEntry?.EditedTranslation
+                    ?? StripHtml(translated.Content);
 
                 if (!string.IsNullOrWhiteSpace(originalText) && !string.IsNullOrWhiteSpace(translatedText))
                 {

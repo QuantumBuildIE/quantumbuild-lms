@@ -250,6 +250,7 @@ export interface SectionValidationResult {
   glossaryHardBlockApplied: boolean | null;
   reviewerDecision: ReviewerDecision;
   editedTranslation: string | null;
+  editedSource: string | null;
   decisionAt: string | null;
   decisionBy: string | null;
 }

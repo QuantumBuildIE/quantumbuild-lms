@@ -226,18 +226,20 @@ export function useSectionDecision() {
       sectionIndex,
       action,
       editedTranslation,
+      editedOriginalText,
     }: {
       talkId: string;
       runId: string;
       sectionIndex: number;
       action: 'accept' | 'edit' | 'retry';
       editedTranslation?: string;
+      editedOriginalText?: string;
     }) => {
       switch (action) {
         case 'accept':
           return acceptSection(talkId, runId, sectionIndex);
         case 'edit':
-          return editSection(talkId, runId, sectionIndex, editedTranslation!);
+          return editSection(talkId, runId, sectionIndex, editedTranslation, editedOriginalText, true);
         case 'retry':
           return retrySection(talkId, runId, sectionIndex);
       }
@@ -425,12 +427,14 @@ export function useSessionSectionDecision() {
       sectionIndex,
       action,
       editedTranslation,
+      editedOriginalText,
     }: {
       talkId: string;
       runId: string;
       sectionIndex: number;
       action: 'accept' | 'edit' | 'retry';
       editedTranslation?: string;
+      editedOriginalText?: string;
     }) => {
       switch (action) {
         case 'accept':
@@ -440,7 +444,9 @@ export function useSessionSectionDecision() {
             talkId,
             runId,
             sectionIndex,
-            editedTranslation!
+            editedTranslation,
+            editedOriginalText,
+            true
           );
         case 'retry':
           return retrySessionSection(talkId, runId, sectionIndex);

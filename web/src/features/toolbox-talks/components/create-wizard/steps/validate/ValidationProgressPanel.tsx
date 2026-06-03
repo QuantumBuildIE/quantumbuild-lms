@@ -41,6 +41,7 @@ interface ValidationProgressPanelProps {
   sourceDialect: string | null;
   progressMessage: string;
   isConnected: boolean;
+  passThreshold?: number;
 }
 
 // ============================================
@@ -57,11 +58,21 @@ export function ValidationProgressPanel({
   sourceDialect,
   progressMessage,
   isConnected,
+  passThreshold = 75,
 }: ValidationProgressPanelProps) {
   const [isEditingDialect, setIsEditingDialect] = useState(false);
   const [dialectOverride, setDialectOverride] = useState('');
 
   const isRunning = statusCounts.running > 0 || statusCounts.pending > 0;
+
+  const isValidationComplete = percentComplete >= 100 && sectionsComplete > 0;
+  const reviewBadgeColors = !isValidationComplete
+    ? { dot: 'bg-amber-500', text: 'text-amber-700' }
+    : overallScore >= passThreshold
+      ? { dot: 'bg-slate-400', text: 'text-slate-500' }
+      : overallScore >= passThreshold - 10
+        ? { dot: 'bg-amber-500', text: 'text-amber-700' }
+        : { dot: 'bg-red-500', text: 'text-red-700' };
 
   return (
     <div className="space-y-4 rounded-lg border bg-card p-4">
@@ -88,14 +99,30 @@ export function ValidationProgressPanel({
 
         {/* Progress bar + message */}
         <div className="flex-1 space-y-1">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">
-              {progressMessage || `${sectionsComplete} / ${totalSections} sections`}
-            </span>
-            <span className="tabular-nums text-muted-foreground">
-              {Math.round(percentComplete)}%
-            </span>
-          </div>
+          {isValidationComplete ? (
+            <div className="flex items-center gap-4 text-sm">
+              <span className="text-muted-foreground">
+                Score:{' '}
+                <span className="font-semibold text-foreground">{overallScore}%</span>
+              </span>
+              <span className="text-muted-foreground" aria-hidden>·</span>
+              <span className="text-muted-foreground">
+                Sections passed:{' '}
+                <span className="font-semibold text-foreground">
+                  {statusCounts.pass} / {totalSections}
+                </span>
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">
+                {progressMessage || `${sectionsComplete} / ${totalSections} sections`}
+              </span>
+              <span className="tabular-nums text-muted-foreground">
+                {Math.round(percentComplete)}%
+              </span>
+            </div>
+          )}
           <Progress value={percentComplete} className="h-2" />
         </div>
 
@@ -127,8 +154,8 @@ export function ValidationProgressPanel({
         )}
         {statusCounts.review > 0 && (
           <span className="flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full bg-amber-500" />
-            <span className="text-amber-700">
+            <span className={cn('h-2 w-2 rounded-full', reviewBadgeColors.dot)} />
+            <span className={reviewBadgeColors.text}>
               Review ({statusCounts.review})
             </span>
           </span>

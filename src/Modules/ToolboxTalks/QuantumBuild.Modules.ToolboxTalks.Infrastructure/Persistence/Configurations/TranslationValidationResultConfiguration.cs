@@ -114,6 +114,9 @@ public class TranslationValidationResultConfiguration : IEntityTypeConfiguration
         builder.Property(r => r.EditedTranslation)
             .HasColumnType("text");
 
+        builder.Property(r => r.EditedSource)
+            .HasColumnType("text");
+
         builder.Property(r => r.DecisionAt);
 
         builder.Property(r => r.DecisionBy)

@@ -18,7 +18,7 @@ public class ConsensusEngineTests
     private readonly Mock<IClaudeHaikuBackTranslationService> _claudeHaiku = new();
     private readonly Mock<IDeepLTranslationService> _deepL = new();
     private readonly Mock<IGeminiTranslationService> _gemini = new();
-    private readonly Mock<IDeepSeekTranslationService> _deepSeek = new();
+    private readonly Mock<IClaudeSonnetBackTranslationService> _claudeSonnet = new();
     private readonly Mock<ILexicalScoringService> _scorer = new();
 
     private ConsensusEngine CreateEngine(int maxRounds = 3)
@@ -27,7 +27,7 @@ public class ConsensusEngineTests
         var logger = Mock.Of<ILogger<ConsensusEngine>>();
         return new ConsensusEngine(
             _claudeHaiku.Object, _deepL.Object, _gemini.Object,
-            _deepSeek.Object, _scorer.Object, settings, logger);
+            _claudeSonnet.Object, _scorer.Object, settings, logger);
     }
 
     private static BackTranslationResult SuccessBt(string text, string provider) =>
@@ -105,8 +105,8 @@ public class ConsensusEngineTests
         SetupScorer(btB, 50.0); // diverges, R1 fails
         SetupScorer(btC, 82.0); // avg(80, 50, 82) = 70.67 → 71 < 75 → goes to R3
 
-        // DeepSeek returns null → still resolves at R3 with available scores
-        _deepSeek.Setup(d => d.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>()))
+        // Claude Sonnet (Round 3) returns null → still resolves at R3 with available scores
+        _claudeSonnet.Setup(s => s.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>(), It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<bool>(), It.IsAny<Guid?>()))
             .ReturnsAsync((BackTranslationResult?)null);
 
         var result = await CreateEngine().RunAsync(OriginalText, TranslatedText, SourceLang, TargetLang, Threshold);
@@ -129,7 +129,7 @@ public class ConsensusEngineTests
             .ReturnsAsync(SuccessBt(btB, "DeepL"));
         _gemini.Setup(g => g.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>()))
             .ReturnsAsync((BackTranslationResult?)null); // unavailable
-        _deepSeek.Setup(d => d.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>()))
+        _claudeSonnet.Setup(s => s.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>(), It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<bool>(), It.IsAny<Guid?>()))
             .ReturnsAsync((BackTranslationResult?)null); // unavailable
         SetupScorer(btA, 70.0);
         SetupScorer(btB, 65.0);
@@ -153,7 +153,7 @@ public class ConsensusEngineTests
             .ReturnsAsync(SuccessBt(btB, "DeepL"));
         _gemini.Setup(g => g.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>()))
             .ReturnsAsync((BackTranslationResult?)null);
-        _deepSeek.Setup(d => d.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>()))
+        _claudeSonnet.Setup(s => s.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>(), It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<bool>(), It.IsAny<Guid?>()))
             .ReturnsAsync((BackTranslationResult?)null);
         SetupScorer(btB, 90.0);
 
@@ -178,7 +178,7 @@ public class ConsensusEngineTests
             .ReturnsAsync((BackTranslationResult?)null);
         _gemini.Setup(g => g.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>()))
             .ReturnsAsync((BackTranslationResult?)null);
-        _deepSeek.Setup(d => d.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>()))
+        _claudeSonnet.Setup(s => s.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>(), It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<bool>(), It.IsAny<Guid?>()))
             .ReturnsAsync((BackTranslationResult?)null);
         SetupScorer(btA, 85.0);
 
@@ -200,7 +200,7 @@ public class ConsensusEngineTests
             .ReturnsAsync((BackTranslationResult?)null);
         _gemini.Setup(g => g.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>()))
             .ReturnsAsync((BackTranslationResult?)null);
-        _deepSeek.Setup(d => d.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>()))
+        _claudeSonnet.Setup(s => s.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>(), It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<bool>(), It.IsAny<Guid?>()))
             .ReturnsAsync((BackTranslationResult?)null);
 
         var result = await CreateEngine().RunAsync(OriginalText, TranslatedText, SourceLang, TargetLang, Threshold);
@@ -244,7 +244,7 @@ public class ConsensusEngineTests
             .ReturnsAsync(SuccessBt(btB, "DeepL"));
         _gemini.Setup(g => g.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>()))
             .ReturnsAsync((BackTranslationResult?)null);
-        _deepSeek.Setup(d => d.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>()))
+        _claudeSonnet.Setup(s => s.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>(), It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<bool>(), It.IsAny<Guid?>()))
             .ReturnsAsync((BackTranslationResult?)null);
         SetupScorer(btA, 74.0);
         SetupScorer(btB, 74.0);
