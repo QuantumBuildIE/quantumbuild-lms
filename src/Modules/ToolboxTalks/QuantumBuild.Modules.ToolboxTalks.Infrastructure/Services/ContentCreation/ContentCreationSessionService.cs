@@ -324,9 +324,29 @@ public class ContentCreationSessionService : IContentCreationSessionService
     {
         var session = await GetSessionEntityAsync(sessionId, tenantId, cancellationToken);
 
-        if (session.Status != ContentCreationSessionStatus.Parsed &&
-            session.Status != ContentCreationSessionStatus.Validated)
-            throw new InvalidOperationException("Sections can only be updated in Parsed or Validated status");
+        var inFlightStatuses = new HashSet<ContentCreationSessionStatus>
+        {
+            ContentCreationSessionStatus.Transcribing,
+            ContentCreationSessionStatus.Parsing,
+            ContentCreationSessionStatus.GeneratingQuiz,
+            ContentCreationSessionStatus.TranslatingValidating,
+            ContentCreationSessionStatus.Publishing,
+        };
+
+        var allowedStatuses = new HashSet<ContentCreationSessionStatus>
+        {
+            ContentCreationSessionStatus.Parsed,
+            ContentCreationSessionStatus.QuizGenerated,
+            ContentCreationSessionStatus.Validated,
+        };
+
+        if (inFlightStatuses.Contains(session.Status))
+            throw new InvalidOperationException(
+                $"Section editing is not available while {session.Status} is in progress. Please wait for the current operation to complete.");
+
+        if (!allowedStatuses.Contains(session.Status))
+            throw new InvalidOperationException(
+                $"Sections can only be updated in Parsed, QuizGenerated, or Validated status (current: {session.Status}).");
 
         var sections = request.Sections
             .Select(s => new ParsedSection(s.Title, s.Content, s.Order))
@@ -335,6 +355,23 @@ public class ContentCreationSessionService : IContentCreationSessionService
 
         session.ParsedSectionsJson = JsonSerializer.Serialize(sections, CamelCaseJson);
         session.OutputType = request.OutputType;
+
+        // Cascade-reset downstream artefacts when re-editing past Parsed status
+        var oldStatus = session.Status;
+        if (oldStatus == ContentCreationSessionStatus.QuizGenerated ||
+            oldStatus == ContentCreationSessionStatus.Validated)
+        {
+            session.QuestionsJson = null;
+            session.Status = ContentCreationSessionStatus.Parsed;
+
+            if (oldStatus == ContentCreationSessionStatus.Validated)
+                session.ValidationRunIds = null;
+
+            _logger.LogInformation(
+                "[ContentCreationSession] Session {SessionId} cascaded back to Parsed status (was {OldStatus}) due to section edit; cleared quiz/translations/validation",
+                sessionId, oldStatus);
+        }
+
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(
