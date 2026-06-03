@@ -12,6 +12,7 @@ import {
   Info,
   Trash2,
 } from 'lucide-react';
+import axios from 'axios';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import {
@@ -464,7 +465,12 @@ export function ParseStep({ state, updateState, onNext, onBack, onReset }: Parse
       });
       onNext();
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to proceed';
+      let message = 'Failed to proceed';
+      if (axios.isAxiosError(error) && error.response?.data?.error) {
+        message = error.response.data.error;
+      } else if (error instanceof Error) {
+        message = error.message;
+      }
       toast.error('Error', { description: message });
     }
   };
