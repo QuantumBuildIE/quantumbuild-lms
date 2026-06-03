@@ -484,12 +484,17 @@ public class ContentCreationSessionService : IContentCreationSessionService
             if (session.IncludeQuiz)
                 SyncQuizQuestionsToTalk(talkId, quizQuestions, session.InputMode);
 
-            // Remove old translations so they are regenerated
+            // Hard-delete: the (ToolboxTalkId, LanguageCode) unique index is unfiltered, so soft-deleted rows
+            // still occupy their slot and block re-insertion when we regenerate translations for the same languages.
+            // IgnoreQueryFilters() also catches rows soft-deleted by previous failed re-run attempts.
+            // Sections have been edited (cascade has happened) so all existing translations are provably stale —
+            // no audit or downstream dependency to preserve here.
             var existingTranslations = await _dbContext.ToolboxTalkTranslations
-                .Where(t => t.ToolboxTalkId == talkId)
+                .IgnoreQueryFilters()
+                .Where(t => t.ToolboxTalkId == talkId && t.TenantId == tenantId)
                 .ToListAsync(cancellationToken);
             foreach (var t in existingTranslations)
-                t.IsDeleted = true;
+                _dbContext.ToolboxTalkTranslations.Remove(t);
         }
         else
         {
