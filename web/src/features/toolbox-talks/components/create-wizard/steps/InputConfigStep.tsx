@@ -136,7 +136,6 @@ export function InputConfigStep({
   // Local state
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
-  const [videoRightsConfirmed, setVideoRightsConfirmed] = useState(false);
   const [customAuditPurpose, setCustomAuditPurpose] = useState('');
   const [auditPurposeMode, setAuditPurposeMode] = useState<'preset' | 'custom'>(
     state.auditPurpose && !auditPurposes.includes(state.auditPurpose)
@@ -202,6 +201,7 @@ export function InputConfigStep({
       sourceFile: mode !== state.inputMode ? null : state.sourceFile,
       sourceFileName: mode !== state.inputMode ? null : state.sourceFileName,
       videoUrl: mode !== state.inputMode ? '' : state.videoUrl,
+      videoRightsConfirmed: false,
     });
   };
 
@@ -268,7 +268,7 @@ export function InputConfigStep({
       : state.inputMode === 'Pdf'
         ? !!state.sourceFile
         : !!state.sourceFile ||
-          (state.videoUrl.trim().length > 0 && videoRightsConfirmed));
+          (state.videoUrl.trim().length > 0 && state.videoRightsConfirmed));
 
   const handleContinue = async () => {
     if (!canContinue || !state.inputMode) return;
@@ -328,16 +328,15 @@ export function InputConfigStep({
           file: state.sourceFile,
           onProgress: setUploadProgress,
         });
-
-        setIsUploading(false);
       }
 
       onNext();
     } catch (error) {
-      setIsUploading(false);
       const message =
         error instanceof Error ? error.message : 'Failed to create session';
       toast.error('Error', { description: message });
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -563,19 +562,17 @@ export function InputConfigStep({
                   <Input
                     placeholder="https://youtube.com/watch?v=... or direct video URL"
                     value={state.videoUrl}
-                    onChange={(e) => {
-                      const url = e.target.value;
-                      updateState({ videoUrl: url });
-                      if (!url.trim()) setVideoRightsConfirmed(false);
-                    }}
+                    onChange={(e) =>
+                      updateState({ videoUrl: e.target.value, videoRightsConfirmed: false })
+                    }
                   />
                   {state.videoUrl.trim().length > 0 && (
                     <div className="flex items-start gap-2">
                       <Checkbox
                         id="video-rights"
-                        checked={videoRightsConfirmed}
+                        checked={state.videoRightsConfirmed}
                         onCheckedChange={(checked) =>
-                          setVideoRightsConfirmed(checked === true)
+                          updateState({ videoRightsConfirmed: checked === true })
                         }
                       />
                       <label

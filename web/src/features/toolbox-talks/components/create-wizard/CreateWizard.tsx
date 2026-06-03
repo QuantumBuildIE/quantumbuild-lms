@@ -57,6 +57,7 @@ export interface WizardState {
   sourceFile: File | null;
   sourceFileName: string | null;
   videoUrl: string;
+  videoRightsConfirmed: boolean;
   targetLanguageCodes: string[];
   passThreshold: number;
   includeQuiz: boolean;
@@ -86,6 +87,7 @@ const initialState: WizardState = {
   sourceFile: null,
   sourceFileName: null,
   videoUrl: '',
+  videoRightsConfirmed: false,
   targetLanguageCodes: [],
   passThreshold: 75,
   includeQuiz: true,
