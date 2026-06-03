@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Check, CheckCircle, ChevronLeft, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTenantSettings } from '@/lib/api/admin/use-tenant-settings';
+import { useCreationSession } from '@/lib/api/toolbox-talks/use-content-creation';
 import type { WizardStep, InputMode, OutputType, ParsedSection } from '@/types/content-creation';
 
 // Lazy-load step components
@@ -136,6 +137,22 @@ export function CreateWizard() {
     setWizardState((prev) => ({ ...prev, ...updates }));
   }, []);
 
+  // Session data — served from TanStack cache (same query key as step components; no extra network call)
+  const { data: session } = useCreationSession(wizardState.sessionId);
+
+  // Steps 5 (Translate) and 6 (Validate) require validation runs to exist.
+  // After a cascade reset the backend nulls out validationRunIds, so those steps
+  // become unreachable until the user walks forward through Settings again.
+  const isStepReachable = useCallback(
+    (stepId: number): boolean => {
+      if (stepId === 5 || stepId === 6) {
+        return !!session?.validationRunIds && session.validationRunIds.length > 0;
+      }
+      return true;
+    },
+    [session?.validationRunIds]
+  );
+
   // Tenant settings — used to derive skip conditions
   const { data: tenantSettings } = useTenantSettings();
   const skipValidationStep = tenantSettings?.['SkipValidationStep'] === 'true';
@@ -176,21 +193,26 @@ export function CreateWizard() {
       if (step === 3 && !wizardState.includeQuiz) return;
       if (step === 5 && !hasTargetLanguages) return;
       if (step === 6 && (!hasTargetLanguages || skipValidationStep)) return;
-      if (step <= highestStep) {
+      if (step <= highestStep && isStepReachable(step)) {
         setCurrentStep(step);
       }
     },
-    [highestStep, wizardState.includeQuiz, hasTargetLanguages, skipValidationStep]
+    [highestStep, wizardState.includeQuiz, hasTargetLanguages, skipValidationStep, isStepReachable]
   );
 
   // Mark skipped steps for the indicator — greyed out with strikethrough
-  const steps = STEPS.map((s) => ({
-    ...s,
-    skipped:
+  // Mark blocked steps — reached via highestStep but unreachable after cascade reset
+  const steps = STEPS.map((s) => {
+    const skipped =
       (s.id === 3 && !wizardState.includeQuiz) ||
       (s.id === 5 && !hasTargetLanguages) ||
-      (s.id === 6 && (!hasTargetLanguages || skipValidationStep)),
-  }));
+      (s.id === 6 && (!hasTargetLanguages || skipValidationStep));
+    return {
+      ...s,
+      skipped,
+      isBlocked: !skipped && s.id <= highestStep && !isStepReachable(s.id),
+    };
+  });
 
   const handleCancel = () => {
     if (confirm('Are you sure you want to cancel? All progress will be lost.')) {
@@ -355,10 +377,15 @@ export function CreateWizard() {
               ) : (
                 <button
                   onClick={() => goToStep(step.id)}
-                  disabled={step.id > highestStep}
+                  disabled={step.id > highestStep || step.isBlocked}
+                  title={
+                    step.isBlocked
+                      ? 'Translation needs to be re-run after recent section changes. Continue from the Settings step to proceed.'
+                      : undefined
+                  }
                   className={cn(
                     'group relative flex items-start',
-                    step.id > highestStep
+                    step.id > highestStep || step.isBlocked
                       ? 'cursor-not-allowed'
                       : 'cursor-pointer'
                   )}
@@ -367,14 +394,16 @@ export function CreateWizard() {
                     <span
                       className={cn(
                         'relative z-10 flex h-8 w-8 items-center justify-center rounded-full',
-                        step.id < currentStep
-                          ? 'bg-primary text-primary-foreground'
-                          : step.id === currentStep
-                            ? 'border-2 border-primary bg-background text-primary'
-                            : 'border-2 border-muted bg-background text-muted-foreground'
+                        step.isBlocked
+                          ? 'border-2 border-amber-400 bg-amber-50 text-amber-600'
+                          : step.id < currentStep
+                            ? 'bg-primary text-primary-foreground'
+                            : step.id === currentStep
+                              ? 'border-2 border-primary bg-background text-primary'
+                              : 'border-2 border-muted bg-background text-muted-foreground'
                       )}
                     >
-                      {step.id < currentStep ? (
+                      {step.id < currentStep && !step.isBlocked ? (
                         <Check className="h-4 w-4" />
                       ) : (
                         <span className="text-xs">{step.id}</span>
@@ -385,15 +414,17 @@ export function CreateWizard() {
                     <span
                       className={cn(
                         'text-sm font-medium',
-                        step.id <= currentStep
-                          ? 'text-primary'
-                          : 'text-muted-foreground'
+                        step.isBlocked
+                          ? 'text-amber-600'
+                          : step.id <= currentStep
+                            ? 'text-primary'
+                            : 'text-muted-foreground'
                       )}
                     >
                       {step.name}
                     </span>
                     <span className="hidden text-xs text-muted-foreground sm:block">
-                      {step.description}
+                      {step.isBlocked ? 'Re-run required' : step.description}
                     </span>
                   </span>
                 </button>
