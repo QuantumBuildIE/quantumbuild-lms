@@ -8,6 +8,7 @@ import {
   Trash2,
   ChevronDown,
   ChevronRight,
+  AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DragHandle, useSortableItem } from '@/components/ui/sortable';
@@ -31,6 +32,7 @@ import {
   restrictToParentElement,
 } from '@dnd-kit/modifiers';
 import type { ParsedSection } from '@/types/content-creation';
+import { SectionBodyEditor } from './SectionBodyEditor';
 
 // ============================================
 // Props
@@ -186,6 +188,12 @@ export function SectionList({ sections, onChange }: SectionListProps) {
                 onRenameKeyDown={handleRenameKeyDown}
                 onToggleExpanded={() => toggleExpanded(ids[index])}
                 onDelete={() => handleDelete(index)}
+                onBodyChange={(content) => {
+                  const updated = sections.map((s, i) =>
+                    i === index ? { ...s, content } : s
+                  );
+                  onChange(updated);
+                }}
               />
             ))}
           </div>
@@ -212,6 +220,7 @@ interface SectionRowProps {
   onRenameKeyDown: (e: React.KeyboardEvent) => void;
   onToggleExpanded: () => void;
   onDelete: () => void;
+  onBodyChange: (content: string) => void;
 }
 
 function SectionRow({
@@ -227,6 +236,7 @@ function SectionRow({
   onRenameKeyDown,
   onToggleExpanded,
   onDelete,
+  onBodyChange,
 }: SectionRowProps) {
   const { attributes, listeners, setNodeRef, style, isDragging } =
     useSortableItem({ id });
@@ -319,10 +329,16 @@ function SectionRow({
 
       {/* Expanded content */}
       {isExpanded && (
-        <div className="border-t px-3 py-3 pl-[4.5rem]">
-          <div
-            className="prose prose-sm dark:prose-invert max-w-none text-sm text-muted-foreground"
-            dangerouslySetInnerHTML={{ __html: section.content }}
+        <div className="border-t px-3 py-3 pl-[4.5rem] space-y-2">
+          <div className="flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            Editing section content may simplify the formatting of structured content (lists, headings) into plain paragraphs. A rich-text editor is planned.
+          </div>
+          <SectionBodyEditor
+            value={section.content}
+            onChange={onBodyChange}
+            sectionId={id}
+            ariaLabel={`Body for section ${index + 1}: ${section.title}`}
           />
         </div>
       )}
