@@ -763,8 +763,14 @@ public class TranslationValidationController : ControllerBase
         if (sectionIndex >= sections.Count)
             return;
 
-        // Propagate edited source text to the underlying section
-        sections[sectionIndex].Content = editedSource;
+        // Wrap plain-text edit in paragraph elements so HTML structure is preserved.
+        // HTML-encoding is non-negotiable — employees view Content via dangerouslySetInnerHTML.
+        var paragraphs = editedSource
+            .Split(new[] { "\r\n", "\n" }, StringSplitOptions.None)
+            .Select(line => line.Trim())
+            .Where(line => line.Length > 0)
+            .Select(line => $"<p>{System.Net.WebUtility.HtmlEncode(line)}</p>");
+        sections[sectionIndex].Content = string.Join(string.Empty, paragraphs);
 
         // Mark all other-language translations as needing re-validation
         var otherTranslations = await _dbContext.ToolboxTalkTranslations

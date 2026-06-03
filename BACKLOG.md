@@ -1,6 +1,6 @@
 # CertifiedIQ — Backlog (Source of Truth)
 
-**Last updated:** 2 June 2026
+**Last updated:** 3 June 2026
 **Purpose:** Comprehensive record of every known item — bug, feature, refactor, product decision — across the CertifiedIQ LMS. This is the long reference. For the active prioritised list, see `SPRINT.md`.
 
 ## Conventions
@@ -40,32 +40,24 @@ Source: `CertifiedIQ_Translator_UAT_Brief_Ryans_Bakery_v3.pdf` (27 May 2026). Re
 #### 1.1.1 Validation summary contradicts itself ("0/4 passed, score 100%")
 - **Priority:** P0
 - **Origin:** `[UAT]`
-- **Status:** Open
-- **Description:** Translation Progress panel shows green "100" score with caption "Validation complete: 0/4 passed, score 100%". Orange Review (n) badge appears below. Reviewer reads orange as error but can't tell what's wrong since score says 100. Two unrelated counters concatenated into one sentence.
-- **Cause:** `PassedSections` counts only `Outcome == Pass`; `OverallScore` is arithmetic mean. A section can be `Outcome=Review` with `FinalScore=100` (e.g. when DeepL unavailable and Round 2 with Gemini lands 100 but downstream rules still mark Review).
-- **Files:** `TranslationValidationJob.cs:221-226, 252-254`, `ConsensusEngine.cs:78-85, 198-211`
-- **Fix direction:** Replace concatenated sentence with two labelled metrics. Drop orange tint on Review badge when `OverallScore >= PassThreshold`. Optionally surface provider-fallback messages.
-- **Acceptance:** A reviewer with no compliance background can state in one sentence what action (if any) is required.
+- **Status:** ✅ Done (3 Jun 2026)
+- **Resolution:** Backend completion message reduced to "Validation complete" — no more concatenated counters. Frontend `ValidationProgressPanel.tsx` renders two distinct labelled metrics on completion: `Score: X%` and `Sections passed: Y / Z`. Review badge tinting now conditional: slate (neutral) when overall score ≥ threshold, amber when within 10 of threshold, red when significantly below. Closes 1.1.12 as a side effect (same badge tinting code). Verified on Development.
 
 #### 1.1.2 Final score 100% EN / 80% RU contradicts upstream 100%
 - **Priority:** P0
 - **Origin:** `[UAT]`
-- **Status:** Open
-- **Description:** Per-step scores show 100 across the board, then final Translate step shows English 100% / Russian 80% with no explanation for the 20% drop.
-- **Cause:** `SourceLanguage` hardcoded to "en" when creating validation runs. If "en" also appears in target list, an EN→EN validation run is created — trivial to score 100 — and Russian back-translation drops to 80 separately. Publish page shows `runDetail.overallScore` with no baseline label.
-- **Files:** `ContentCreationSessionService.cs:571-593`, `PublishStep.tsx:520-552`
-- **Fix direction:** Filter source language out of target list. If keeping EN row for audit completeness, label "Source — no back-translation required". Label per-language scores with their baseline (e.g. "RU back-translation consensus").
-- **Acceptance:** Any score on publish page traceable to its screen/calculation. EN never appears as a translation target.
+- **Status:** ✅ Done (3 Jun 2026)
+- **Resolution:** Backend filters source language out of target list when creating validation runs — if source is EN and targets include EN, only non-EN runs are created. Frontend `PublishStep.tsx` section heading changed to "Back-translation scores" with description "Consensus back-translation score per target language". Each per-language score is clearly labelled. Frontend index-misalignment bug also caught and fixed (RU run was being rendered with EN label after the backend filter dropped EN — fixed by sourcing language mapping from session storage rather than wizard state). Verified on Development.
 
 #### 1.1.3 No path to edit English source and re-validate
 - **Priority:** P0
 - **Origin:** `[UAT]`
-- **Status:** Open
-- **Description:** Reviewer can Accept / Reject / Edit a translation section, but Edit textarea prefills with target only. No affordance to edit the EN source string. Reviewer cannot fix a phrase upstream and re-validate.
-- **Cause:** `startEdit()` sets `editText` from `editedTranslation ?? translatedText`. `submitEdit()` sends as `editedTranslation`. `result.originalText` rendered read-only. No `editedOriginalText` field on the decision payload.
-- **Files:** `ValidationSectionCard.tsx:217-232, 372-380, 385-410`, `ValidateStep.tsx:123-161`
-- **Fix direction:** Add second textarea on Original card; new `editedOriginalText` field on the section-decision mutation. Backend writes to a new `EditedSource` field, requeues a single-section validation job, propagates `EditedTranslation → ToolboxTalkTranslation` on reviewer accept (not on validation completion).
-- **Acceptance:** Reviewer edits EN, re-validates that section only, accepts, live translation reflects the edit.
+- **Status:** ✅ Done (3 Jun 2026) — with known limitation (see 1.1.18)
+- **Resolution:** Reviewers can now edit both Original (English source) and Translation textareas in Edit mode on the Validate step. An inline amber warning above the source textarea discloses the consequences. New `EditedSource` field on `TranslationValidationResult` stages the edit; on Accept, the edit propagates to `ToolboxTalkSection.Content` and sets `NeedsRevalidation = true` on all other-language translations of the same talk (per-talk granularity — `ToolboxTalkTranslation` is per-talk, not per-section). Single-section re-validation reuses the existing `ConsensusEngine` pipeline by overriding `OriginalText` with `EditedSource` when present — no validation logic duplication. Concurrency guarded with 409 response if a re-validation is already running.
+
+  Migration `20260602142845_AddEditedSourceAndRevalidationFlag` adds both new fields (CLI-generated, both `.cs` and `.Designer.cs` present).
+
+  **Known limitation:** the propagation flattens HTML structure (lists, headings) to plain paragraphs because the reviewer edits a plain-text projection of the HTML source. To prevent stored XSS, the propagated text is HTML-encoded and wrapped in `<p>` elements (one paragraph per non-empty line). The amber warning discloses this: *"Editing the source affects all translations of this section, and may simplify the formatting of structured content (lists, headings) into plain paragraphs."* Long-term fix tracked as **1.1.18** (rich-text editor).
 
 ### P1 — High (workflow breakers)
 
@@ -184,6 +176,54 @@ Source: `CertifiedIQ_Translator_UAT_Brief_Ryans_Bakery_v3.pdf` (27 May 2026). Re
 - **Cause:** Not a bug — feature request. Wizard initialises empty; no tenant-defaults lookup.
 - **Files:** Infrastructure exists — `TenantSetting.cs`, `useTenantSettings()` hook
 - **Fix direction:** New tenant-settings keys under `Module = ToolboxTalks.Defaults`: target languages, sector, include-quiz, pass threshold, reviewer role, audience role, verbatim mode. Read in `InputConfigStep` on mount; allow per-import override. Settings UI in `/admin/toolbox-talks/settings`.
+
+#### 1.1.18 Rich-text editor for section source/translation editing
+- **Priority:** P2
+- **Origin:** `[Engineering]` `[UAT-followup]`
+- **Status:** Open (new — 3 Jun 2026)
+- **Description:** Replace the plain-text textareas on the Validate step's source/translation edit panes with a rich-text editor that natively handles structured HTML (paragraphs, headings h2/h3, bullet and numbered lists, bold/italic, links).
+
+  **Why this matters:** `ToolboxTalkSection.Content` stores HTML (the AI generates structured content with bullets, headings, etc). The current "edit plain text, write HTML" round-trip is destructive — accepting a source edit flattens all structural formatting to plain paragraphs (mitigated short-term in 1.1.3 by wrapping in `<p>` elements per line and HTML-encoding for XSS prevention, but the formatting loss remains).
+
+  Replacing the textareas with a structured editor (the same representation the reviewer sees as what's stored) is the long-term correct fix. WYSIWYG editing eliminates the strip/reconstruct round-trip and preserves structure end-to-end.
+
+  **Library candidates:**
+  - **ProseMirror** (likely best fit) — MIT-licensed, no commercial pressure, very stable long-term API, smaller bundle, used by NYT/Atlassian/Asana directly. Requires more boilerplate than higher-level wrappers.
+  - **TipTap** — Wrapper around ProseMirror. MIT core; some advanced features in paid Pro tier (collaboration, AI extensions, cloud sync). Faster initial setup, less flexible long-term.
+  - **Lexical (Meta)** — MIT, newer, smaller community.
+
+  Recommendation: ProseMirror directly. The editor scope is narrow (~6 schema nodes — paragraph, h2, h3, bullet list, ordered list, bold, italic) and ProseMirror's directness pays off over the project's lifetime more than TipTap's initial-velocity benefit.
+
+  **Files affected:**
+  - `web/src/features/toolbox-talks/components/create-wizard/steps/validate/ValidationSectionCard.tsx` — replace textareas with editor component
+  - Probably `web/src/features/toolbox-talks/components/create-wizard/steps/parse/SectionList.tsx` — Parse step currently has read-only display via `dangerouslySetInnerHTML`; if reviewers can edit on Validate, they should edit on Parse too. Same editor reused.
+  - Backend: `TranslationValidationController.cs` `PropagateEditedSourceAsync` — remove the line-splitting-and-wrapping logic; editor outputs valid HTML directly.
+  - Backend: review whether `TranslationValidationJob.StripHtml()` for AI prompting still needs to happen on the fly during re-validation, or can be reused from a stored plain-text projection.
+  - PDF export / certificate rendering — verify the editor's HTML output renders correctly through QuestPDF (the existing PDF generator).
+
+  **Considerations:**
+  - **Paste sanitisation** — reviewers will paste from Word, web pages, etc. Configure schema to strip disallowed elements (Microsoft Office paste in particular injects MSO classes and inline styles that need scrubbing).
+  - **Schema enforcement** — only allow the elements the AI generator actually produces. Confirm by sampling existing `ToolboxTalkSection.Content` values from the DB before defining the schema.
+  - **Translation-source structural mismatch** — if a reviewer changes the *structure* of the source (adds a bullet, removes a heading), the translation's structure may no longer match. Use the existing `NeedsRevalidation` flag (added in 1.1.3) to mark translations as stale; surface this to the reviewer in a follow-up UI prompt.
+  - **Accessibility** — keyboard navigation, screen reader compatibility. ProseMirror has good defaults but worth verifying.
+  - **Bundle size** — ProseMirror core is small (~50KB gzipped) but adds up with extensions; budget around 100-200KB additional.
+
+  **Effort estimate:** 4-5 working days for a developer familiar with React (Claude Code competent at both libraries):
+  - Library install + basic editor in `ValidationSectionCard.tsx`: 0.5 day
+  - Schema configuration + toolbar: 0.5 day
+  - Both source and translation panes: 0.25 day
+  - Backend pipeline adjustments (remove `<p>`-wrapping, audit StripHtml usage): 0.5 day
+  - Parse step editor: 0.5 day
+  - Structure-changed → translation-stale UI surfacing: 0.5 day
+  - PDF export verification, paste sanitisation tuning: 0.5 day
+  - Testing across browsers and round-trip scenarios: 1 day
+  - Cleanup, removing now-obsolete `<p>`-wrapping logic from `PropagateEditedSourceAsync`: 0.5 day
+
+  **Dependencies:**
+  - The 1.1.3 fix (source-edit feature itself) — must be in place. It is.
+  - Schema design decision (which elements to allow) — quick pre-build investigation needed.
+
+  **Closes:** the formatting-loss limitation disclosed in 1.1.3's amber warning. Once shipped, that warning can be removed.
 
 ---
 
@@ -663,6 +703,17 @@ These are not backlog items — they're explicit product decisions with known tr
 # 7. Recently Closed
 
 Kept here for trail; prune periodically.
+
+## 3 June 2026 — UAT P0s + tenant-filter sweep batch (shipped to Production — pending)
+- **1.1.1** Validation summary "Score / Sections passed" twin-metric display + conditional badge tinting (closes 1.1.12 as side effect)
+- **1.1.2** EN-from-targets filter + labelled "Back-translation scores" display + frontend index-misalignment fix
+- **1.1.3** Edit English source and re-validate from Validate step (with disclosed formatting-loss limitation tracked as 1.1.18)
+- **AuthService tenant-filter bypass** — silent bug closed: `GenerateAuthResponseAsync` was returning empty `enabledModules` array for every login/refresh because the global tenant filter conflicted with the explicit user.TenantId predicate in an unauthenticated context
+- **Note 21 interface-enqueue fix** — `ContentExtractionService` subtitle retry path now enqueues via concrete class
+- **Tenant-filter forensic audit (BACKLOG 5.1)** — completed; 6 anonymous endpoints + 18 Hangfire jobs + ~120 queries inspected, 2 issues found (above), both fixed
+- **Migration forensic audit (BACKLOG 5.3)** — completed; all 90 migrations confirmed structurally sound, 5 synthetic-timestamp migrations identified but functional
+- **CLAUDE.md hygiene** — Note 28 (CLI-only migrations) added, 12 resolved notes archived to CLAUDE-archive.md (~80 lines saved), Pipeline Audit entity invariants captured inline
+- **Build-time migration guard (BACKLOG 5.2)** — two `[Fact]` tests in `MigrationStructureTests.cs` verify every migration has a matching Designer.cs with valid `[Migration]` attribute. Deliberate-failure verification proved checks would have caught all four real instances this week.
 
 ## 2 June 2026 — "Translator polish" batch (shipped to Production)
 - **1.1.4** Slideshow counter mismatch — prompt change + bridge removal

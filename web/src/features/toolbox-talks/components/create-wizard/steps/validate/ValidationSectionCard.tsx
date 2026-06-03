@@ -395,7 +395,7 @@ export function ValidationSectionCard({
                 {/* Inline warning */}
                 <div className="flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  Editing the source affects all translations of this section.
+                  Editing the source affects all translations of this section, and may simplify the formatting of structured content (lists, headings) into plain paragraphs.
                 </div>
                 <Textarea
                   value={editSourceText}
