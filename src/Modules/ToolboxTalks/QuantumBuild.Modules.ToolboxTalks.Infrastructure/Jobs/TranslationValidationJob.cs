@@ -657,6 +657,7 @@ public class TranslationValidationJob
         string? sourceLanguage,
         CancellationToken cancellationToken)
     {
+        Domain.Entities.ToolboxTalkTranslation? translation = null;
         try
         {
             var languageName = await _languageCodeService.GetLanguageNameAsync(languageCode);
@@ -830,7 +831,7 @@ public class TranslationValidationJob
             }
 
             // Persist the translation record
-            var translation = new Domain.Entities.ToolboxTalkTranslation
+            translation = new Domain.Entities.ToolboxTalkTranslation
             {
                 Id = Guid.NewGuid(),
                 TenantId = tenantId,
@@ -857,6 +858,15 @@ public class TranslationValidationJob
         }
         catch (Exception ex)
         {
+            // Detach the failed entity so subsequent SaveChangesAsync calls do not re-submit it.
+            // (Note 23 in CLAUDE.md — a caught DbUpdateException leaves the tracker contaminated.)
+            if (translation != null)
+            {
+                var entry = ((DbContext)_dbContext).Entry(translation);
+                if (entry.State != EntityState.Detached)
+                    entry.State = EntityState.Detached;
+            }
+
             _logger.LogError(ex,
                 "Failed to generate translations for ToolboxTalk {TalkId}, Language {Lang}",
                 talkId, languageCode);
