@@ -316,7 +316,7 @@ export function InputConfigStep({
         });
 
         sessionId = session.id;
-        updateState({ sessionId: session.id, sessionSourceSnapshot: buildSourceSnapshot() });
+        updateState({ sessionId: session.id, sessionSourceSnapshot: buildSourceSnapshot(), parsedSectionsSnapshot: null });
       } else {
         // Session exists — only re-parse if the source content actually changed.
         const snap = state.sessionSourceSnapshot;
@@ -361,6 +361,7 @@ export function InputConfigStep({
           suggestedOutputType: null,
           selectedOutputType: null,
           sessionSourceSnapshot: buildSourceSnapshot(),
+          parsedSectionsSnapshot: null,
         });
       }
 

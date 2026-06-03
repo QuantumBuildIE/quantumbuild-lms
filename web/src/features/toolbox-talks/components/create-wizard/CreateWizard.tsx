@@ -58,9 +58,14 @@ export interface SessionSourceSnapshot {
   videoUrl?: string;
 }
 
+export interface SectionsSnapshot {
+  sections: Array<{ title: string; content: string; suggestedOrder: number }>;
+}
+
 export interface WizardState {
   sessionId: string | null;
   sessionSourceSnapshot: SessionSourceSnapshot | null;
+  parsedSectionsSnapshot: SectionsSnapshot | null;
   inputMode: InputMode | null;
   sourceText: string;
   sourceFile: File | null;
@@ -92,6 +97,7 @@ export interface WizardState {
 const initialState: WizardState = {
   sessionId: null,
   sessionSourceSnapshot: null,
+  parsedSectionsSnapshot: null,
   inputMode: null,
   sourceText: '',
   sourceFile: null,
