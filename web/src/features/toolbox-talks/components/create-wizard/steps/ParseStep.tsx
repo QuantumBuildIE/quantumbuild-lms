@@ -180,6 +180,14 @@ export function ParseStep({ state, updateState, onNext, onBack, onReset }: Parse
   // ============================================
 
   function hydrateFromSession() {
+    // Wizard state is authoritative when already populated (e.g. user edited
+    // sections then navigated back). Only hydrate from the server when the
+    // client state is empty (fresh page load resuming an existing session).
+    if (state.parsedSections.length > 0) {
+      setHasParsed(true);
+      return;
+    }
+
     if (!session?.parsedSectionsJson) return;
 
     try {

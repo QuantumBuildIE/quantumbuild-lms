@@ -50,8 +50,17 @@ const STEPS = [
 // Wizard State
 // ============================================
 
+export interface SessionSourceSnapshot {
+  mode: InputMode;
+  text?: string;
+  fileName?: string;
+  fileSize?: number;
+  videoUrl?: string;
+}
+
 export interface WizardState {
   sessionId: string | null;
+  sessionSourceSnapshot: SessionSourceSnapshot | null;
   inputMode: InputMode | null;
   sourceText: string;
   sourceFile: File | null;
@@ -82,6 +91,7 @@ export interface WizardState {
 
 const initialState: WizardState = {
   sessionId: null,
+  sessionSourceSnapshot: null,
   inputMode: null,
   sourceText: '',
   sourceFile: null,
