@@ -517,28 +517,25 @@ public class ContentCreationSessionService : IContentCreationSessionService
                 });
             }
 
-            // Remove old questions so they are recreated from session quiz data
-            var existingQuestions = await _dbContext.ToolboxTalkQuestions
+            // Remove old questions so they are recreated from session quiz data.
+            // ExecuteDeleteAsync issues a raw SQL DELETE that bypasses the SetAuditFields
+            // interceptor — Remove() would be soft-deleted, accumulating ghost rows.
+            await _dbContext.ToolboxTalkQuestions
+                .IgnoreQueryFilters()
                 .Where(q => q.ToolboxTalkId == talkId)
-                .ToListAsync(cancellationToken);
-            foreach (var q in existingQuestions)
-                _dbContext.ToolboxTalkQuestions.Remove(q);
+                .ExecuteDeleteAsync(cancellationToken);
 
             // Add quiz questions from session (skip when quiz excluded)
             if (session.IncludeQuiz)
                 SyncQuizQuestionsToTalk(talkId, quizQuestions, session.InputMode);
 
-            // Hard-delete: the (ToolboxTalkId, LanguageCode) unique index is unfiltered, so soft-deleted rows
-            // still occupy their slot and block re-insertion when we regenerate translations for the same languages.
-            // IgnoreQueryFilters() also catches rows soft-deleted by previous failed re-run attempts.
-            // Sections have been edited (cascade has happened) so all existing translations are provably stale —
-            // no audit or downstream dependency to preserve here.
-            var existingTranslations = await _dbContext.ToolboxTalkTranslations
+            // Physical delete via ExecuteDeleteAsync — Remove() would be soft-deleted by the
+            // SetAuditFields interceptor, leaving the row to block the unfiltered unique index
+            // ix_toolbox_talk_translations_talk_language on re-insertion.
+            await _dbContext.ToolboxTalkTranslations
                 .IgnoreQueryFilters()
                 .Where(t => t.ToolboxTalkId == talkId && t.TenantId == tenantId)
-                .ToListAsync(cancellationToken);
-            foreach (var t in existingTranslations)
-                _dbContext.ToolboxTalkTranslations.Remove(t);
+                .ExecuteDeleteAsync(cancellationToken);
         }
         else
         {
@@ -1157,18 +1154,14 @@ public class ContentCreationSessionService : IContentCreationSessionService
             session.ValidationRunIds = null;
             session.TranslationJobIds = null;
 
-            // Hard-delete stale translations: quiz questions changed so TranslatedQuestionsJson is
-            // out of date. IgnoreQueryFilters() catches rows soft-deleted by previous failed re-run
-            // attempts. The (ToolboxTalkId, LanguageCode) unique index is unfiltered, so hard-delete
-            // is required to allow re-insertion when translation is next run.
             if (session.OutputTalkId.HasValue)
             {
-                var existingTranslations = await _dbContext.ToolboxTalkTranslations
+                // Physical delete — same reasoning as Site 4 (see comment above the equivalent block
+                // in StartTranslateValidateAsync). SetAuditFields would otherwise soft-delete these rows.
+                await _dbContext.ToolboxTalkTranslations
                     .IgnoreQueryFilters()
                     .Where(t => t.ToolboxTalkId == session.OutputTalkId.Value && t.TenantId == tenantId)
-                    .ToListAsync(cancellationToken);
-                foreach (var t in existingTranslations)
-                    _dbContext.ToolboxTalkTranslations.Remove(t);
+                    .ExecuteDeleteAsync(cancellationToken);
             }
 
             _logger.LogInformation(
@@ -1912,12 +1905,13 @@ public class ContentCreationSessionService : IContentCreationSessionService
                 };
                 _dbContext.ToolboxTalkSections.Add(videoSection);
 
-                // Remove quiz questions from the video talk (no quiz for full video)
-                var videoTalkQuestions = await _dbContext.ToolboxTalkQuestions
+                // Remove quiz questions from the video talk (no quiz for full video).
+                // ExecuteDeleteAsync issues a raw SQL DELETE that bypasses the SetAuditFields
+                // interceptor — Remove() would be soft-deleted, leaving stale rows.
+                await _dbContext.ToolboxTalkQuestions
                     .IgnoreQueryFilters()
                     .Where(q => q.ToolboxTalkId == videoTalk.Id)
-                    .ToListAsync(cancellationToken);
-                foreach (var q in videoTalkQuestions) _dbContext.ToolboxTalkQuestions.Remove(q);
+                    .ExecuteDeleteAsync(cancellationToken);
 
                 // Update translations for the video talk (title change, clear section translations)
                 if (draftTranslations != null)

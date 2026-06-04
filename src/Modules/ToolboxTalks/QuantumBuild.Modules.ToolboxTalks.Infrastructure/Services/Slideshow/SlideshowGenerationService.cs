@@ -73,20 +73,20 @@ public class SlideshowGenerationService : ISlideshowGenerationService
         talk.SlideshowGeneratedAt = DateTime.UtcNow;
         talk.SlidesGenerated = true;
 
-        // Clear any old slideshow translations (they need to be regenerated)
-        var oldTranslations = await _context.ToolboxTalkSlideshowTranslations
+        // Clear any old slideshow translations (they need to be regenerated).
+        // ExecuteDeleteAsync issues a raw SQL DELETE that bypasses the SetAuditFields
+        // interceptor — Remove() would be intercepted into a soft-delete, leaving rows
+        // to block the unfiltered unique index ix_toolbox_talk_slideshow_translations_talk_language.
+        var deletedCount = await _context.ToolboxTalkSlideshowTranslations
+            .IgnoreQueryFilters()
             .Where(t => t.ToolboxTalkId == toolboxTalkId)
-            .ToListAsync(cancellationToken);
+            .ExecuteDeleteAsync(cancellationToken);
 
-        if (oldTranslations.Any())
+        if (deletedCount > 0)
         {
-            foreach (var translation in oldTranslations)
-            {
-                _context.ToolboxTalkSlideshowTranslations.Remove(translation);
-            }
             _logger.LogInformation(
                 "Removed {Count} old slideshow translations for talk {TalkId}",
-                oldTranslations.Count, toolboxTalkId);
+                deletedCount, toolboxTalkId);
         }
 
         var saved = await _context.SaveChangesAsync(cancellationToken);
