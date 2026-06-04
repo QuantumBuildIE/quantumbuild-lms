@@ -229,12 +229,28 @@ public class ProcessToolboxTalkScheduleCommandHandler : IRequestHandler<ProcessT
         }
 
         // Remove inactive employees (mark as processed so they don't get talks)
-        var inactiveEmployeeIds = currentEmployeeIds.Except(activeEmployeeIds);
-        foreach (var assignment in schedule.Assignments.Where(a => inactiveEmployeeIds.Contains(a.EmployeeId)))
+        var inactiveEmployeeIds = currentEmployeeIds.Except(activeEmployeeIds).ToHashSet();
+        var inactiveAssignments = schedule.Assignments
+            .Where(a => inactiveEmployeeIds.Contains(a.EmployeeId))
+            .ToList();
+
+        // Physical delete via ExecuteDeleteAsync — DbSet.Remove() would be soft-deleted by the
+        // SetAuditFields interceptor. Required-FK nav-collection Remove() also marks the entity
+        // as Deleted via EF orphan-removal semantics, so we Detach explicitly to suppress the
+        // phantom soft-delete UPDATE that would otherwise hit zero rows.
+        var inactiveAssignmentIds = new List<Guid>();
+        foreach (var assignment in inactiveAssignments)
         {
-            // Remove completely instead of marking processed
-            schedule.Assignments.Remove(assignment);
-            _dbContext.ToolboxTalkScheduleAssignments.Remove(assignment);
+            schedule.Assignments.Remove(assignment); // load-bearing for nav-collection consumers
+            _dbContext.Entry(assignment).State = EntityState.Detached;
+            inactiveAssignmentIds.Add(assignment.Id);
+        }
+
+        if (inactiveAssignmentIds.Count > 0)
+        {
+            await _dbContext.ToolboxTalkScheduleAssignments
+                .Where(a => inactiveAssignmentIds.Contains(a.Id))
+                .ExecuteDeleteAsync(cancellationToken);
         }
     }
 
