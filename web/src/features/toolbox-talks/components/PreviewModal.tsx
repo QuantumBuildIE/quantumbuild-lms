@@ -40,6 +40,7 @@ import {
   BookOpen,
   HelpCircle,
   CheckCircle2,
+  Loader2,
 } from 'lucide-react';
 import type { ToolboxTalk } from '@/types/toolbox-talks';
 
@@ -157,7 +158,8 @@ export function PreviewModal({ open, onOpenChange, talk }: PreviewModalProps) {
               />
             )}
 
-            {/* HTML Slideshow (preferred) */}
+            {/* THREE BRANCHES FOR SLIDESHOW, 1. HTML Slideshow 2. Image-based slideshow fallback 3. Pending: slideshow expected but not yet generated */}
+            {/* 1. HTML Slideshow (preferred) Branch */}
             {slideshowHtmlData?.html && (
               <Card>
                 <CardHeader>
@@ -178,7 +180,7 @@ export function PreviewModal({ open, onOpenChange, talk }: PreviewModalProps) {
               </Card>
             )}
 
-            {/* Image-based slideshow fallback */}
+            {/* 2. Image-based slideshow fallback */}
             {!slideshowHtmlData?.html && slides && slides.length > 0 && (
               <Card>
                 <CardHeader>
@@ -192,6 +194,24 @@ export function PreviewModal({ open, onOpenChange, talk }: PreviewModalProps) {
                 </CardHeader>
                 <CardContent>
                   <Slideshow slides={slides} />
+                </CardContent>
+              </Card>
+            )}
+
+            {/* 3. Pending: slideshow expected but not yet generated */}
+            {!slideshowHtmlData?.html && (!slides || slides.length === 0) && (talk.hasSlideshow || !!preview?.hasSlideshow) && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Presentation className="h-5 w-5" />
+                    Presentation
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-3 text-sm text-muted-foreground py-6">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Slideshow is being generated. Please refresh in a moment to view it.</span>
+                  </div>
                 </CardContent>
               </Card>
             )}
