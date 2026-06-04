@@ -658,6 +658,51 @@ public class TranslationValidationJob
         Guid runId,
         CancellationToken cancellationToken)
     {
+        // Relevance guard: if this run has been superseded (cascade-reset cleared the session's
+        // ValidationRunIds), abort before inserting the ToolboxTalkTranslation row that would
+        // conflict on the unique index. This covers the in-flight case where Delete() could not
+        // stop an already-running job.
+        var session = await _dbContext.ContentCreationSessions
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(s => s.OutputTalkId == talkId && s.TenantId == tenantId,
+                cancellationToken);
+
+        if (session == null)
+        {
+            _logger.LogInformation(
+                "TranslationValidationJob run {RunId} is no longer relevant — no session found for talk {TalkId}. Aborting before INSERT.",
+                runId, talkId);
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(session.ValidationRunIds))
+        {
+            _logger.LogInformation(
+                "TranslationValidationJob run {RunId} is no longer relevant — session {SessionId} has no current ValidationRunIds. Aborting before INSERT.",
+                runId, session.Id);
+            return null;
+        }
+
+        try
+        {
+            var currentRunIds = JsonSerializer.Deserialize<List<Guid>>(session.ValidationRunIds);
+            if (currentRunIds == null || !currentRunIds.Contains(runId))
+            {
+                _logger.LogInformation(
+                    "TranslationValidationJob run {RunId} is no longer in session {SessionId}'s ValidationRunIds. Aborting before INSERT.",
+                    runId, session.Id);
+                return null;
+            }
+        }
+        catch (JsonException ex)
+        {
+            // Malformed JSON — log and fall through. Better to risk a conflict than to silently
+            // abort on a parse failure.
+            _logger.LogWarning(ex,
+                "Failed to parse session.ValidationRunIds for session {SessionId} — proceeding cautiously.",
+                session.Id);
+        }
+
         Domain.Entities.ToolboxTalkTranslation? translation = null;
         try
         {

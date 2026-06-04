@@ -35,6 +35,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
     private readonly ISubtitleProcessingOrchestrator _subtitleOrchestrator;
     private readonly ILanguageCodeService _languageCodeService;
     private readonly IContentTranslationService _contentTranslationService;
+    private readonly IBackgroundJobClient _backgroundJobClient;
     private readonly TranslationValidationSettings _validationSettings;
     private readonly ILogger<ContentCreationSessionService> _logger;
 
@@ -58,6 +59,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
         ISubtitleProcessingOrchestrator subtitleOrchestrator,
         ILanguageCodeService languageCodeService,
         IContentTranslationService contentTranslationService,
+        IBackgroundJobClient backgroundJobClient,
         IOptions<TranslationValidationSettings> validationSettings,
         ILogger<ContentCreationSessionService> logger)
     {
@@ -70,6 +72,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
         _subtitleOrchestrator = subtitleOrchestrator;
         _languageCodeService = languageCodeService;
         _contentTranslationService = contentTranslationService;
+        _backgroundJobClient = backgroundJobClient;
         _validationSettings = validationSettings.Value;
         _logger = logger;
     }
@@ -365,7 +368,10 @@ public class ContentCreationSessionService : IContentCreationSessionService
             session.Status = ContentCreationSessionStatus.Parsed;
 
             if (oldStatus == ContentCreationSessionStatus.Validated)
+            {
                 session.ValidationRunIds = null;
+                session.TranslationJobIds = null;
+            }
 
             _logger.LogInformation(
                 "[ContentCreationSession] Session {SessionId} cascaded back to Parsed status (was {OldStatus}) due to section edit; cleared quiz/translations/validation",
@@ -396,6 +402,44 @@ public class ContentCreationSessionService : IContentCreationSessionService
 
         if (string.IsNullOrWhiteSpace(session.ParsedSectionsJson))
             throw new InvalidOperationException("No parsed sections available for validation");
+
+        // Cancel any previously-enqueued translation jobs to prevent races with the new run.
+        // Delete() reliably cancels Enqueued / Scheduled / AwaitingRetry jobs. Already-running
+        // jobs cannot be stopped from outside — the in-job relevance guard (Layer 2) covers that case.
+        if (!string.IsNullOrWhiteSpace(session.TranslationJobIds))
+        {
+            try
+            {
+                var staleJobIds = JsonSerializer.Deserialize<List<string>>(session.TranslationJobIds);
+                if (staleJobIds != null)
+                {
+                    foreach (var staleJobId in staleJobIds)
+                    {
+                        try
+                        {
+                            _backgroundJobClient.Delete(staleJobId);
+                        }
+                        catch (Exception ex)
+                        {
+                            // Single job's Delete() failed — log and continue. Other jobs still need
+                            // cancelling, and a failed cancel falls back to the in-job relevance guard.
+                            _logger.LogWarning(ex,
+                                "[ContentCreationSession] Failed to cancel orphaned Hangfire job {JobId} for session {SessionId}",
+                                staleJobId, sessionId);
+                        }
+                    }
+                }
+            }
+            catch (JsonException ex)
+            {
+                // Malformed JSON — log and treat as if no jobs to cancel.
+                _logger.LogWarning(ex,
+                    "[ContentCreationSession] Failed to parse TranslationJobIds for session {SessionId}: {Json}",
+                    sessionId, session.TranslationJobIds);
+            }
+
+            session.TranslationJobIds = null;
+        }
 
         // Parse the sections from the session
         var sections = JsonSerializer.Deserialize<List<ParsedSection>>(session.ParsedSectionsJson, CamelCaseJson) ?? new();
@@ -657,12 +701,17 @@ public class ContentCreationSessionService : IContentCreationSessionService
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
 
-        // Enqueue Hangfire jobs after save
+        // Enqueue Hangfire jobs after save; capture job IDs so orphans can be cancelled on re-trigger.
+        var jobIds = new List<string>();
         foreach (var runId in runIds)
         {
-            BackgroundJob.Enqueue<TranslationValidationJob>(
+            var jobId = _backgroundJobClient.Enqueue<TranslationValidationJob>(
                 job => job.ExecuteAsync(runId, tenantId, null, CancellationToken.None));
+            jobIds.Add(jobId);
         }
+
+        session.TranslationJobIds = JsonSerializer.Serialize(jobIds);
+        await _dbContext.SaveChangesAsync(cancellationToken);
 
         // Start subtitle processing for video-based sessions
         if (session.InputMode == InputMode.Video && !string.IsNullOrEmpty(session.SourceFileUrl))
@@ -1106,6 +1155,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
         {
             session.Status = ContentCreationSessionStatus.Parsed;
             session.ValidationRunIds = null;
+            session.TranslationJobIds = null;
 
             // Hard-delete stale translations: quiz questions changed so TranslatedQuestionsJson is
             // out of date. IgnoreQueryFilters() catches rows soft-deleted by previous failed re-run

@@ -105,6 +105,10 @@ public class ContentCreationSessionConfiguration : IEntityTypeConfiguration<Cont
         builder.Property(s => s.ValidationRunIds)
             .HasColumnType("text");
 
+        // Translation job tracking
+        builder.Property(s => s.TranslationJobIds)
+            .HasColumnType("text");
+
         // Quiz
         builder.Property(s => s.QuestionsJson)
             .HasColumnType("text");
