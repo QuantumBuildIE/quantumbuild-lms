@@ -390,7 +390,7 @@ public class TranslationValidationJob
             // Pass sectorKey from the validation run for tiered prompt quality
             translation = await GenerateTranslationForSectionsAsync(
                 run.ToolboxTalkId.Value, tenantId, run.LanguageCode, originalSections,
-                run.SectorKey, run.SourceLanguage, cancellationToken);
+                run.SectorKey, run.SourceLanguage, run.Id, cancellationToken);
 
             if (string.IsNullOrWhiteSpace(translation))
             {
@@ -655,6 +655,7 @@ public class TranslationValidationJob
         List<OriginalSectionInfo> originalSections,
         string? sectorKey,
         string? sourceLanguage,
+        Guid runId,
         CancellationToken cancellationToken)
     {
         Domain.Entities.ToolboxTalkTranslation? translation = null;
@@ -870,6 +871,30 @@ public class TranslationValidationJob
             _logger.LogError(ex,
                 "Failed to generate translations for ToolboxTalk {TalkId}, Language {Lang}",
                 talkId, languageCode);
+
+            // Mark the run as Failed so the wizard surfaces the failure to the user
+            // instead of letting it sail through as Completed with TotalSections = 0.
+            try
+            {
+                var failedRun = await _dbContext.TranslationValidationRuns
+                    .IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(r => r.Id == runId, cancellationToken);
+                if (failedRun != null)
+                {
+                    failedRun.Status = ValidationRunStatus.Failed;
+                    failedRun.CompletedAt = DateTime.UtcNow;
+                    await _dbContext.SaveChangesAsync(cancellationToken);
+                }
+            }
+            catch (Exception runUpdateEx)
+            {
+                // If we can't update the run status, log and continue — better to have a stuck run
+                // than to throw out of the catch block and lose the original error.
+                _logger.LogError(runUpdateEx,
+                    "Failed to mark TranslationValidationRun {RunId} as Failed after translation failure. Original error: {OriginalError}",
+                    runId, SanitiseErrorMessage(ex.Message));
+            }
+
             return null;
         }
     }
@@ -997,6 +1022,21 @@ public class TranslationValidationJob
                 "Failed to check/update session status after run {RunId} completed",
                 validationRunId);
         }
+    }
+
+    /// <summary>
+    /// Truncates and normalises an exception message for safe inclusion in log output.
+    /// Strips newlines and caps length to avoid log flooding with DB driver internals.
+    /// </summary>
+    private static string SanitiseErrorMessage(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+            return "Translation failed: unknown error";
+
+        var sanitised = message.Replace('\n', ' ').Replace('\r', ' ');
+        if (sanitised.Length > 200)
+            sanitised = sanitised[..200];
+        return $"Translation failed: {sanitised}";
     }
 
     /// <summary>
