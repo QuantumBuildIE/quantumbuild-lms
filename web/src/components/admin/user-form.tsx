@@ -32,40 +32,15 @@ import { useRoles, type Role } from "@/lib/api/admin/use-roles";
 import { useUnlinkedEmployees } from "@/lib/api/admin/use-employees";
 import { useAllSites } from "@/lib/api/admin/use-sites";
 import { toast } from "sonner";
-import { cn, getApiErrorMessage } from "@/lib/utils";
+import { getApiErrorMessage } from "@/lib/utils";
 import { LookupField } from "./lookup-field";
 import { UserEmployeeRecordSection } from "./user-employee-record-section";
-
-// Password strength calculation
-function calculatePasswordStrength(password: string): {
-  score: number;
-  label: string;
-  color: string;
-} {
-  let score = 0;
-  if (password.length >= 8) score++;
-  if (password.length >= 12) score++;
-  if (/[A-Z]/.test(password)) score++;
-  if (/[a-z]/.test(password)) score++;
-  if (/[0-9]/.test(password)) score++;
-  if (/[^A-Za-z0-9]/.test(password)) score++;
-
-  if (score <= 2) return { score, label: "Weak", color: "bg-red-500" };
-  if (score <= 4) return { score, label: "Medium", color: "bg-yellow-500" };
-  return { score, label: "Strong", color: "bg-green-500" };
-}
 
 const createUserSchema = z
   .object({
     email: z.string().min(1, "Email is required").email("Invalid email address"),
     firstName: z.string().min(1, "First name is required").max(100),
     lastName: z.string().min(1, "Last name is required").max(100),
-    password: z
-      .string()
-      .min(8, "Password must be at least 8 characters")
-      .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
-      .regex(/[^A-Za-z0-9]/, "Password must contain at least one special character"),
-    confirmPassword: z.string().min(1, "Please confirm your password"),
     roleIds: z.array(z.string()).min(1, "At least one role is required"),
     isActive: z.boolean(),
     // Employee linking
@@ -77,10 +52,6 @@ const createUserSchema = z
     newEmployeeJobTitle: z.string().max(100).optional(),
     newEmployeeDepartment: z.string().max(100).optional(),
     newEmployeePrimarySiteId: z.string().optional(),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords do not match",
-    path: ["confirmPassword"],
   })
   .refine(
     (data) => {
@@ -129,8 +100,6 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
       firstName: user?.firstName ?? "",
       lastName: user?.lastName ?? "",
       ...(isEditing ? {} : {
-        password: "",
-        confirmPassword: "",
         employeeLinkOption: "None" as const,
         existingEmployeeId: "",
         newEmployeeCode: "",
@@ -144,12 +113,6 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
       isActive: user?.isActive ?? true,
     },
   });
-
-  // Only watch password for create mode
-  const watchedPassword = !isEditing ? form.watch("password") : undefined;
-  const passwordStrength = watchedPassword && typeof watchedPassword === "string"
-    ? calculatePasswordStrength(watchedPassword)
-    : null;
 
   const watchEmployeeLinkOption = !isEditing
     ? (form.watch as any)("employeeLinkOption") as string
@@ -179,8 +142,6 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
           email: createValues.email,
           firstName: createValues.firstName,
           lastName: createValues.lastName,
-          password: createValues.password,
-          confirmPassword: createValues.confirmPassword,
           isActive: createValues.isActive,
           roleIds: createValues.roleIds,
           employeeLinkOption: linkOption,
@@ -202,9 +163,9 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
         await createUser.mutateAsync(payload);
 
         if (linkOption !== "None") {
-          toast.success("User created and linked to employee");
+          toast.success("User created and linked to employee — invitation email sent");
         } else {
-          toast.success("User created successfully");
+          toast.success("User created — invitation email sent");
         }
       }
       onSuccess?.();
@@ -282,66 +243,6 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
             )}
           />
         </div>
-
-        {!isEditing && (
-          <>
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Password *</FormLabel>
-                  <FormControl>
-                    <Input type="password" placeholder="Enter password" {...field} />
-                  </FormControl>
-                  {passwordStrength && (
-                    <div className="mt-2 space-y-1">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2 flex-1 rounded-full bg-muted overflow-hidden">
-                          <div
-                            className={cn(
-                              "h-full transition-all",
-                              passwordStrength.color
-                            )}
-                            style={{ width: `${(passwordStrength.score / 6) * 100}%` }}
-                          />
-                        </div>
-                        <span
-                          className={cn(
-                            "text-xs font-medium",
-                            passwordStrength.label === "Weak" && "text-red-500",
-                            passwordStrength.label === "Medium" && "text-yellow-500",
-                            passwordStrength.label === "Strong" && "text-green-500"
-                          )}
-                        >
-                          {passwordStrength.label}
-                        </span>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Required: 8+ characters, at least one uppercase letter (A-Z), and one special character (!@#$%^&* etc.)
-                      </p>
-                    </div>
-                  )}
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="confirmPassword"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Confirm Password *</FormLabel>
-                  <FormControl>
-                    <Input type="password" placeholder="Confirm password" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </>
-        )}
 
         <FormField
           control={form.control}

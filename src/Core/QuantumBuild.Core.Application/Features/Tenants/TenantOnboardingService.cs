@@ -82,7 +82,7 @@ public class TenantOnboardingService(
             Id = Guid.NewGuid(),
             UserName = email,
             Email = email,
-            EmailConfirmed = true,
+            EmailConfirmed = false,
             FirstName = firstName,
             LastName = lastName,
             TenantId = tenantId,
