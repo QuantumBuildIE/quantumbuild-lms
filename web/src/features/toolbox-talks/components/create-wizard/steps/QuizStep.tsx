@@ -15,9 +15,10 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { WizardSectionDivider } from '@/components/ui/wizard-section-divider';
-import { Loader2, Sparkles, AlertCircle, RotateCcw } from 'lucide-react';
+import { Loader2, Sparkles, AlertCircle, RotateCcw, ArrowLeft, ArrowRight, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import axios from 'axios';
 import {
   useCreationSession,
   useSessionQuizData,
@@ -27,7 +28,7 @@ import {
 } from '@/lib/api/toolbox-talks/use-content-creation';
 import { QuizSettingsPanel } from './quiz/QuizSettingsPanel';
 import { SectionQuestionGroup } from './quiz/SectionQuestionGroup';
-import type { WizardState } from '../CreateWizard';
+import type { WizardState, QuestionsSnapshot } from '../CreateWizard';
 import type { QuizQuestion, QuizSettings, ParsedSection } from '@/types/content-creation';
 
 interface QuizStepProps {
@@ -45,7 +46,13 @@ const DEFAULT_SETTINGS: QuizSettings = {
   allowRetry: true,
 };
 
-export function QuizStep({ state, onNext, onBack }: QuizStepProps) {
+const IN_FLIGHT_STATUS_LABEL: Record<string, string> = {
+  GeneratingQuiz: 'Quiz Generation',
+  TranslatingValidating: 'Translation & Validation',
+  Publishing: 'Publishing',
+};
+
+export function QuizStep({ state, updateState, onNext, onBack }: QuizStepProps) {
   const sessionId = state.sessionId;
 
   // API hooks
@@ -62,7 +69,17 @@ export function QuizStep({ state, onNext, onBack }: QuizStepProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [regeneratingQuestionId, setRegeneratingQuestionId] = useState<string | null>(null);
   const [generateError, setGenerateError] = useState<string | null>(null);
+  const [showCascadeResetDialog, setShowCascadeResetDialog] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Status-derived flags
+  const status = session?.status ?? null;
+  const isInFlight =
+    status === 'GeneratingQuiz' ||
+    status === 'TranslatingValidating' ||
+    status === 'Publishing';
+  const isValidated = status === 'Validated';
+  const friendlyStatus = status ? (IN_FLIGHT_STATUS_LABEL[status] ?? status) : '';
 
   // Parse sections from session
   const sections: ParsedSection[] = useMemo(() => {
@@ -82,7 +99,24 @@ export function QuizStep({ state, onNext, onBack }: QuizStepProps) {
     }
   }, [quizData]);
 
-  // Auto-generate quiz on mount if no questions exist and session is in Validated state
+  // Snapshot questions on first populated visit (per session)
+  useEffect(() => {
+    if (questions.length > 0 && state.generatedQuestionsSnapshot === null) {
+      updateState({
+        generatedQuestionsSnapshot: {
+          questions: questions.map((q) => ({
+            id: q.id,
+            sectionIndex: q.sectionIndex,
+            questionText: q.questionText,
+            options: [...q.options],
+            correctAnswerIndex: q.correctAnswerIndex,
+          })),
+        } satisfies QuestionsSnapshot,
+      });
+    }
+  }, [questions, state.generatedQuestionsSnapshot, updateState]);
+
+  // Auto-generate quiz on mount if no questions exist
   useEffect(() => {
     if (!session || !quizData) return;
     if (
@@ -159,16 +193,19 @@ export function QuizStep({ state, onNext, onBack }: QuizStepProps) {
     [sessionId, updateSettings]
   );
 
-  // Question CRUD
+  // Question CRUD — auto-save blocked from Validated (questions held locally until Continue confirms)
   const saveQuestionsToServer = useCallback(
     (updatedQuestions: QuizQuestion[]) => {
       if (!sessionId) return;
+      // From Validated: questions are held locally and saved atomically at handleContinue
+      // after the user explicitly confirms the cascade-reset.
+      if (session?.status === 'Validated') return;
       updateQuestions.mutate(
         { sessionId, questions: updatedQuestions },
         { onError: () => toast.error('Failed to save questions') }
       );
     },
-    [sessionId, updateQuestions]
+    [sessionId, updateQuestions, session?.status]
   );
 
   const handleSaveQuestion = useCallback(
@@ -221,6 +258,87 @@ export function QuizStep({ state, onNext, onBack }: QuizStepProps) {
     setEditingQuestionId(null);
   }, [questions, editingQuestionId]);
 
+  // Snapshot refresh — called after a successful server save
+  const refreshSnapshot = useCallback(() => {
+    updateState({
+      generatedQuestionsSnapshot: {
+        questions: questions.map((q) => ({
+          id: q.id,
+          sectionIndex: q.sectionIndex,
+          questionText: q.questionText,
+          options: [...q.options],
+          correctAnswerIndex: q.correctAnswerIndex,
+        })),
+      },
+    });
+  }, [questions, updateState]);
+
+  // Execute PUT and advance — used by both normal and cascade-confirmed paths
+  const executeQuestionsSave = useCallback(async () => {
+    if (!sessionId) return;
+    try {
+      await updateQuestions.mutateAsync({ sessionId, questions });
+      refreshSnapshot();
+      onNext();
+    } catch (error) {
+      let message = 'Failed to proceed';
+      if (axios.isAxiosError(error) && error.response?.data?.error) {
+        message = error.response.data.error;
+      } else if (error instanceof Error) {
+        message = error.message;
+      }
+      toast.error('Error', { description: message });
+    }
+  }, [sessionId, questions, updateQuestions, refreshSnapshot, onNext]);
+
+  const handleCascadeResetConfirm = useCallback(async () => {
+    setShowCascadeResetDialog(false);
+    await executeQuestionsSave();
+  }, [executeQuestionsSave]);
+
+  // Continue — change detection + routing
+  const handleContinue = useCallback(async () => {
+    if (questions.length === 0) {
+      onNext();
+      return;
+    }
+
+    // Deep-compare current questions against the arrival snapshot
+    const snapshot = state.generatedQuestionsSnapshot;
+    let questionsChanged: boolean;
+
+    if (!snapshot) {
+      questionsChanged = true;
+    } else if (snapshot.questions.length !== questions.length) {
+      questionsChanged = true;
+    } else {
+      questionsChanged = questions.some((q, i) => {
+        const snap = snapshot.questions[i];
+        return (
+          q.questionText !== snap.questionText ||
+          q.correctAnswerIndex !== snap.correctAnswerIndex ||
+          q.options.length !== snap.options.length ||
+          q.options.some((opt, j) => opt !== snap.options[j])
+        );
+      });
+    }
+
+    // No changes — skip PUT and advance directly
+    if (!questionsChanged) {
+      onNext();
+      return;
+    }
+
+    // Changes detected while session is Validated — require explicit cascade consent
+    if (isValidated) {
+      setShowCascadeResetDialog(true);
+      return;
+    }
+
+    // Normal forward path (Parsed or QuizGenerated)
+    await executeQuestionsSave();
+  }, [questions, state.generatedQuestionsSnapshot, isValidated, executeQuestionsSave, onNext]);
+
   // Group questions by section
   const questionsBySection = useMemo(() => {
     const grouped = new Map<number, QuizQuestion[]>();
@@ -237,6 +355,7 @@ export function QuizStep({ state, onNext, onBack }: QuizStepProps) {
 
   const totalQuestions = questions.length;
   const isSaving = updateQuestions.isPending || updateSettings.isPending;
+  const isContinueDisabled = editingQuestionId !== null || isSaving || isInFlight;
 
   // Loading state
   if (isLoadingQuiz && !quizData) {
@@ -293,6 +412,22 @@ export function QuizStep({ state, onNext, onBack }: QuizStepProps) {
       {/* 3b — Questions */}
       <WizardSectionDivider number="3b" label="Questions" />
 
+      {/* In-flight notice — editing paused while a job is running */}
+      {isInFlight && (
+        <div className="flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          Quiz editing is paused while {friendlyStatus} is in progress.
+        </div>
+      )}
+
+      {/* Validated notice — editing will cascade-reset downstream work */}
+      {isValidated && !isInFlight && (
+        <div className="flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          This learning has progressed through translation and validation. Editing the quiz here will clear the translations and validation results, which will need to be regenerated.
+        </div>
+      )}
+
       {/* Section-grouped questions */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -305,7 +440,7 @@ export function QuizStep({ state, onNext, onBack }: QuizStepProps) {
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={isGenerating}
+                  disabled={isGenerating || isInFlight}
                   className="text-xs"
                 >
                   {isGenerating ? (
@@ -345,6 +480,7 @@ export function QuizStep({ state, onNext, onBack }: QuizStepProps) {
               questions={sectionQuestions}
               editingQuestionId={editingQuestionId}
               regeneratingQuestionId={regeneratingQuestionId}
+              disabled={isInFlight}
               onStartEdit={setEditingQuestionId}
               onSaveQuestion={handleSaveQuestion}
               onCancelEdit={handleCancelEdit}
@@ -365,16 +501,47 @@ export function QuizStep({ state, onNext, onBack }: QuizStepProps) {
 
       {/* Navigation */}
       <div className="flex justify-between pt-4 border-t">
-        <Button variant="outline" onClick={onBack}>
+        <Button variant="outline" onClick={onBack} disabled={isSaving}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
         <Button
-          onClick={onNext}
-          disabled={editingQuestionId !== null || isSaving}
+          onClick={handleContinue}
+          disabled={isContinueDisabled}
         >
-          Continue
+          {updateQuestions.isPending ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            <>
+              Continue
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </>
+          )}
         </Button>
       </div>
+
+      {/* Cascade reset confirmation dialog */}
+      <AlertDialog open={showCascadeResetDialog} onOpenChange={setShowCascadeResetDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Quiz changes will reset translation work</AlertDialogTitle>
+            <AlertDialogDescription>
+              You&apos;ve edited the quiz on a learning that has already been translated and validated.
+              Continuing will: clear the translations and validation results.
+              Translation will need to be re-run before publishing.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleCascadeResetConfirm}>
+              Continue and reset
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -63,10 +63,21 @@ export interface SectionsSnapshot {
   sections: Array<{ title: string; content: string; suggestedOrder: number }>;
 }
 
+export interface QuestionsSnapshot {
+  questions: Array<{
+    id: string;
+    sectionIndex: number;
+    questionText: string;
+    options: string[];
+    correctAnswerIndex: number;
+  }>;
+}
+
 export interface WizardState {
   sessionId: string | null;
   sessionSourceSnapshot: SessionSourceSnapshot | null;
   parsedSectionsSnapshot: SectionsSnapshot | null;
+  generatedQuestionsSnapshot: QuestionsSnapshot | null;
   inputMode: InputMode | null;
   sourceText: string;
   sourceFile: File | null;
@@ -99,6 +110,7 @@ const initialState: WizardState = {
   sessionId: null,
   sessionSourceSnapshot: null,
   parsedSectionsSnapshot: null,
+  generatedQuestionsSnapshot: null,
   inputMode: null,
   sourceText: '',
   sourceFile: null,

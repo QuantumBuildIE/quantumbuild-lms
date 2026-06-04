@@ -1076,16 +1076,59 @@ public class ContentCreationSessionService : IContentCreationSessionService
     {
         var session = await GetSessionEntityAsync(sessionId, tenantId, cancellationToken);
 
-        if (session.Status != ContentCreationSessionStatus.QuizGenerated &&
-            session.Status != ContentCreationSessionStatus.Validated &&
-            session.Status != ContentCreationSessionStatus.Parsed)
-            throw new InvalidOperationException("Questions can only be updated in QuizGenerated, Validated, or Parsed status");
+        var inFlightStatuses = new HashSet<ContentCreationSessionStatus>
+        {
+            ContentCreationSessionStatus.Transcribing,
+            ContentCreationSessionStatus.Parsing,
+            ContentCreationSessionStatus.GeneratingQuiz,
+            ContentCreationSessionStatus.TranslatingValidating,
+            ContentCreationSessionStatus.Publishing,
+        };
+
+        var allowedStatuses = new HashSet<ContentCreationSessionStatus>
+        {
+            ContentCreationSessionStatus.Parsed,
+            ContentCreationSessionStatus.QuizGenerated,
+            ContentCreationSessionStatus.Validated,
+        };
+
+        if (inFlightStatuses.Contains(session.Status))
+            throw new InvalidOperationException(
+                $"Quiz editing is not available while {session.Status} is in progress. Please wait for the current operation to complete.");
+
+        if (!allowedStatuses.Contains(session.Status))
+            throw new InvalidOperationException(
+                $"Quiz can only be updated in Parsed, QuizGenerated, or Validated status (current: {session.Status}).");
 
         session.QuestionsJson = JsonSerializer.Serialize(request.Questions, CamelCaseJson);
 
-        // If questions are being set for the first time (no prior generation), move to QuizGenerated
-        if (session.Status != ContentCreationSessionStatus.QuizGenerated)
+        if (session.Status == ContentCreationSessionStatus.Validated)
+        {
+            session.Status = ContentCreationSessionStatus.Parsed;
+            session.ValidationRunIds = null;
+
+            // Hard-delete stale translations: quiz questions changed so TranslatedQuestionsJson is
+            // out of date. IgnoreQueryFilters() catches rows soft-deleted by previous failed re-run
+            // attempts. The (ToolboxTalkId, LanguageCode) unique index is unfiltered, so hard-delete
+            // is required to allow re-insertion when translation is next run.
+            if (session.OutputTalkId.HasValue)
+            {
+                var existingTranslations = await _dbContext.ToolboxTalkTranslations
+                    .IgnoreQueryFilters()
+                    .Where(t => t.ToolboxTalkId == session.OutputTalkId.Value && t.TenantId == tenantId)
+                    .ToListAsync(cancellationToken);
+                foreach (var t in existingTranslations)
+                    _dbContext.ToolboxTalkTranslations.Remove(t);
+            }
+
+            _logger.LogInformation(
+                "[ContentCreationSession] Session {SessionId} cascaded back to Parsed status (was Validated) due to quiz edit; cleared validation runs and translations",
+                sessionId);
+        }
+        else if (session.Status != ContentCreationSessionStatus.QuizGenerated)
+        {
             session.Status = ContentCreationSessionStatus.QuizGenerated;
+        }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
