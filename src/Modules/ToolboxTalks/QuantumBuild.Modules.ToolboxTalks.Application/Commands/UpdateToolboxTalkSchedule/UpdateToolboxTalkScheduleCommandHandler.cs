@@ -89,10 +89,23 @@ public class UpdateToolboxTalkScheduleCommandHandler : IRequestHandler<UpdateToo
             .Where(a => !newEmployeeIds.Contains(a.EmployeeId))
             .ToList();
 
+        // Physical delete via ExecuteDeleteAsync — DbSet.Remove() would be soft-deleted by the
+        // SetAuditFields interceptor. Required-FK nav-collection Remove() also marks the entity
+        // as Deleted via EF orphan-removal semantics, so we Detach explicitly to suppress the
+        // phantom soft-delete UPDATE that would otherwise hit zero rows.
+        var assignmentIdsToRemove = new List<Guid>();
         foreach (var assignment in assignmentsToRemove)
         {
-            schedule.Assignments.Remove(assignment);
-            _dbContext.ToolboxTalkScheduleAssignments.Remove(assignment);
+            schedule.Assignments.Remove(assignment); // load-bearing for nav-collection consumers
+            _dbContext.Entry(assignment).State = EntityState.Detached;
+            assignmentIdsToRemove.Add(assignment.Id);
+        }
+
+        if (assignmentIdsToRemove.Count > 0)
+        {
+            await _dbContext.ToolboxTalkScheduleAssignments
+                .Where(a => assignmentIdsToRemove.Contains(a.Id))
+                .ExecuteDeleteAsync(cancellationToken);
         }
 
         // Add assignments for new employees

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
@@ -8,6 +9,7 @@ namespace QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 /// </summary>
 public interface IToolboxTalksDbContext
 {
+    EntityEntry<TEntity> Entry<TEntity>(TEntity entity) where TEntity : class;
     DbSet<ToolboxTalk> ToolboxTalks { get; }
     DbSet<ToolboxTalkSection> ToolboxTalkSections { get; }
     DbSet<ToolboxTalkQuestion> ToolboxTalkQuestions { get; }

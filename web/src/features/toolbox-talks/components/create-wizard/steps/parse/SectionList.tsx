@@ -8,6 +8,7 @@ import {
   Trash2,
   ChevronDown,
   ChevronRight,
+  AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DragHandle, useSortableItem } from '@/components/ui/sortable';
@@ -31,6 +32,7 @@ import {
   restrictToParentElement,
 } from '@dnd-kit/modifiers';
 import type { ParsedSection } from '@/types/content-creation';
+import { SectionBodyEditor } from './SectionBodyEditor';
 
 // ============================================
 // Props
@@ -39,13 +41,14 @@ import type { ParsedSection } from '@/types/content-creation';
 interface SectionListProps {
   sections: ParsedSection[];
   onChange: (sections: ParsedSection[]) => void;
+  disabled?: boolean;
 }
 
 // ============================================
 // Main Section List
 // ============================================
 
-export function SectionList({ sections, onChange }: SectionListProps) {
+export function SectionList({ sections, onChange, disabled }: SectionListProps) {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -186,6 +189,13 @@ export function SectionList({ sections, onChange }: SectionListProps) {
                 onRenameKeyDown={handleRenameKeyDown}
                 onToggleExpanded={() => toggleExpanded(ids[index])}
                 onDelete={() => handleDelete(index)}
+                onBodyChange={(content) => {
+                  const updated = sections.map((s, i) =>
+                    i === index ? { ...s, content } : s
+                  );
+                  onChange(updated);
+                }}
+                disabled={disabled}
               />
             ))}
           </div>
@@ -212,6 +222,8 @@ interface SectionRowProps {
   onRenameKeyDown: (e: React.KeyboardEvent) => void;
   onToggleExpanded: () => void;
   onDelete: () => void;
+  onBodyChange: (content: string) => void;
+  disabled?: boolean;
 }
 
 function SectionRow({
@@ -227,14 +239,17 @@ function SectionRow({
   onRenameKeyDown,
   onToggleExpanded,
   onDelete,
+  onBodyChange,
+  disabled,
 }: SectionRowProps) {
   const { attributes, listeners, setNodeRef, style, isDragging } =
-    useSortableItem({ id });
+    useSortableItem({ id, disabled });
 
   // Manual double-click detection — immune to dnd-kit pointer event interference
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleTitlePointerUp = useCallback(
     (e: React.PointerEvent) => {
+      if (disabled) return;
       if (e.button !== 0) return; // left-click only
       if (clickTimer.current) {
         clearTimeout(clickTimer.current);
@@ -246,7 +261,7 @@ function SectionRow({
         }, 300);
       }
     },
-    [onStartRename]
+    [disabled, onStartRename]
   );
 
   const label = `L${String(index + 1).padStart(2, '0')}`;
@@ -263,7 +278,7 @@ function SectionRow({
       {/* Row header */}
       <div className="flex items-center gap-3 px-3 py-2.5">
         {/* Drag handle */}
-        <DragHandle {...listeners} {...attributes} />
+        <DragHandle disabled={disabled} {...(disabled ? {} : listeners)} {...attributes} />
 
         {/* Expand/collapse toggle */}
         <Button
@@ -312,6 +327,7 @@ function SectionRow({
           className="h-7 w-7 shrink-0 text-destructive hover:text-destructive"
           onClick={onDelete}
           title="Delete section"
+          disabled={disabled}
         >
           <Trash2 className="h-3.5 w-3.5" />
         </Button>
@@ -319,10 +335,17 @@ function SectionRow({
 
       {/* Expanded content */}
       {isExpanded && (
-        <div className="border-t px-3 py-3 pl-[4.5rem]">
-          <div
-            className="prose prose-sm dark:prose-invert max-w-none text-sm text-muted-foreground"
-            dangerouslySetInnerHTML={{ __html: section.content }}
+        <div className="border-t px-3 py-3 pl-[4.5rem] space-y-2">
+          <div className="flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            Editing section content may simplify the formatting of structured content (lists, headings) into plain paragraphs. A rich-text editor is planned.
+          </div>
+          <SectionBodyEditor
+            value={section.content}
+            onChange={onBodyChange}
+            sectionId={id}
+            ariaLabel={`Body for section ${index + 1}: ${section.title}`}
+            disabled={disabled}
           />
         </div>
       )}

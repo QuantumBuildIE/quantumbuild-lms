@@ -49,6 +49,7 @@ interface QuestionCardProps {
   index: number;
   isEditing: boolean;
   isRegenerating?: boolean;
+  disabled?: boolean;
   onStartEdit: () => void;
   onSave: (updated: QuizQuestion) => void;
   onCancel: () => void;
@@ -61,6 +62,7 @@ export function QuestionCard({
   index,
   isEditing,
   isRegenerating = false,
+  disabled = false,
   onStartEdit,
   onSave,
   onCancel,
@@ -263,7 +265,7 @@ export function QuestionCard({
           )}
         </div>
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleStartEdit}>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleStartEdit} disabled={disabled}>
             <Pencil className="h-3.5 w-3.5" />
           </Button>
           {onRegenerateQuestion && (
@@ -273,7 +275,7 @@ export function QuestionCard({
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                  disabled={isRegenerating}
+                  disabled={isRegenerating || disabled}
                 >
                   <RotateCcw className={cn('h-3.5 w-3.5', isRegenerating && 'animate-spin')} />
                 </Button>
@@ -296,7 +298,7 @@ export function QuestionCard({
           )}
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive">
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" disabled={disabled}>
                 <Trash2 className="h-3.5 w-3.5" />
               </Button>
             </AlertDialogTrigger>

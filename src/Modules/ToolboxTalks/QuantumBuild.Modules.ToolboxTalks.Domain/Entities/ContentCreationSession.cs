@@ -60,6 +60,11 @@ public class ContentCreationSession : TenantEntity
     // Validation run tracking — JSON array of run IDs created for this session
     public string? ValidationRunIds { get; set; }
 
+    // Translation job tracking — JSON array of Hangfire job IDs for the currently-active
+    // TranslationValidationJob instances. Set by StartTranslateValidateAsync after enqueueing.
+    // Used to cancel orphaned jobs on re-trigger. Cleared by cascade-reset paths.
+    public string? TranslationJobIds { get; set; }
+
     // Quiz — JSON arrays of generated/edited questions and quiz settings
     public string? QuestionsJson { get; set; }
     public string? QuizSettingsJson { get; set; }

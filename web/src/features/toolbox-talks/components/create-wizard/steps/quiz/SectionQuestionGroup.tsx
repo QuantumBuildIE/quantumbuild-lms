@@ -14,6 +14,7 @@ interface SectionQuestionGroupProps {
   questions: QuizQuestion[];
   editingQuestionId: string | null;
   regeneratingQuestionId?: string | null;
+  disabled?: boolean;
   onStartEdit: (questionId: string) => void;
   onSaveQuestion: (question: QuizQuestion) => void;
   onCancelEdit: () => void;
@@ -28,6 +29,7 @@ export function SectionQuestionGroup({
   questions,
   editingQuestionId,
   regeneratingQuestionId,
+  disabled = false,
   onStartEdit,
   onSaveQuestion,
   onCancelEdit,
@@ -73,6 +75,7 @@ export function SectionQuestionGroup({
               index={qIdx}
               isEditing={editingQuestionId === question.id}
               isRegenerating={regeneratingQuestionId === question.id}
+              disabled={disabled}
               onStartEdit={() => onStartEdit(question.id)}
               onSave={onSaveQuestion}
               onCancel={onCancelEdit}
@@ -88,7 +91,7 @@ export function SectionQuestionGroup({
             size="sm"
             className="w-full border-dashed"
             onClick={() => onAddQuestion(sectionIndex)}
-            disabled={editingQuestionId !== null}
+            disabled={editingQuestionId !== null || disabled}
           >
             <Plus className="h-3.5 w-3.5 mr-1.5" />
             Add Question

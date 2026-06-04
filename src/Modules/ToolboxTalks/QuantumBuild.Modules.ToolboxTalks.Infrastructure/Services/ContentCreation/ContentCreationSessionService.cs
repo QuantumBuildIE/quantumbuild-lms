@@ -35,6 +35,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
     private readonly ISubtitleProcessingOrchestrator _subtitleOrchestrator;
     private readonly ILanguageCodeService _languageCodeService;
     private readonly IContentTranslationService _contentTranslationService;
+    private readonly IBackgroundJobClient _backgroundJobClient;
     private readonly TranslationValidationSettings _validationSettings;
     private readonly ILogger<ContentCreationSessionService> _logger;
 
@@ -58,6 +59,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
         ISubtitleProcessingOrchestrator subtitleOrchestrator,
         ILanguageCodeService languageCodeService,
         IContentTranslationService contentTranslationService,
+        IBackgroundJobClient backgroundJobClient,
         IOptions<TranslationValidationSettings> validationSettings,
         ILogger<ContentCreationSessionService> logger)
     {
@@ -70,6 +72,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
         _subtitleOrchestrator = subtitleOrchestrator;
         _languageCodeService = languageCodeService;
         _contentTranslationService = contentTranslationService;
+        _backgroundJobClient = backgroundJobClient;
         _validationSettings = validationSettings.Value;
         _logger = logger;
     }
@@ -324,9 +327,29 @@ public class ContentCreationSessionService : IContentCreationSessionService
     {
         var session = await GetSessionEntityAsync(sessionId, tenantId, cancellationToken);
 
-        if (session.Status != ContentCreationSessionStatus.Parsed &&
-            session.Status != ContentCreationSessionStatus.Validated)
-            throw new InvalidOperationException("Sections can only be updated in Parsed or Validated status");
+        var inFlightStatuses = new HashSet<ContentCreationSessionStatus>
+        {
+            ContentCreationSessionStatus.Transcribing,
+            ContentCreationSessionStatus.Parsing,
+            ContentCreationSessionStatus.GeneratingQuiz,
+            ContentCreationSessionStatus.TranslatingValidating,
+            ContentCreationSessionStatus.Publishing,
+        };
+
+        var allowedStatuses = new HashSet<ContentCreationSessionStatus>
+        {
+            ContentCreationSessionStatus.Parsed,
+            ContentCreationSessionStatus.QuizGenerated,
+            ContentCreationSessionStatus.Validated,
+        };
+
+        if (inFlightStatuses.Contains(session.Status))
+            throw new InvalidOperationException(
+                $"Section editing is not available while {session.Status} is in progress. Please wait for the current operation to complete.");
+
+        if (!allowedStatuses.Contains(session.Status))
+            throw new InvalidOperationException(
+                $"Sections can only be updated in Parsed, QuizGenerated, or Validated status (current: {session.Status}).");
 
         var sections = request.Sections
             .Select(s => new ParsedSection(s.Title, s.Content, s.Order))
@@ -335,6 +358,26 @@ public class ContentCreationSessionService : IContentCreationSessionService
 
         session.ParsedSectionsJson = JsonSerializer.Serialize(sections, CamelCaseJson);
         session.OutputType = request.OutputType;
+
+        // Cascade-reset downstream artefacts when re-editing past Parsed status
+        var oldStatus = session.Status;
+        if (oldStatus == ContentCreationSessionStatus.QuizGenerated ||
+            oldStatus == ContentCreationSessionStatus.Validated)
+        {
+            session.QuestionsJson = null;
+            session.Status = ContentCreationSessionStatus.Parsed;
+
+            if (oldStatus == ContentCreationSessionStatus.Validated)
+            {
+                session.ValidationRunIds = null;
+                session.TranslationJobIds = null;
+            }
+
+            _logger.LogInformation(
+                "[ContentCreationSession] Session {SessionId} cascaded back to Parsed status (was {OldStatus}) due to section edit; cleared quiz/translations/validation",
+                sessionId, oldStatus);
+        }
+
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(
@@ -359,6 +402,44 @@ public class ContentCreationSessionService : IContentCreationSessionService
 
         if (string.IsNullOrWhiteSpace(session.ParsedSectionsJson))
             throw new InvalidOperationException("No parsed sections available for validation");
+
+        // Cancel any previously-enqueued translation jobs to prevent races with the new run.
+        // Delete() reliably cancels Enqueued / Scheduled / AwaitingRetry jobs. Already-running
+        // jobs cannot be stopped from outside — the in-job relevance guard (Layer 2) covers that case.
+        if (!string.IsNullOrWhiteSpace(session.TranslationJobIds))
+        {
+            try
+            {
+                var staleJobIds = JsonSerializer.Deserialize<List<string>>(session.TranslationJobIds);
+                if (staleJobIds != null)
+                {
+                    foreach (var staleJobId in staleJobIds)
+                    {
+                        try
+                        {
+                            _backgroundJobClient.Delete(staleJobId);
+                        }
+                        catch (Exception ex)
+                        {
+                            // Single job's Delete() failed — log and continue. Other jobs still need
+                            // cancelling, and a failed cancel falls back to the in-job relevance guard.
+                            _logger.LogWarning(ex,
+                                "[ContentCreationSession] Failed to cancel orphaned Hangfire job {JobId} for session {SessionId}",
+                                staleJobId, sessionId);
+                        }
+                    }
+                }
+            }
+            catch (JsonException ex)
+            {
+                // Malformed JSON — log and treat as if no jobs to cancel.
+                _logger.LogWarning(ex,
+                    "[ContentCreationSession] Failed to parse TranslationJobIds for session {SessionId}: {Json}",
+                    sessionId, session.TranslationJobIds);
+            }
+
+            session.TranslationJobIds = null;
+        }
 
         // Parse the sections from the session
         var sections = JsonSerializer.Deserialize<List<ParsedSection>>(session.ParsedSectionsJson, CamelCaseJson) ?? new();
@@ -436,23 +517,25 @@ public class ContentCreationSessionService : IContentCreationSessionService
                 });
             }
 
-            // Remove old questions so they are recreated from session quiz data
-            var existingQuestions = await _dbContext.ToolboxTalkQuestions
+            // Remove old questions so they are recreated from session quiz data.
+            // ExecuteDeleteAsync issues a raw SQL DELETE that bypasses the SetAuditFields
+            // interceptor — Remove() would be soft-deleted, accumulating ghost rows.
+            await _dbContext.ToolboxTalkQuestions
+                .IgnoreQueryFilters()
                 .Where(q => q.ToolboxTalkId == talkId)
-                .ToListAsync(cancellationToken);
-            foreach (var q in existingQuestions)
-                _dbContext.ToolboxTalkQuestions.Remove(q);
+                .ExecuteDeleteAsync(cancellationToken);
 
             // Add quiz questions from session (skip when quiz excluded)
             if (session.IncludeQuiz)
                 SyncQuizQuestionsToTalk(talkId, quizQuestions, session.InputMode);
 
-            // Remove old translations so they are regenerated
-            var existingTranslations = await _dbContext.ToolboxTalkTranslations
-                .Where(t => t.ToolboxTalkId == talkId)
-                .ToListAsync(cancellationToken);
-            foreach (var t in existingTranslations)
-                t.IsDeleted = true;
+            // Physical delete via ExecuteDeleteAsync — Remove() would be soft-deleted by the
+            // SetAuditFields interceptor, leaving the row to block the unfiltered unique index
+            // ix_toolbox_talk_translations_talk_language on re-insertion.
+            await _dbContext.ToolboxTalkTranslations
+                .IgnoreQueryFilters()
+                .Where(t => t.ToolboxTalkId == talkId && t.TenantId == tenantId)
+                .ExecuteDeleteAsync(cancellationToken);
         }
         else
         {
@@ -615,12 +698,17 @@ public class ContentCreationSessionService : IContentCreationSessionService
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
 
-        // Enqueue Hangfire jobs after save
+        // Enqueue Hangfire jobs after save; capture job IDs so orphans can be cancelled on re-trigger.
+        var jobIds = new List<string>();
         foreach (var runId in runIds)
         {
-            BackgroundJob.Enqueue<TranslationValidationJob>(
+            var jobId = _backgroundJobClient.Enqueue<TranslationValidationJob>(
                 job => job.ExecuteAsync(runId, tenantId, null, CancellationToken.None));
+            jobIds.Add(jobId);
         }
+
+        session.TranslationJobIds = JsonSerializer.Serialize(jobIds);
+        await _dbContext.SaveChangesAsync(cancellationToken);
 
         // Start subtitle processing for video-based sessions
         if (session.InputMode == InputMode.Video && !string.IsNullOrEmpty(session.SourceFileUrl))
@@ -1034,16 +1122,56 @@ public class ContentCreationSessionService : IContentCreationSessionService
     {
         var session = await GetSessionEntityAsync(sessionId, tenantId, cancellationToken);
 
-        if (session.Status != ContentCreationSessionStatus.QuizGenerated &&
-            session.Status != ContentCreationSessionStatus.Validated &&
-            session.Status != ContentCreationSessionStatus.Parsed)
-            throw new InvalidOperationException("Questions can only be updated in QuizGenerated, Validated, or Parsed status");
+        var inFlightStatuses = new HashSet<ContentCreationSessionStatus>
+        {
+            ContentCreationSessionStatus.Transcribing,
+            ContentCreationSessionStatus.Parsing,
+            ContentCreationSessionStatus.GeneratingQuiz,
+            ContentCreationSessionStatus.TranslatingValidating,
+            ContentCreationSessionStatus.Publishing,
+        };
+
+        var allowedStatuses = new HashSet<ContentCreationSessionStatus>
+        {
+            ContentCreationSessionStatus.Parsed,
+            ContentCreationSessionStatus.QuizGenerated,
+            ContentCreationSessionStatus.Validated,
+        };
+
+        if (inFlightStatuses.Contains(session.Status))
+            throw new InvalidOperationException(
+                $"Quiz editing is not available while {session.Status} is in progress. Please wait for the current operation to complete.");
+
+        if (!allowedStatuses.Contains(session.Status))
+            throw new InvalidOperationException(
+                $"Quiz can only be updated in Parsed, QuizGenerated, or Validated status (current: {session.Status}).");
 
         session.QuestionsJson = JsonSerializer.Serialize(request.Questions, CamelCaseJson);
 
-        // If questions are being set for the first time (no prior generation), move to QuizGenerated
-        if (session.Status != ContentCreationSessionStatus.QuizGenerated)
+        if (session.Status == ContentCreationSessionStatus.Validated)
+        {
+            session.Status = ContentCreationSessionStatus.Parsed;
+            session.ValidationRunIds = null;
+            session.TranslationJobIds = null;
+
+            if (session.OutputTalkId.HasValue)
+            {
+                // Physical delete — same reasoning as Site 4 (see comment above the equivalent block
+                // in StartTranslateValidateAsync). SetAuditFields would otherwise soft-delete these rows.
+                await _dbContext.ToolboxTalkTranslations
+                    .IgnoreQueryFilters()
+                    .Where(t => t.ToolboxTalkId == session.OutputTalkId.Value && t.TenantId == tenantId)
+                    .ExecuteDeleteAsync(cancellationToken);
+            }
+
+            _logger.LogInformation(
+                "[ContentCreationSession] Session {SessionId} cascaded back to Parsed status (was Validated) due to quiz edit; cleared validation runs and translations",
+                sessionId);
+        }
+        else if (session.Status != ContentCreationSessionStatus.QuizGenerated)
+        {
             session.Status = ContentCreationSessionStatus.QuizGenerated;
+        }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -1221,6 +1349,10 @@ public class ContentCreationSessionService : IContentCreationSessionService
     {
         var session = await GetSessionEntityAsync(sessionId, tenantId, cancellationToken);
 
+        if (session.Status != ContentCreationSessionStatus.Draft)
+            throw new InvalidOperationException(
+                $"Upload can only be confirmed for a session in Draft status (current: {session.Status})");
+
         // Security: validate key starts with expected tenant/session prefix (prevent key injection)
         var expectedPrefix = $"{tenantId}/sessions/{sessionId}/";
         if (!request.Key.StartsWith(expectedPrefix, StringComparison.OrdinalIgnoreCase))
@@ -1386,11 +1518,13 @@ public class ContentCreationSessionService : IContentCreationSessionService
                         .Select(q => q.Id)
                         .ToListAsync(cancellationToken);
 
-                    var existingQuestions = await _dbContext.ToolboxTalkQuestions
+                    // Physical delete via ExecuteDeleteAsync — Remove() would be soft-deleted by the
+                    // SetAuditFields interceptor. Questions accumulating as soft-deleted ghost rows
+                    // would not break the publish flow (no unique index), but would leave the DB
+                    // with orphan rows on every republish.
+                    await _dbContext.ToolboxTalkQuestions
                         .Where(q => q.ToolboxTalkId == draftTalk.Id)
-                        .ToListAsync(cancellationToken);
-                    foreach (var q in existingQuestions)
-                        _dbContext.ToolboxTalkQuestions.Remove(q);
+                        .ExecuteDeleteAsync(cancellationToken);
 
                     List<SessionQuizQuestionDto>? courseQuizQuestions = null;
                     if (!string.IsNullOrWhiteSpace(session.QuestionsJson))
@@ -1773,12 +1907,13 @@ public class ContentCreationSessionService : IContentCreationSessionService
                 };
                 _dbContext.ToolboxTalkSections.Add(videoSection);
 
-                // Remove quiz questions from the video talk (no quiz for full video)
-                var videoTalkQuestions = await _dbContext.ToolboxTalkQuestions
+                // Remove quiz questions from the video talk (no quiz for full video).
+                // ExecuteDeleteAsync issues a raw SQL DELETE that bypasses the SetAuditFields
+                // interceptor — Remove() would be soft-deleted, leaving stale rows.
+                await _dbContext.ToolboxTalkQuestions
                     .IgnoreQueryFilters()
                     .Where(q => q.ToolboxTalkId == videoTalk.Id)
-                    .ToListAsync(cancellationToken);
-                foreach (var q in videoTalkQuestions) _dbContext.ToolboxTalkQuestions.Remove(q);
+                    .ExecuteDeleteAsync(cancellationToken);
 
                 // Update translations for the video talk (title change, clear section translations)
                 if (draftTranslations != null)

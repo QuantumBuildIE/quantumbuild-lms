@@ -390,7 +390,7 @@ public class TranslationValidationJob
             // Pass sectorKey from the validation run for tiered prompt quality
             translation = await GenerateTranslationForSectionsAsync(
                 run.ToolboxTalkId.Value, tenantId, run.LanguageCode, originalSections,
-                run.SectorKey, run.SourceLanguage, cancellationToken);
+                run.SectorKey, run.SourceLanguage, run.Id, cancellationToken);
 
             if (string.IsNullOrWhiteSpace(translation))
             {
@@ -655,8 +655,55 @@ public class TranslationValidationJob
         List<OriginalSectionInfo> originalSections,
         string? sectorKey,
         string? sourceLanguage,
+        Guid runId,
         CancellationToken cancellationToken)
     {
+        // Relevance guard: if this run has been superseded (cascade-reset cleared the session's
+        // ValidationRunIds), abort before inserting the ToolboxTalkTranslation row that would
+        // conflict on the unique index. This covers the in-flight case where Delete() could not
+        // stop an already-running job.
+        var session = await _dbContext.ContentCreationSessions
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(s => s.OutputTalkId == talkId && s.TenantId == tenantId,
+                cancellationToken);
+
+        if (session == null)
+        {
+            _logger.LogInformation(
+                "TranslationValidationJob run {RunId} is no longer relevant — no session found for talk {TalkId}. Aborting before INSERT.",
+                runId, talkId);
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(session.ValidationRunIds))
+        {
+            _logger.LogInformation(
+                "TranslationValidationJob run {RunId} is no longer relevant — session {SessionId} has no current ValidationRunIds. Aborting before INSERT.",
+                runId, session.Id);
+            return null;
+        }
+
+        try
+        {
+            var currentRunIds = JsonSerializer.Deserialize<List<Guid>>(session.ValidationRunIds);
+            if (currentRunIds == null || !currentRunIds.Contains(runId))
+            {
+                _logger.LogInformation(
+                    "TranslationValidationJob run {RunId} is no longer in session {SessionId}'s ValidationRunIds. Aborting before INSERT.",
+                    runId, session.Id);
+                return null;
+            }
+        }
+        catch (JsonException ex)
+        {
+            // Malformed JSON — log and fall through. Better to risk a conflict than to silently
+            // abort on a parse failure.
+            _logger.LogWarning(ex,
+                "Failed to parse session.ValidationRunIds for session {SessionId} — proceeding cautiously.",
+                session.Id);
+        }
+
+        Domain.Entities.ToolboxTalkTranslation? translation = null;
         try
         {
             var languageName = await _languageCodeService.GetLanguageNameAsync(languageCode);
@@ -830,7 +877,7 @@ public class TranslationValidationJob
             }
 
             // Persist the translation record
-            var translation = new Domain.Entities.ToolboxTalkTranslation
+            translation = new Domain.Entities.ToolboxTalkTranslation
             {
                 Id = Guid.NewGuid(),
                 TenantId = tenantId,
@@ -857,9 +904,42 @@ public class TranslationValidationJob
         }
         catch (Exception ex)
         {
+            // Detach the failed entity so subsequent SaveChangesAsync calls do not re-submit it.
+            // (Note 23 in CLAUDE.md — a caught DbUpdateException leaves the tracker contaminated.)
+            if (translation != null)
+            {
+                var entry = ((DbContext)_dbContext).Entry(translation);
+                if (entry.State != EntityState.Detached)
+                    entry.State = EntityState.Detached;
+            }
+
             _logger.LogError(ex,
                 "Failed to generate translations for ToolboxTalk {TalkId}, Language {Lang}",
                 talkId, languageCode);
+
+            // Mark the run as Failed so the wizard surfaces the failure to the user
+            // instead of letting it sail through as Completed with TotalSections = 0.
+            try
+            {
+                var failedRun = await _dbContext.TranslationValidationRuns
+                    .IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(r => r.Id == runId, cancellationToken);
+                if (failedRun != null)
+                {
+                    failedRun.Status = ValidationRunStatus.Failed;
+                    failedRun.CompletedAt = DateTime.UtcNow;
+                    await _dbContext.SaveChangesAsync(cancellationToken);
+                }
+            }
+            catch (Exception runUpdateEx)
+            {
+                // If we can't update the run status, log and continue — better to have a stuck run
+                // than to throw out of the catch block and lose the original error.
+                _logger.LogError(runUpdateEx,
+                    "Failed to mark TranslationValidationRun {RunId} as Failed after translation failure. Original error: {OriginalError}",
+                    runId, SanitiseErrorMessage(ex.Message));
+            }
+
             return null;
         }
     }
@@ -987,6 +1067,21 @@ public class TranslationValidationJob
                 "Failed to check/update session status after run {RunId} completed",
                 validationRunId);
         }
+    }
+
+    /// <summary>
+    /// Truncates and normalises an exception message for safe inclusion in log output.
+    /// Strips newlines and caps length to avoid log flooding with DB driver internals.
+    /// </summary>
+    private static string SanitiseErrorMessage(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+            return "Translation failed: unknown error";
+
+        var sanitised = message.Replace('\n', ' ').Replace('\r', ' ');
+        if (sanitised.Length > 200)
+            sanitised = sanitised[..200];
+        return $"Translation failed: {sanitised}";
     }
 
     /// <summary>

@@ -12,6 +12,7 @@ import {
   Info,
   Trash2,
 } from 'lucide-react';
+import axios from 'axios';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import {
@@ -30,7 +31,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import type { WizardState } from '../CreateWizard';
+import type { WizardState, SectionsSnapshot } from '../CreateWizard';
 import type {
   ParsedSection,
   OutputType,
@@ -87,6 +88,7 @@ export function ParseStep({ state, updateState, onNext, onBack, onReset }: Parse
 
   // Local state
   const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [showCascadeResetDialog, setShowCascadeResetDialog] = useState(false);
   const [parseLog, setParseLog] = useState<ParseLogEntry[]>([]);
   const [hasParsed, setHasParsed] = useState(false);
   const [isParseFailed, setIsParseFailed] = useState(false);
@@ -108,6 +110,21 @@ export function ParseStep({ state, updateState, onNext, onBack, onReset }: Parse
   const sessionStatus = session?.status ?? state.parsedSections.length > 0 ? 'Parsed' : 'Draft';
   const sections = state.parsedSections;
 
+  // Status-derived flags for section re-edit behaviour
+  const status = session?.status ?? null;
+  const isInFlight =
+    status === 'GeneratingQuiz' ||
+    status === 'TranslatingValidating' ||
+    status === 'Publishing';
+  const isPostParsed = status === 'QuizGenerated' || status === 'Validated';
+
+  const inFlightStatusLabel: Record<string, string> = {
+    GeneratingQuiz: 'Quiz Generation',
+    TranslatingValidating: 'Translation & Validation',
+    Publishing: 'Publishing',
+  };
+  const friendlyStatus = status ? (inFlightStatusLabel[status] ?? status) : '';
+
   // ============================================
   // Log helper
   // ============================================
@@ -122,6 +139,16 @@ export function ParseStep({ state, updateState, onNext, onBack, onReset }: Parse
 
   useEffect(() => {
     if (!state.sessionId) return;
+
+    // Back-nav remount: wizard state already holds parsed sections but hasParsed
+    // was reset on unmount. Session status may be beyond 'Parsed' (QuizGenerated,
+    // TranslateValidate, etc.) so the status-gated branches below won't fire.
+    // Wizard state is the source of truth here — no server hydration needed.
+    if (state.parsedSections.length > 0 && !hasParsed) {
+      parseTriggered.current = true;
+      setHasParsed(true);
+      return;
+    }
 
     const status = session?.status;
 
@@ -176,10 +203,36 @@ export function ParseStep({ state, updateState, onNext, onBack, onReset }: Parse
   }, []);
 
   // ============================================
+  // Snapshot sections on first populated visit (per session)
+  // ============================================
+
+  useEffect(() => {
+    if (state.parsedSections.length > 0 && state.parsedSectionsSnapshot === null) {
+      updateState({
+        parsedSectionsSnapshot: {
+          sections: state.parsedSections.map((s) => ({
+            title: s.title,
+            content: s.content,
+            suggestedOrder: s.suggestedOrder,
+          })),
+        } satisfies SectionsSnapshot,
+      });
+    }
+  }, [state.parsedSections, state.parsedSectionsSnapshot, updateState]);
+
+  // ============================================
   // Hydrate sections from session JSON
   // ============================================
 
   function hydrateFromSession() {
+    // Wizard state is authoritative when already populated (e.g. user edited
+    // sections then navigated back). Only hydrate from the server when the
+    // client state is empty (fresh page load resuming an existing session).
+    if (state.parsedSections.length > 0) {
+      setHasParsed(true);
+      return;
+    }
+
     if (!session?.parsedSectionsJson) return;
 
     try {
@@ -393,15 +446,24 @@ export function ParseStep({ state, updateState, onNext, onBack, onReset }: Parse
   );
 
   // ============================================
-  // Continue — save sections then trigger translate-validate
+  // Continue — save sections then advance
   // ============================================
 
-  const handleContinue = async () => {
-    if (!state.sessionId || sections.length === 0) return;
-    const outputType = state.selectedOutputType ?? state.suggestedOutputType ?? 'Lesson';
+  const refreshSnapshot = () => {
+    updateState({
+      parsedSectionsSnapshot: {
+        sections: state.parsedSections.map((s) => ({
+          title: s.title,
+          content: s.content,
+          suggestedOrder: s.suggestedOrder,
+        })),
+      },
+    });
+  };
 
+  const executeSectionsSave = async (outputType: OutputType) => {
+    if (!state.sessionId) return;
     try {
-      // Save sections
       await updateSections.mutateAsync({
         sessionId: state.sessionId,
         request: {
@@ -413,12 +475,58 @@ export function ParseStep({ state, updateState, onNext, onBack, onReset }: Parse
           outputType,
         },
       });
-
+      refreshSnapshot();
       onNext();
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to proceed';
+      let message = 'Failed to proceed';
+      if (axios.isAxiosError(error) && error.response?.data?.error) {
+        message = error.response.data.error;
+      } else if (error instanceof Error) {
+        message = error.message;
+      }
       toast.error('Error', { description: message });
     }
+  };
+
+  const handleCascadeResetConfirm = async () => {
+    setShowCascadeResetDialog(false);
+    const outputType = state.selectedOutputType ?? state.suggestedOutputType ?? 'Lesson';
+    await executeSectionsSave(outputType);
+  };
+
+  const handleContinue = async () => {
+    if (!state.sessionId || sections.length === 0) return;
+    const outputType = state.selectedOutputType ?? state.suggestedOutputType ?? 'Lesson';
+
+    // Change detection — compare current sections against arrival snapshot
+    const snapshot = state.parsedSectionsSnapshot;
+    let sectionsChanged: boolean;
+
+    if (!snapshot) {
+      sectionsChanged = true;
+    } else if (snapshot.sections.length !== sections.length) {
+      sectionsChanged = true;
+    } else {
+      sectionsChanged = sections.some((s, i) => {
+        const snap = snapshot.sections[i];
+        return s.title !== snap.title || s.content !== snap.content;
+      });
+    }
+
+    // No changes — skip PUT and advance directly
+    if (!sectionsChanged) {
+      onNext();
+      return;
+    }
+
+    // Changes detected while session has progressed past Parsed — need user consent
+    if (isPostParsed) {
+      setShowCascadeResetDialog(true);
+      return;
+    }
+
+    // Normal forward path
+    await executeSectionsSave(outputType);
   };
 
   // Once sections have been parsed and hydrated, neither stale polling state nor
@@ -427,6 +535,9 @@ export function ParseStep({ state, updateState, onNext, onBack, onReset }: Parse
   const isBusy = hasParsed
     ? updateSections.isPending
     : parseContent.isPending || updateSections.isPending || isPolling;
+
+  const isContinueDisabled =
+    !hasParsed || sections.length === 0 || isBusy || isInFlight;
 
   const isParsing = parseContent.isPending || isPolling;
   const selectedType = state.selectedOutputType ?? state.suggestedOutputType;
@@ -510,10 +621,29 @@ export function ParseStep({ state, updateState, onNext, onBack, onReset }: Parse
           {/* 2b — Sections */}
           <WizardSectionDivider number="2b" label="Sections" />
 
+          {/* In-flight notice — editing paused while a job is running */}
+          {isInFlight && (
+            <div className="flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              Section editing is paused while {friendlyStatus} is in progress.
+            </div>
+          )}
+
+          {/* Post-parsed notice — editing will cascade-reset downstream work */}
+          {isPostParsed && !isInFlight && (
+            <div className="flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              {status === 'Validated'
+                ? 'This learning has progressed through translation and validation. Editing sections here will clear the quiz, translations, and validation results, all of which will need to be regenerated.'
+                : 'This learning has progressed through quiz generation. Editing sections here will clear the generated quiz and require it to be re-generated.'}
+            </div>
+          )}
+
           {/* Section List */}
           <SectionList
             sections={sections}
             onChange={handleSectionsChange}
+            disabled={isInFlight}
           />
         </>
       )}
@@ -548,11 +678,7 @@ export function ParseStep({ state, updateState, onNext, onBack, onReset }: Parse
 
           <Button
             onClick={handleContinue}
-            disabled={
-              !hasParsed ||
-              sections.length === 0 ||
-              isBusy
-            }
+            disabled={isContinueDisabled}
           >
             {updateSections.isPending ? (
               <>
@@ -585,6 +711,25 @@ export function ParseStep({ state, updateState, onNext, onBack, onReset }: Parse
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Cancel and start over
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showCascadeResetDialog} onOpenChange={setShowCascadeResetDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Section changes will reset downstream work</AlertDialogTitle>
+            <AlertDialogDescription>
+              {status === 'Validated'
+                ? "You've edited sections on a learning that has already been translated and validated. Continuing will: clear the generated quiz, translations, and validation results. All of these will need to be regenerated."
+                : "You've edited sections on a learning where the quiz has already been generated. Continuing will: clear the generated quiz (it will need to be regenerated)."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleCascadeResetConfirm}>
+              Continue and reset
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

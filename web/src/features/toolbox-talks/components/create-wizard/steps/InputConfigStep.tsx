@@ -41,7 +41,7 @@ import { useTenantSectors, useAvailableSectors } from '@/lib/api/admin/use-tenan
 import { useCreateSession, useUploadSessionFile, useUpdateSource } from '@/lib/api/toolbox-talks/use-content-creation';
 import { useAvailableLanguages } from '@/lib/api/toolbox-talks/use-subtitle-processing';
 import { useTenantSettings } from '@/lib/api/admin/use-tenant-settings';
-import type { WizardState } from '../CreateWizard';
+import type { WizardState, SessionSourceSnapshot } from '../CreateWizard';
 import type { InputMode } from '@/types/content-creation';
 
 // ============================================
@@ -136,7 +136,6 @@ export function InputConfigStep({
   // Local state
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
-  const [videoRightsConfirmed, setVideoRightsConfirmed] = useState(false);
   const [customAuditPurpose, setCustomAuditPurpose] = useState('');
   const [auditPurposeMode, setAuditPurposeMode] = useState<'preset' | 'custom'>(
     state.auditPurpose && !auditPurposes.includes(state.auditPurpose)
@@ -202,6 +201,7 @@ export function InputConfigStep({
       sourceFile: mode !== state.inputMode ? null : state.sourceFile,
       sourceFileName: mode !== state.inputMode ? null : state.sourceFileName,
       videoUrl: mode !== state.inputMode ? '' : state.videoUrl,
+      videoRightsConfirmed: false,
     });
   };
 
@@ -268,7 +268,22 @@ export function InputConfigStep({
       : state.inputMode === 'Pdf'
         ? !!state.sourceFile
         : !!state.sourceFile ||
-          (state.videoUrl.trim().length > 0 && videoRightsConfirmed));
+          (state.videoUrl.trim().length > 0 && state.videoRightsConfirmed));
+
+  const buildSourceSnapshot = (): SessionSourceSnapshot => ({
+    mode: state.inputMode!,
+    text: state.inputMode === 'Text' ? state.sourceText : undefined,
+    fileName:
+      (state.inputMode === 'Pdf' || state.inputMode === 'Video') && state.sourceFile
+        ? (state.sourceFileName ?? undefined)
+        : undefined,
+    fileSize:
+      (state.inputMode === 'Pdf' || state.inputMode === 'Video') && state.sourceFile
+        ? state.sourceFile.size
+        : undefined,
+    videoUrl:
+      state.inputMode === 'Video' && !state.sourceFile ? state.videoUrl : undefined,
+  });
 
   const handleContinue = async () => {
     if (!canContinue || !state.inputMode) return;
@@ -301,9 +316,42 @@ export function InputConfigStep({
         });
 
         sessionId = session.id;
-        updateState({ sessionId: session.id });
+        updateState({ sessionId: session.id, sessionSourceSnapshot: buildSourceSnapshot(), parsedSectionsSnapshot: null, generatedQuestionsSnapshot: null });
       } else {
-        // Session exists — update source content and reset to Draft for re-parsing
+        // Session exists — only re-parse if the source content actually changed.
+        const snap = state.sessionSourceSnapshot;
+        const modeChanged = !snap || snap.mode !== state.inputMode;
+        let sourceChanged = modeChanged;
+
+        if (!modeChanged && snap) {
+          switch (state.inputMode) {
+            case 'Text':
+              sourceChanged = state.sourceText !== snap.text;
+              break;
+            case 'Pdf':
+              sourceChanged =
+                state.sourceFileName !== snap.fileName ||
+                state.sourceFile?.size !== snap.fileSize;
+              break;
+            case 'Video':
+              if (state.sourceFile) {
+                sourceChanged =
+                  state.sourceFileName !== snap.fileName ||
+                  state.sourceFile.size !== snap.fileSize;
+              } else {
+                sourceChanged = state.videoUrl !== snap.videoUrl;
+              }
+              break;
+          }
+        }
+
+        if (!sourceChanged) {
+          // User just navigated back to look — source is the same, skip re-parse.
+          onNext();
+          return;
+        }
+
+        // Source changed — update session and reset parse results for re-parsing.
         await updateSource.mutateAsync({
           sessionId,
           sourceText: state.inputMode === 'Text' ? state.sourceText : undefined,
@@ -312,6 +360,9 @@ export function InputConfigStep({
           parsedSections: [],
           suggestedOutputType: null,
           selectedOutputType: null,
+          sessionSourceSnapshot: buildSourceSnapshot(),
+          parsedSectionsSnapshot: null,
+          generatedQuestionsSnapshot: null,
         });
       }
 
@@ -328,16 +379,15 @@ export function InputConfigStep({
           file: state.sourceFile,
           onProgress: setUploadProgress,
         });
-
-        setIsUploading(false);
       }
 
       onNext();
     } catch (error) {
-      setIsUploading(false);
       const message =
         error instanceof Error ? error.message : 'Failed to create session';
       toast.error('Error', { description: message });
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -563,19 +613,17 @@ export function InputConfigStep({
                   <Input
                     placeholder="https://youtube.com/watch?v=... or direct video URL"
                     value={state.videoUrl}
-                    onChange={(e) => {
-                      const url = e.target.value;
-                      updateState({ videoUrl: url });
-                      if (!url.trim()) setVideoRightsConfirmed(false);
-                    }}
+                    onChange={(e) =>
+                      updateState({ videoUrl: e.target.value, videoRightsConfirmed: false })
+                    }
                   />
                   {state.videoUrl.trim().length > 0 && (
                     <div className="flex items-start gap-2">
                       <Checkbox
                         id="video-rights"
-                        checked={videoRightsConfirmed}
+                        checked={state.videoRightsConfirmed}
                         onCheckedChange={(checked) =>
-                          setVideoRightsConfirmed(checked === true)
+                          updateState({ videoRightsConfirmed: checked === true })
                         }
                       />
                       <label

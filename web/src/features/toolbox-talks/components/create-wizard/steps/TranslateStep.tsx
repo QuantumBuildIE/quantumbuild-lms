@@ -12,6 +12,7 @@ import {
   Languages,
   Sparkles,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   useCreationSession,
   useSessionValidationRun,
@@ -79,6 +80,21 @@ export function TranslateStep({
   // Active language tab (for multi-language support)
   const [activeIndex, setActiveIndex] = useState(0);
   const activeEntry = runEntries[activeIndex] ?? null;
+
+  // Belt-and-braces guard: if we land here with no validation runs and the session
+  // is in Parsed state (i.e. a cascade reset just cleared validationRunIds), redirect
+  // back to Settings so the user can re-trigger translation via the legitimate path.
+  // Does NOT fire during mid-translation loads where validationRunIds is populated
+  // and status is 'TranslatingValidating' or 'Validated'.
+  useEffect(() => {
+    if (!session) return;
+    if (state.parsedSections.length === 0) return;
+    const hasRuns = !!session.validationRunIds && session.validationRunIds.length > 0;
+    if (!hasRuns && session.status === 'Parsed') {
+      toast.info('Translation needs to be re-run after recent section changes. Please confirm settings to continue.');
+      onBack();
+    }
+  }, [session, state.parsedSections.length, onBack]);
 
   // SignalR hub connection for active run — lives here while translation is running
   const hub = useValidationHub(activeEntry?.runId ?? null);
