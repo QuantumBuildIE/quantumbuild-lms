@@ -1263,6 +1263,10 @@ public class ContentCreationSessionService : IContentCreationSessionService
     {
         var session = await GetSessionEntityAsync(sessionId, tenantId, cancellationToken);
 
+        if (session.Status != ContentCreationSessionStatus.Draft)
+            throw new InvalidOperationException(
+                $"Upload can only be confirmed for a session in Draft status (current: {session.Status})");
+
         // Security: validate key starts with expected tenant/session prefix (prevent key injection)
         var expectedPrefix = $"{tenantId}/sessions/{sessionId}/";
         if (!request.Key.StartsWith(expectedPrefix, StringComparison.OrdinalIgnoreCase))
