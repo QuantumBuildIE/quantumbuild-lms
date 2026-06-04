@@ -1518,11 +1518,13 @@ public class ContentCreationSessionService : IContentCreationSessionService
                         .Select(q => q.Id)
                         .ToListAsync(cancellationToken);
 
-                    var existingQuestions = await _dbContext.ToolboxTalkQuestions
+                    // Physical delete via ExecuteDeleteAsync — Remove() would be soft-deleted by the
+                    // SetAuditFields interceptor. Questions accumulating as soft-deleted ghost rows
+                    // would not break the publish flow (no unique index), but would leave the DB
+                    // with orphan rows on every republish.
+                    await _dbContext.ToolboxTalkQuestions
                         .Where(q => q.ToolboxTalkId == draftTalk.Id)
-                        .ToListAsync(cancellationToken);
-                    foreach (var q in existingQuestions)
-                        _dbContext.ToolboxTalkQuestions.Remove(q);
+                        .ExecuteDeleteAsync(cancellationToken);
 
                     List<SessionQuizQuestionDto>? courseQuizQuestions = null;
                     if (!string.IsNullOrWhiteSpace(session.QuestionsJson))
