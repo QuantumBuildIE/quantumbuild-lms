@@ -528,6 +528,12 @@ Removed from Employee:
 - **Status:** Open
 - **Description:** `UserService` logs "Sent account creation email" even when MailerSend returned 422 (trial limit). The success log line shouldn't fire if the provider call failed. Caused real-world confusion this session — logs showed "Sent" while delivery was failing.
 
+#### **3.11 (new)** — Tenant creation: 400 "already exists" returned on first submit. Submitting the Create Tenant form once produces an HTTP 400 with "A tenant with this name already exists", but the tenant row is actually created. Possible double-submit (form fires POST twice; first creates, second hits uniqueness check) or misleading error from post-commit exception during admin-user creation. Predates 3.1. Repro: submit Create Tenant form with a fresh unique name, observe 400 in browser network tab, query DB to confirm row exists.
+
+#### **3.12 (new)** — New user activation timing question. New users are created with `IsActive = true` despite not being able to log in until they complete the invitation flow (set password). Product question: should `IsActive` reflect "account fully set up" or "admin has approved this account"? Needs explicit decision.
+
+#### **3.13 (new)** — Testing discipline: admin should be tested in a separate browser profile from end-user verification flows. Same-origin localStorage means token state from a user-login can clobber an admin's token state silently. Caused a 403 cascade during 3.1 verification on 5 June. Documentation/discipline note rather than code change.
+
 ---
 
 # 4. Tenant Management & Regulatory
@@ -703,6 +709,27 @@ These are not backlog items — they're explicit product decisions with known tr
 # 7. Recently Closed
 
 Kept here for trail; prune periodically.
+
+## 5 June 2026 — BACKLOG 3.1: Unify user creation (shipped to Production)
+- **3.1** — Three user-creation paths unified on the bulk-import pattern. PATH A (UI user-create, `UserService.CreateAsync`) and PATH B (tenant onboarding, `TenantOnboardingService.CreateAdminUserAsync`) now generate throwaway passwords internally, set `EmailConfirmed = false`, generate a password-reset token, and send `SendPasswordSetupEmailAsync` — same as PATH C (bulk import). Admin no longer supplies passwords; new users go through set-password flow on first login. Password field removed from admin user-create form (`CreateUserDto`, `CreateUserValidator`, frontend `user-form.tsx`). PATH A and PATH B verified end-to-end on Development; PATH C unchanged. Commit `bb2709e` (transval) → merged to main via `5d12808`.
+
+## 4 June 2026 — Wizard cascade-reset hardening + UAT 1.1.6/1.1.7/1.1.8/1.1.9 (shipped to Production)
+
+### UAT batch
+- **1.1.6** — Continue button wedged after empty languages; `videoRightsConfirmed` persisted in wizard state to survive InputConfigStep remount
+- **1.1.7** — Inline section body editor at parse step; user-facing consent for section re-edits (inline notice + confirmation dialog when editing past Parsed); snapshot-based change detection; backend allowlist widened to Parsed/QuizGenerated/Validated with cascade reset of downstream artefacts; in-flight statuses rejected; step-indicator hard-block on validationRunIds null
+- **1.1.8** — Parse-step edits preserved across back-nav (sessionSourceSnapshot pattern); ParseStep render guard restoring hasParsed on remount when wizard state populated
+- **1.1.9** — Pending state in PreviewModal when slideshow expected but not yet generated
+
+### Lifecycle hardening (CONTENT-LIFECYCLE §6.x — all closed)
+- **§6.4** — Orphaned `TranslationValidationJob` cancellation: `TranslationJobIds` column added to session (migration `20260604111150_AddTranslationJobIdsToContentCreationSession`); `IBackgroundJobClient.Delete()` called for stale jobs on re-enqueue; two-layer defence with in-job relevance guard at top of `GenerateTranslationForSectionsAsync`
+- **§6.5** — Session no longer silently stuck in `TranslatingValidating`: `GenerateTranslationForSectionsAsync` catch block now marks `TranslationValidationRun.Status = Failed` before returning null
+- **§6.10** — `UpdateQuestionsAsync` no longer silently demotes Validated → QuizGenerated: mirrored cascade-reset pattern from `UpdateSectionsAsync` (Validated → Parsed with full downstream invalidation, consent dialog on QuizStep, in-flight disable)
+- **§6.11** — `ConfirmUploadAsync` no longer resets Draft from any status: Draft-status guard added matching `UploadFileAsync` pattern
+- **§6.2 (partial closure)** — Eight `.Remove()` sites converted to `ExecuteDeleteAsync` to bypass the `SetAuditFields` interceptor that was silently soft-deleting them: ToolboxTalkSlideshowTranslation (1 site), ToolboxTalkQuestion (3 sites), ToolboxTalkTranslation (2 sites), ToolboxTalkScheduleAssignment (2 sites — with `Detach` to suppress EF orphan-removal phantom soft-delete). Structural close — filtering the unfiltered unique indexes — remains BACKLOG (Path-B candidate)
+
+### Lifecycle document
+- `docs/CONTENT_CREATION_LIFECYCLE.md` introduced as source-of-truth state map (commit `45ca98d`); verified end-to-end; consolidated update post-batch (commit `25c73e9`) closing the four sharp edges above, adding §6.12 SetAuditFields interceptor as system-wide sharp edge, §4.5 ToolboxTalkSlideshowTranslation entry, §4.6 TranslationValidationRun field-by-field, Option B annotations on §4.3/§4.4 mechanism corrections, and Rule 8 in §9 (Remove() vs ExecuteDeleteAsync discipline)
 
 ## 3 June 2026 — UAT P0s + tenant-filter sweep batch (shipped to Production — pending)
 - **1.1.1** Validation summary "Score / Sections passed" twin-metric display + conditional badge tinting (closes 1.1.12 as side effect)
