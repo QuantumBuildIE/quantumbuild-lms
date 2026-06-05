@@ -13,32 +13,6 @@ This document is dynamic — expect it to be reshuffled as priorities shift. The
 
 ---
 
-## Now (this week)
-
-### 1. UAT P1s — workflow breakers
-
-Four items from the UAT brief, all small and self-contained. Schedule as a "Wizard navigation & editability" PR since they share UI surfaces.
-
-- **BACKLOG 1.1.6** — Continue button wedged after empty languages. Smallest of the four. Add languages check to `canContinue`; wrap mutation in try/finally.
-- **BACKLOG 1.1.7** — Section content editable after parse. Adds inline body editor; mark edited sections with manual-override flag.
-- **BACKLOG 1.1.8** — Back-nav from Parse preserves edits. Persist parse-step edits to backend; skip hydrate when client state is newer.
-- **BACKLOG 1.1.9** — Preview as Employee renders pending state. Third branch in `PreviewModal` for "slideshow generating — refresh to see it".
-
-**Why now:** real customer-facing friction. The P0s addressed validation trust; the P1s address the actual day-to-day workflow. Doing them as a batch is efficient — same files, same testing path.
-
----
-
-### 2. Engineering quality — unify user creation
-
-- **BACKLOG 3.1** — Unify user creation on throwaway-password + invitation-email flow. **P1.**
-  - Three different paths create users with inconsistent behaviour: UI user-create (admin sets password, sends notification), tenant-create (admin user with `EmailConfirmed=true`), bulk import (the correct reference pattern).
-  - The MailerSend gap fixed earlier this session was a stopgap on the UI path; the proper fix is unifying all three on the bulk import model.
-  - Closes 3.2 (bulk import partial-row recovery) as a side effect.
-
-**Why now:** longest-standing engineering loose end on the list. Closes multiple stopgap fixes from this session into a single coherent solution. Estimated 2-3 hours done properly.
-
----
-
 ## Next (after current set lands)
 
 ### 3. UAT P2s — completeness items
@@ -113,7 +87,16 @@ Pulled from BACKLOG; not prioritised yet but kept in view:
 
 ## Recently closed (last sprint)
 
-**3 June 2026 — UAT P0s + tenant-filter sweep batch (Production deploy pending):**
+**5 June 2026 — User-creation unification (shipped to Production):**
+- BACKLOG 3.1 — UI user-create, tenant onboarding, bulk import now unified on throwaway-password + invitation-email pattern; admin no longer sets passwords for new users; new tenant admins go through set-password flow on first login
+
+**4 June 2026 — Wizard cascade-reset hardening + UAT P1 batch (shipped to Production):**
+- UAT 1.1.6, 1.1.7, 1.1.8, 1.1.9 — wizard navigation, editability, preview pending state
+- CONTENT-LIFECYCLE §6.4, §6.5, §6.10, §6.11 closed; §6.2 partially closed (8 sites)
+- New `SetAuditFields` interceptor sharp edge (§6.12) documented — system-wide blast radius
+- Lifecycle map document introduced and consolidated
+
+**3 June 2026 — UAT P0s + tenant-filter sweep batch:**
 - 1.1.1 — Validation summary twin-metric display + conditional badge tinting (closes 1.1.12)
 - 1.1.2 — EN-from-targets filter + labelled scores + index-misalignment fix
 - 1.1.3 — Edit English source and re-validate (with disclosed formatting-loss limitation tracked as 1.1.18)
