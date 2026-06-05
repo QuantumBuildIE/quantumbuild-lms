@@ -35,8 +35,6 @@ export interface CreateUserDto {
   email: string;
   firstName: string;
   lastName: string;
-  password: string;
-  confirmPassword: string;
   isActive: boolean;
   roleIds: string[];
   employeeLinkOption?: EmployeeLinkOption;

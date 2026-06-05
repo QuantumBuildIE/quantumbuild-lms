@@ -231,12 +231,13 @@ public class UserService : IUserService
                 LastName = dto.LastName,
                 TenantId = tenantId,
                 IsActive = dto.IsActive,
-                EmailConfirmed = true,
+                EmailConfirmed = false,
                 CreatedAt = DateTime.UtcNow,
                 CreatedBy = _currentUserService.UserId
             };
 
-            var createResult = await _userManager.CreateAsync(user, dto.Password);
+            var tempPassword = $"Temp{Guid.NewGuid():N}!Aa1";
+            var createResult = await _userManager.CreateAsync(user, tempPassword);
             if (!createResult.Succeeded)
             {
                 var errors = createResult.Errors.Select(e => e.Description).ToList();
@@ -373,15 +374,16 @@ public class UserService : IUserService
 
             try
             {
-                await _emailService.SendUserCreatedEmailAsync(createdUser.Email!, createdUser.FirstName);
+                var setupToken = await _userManager.GeneratePasswordResetTokenAsync(createdUser);
+                await _emailService.SendPasswordSetupEmailAsync(createdUser.Email!, createdUser.FirstName, setupToken);
                 _logger.LogInformation(
-                    "Sent account creation email to {Email} for User {UserId}",
+                    "Sent password setup email to {Email} for User {UserId}",
                     createdUser.Email, createdUser.Id);
             }
             catch (Exception emailEx)
             {
                 _logger.LogWarning(emailEx,
-                    "Failed to send account creation email to {Email} for User {UserId}",
+                    "Failed to send password setup email to {Email} for User {UserId}",
                     createdUser.Email, createdUser.Id);
             }
 

@@ -27,20 +27,6 @@ public class CreateUserValidator : AbstractValidator<CreateUserDto>
             .MaximumLength(100)
             .WithMessage("Last name must not exceed 100 characters");
 
-        RuleFor(x => x.Password)
-            .NotEmpty()
-            .WithMessage("Password is required")
-            .MinimumLength(6)
-            .WithMessage("Password must be at least 6 characters")
-            .MaximumLength(100)
-            .WithMessage("Password must not exceed 100 characters");
-
-        RuleFor(x => x.ConfirmPassword)
-            .NotEmpty()
-            .WithMessage("Confirm password is required")
-            .Equal(x => x.Password)
-            .WithMessage("Passwords do not match");
-
         RuleFor(x => x.RoleIds)
             .NotNull()
             .WithMessage("Role IDs must be provided");
