@@ -1,15 +1,25 @@
-# Content Creation Wizard — Lifecycle Map
+# Learning Lifecycle Map
 
-> **Purpose:** A complete map of the content-creation wizard's state machine so that failure modes, race conditions, and "stuck" states can be reasoned about without re-investigating. This document does not propose fixes.
+> **Purpose:** A complete map of the full learning lifecycle — covering both the create wizard and the post-publish edit surface — so that failure modes, race conditions, and "stuck" states can be reasoned about without re-investigating. This document does not propose fixes.
 >
-> **Scope:** `ContentCreationSession`, all artefacts it creates, every transition, every Hangfire job, every field that flows between steps.
+> **Scope (Create Wizard — §1–§9):** `ContentCreationSession`, all artefacts it creates, every transition, every Hangfire job, every field that flows between steps.
 >
-> **Key files:**
+> **Scope (Edit Surface — §10):** Every action available on the admin edit page for a published `ToolboxTalk` — what each action reads, writes, cascades, and leaves behind. Includes the translate button, slideshow regeneration, section/question editing, and subtitle processing.
+>
+> **Key files (Create Wizard):**
 > - Enum: [ContentCreationSessionStatus.cs](src/Modules/ToolboxTalks/QuantumBuild.Modules.ToolboxTalks.Domain/Enums/ContentCreationSessionStatus.cs)
 > - Entity: [ContentCreationSession.cs](src/Modules/ToolboxTalks/QuantumBuild.Modules.ToolboxTalks.Domain/Entities/ContentCreationSession.cs)
 > - Service: [ContentCreationSessionService.cs](src/Modules/ToolboxTalks/QuantumBuild.Modules.ToolboxTalks.Infrastructure/Services/ContentCreation/ContentCreationSessionService.cs)
 > - Controller: [ContentCreationController.cs](src/QuantumBuild.API/Controllers/ContentCreationController.cs)
 > - Frontend wizard: [CreateWizard.tsx](web/src/features/toolbox-talks/components/create-wizard/CreateWizard.tsx)
+>
+> **Key files (Edit Surface):**
+> - Edit page: [web/src/app/(authenticated)/admin/toolbox-talks/talks/[id]/edit/page.tsx](web/src/app/(authenticated)/admin/toolbox-talks/talks/%5Bid%5D/edit/page.tsx)
+> - Edit form: [ToolboxTalkForm.tsx](web/src/features/toolbox-talks/components/ToolboxTalkForm.tsx)
+> - Translation panel: [ContentTranslationPanel.tsx](web/src/features/toolbox-talks/components/ContentTranslationPanel.tsx)
+> - Update command: [UpdateToolboxTalkCommandHandler.cs](src/Modules/ToolboxTalks/QuantumBuild.Modules.ToolboxTalks.Application/Commands/UpdateToolboxTalk/UpdateToolboxTalkCommandHandler.cs)
+> - Translate command: [GenerateContentTranslationsCommandHandler.cs](src/Modules/ToolboxTalks/QuantumBuild.Modules.ToolboxTalks.Application/Commands/GenerateContentTranslations/GenerateContentTranslationsCommandHandler.cs)
+> - Slideshow service: [SlideshowGenerationService.cs](src/Modules/ToolboxTalks/QuantumBuild.Modules.ToolboxTalks.Infrastructure/Services/Slideshow/SlideshowGenerationService.cs)
 
 ---
 
@@ -926,4 +936,228 @@ _Changes made during the 2026-06-04 revision against HEAD `6bf1a71` (transval br
 
 ---
 
-*Document last revised: 2026-06-04. Verified against commit `6bf1a71` (HEAD of `transval` branch). Re-verify file paths and line numbers before relying on them after any significant refactor.*
+## 10. Edit Surface
+
+The edit surface covers every action an admin can take on a **published** `ToolboxTalk` after it has been promoted by the wizard's `PublishAsync`. There is no `ContentCreationSession` involved; all actions operate directly on the live entity.
+
+### 10.1 States
+
+The edit surface has no state machine. A published talk's `Status = Published` does not change through any edit-page action. All actions are stateless from the talk's perspective.
+
+---
+
+### 10.2 Entry Points
+
+| Surface | Location | Guard |
+|---------|----------|-------|
+| **Talk list** | `/admin/toolbox-talks/talks` — edit icon/button per row | `Learnings.Manage` permission |
+| **Talk detail page** | `/admin/toolbox-talks/talks/{id}` — Edit button ([ToolboxTalkDetail.tsx:53](web/src/features/toolbox-talks/components/ToolboxTalkDetail.tsx#L53)) | `canManage` (`Learnings.Manage`) |
+| **Direct URL** | `/admin/toolbox-talks/talks/{id}/edit` | Authentication + `Learnings.Manage` via controller |
+
+All three routes resolve to the same page: [edit/page.tsx](web/src/app/(authenticated)/admin/toolbox-talks/talks/%5Bid%5D/edit/page.tsx), which renders `ToolboxTalkForm` with the existing talk populated (`isEditing = true`).
+
+---
+
+### 10.3 Actions Available on the Edit Page
+
+The `ToolboxTalkForm` component ([ToolboxTalkForm.tsx](web/src/features/toolbox-talks/components/ToolboxTalkForm.tsx)) renders the following in edit mode (`isEditing = true`):
+
+| # | Action | Frontend Trigger | API Endpoint | Backend Handler | Notes |
+|---|--------|-----------------|--------------|-----------------|-------|
+| 1 | **Save talk** (basic info, sections, questions) | "Update Learning" submit button ([ToolboxTalkForm.tsx:1077](web/src/features/toolbox-talks/components/ToolboxTalkForm.tsx#L1077)) | `PUT /api/toolbox-talks/{id}` (`Learnings.Manage`) | [UpdateToolboxTalkCommandHandler.cs](src/Modules/ToolboxTalks/QuantumBuild.Modules.ToolboxTalks.Application/Commands/UpdateToolboxTalk/UpdateToolboxTalkCommandHandler.cs) | Covers all scalar fields, section edits, question edits. |
+| 2 | **Regenerate slideshow** | "Regenerate Slideshow" button ([ToolboxTalkForm.tsx:980](web/src/features/toolbox-talks/components/ToolboxTalkForm.tsx#L980)), conditional on `talk.hasSlideshow` or `talk.slidesGenerated` | `POST /api/toolbox-talks/{id}/generate-slides` (`Learnings.Manage`) | [ToolboxTalksController:863](src/QuantumBuild.API/Controllers/ToolboxTalksController.cs#L863) → `SlideshowGenerationService.GenerateSlideshowAsync` | Hard-deletes ALL `ToolboxTalkSlideshowTranslations` before write (see §10.9.3). |
+| 3 | **Generate translations** | "Generate Translations" button in `ContentTranslationPanel` ([ContentTranslationPanel.tsx:240](web/src/features/toolbox-talks/components/ContentTranslationPanel.tsx#L240)); shown only when `sections.length > 0 OR questions.length > 0` ([ToolboxTalkForm.tsx:1058](web/src/features/toolbox-talks/components/ToolboxTalkForm.tsx#L1058)) | `POST /api/toolbox-talks/{id}/translations/generate` (`Learnings.Admin`) | [ToolboxTalksController:1065](src/QuantumBuild.API/Controllers/ToolboxTalksController.cs#L1065) → [GenerateContentTranslationsCommandHandler.cs](src/Modules/ToolboxTalks/QuantumBuild.Modules.ToolboxTalks.Application/Commands/GenerateContentTranslations/GenerateContentTranslationsCommandHandler.cs) | Synchronous call, no background job. See §10.5 for full detail. |
+| 4 | **Process subtitles** | `SubtitleProcessingPanel` ([ToolboxTalkForm.tsx:1051](web/src/features/toolbox-talks/components/ToolboxTalkForm.tsx#L1051)); shown only when `talk.videoSource !== 'None' AND talk.videoUrl` | `POST /api/toolbox-talks/{talkId}/subtitles/process` (`Learnings.Manage`) | `SubtitleProcessingController` → `ISubtitleProcessingOrchestrator` | Enqueues a background job. Does not touch `ToolboxTalkTranslation`. |
+
+**Actions accessible on the detail page but NOT the edit form:**
+
+| Action | Endpoint | Notes |
+|--------|----------|-------|
+| AI content generation | `POST /api/toolbox-talks/{id}/generate` | `ContentGenerationJob` (Hangfire + SignalR). Accessible from detail page UI; auto-translates after generation via `GenerateContentTranslationsCommand`. |
+| Smart generate | `POST /api/toolbox-talks/{id}/smart-generate` | Dedup + AI generation; accessible from detail page UI. |
+| Upload/delete video binary | `POST/DELETE /api/toolbox-talks/{id}/video` | `ToolboxTalkFilesController`. |
+| Upload/delete PDF binary | `POST/DELETE /api/toolbox-talks/{id}/pdf` | `ToolboxTalkFilesController`. |
+| Start validation run | `POST /api/toolbox-talks/{id}/validation/validate` | Available for published talks; accessible via detail page's Validation history tab. |
+
+---
+
+### 10.4 UpdateToolboxTalkCommandHandler — Fields Written
+
+**File:** [UpdateToolboxTalkCommandHandler.cs](src/Modules/ToolboxTalks/QuantumBuild.Modules.ToolboxTalks.Application/Commands/UpdateToolboxTalk/UpdateToolboxTalkCommandHandler.cs)
+
+**Tables read:** `ToolboxTalks` (line 61), re-queried for title uniqueness (line 78) and code uniqueness (line 92). `ToolboxTalkSections` (line 169) and `ToolboxTalkQuestions` (line 147) queried directly from DbContext (not via nav-collection to avoid concurrency issues).
+
+**Tables written (single `SaveChangesAsync` at line 138):**
+
+| Table | Operation | Condition |
+|-------|-----------|-----------|
+| `ToolboxTalks` | UPDATE — all scalar fields: `Title`, `Description`, `Category`, `Frequency`, `VideoUrl`, `VideoSource`, `AttachmentUrl`, `MinimumVideoWatchPercent`, `RequiresQuiz`, `PassingScore`, `IsActive`, `QuizQuestionCount`, `ShuffleQuestions`, `ShuffleOptions`, `UseQuestionPool`, `AutoAssignToNewEmployees`, `AutoAssignDueDays`, `SourceLanguageCode`, `GenerateSlidesFromPdf`, `GenerateCertificate`, `RequiresRefresher`, `RefresherIntervalMonths`, `Code` | Always |
+| `ToolboxTalkSections` | **Soft-delete** (`IsDeleted = true`) for rows absent from the request (line 195) | Sections removed by admin |
+| `ToolboxTalkSections` | UPDATE in-place for rows present with an ID (lines 212–220) | Existing sections edited |
+| `ToolboxTalkSections` | INSERT new rows (lines 226–239, 245–257) | New sections added (no ID) |
+| `ToolboxTalkQuestions` | **Soft-delete** (`IsDeleted = true`) for rows absent (line 281) | Questions removed by admin |
+| `ToolboxTalkQuestions` | UPDATE in-place (lines 298–310) | Existing questions edited |
+| `ToolboxTalkQuestions` | INSERT new rows (lines 316–334, 339–357) | New questions added (no ID) |
+
+**Not touched:** `ToolboxTalkTranslation`, `ToolboxTalkSlideshowTranslation`, `ToolboxTalkSlideTranslation`, `ToolboxTalkVideoTranslation`, `SubtitleTranslation`, `TranslationValidationRun`, `TranslationValidationResult`. **Translations are not updated or invalidated when section content is edited.**
+
+**Atomicity:** Single `SaveChangesAsync` (line 138) — all mutations above committed in one transaction.
+
+**Guard:** No `ToolboxTalk.Status` guard. The handler accepts any status, including `Published`, `Draft`, `Processing`. This differs from the wizard's `PublishAsync` which rejects `Completed` sessions.
+
+---
+
+### 10.5 GenerateContentTranslationsCommandHandler — Translation Tables and Overwrite Behaviour
+
+**File:** [GenerateContentTranslationsCommandHandler.cs](src/Modules/ToolboxTalks/QuantumBuild.Modules.ToolboxTalks.Application/Commands/GenerateContentTranslations/GenerateContentTranslationsCommandHandler.cs)
+
+**Triggered by:** `POST /api/toolbox-talks/{id}/translations/generate` from `ContentTranslationPanel`'s "Generate Translations" button ([ContentTranslationPanel.tsx:66](web/src/features/toolbox-talks/components/ContentTranslationPanel.tsx#L66)).
+
+**Frontend UX:**
+- User selects languages from a checkbox grid; default selection is the tenant's employee languages (pre-selected on load, line 52–57).
+- Existing translations shown as a read-only list; languages with existing translations show a `RefreshCw` icon hinting they will be regenerated ([ContentTranslationPanel.tsx:209](web/src/features/toolbox-talks/components/ContentTranslationPanel.tsx#L209)).
+- No confirmation dialog before overwriting.
+- "Generating Translations..." spinner replaces button text during the call.
+- No per-section or per-language progress. Single HTTP request, no SignalR, no background job.
+
+**Translation tables and overwrite behaviour:**
+
+| Table | Behaviour | Lines (approx) |
+|-------|-----------|----------------|
+| `ToolboxTalkTranslation` | **Unconditionally overwritten** for matching `(TalkId, LanguageCode)`. Existing row found via nav-collection (`.FirstOrDefault(t => t.LanguageCode == languageCode)`) and updated in-place. New entity inserted if no row exists. Fields written: `TranslatedTitle`, `TranslatedDescription`, `TranslatedSections` (JSON), `TranslatedQuestions` (JSON), `EmailSubject`, `EmailBody`, `TranslatedAt`, `TranslationProvider`. | Lines 149–159, 184–343 |
+| `ToolboxTalkSlideTranslation` | **Skipped if already exists** for `(SlideId, LanguageCode)`. New row inserted only if no existing translation for that slide and language. | Lines 354–358 (skip guard), 367–374 (insert) |
+| `ToolboxTalkSlideshowTranslation` | **Skipped if already exists** for `(TalkId, LanguageCode)`. New row inserted only if no existing row. | Lines 454–464 (skip guard), 570–578 (insert) |
+| `ToolboxTalkVideoTranslation` | **Not touched.** | — |
+| `SubtitleTranslation` | **Not touched.** | — |
+| `ToolboxTalkCourseTranslation` | **Not touched.** | — |
+
+**No "manually edited" flag check.** `ToolboxTalkTranslation` has no field tracking whether its content was manually reviewed or accepted via the TransVal reviewer workflow. The handler performs no such check. Any section translations previously accepted by a reviewer and propagated via `PropagateEditedTranslationAsync` are silently overwritten.
+
+**No delete-before-insert.** Unlike `StartTranslateValidateAsync` (wizard path, which uses `ExecuteDeleteAsync` to clear stale translations before creating runs), this handler performs an in-memory upsert. This has implications for the §6.2 unique index risk — see §10.9.6.
+
+**Atomicity:** Single `SaveChangesAsync` at line 111 commits all language mutations together. Translations for selected languages are all-or-nothing relative to each other. A failure (e.g. timeout) during the HTTP call may leave zero languages updated (if the save never ran) or all languages updated (if the save completed before the client timeout).
+
+**Sector key resolution:** The controller resolves `sectorKey` from `_tenantSectorService.GetDefaultSectorAsync(_currentUserService.TenantId)` ([ToolboxTalksController.cs:1084](src/QuantumBuild.API/Controllers/ToolboxTalksController.cs#L1084)) for tiered translation prompts. This is the tenant's current default sector, which may differ from the sector key used during the original wizard run if the tenant's default has changed.
+
+---
+
+### 10.6 ContentCreationSessionService — Not Involved
+
+The edit surface does not go through `ContentCreationSessionService`. There is no `ContentCreationSession` created, read, or updated by any edit-page action. The six translation tables touched by the wizard (`§4.2–§4.7`) are accessed directly via their own DbSet queries.
+
+---
+
+### 10.7 Validation Infrastructure Reusability
+
+`TranslationValidationController.POST /{talkId}/validation/validate` is available for any published talk with translations — it is **not** wizard-only. The controller requires a `ToolboxTalkTranslation` row to exist for the target language (guard at ~line 70–75). Once translations exist (generated via `ContentTranslationPanel`), a validation run can be started from the detail page's Validation history tab.
+
+`TranslationValidationJob` reads the published talk's sections and the existing `ToolboxTalkTranslation.TranslatedSections` JSON to generate the run. It does not distinguish between wizard-generated and edit-page-generated translations.
+
+**Caveat:** If an admin triggers "Generate Translations" from the edit page after a prior validation run has had sections accepted/edited, the just-overwritten `ToolboxTalkTranslation.TranslatedSections` will differ from the content that was reviewed. The old validation runs survive in the database (they are not deleted), but the translations they reviewed no longer exist. A new validation run must be started to re-validate the freshly generated translations.
+
+---
+
+### 10.8 Hangfire Jobs in the Edit Flow
+
+| Action | Job Enqueued? | Notes |
+|--------|--------------|-------|
+| Save talk (UpdateToolboxTalk) | No | Fully synchronous. No downstream jobs triggered. |
+| Regenerate slideshow (GenerateSlides) | No | `SlideshowGenerationService.GenerateSlideshowAsync` runs synchronously within the HTTP request. |
+| Generate translations (GenerateContentTranslations) | No | `GenerateContentTranslationsCommandHandler.Handle` runs synchronously. No SignalR, no progress reporting. |
+| Process subtitles | Yes — `SubtitleProcessingJob` | Enqueued by `ISubtitleProcessingOrchestrator`. Does not touch `ToolboxTalkTranslation`. |
+| AI content generation (via detail page) | Yes — `ContentGenerationJob` | After completion, auto-translates via `GenerateContentTranslationsCommand` (mediator call from within the job). |
+
+---
+
+### 10.9 Sharp Edges
+
+#### 10.9.1 Section Edits Silently Stale Translations — No Staleness Flag
+
+**Where:** [UpdateToolboxTalkCommandHandler.cs:106–138](src/Modules/ToolboxTalks/QuantumBuild.Modules.ToolboxTalks.Application/Commands/UpdateToolboxTalk/UpdateToolboxTalkCommandHandler.cs#L106); specifically `UpdateSectionsAsync` lines 210–220 (in-place UPDATE for existing sections, same `SectionId`).
+
+**What:** When an admin edits a section's `Title` or `Content` on the edit form and saves, the `ToolboxTalkSection` row is updated in-place (the `Id` Guid is unchanged). Existing `ToolboxTalkTranslation.TranslatedSections` JSON maps by `SectionId` — after the update, that same `SectionId` now maps to updated source text, but the stored translated text is from the previous version. No staleness flag is set on the translation row. No `MissingTranslationsJob` is enqueued. The `DailyTranslationScanJob` only checks for the presence of `TranslatedSections` (non-null), not content currency. Employees in non-English languages continue to see stale translated content until the admin manually re-runs the "Generate Translations" action.
+
+**Risk:** Undetectable without side-by-side comparison of source and translation dates, or reading the translated JSON.
+
+#### 10.9.2 Removed + Re-added Sections Break Translation ID Mappings Silently
+
+**Where:** [UpdateToolboxTalkCommandHandler.cs:195](src/Modules/ToolboxTalks/QuantumBuild.Modules.ToolboxTalks.Application/Commands/UpdateToolboxTalk/UpdateToolboxTalkCommandHandler.cs#L195) (soft-delete removed sections), lines 226–239 (INSERT new sections — new `Guid` assigned).
+
+**What:** If an admin removes a section (via `SectionEditor` delete) and adds a new one in its place (or adds a section with no existing `Id`), the new section gets a new `Guid`. The existing `ToolboxTalkTranslation.TranslatedSections` JSON contains an entry for the old `SectionId` (which is now soft-deleted) and no entry for the new `SectionId`. Until translations are re-run:
+- Employees in the source language see the new section correctly.
+- Employees in translated languages see no translated content for the new section (falls back to English source).
+- The old translated entry for the soft-deleted section lingers in the JSON silently.
+
+Re-running "Generate Translations" rebuilds the JSON from the live sections — this is the correct resolution, but nothing prompts the admin to do it.
+
+#### 10.9.3 Regenerate Slideshow Silently Destroys All Slideshow Translations
+
+**Where:** [SlideshowGenerationService.cs:80–83](src/Modules/ToolboxTalks/QuantumBuild.Modules.ToolboxTalks.Infrastructure/Services/Slideshow/SlideshowGenerationService.cs#L80) — `ExecuteDeleteAsync` on `ToolboxTalkSlideshowTranslations`.
+
+**What:** Clicking "Regenerate Slideshow" calls `POST /api/toolbox-talks/{id}/generate-slides`. `SlideshowGenerationService.GenerateSlideshowAsync` hard-deletes **all** `ToolboxTalkSlideshowTranslation` rows for the talk before writing the new slideshow HTML. The edit page shows no warning. After regeneration, employees in non-English languages who had slideshow translations see no slideshow until the admin re-runs "Generate Translations". This is the same `ExecuteDeleteAsync` pattern documented in §4.5 (wizard flow), but it applies equally to the edit surface and is triggered by a button the admin may click without appreciating the downstream translation impact.
+
+#### 10.9.4 "Generate Translations" Asymmetry: Overwrites ToolboxTalkTranslation but Preserves ToolboxTalkSlideTranslation and ToolboxTalkSlideshowTranslation
+
+**Where:** [GenerateContentTranslationsCommandHandler.cs:149–159](src/Modules/ToolboxTalks/QuantumBuild.Modules.ToolboxTalks.Application/Commands/GenerateContentTranslations/GenerateContentTranslationsCommandHandler.cs#L149) (unconditional overwrite); lines 354–358, 454–464 (skip-if-exists guards).
+
+**What:** Re-running "Generate Translations" unconditionally replaces `TranslatedTitle`, `TranslatedSections`, `TranslatedQuestions` in `ToolboxTalkTranslation`, but skips `ToolboxTalkSlideTranslation` and `ToolboxTalkSlideshowTranslation` that already exist. After a slideshow regeneration (which hard-deletes all slideshow translations per §10.9.3), re-running translations creates new slideshow translations. But if only sections are edited and translations are regenerated (without slideshow regeneration), the slideshow translations are preserved from a prior run — they now describe the old slideshow while sections reflect updated source content. No generation-time correlation is tracked between the two translation types.
+
+#### 10.9.5 Reviewer-Accepted Translations Silently Overwritten by Edit-Page Translate
+
+**Where:** [GenerateContentTranslationsCommandHandler.cs:149–159](src/Modules/ToolboxTalks/QuantumBuild.Modules.ToolboxTalks.Application/Commands/GenerateContentTranslations/GenerateContentTranslationsCommandHandler.cs#L149) (unconditional in-place overwrite of `ToolboxTalkTranslation`).
+
+**What:** If a reviewer has accepted or edited sections via the TransVal reviewer workflow (`AcceptSection` in `TranslationValidationController` — line ~213–260), those edits are propagated to `ToolboxTalkTranslation.TranslatedSections` via `PropagateEditedTranslationAsync`. The edit page's "Generate Translations" button subsequently overwrites the entire `TranslatedSections` JSON with fresh AI translations, replacing any reviewer-approved content. No audit record of the overwrite is created; the prior `TranslationValidationRun` rows survive in the database but the translations they approved are gone. No warning is shown in the UI before overwriting.
+
+#### 10.9.6 Unique-Constraint Violation Risk: Soft-Deleted ToolboxTalkTranslation Row Can Block Re-insertion
+
+**Where:** [GenerateContentTranslationsCommandHandler.cs:49–59](src/Modules/ToolboxTalks/QuantumBuild.Modules.ToolboxTalks.Application/Commands/GenerateContentTranslations/GenerateContentTranslationsCommandHandler.cs#L49) (query filter: `Where(tr => !tr.IsDeleted)` excludes soft-deleted rows); lines 153–159 (INSERT if row not found in nav-collection).
+
+**What:** The handler loads `Translations.Where(tr => !tr.IsDeleted)`. A soft-deleted `(TalkId, LanguageCode)` row is invisible to this query. If the handler creates a new `ToolboxTalkTranslation` entity and `SaveChangesAsync` emits an INSERT, the unfiltered unique index `ix_toolbox_talk_translations_talk_language` (documented in §6.2) will cause Postgres error `23505`. Under normal operation, a soft-deleted translation row on a published talk is unlikely — the wizard's cascade-reset paths use `ExecuteDeleteAsync` (hard-delete) rather than soft-delete. However, any code path using `Remove()` on a `BaseEntity` descendant silently soft-deletes (see §6.12), so this risk remains if a new code path introduces such a call. Unlike the wizard path, this handler has no `ExecuteDeleteAsync` pre-pass to clear ghost rows.
+
+#### 10.9.7 Translate Action Is a Synchronous HTTP Call — No Progress, No Timeout Recovery
+
+**Where:** [ContentTranslationPanel.tsx:66–90](web/src/features/toolbox-talks/components/ContentTranslationPanel.tsx#L66) (synchronous `await` on mutation); [GenerateContentTranslationsCommandHandler.cs:37–131](src/Modules/ToolboxTalks/QuantumBuild.Modules.ToolboxTalks.Application/Commands/GenerateContentTranslations/GenerateContentTranslationsCommandHandler.cs#L37) (full execution within HTTP request).
+
+**What:** Unlike the wizard's `TranslationValidationJob` (Hangfire background job with SignalR progress), the edit-page translate action runs entirely within a single HTTP request. For a talk with many sections and questions across multiple languages, this can take several minutes. The frontend shows a spinner button only — no per-language progress, no estimated time. An ASP.NET Core or load-balancer request timeout would terminate the call mid-execution. Because all language mutations commit in a single `SaveChangesAsync` (line 111), any timeout before the save completes leaves zero translations updated. There is no resume mechanism, no Hangfire job to check, and no error persisted to a database column. The admin's only option is to re-trigger the action.
+
+---
+
+### 10.10 Cross-Reference with Wizard Sharp Edges
+
+| Wizard Sharp Edge | Applies to Edit Surface? |
+|-------------------|--------------------------|
+| §6.1 Note 23 Trap — ChangeTracker contamination after caught `DbUpdateException` | **No.** `UpdateToolboxTalkCommandHandler` uses a single `SaveChangesAsync`; no complex multi-step transaction. If it throws, the HTTP 500 response is returned without a subsequent save. |
+| §6.2 Unfiltered unique index on `ToolboxTalkTranslation` | **Yes — §10.9.6.** A soft-deleted ghost row can block re-insertion from the edit-page translate action, for the same structural reason. The edit handler has no `ExecuteDeleteAsync` pre-pass. |
+| §6.3 Cascade reset leaves stale DB artefacts | **Not applicable.** No cascade reset concept on the edit surface. |
+| §6.4 Orphaned Hangfire jobs | **Not applicable.** Edit surface enqueues no cancellable Hangfire jobs from the core save/translate/regenerate flows. |
+| §6.5 Session stuck in TranslatingValidating | **Not applicable.** No `ContentCreationSession` exists on the edit surface. |
+| §6.6 `Failed` is not truly terminal | **Not applicable.** No session entity. |
+| §6.7 TryUpdateSessionStatusAsync string-matching | **Not applicable.** No session entity. |
+| §6.8 PublishAsync concurrent double-submit race | **Partial equivalent.** Two concurrent `PUT /api/toolbox-talks/{id}` saves would interleave, with last-writer-wins semantics. No permanent corruption since sections are identified by Guid, but concurrent saves could produce an inconsistent section set (e.g. one save's delete not visible to the other's read). Not guarded with a DB-level lock. |
+| §6.9 `IsDeleted` not set by `ExpiredSessionCleanupJob` | **Not applicable.** No session cleanup job. |
+| §6.10 `UpdateQuestionsAsync` silent demotion | **Not applicable.** No session demotion. |
+| §6.11 `ConfirmUploadAsync` status guard | **Not applicable.** No upload-confirm flow on edit surface. |
+| §6.12 SetAuditFields interceptor soft-delete conversion | **Partially applies.** `UpdateToolboxTalkCommandHandler.UpdateSectionsAsync` sets `section.IsDeleted = true` directly (line 195, not via `Remove()`), so the interceptor is not involved for the deletion path. New sections added via `_dbContext.ToolboxTalkSections.Add()` will receive audit stamps from the interceptor (as expected). Sections and questions accumulate as soft-deleted rows, but unlike `ToolboxTalkTranslation`, sections and questions have no unfiltered unique index — soft-deleted accumulation does not cause constraint violations. |
+
+---
+
+### 10.11 Open Questions (Edit Surface)
+
+1. **What is the request timeout configured for the Railway deployment?** The synchronous translate action (§10.9.7) is the highest-risk timeout target. If Railway's load balancer or Nginx has a sub-2-minute timeout, multi-language translation jobs will be silently truncated.
+
+2. **Does the detail page surface the "Validate" action prominently enough?** Validation runs can be triggered on published talks (§10.7), but the action lives in the Validation history tab on the detail page — not on the edit page. After an admin edits sections and re-runs translations, there is no nudge to re-validate.
+
+3. **ToolboxTalkSlideTranslation accumulation on re-slideshow.** After a slideshow is regenerated (hard-deleting all `ToolboxTalkSlideshowTranslation` rows via §10.9.3), the `ToolboxTalkSlide` rows themselves are NOT deleted — they are carry-over from the previous PDF parse. If the PDF was changed and the slides re-extracted (new slide rows, new Guids), old `ToolboxTalkSlideTranslation` rows referencing the old slide Guids become orphans. The `GenerateContentTranslationsCommandHandler` only creates new `ToolboxTalkSlideTranslation` rows for slides currently in the nav-collection — it does not delete orphaned translations for old slide Guids. These orphans silently accumulate. Not confirmed whether the slide query in the employee-facing endpoint also queries by talk ID only (which would surface orphaned translations).
+
+---
+
+_Changes made during the 2026-06-05 investigation and document revision._
+
+| # | Section | Prior Claim | Correction |
+|---|---------|------------|------------|
+| 32 | Document title and purpose | Title: "Content Creation Wizard — Lifecycle Map". Purpose paragraph scoped to wizard only. | Title: "Learning Lifecycle Map". Purpose paragraph extended to cover both create wizard (§1–§9) and edit surface (§10). File renamed from `CONTENT_CREATION_LIFECYCLE.md` to `LEARNING_LIFECYCLE.md` via `git mv` (history preserved). |
+| 33 | New | No edit surface section. | §10 added: full investigation of the edit surface — entry points, all actions, `UpdateToolboxTalkCommandHandler` field-by-field trace, `GenerateContentTranslationsCommandHandler` translation-table-by-table trace, `SlideshowGenerationService` hard-delete behaviour, validation reusability, 7 sharp edges (§10.9.1–§10.9.7), wizard sharp-edge cross-reference (§10.10), and 3 open questions (§10.11). |
+
+---
+
+*Document last revised: 2026-06-05. §1–§9 verified against commit `6bf1a71` (HEAD of `transval` branch at time of §6 batch). §10 verified against HEAD `bb2709e`. Re-verify file paths and line numbers before relying on them after any significant refactor.*
