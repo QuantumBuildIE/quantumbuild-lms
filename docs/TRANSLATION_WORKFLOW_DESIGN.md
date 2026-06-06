@@ -67,6 +67,8 @@ Add a confirmation dialog to the edit page's "Generate translations" button when
 
 **Estimate:** 2–4 hours.
 
+**Status:** Complete ({{COMMIT}}, 2026-06-06).
+
 ### Phase 1 — Workflow primitives + translation workflow service
 
 Generic `WorkflowEvent`, `WorkflowReview`, `ExternalParticipantInvitation` tables. Migrations. `TranslationWorkflowService` interface and implementation consuming those tables. State machine, transitions, no UI callers yet. `TranslationFlag` table. Tenant settings addition.

@@ -20,6 +20,16 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Loader2,
   Languages,
   CheckCircle,
@@ -47,6 +57,7 @@ export function ContentTranslationPanel({
 
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
   const [showAllLanguages, setShowAllLanguages] = useState(false);
+  const [showOverwriteDialog, setShowOverwriteDialog] = useState(false);
 
   // Pre-select employee languages when data loads
   useEffect(() => {
@@ -57,12 +68,18 @@ export function ContentTranslationPanel({
     }
   }, [languagesData, selectedLanguages.length]);
 
-  const handleGenerateTranslations = async () => {
-    if (selectedLanguages.length === 0) {
-      toast.error('Please select at least one language');
-      return;
-    }
+  const existingLanguageCodes = existingTranslations.map((t) => t.languageCode);
 
+  // Languages in the current selection that already have translations (name → code lookup
+  // reuses the same allSupportedLanguages mapping used by the RefreshCw badge below).
+  const overwritingLanguages = selectedLanguages.filter((lang) =>
+    existingLanguageCodes.includes(
+      languagesData?.allSupportedLanguages?.find((l) => l.language === lang)
+        ?.languageCode || ''
+    )
+  );
+
+  const fireGenerateMutation = async () => {
     try {
       const result = await generateMutation.mutateAsync({
         toolboxTalkId,
@@ -90,6 +107,20 @@ export function ContentTranslationPanel({
     }
   };
 
+  const handleGenerateTranslations = async () => {
+    if (selectedLanguages.length === 0) {
+      toast.error('Please select at least one language');
+      return;
+    }
+
+    if (overwritingLanguages.length > 0) {
+      setShowOverwriteDialog(true);
+      return;
+    }
+
+    await fireGenerateMutation();
+  };
+
   const toggleLanguage = (language: string) => {
     setSelectedLanguages((prev) =>
       prev.includes(language)
@@ -101,8 +132,6 @@ export function ContentTranslationPanel({
   const displayedLanguages = showAllLanguages
     ? languagesData?.allSupportedLanguages || []
     : languagesData?.employeeLanguages || [];
-
-  const existingLanguageCodes = existingTranslations.map((t) => t.languageCode);
 
   return (
     <Card>
@@ -270,6 +299,32 @@ export function ContentTranslationPanel({
           </AlertDescription>
         </Alert>
       </CardContent>
+
+      {/* Overwrite confirmation — fires when selected languages overlap with existing translations */}
+      <AlertDialog open={showOverwriteDialog} onOpenChange={setShowOverwriteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Overwrite existing translations?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The following languages already have translations:{' '}
+              <span className="font-medium text-foreground">
+                {overwritingLanguages.join(', ')}
+              </span>
+              . Reviewer edits and validation results for these languages will be
+              replaced with fresh AI translations.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={fireGenerateMutation}
+            >
+              Overwrite and regenerate
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
