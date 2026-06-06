@@ -16,18 +16,6 @@ public sealed class TranslationWorkflowService(
     IToolboxTalksDbContext context,
     ICurrentUserService currentUser) : ITranslationWorkflowService
 {
-    private static class EventTypes
-    {
-        public const string TranslationStarted = "TranslationStarted";
-        public const string ValidationStarted = "ValidationStarted";
-        public const string InternalReviewSubmitted = "InternalReviewSubmitted";
-        public const string ExternalReviewInitiated = "ExternalReviewInitiated";
-        public const string ExternalReviewSubmitted = "ExternalReviewSubmitted";
-        public const string ExternalReviewConfirmed = "ExternalReviewConfirmed";
-        public const string AcceptedAsFinal = "AcceptedAsFinal";
-        public const string MarkedStale = "MarkedStale";
-    }
-
     public async Task<TranslationWorkflowStateDto> GetState(Guid talkId, string languageCode, CancellationToken ct = default)
     {
         var lastEvent = await context.WorkflowEvents
@@ -42,7 +30,7 @@ public sealed class TranslationWorkflowService(
             .FirstOrDefaultAsync(ct);
 
         var state = lastEvent is null
-            ? TranslationWorkflowState.NotStarted
+            ? TranslationWorkflowState.Initial
             : EventTypeToState(lastEvent.EventType);
 
         return new TranslationWorkflowStateDto
@@ -79,9 +67,9 @@ public sealed class TranslationWorkflowService(
     public async Task<Result> StartTranslation(Guid talkId, string languageCode, bool confirmOverwrite = false, CancellationToken ct = default)
     {
         // TODO Phase 2: enforce state machine guard
-        // Allow only in NotStarted or Stale; require confirmOverwrite=true if current state is Accepted
+        // Allow only in Initial or Stale; require confirmOverwrite=true if current state is Accepted
 
-        AddEvent(talkId, languageCode, EventTypes.TranslationStarted,
+        AddEvent(talkId, languageCode, WorkflowEventTypes.TranslationStarted,
             Serialize(new { languageCode, confirmOverwrite }));
         await context.SaveChangesAsync(ct);
 
@@ -93,7 +81,7 @@ public sealed class TranslationWorkflowService(
     {
         // TODO Phase 2: enforce state machine guard — allow only in AIGenerated
 
-        AddEvent(talkId, languageCode, EventTypes.ValidationStarted,
+        AddEvent(talkId, languageCode, WorkflowEventTypes.ValidationStarted,
             Serialize(new { languageCode }));
         await context.SaveChangesAsync(ct);
 
@@ -103,7 +91,7 @@ public sealed class TranslationWorkflowService(
 
     public async Task<Result> SubmitInternalReview(Guid talkId, string languageCode, bool accepted, string? editedContent, CancellationToken ct = default)
     {
-        // TODO Phase 2: enforce state machine guard — allow only in ValidationComplete
+        // TODO Phase 2: enforce state machine guard — allow only in Validated
 
         context.WorkflowReviews.Add(new WorkflowReview
         {
@@ -117,7 +105,7 @@ public sealed class TranslationWorkflowService(
             SubmittedAt = DateTime.UtcNow
         });
 
-        AddEvent(talkId, languageCode, EventTypes.InternalReviewSubmitted,
+        AddEvent(talkId, languageCode, WorkflowEventTypes.InternalReviewSubmitted,
             Serialize(new { accepted, hasEditedContent = editedContent is not null }));
 
         await context.SaveChangesAsync(ct);
@@ -149,7 +137,7 @@ public sealed class TranslationWorkflowService(
         };
         context.ExternalParticipantInvitations.Add(invitation);
 
-        AddEvent(talkId, languageCode, EventTypes.ExternalReviewInitiated,
+        AddEvent(talkId, languageCode, WorkflowEventTypes.ExternalReviewInitiated,
             Serialize(new { invitedEmail }));
 
         await context.SaveChangesAsync(ct);
@@ -204,7 +192,7 @@ public sealed class TranslationWorkflowService(
             WorkflowType = WorkflowType.Translation,
             TargetEntityId = invitation.TargetEntityId,
             TargetEntitySubKey = invitation.TargetEntitySubKey,
-            EventType = EventTypes.ExternalReviewSubmitted,
+            EventType = WorkflowEventTypes.ExternalReviewSubmitted,
             TriggeredByType = TriggeredByType.User,
             TriggeredByUserId = null,
             PayloadJson = Serialize(new { accepted }),
@@ -219,9 +207,9 @@ public sealed class TranslationWorkflowService(
 
     public async Task<Result> ConfirmExternalReview(Guid talkId, string languageCode, bool accepted, CancellationToken ct = default)
     {
-        // TODO Phase 2: enforce state machine guard — allow only in ExternalReviewSubmitted
+        // TODO Phase 2: enforce state machine guard — allow only in ThirdPartyReviewed
 
-        AddEvent(talkId, languageCode, EventTypes.ExternalReviewConfirmed,
+        AddEvent(talkId, languageCode, WorkflowEventTypes.ExternalReviewConfirmed,
             Serialize(new { accepted }));
         await context.SaveChangesAsync(ct);
 
@@ -233,7 +221,7 @@ public sealed class TranslationWorkflowService(
     {
         // TODO Phase 2: enforce state machine guard
 
-        AddEvent(talkId, languageCode, EventTypes.AcceptedAsFinal, payloadJson: null);
+        AddEvent(talkId, languageCode, WorkflowEventTypes.AcceptedAsFinal, payloadJson: null);
         await context.SaveChangesAsync(ct);
 
         // TODO Phase 7: fire WorkflowNotificationTrigger
@@ -244,7 +232,7 @@ public sealed class TranslationWorkflowService(
     {
         // TODO Phase 2: enforce state machine guard
 
-        AddEvent(talkId, languageCode, EventTypes.MarkedStale, payloadJson: null);
+        AddEvent(talkId, languageCode, WorkflowEventTypes.MarkedStale, payloadJson: null);
         await context.SaveChangesAsync(ct);
 
         // TODO Phase 7: fire WorkflowNotificationTrigger
@@ -255,15 +243,19 @@ public sealed class TranslationWorkflowService(
 
     private static TranslationWorkflowState EventTypeToState(string eventType) => eventType switch
     {
-        EventTypes.TranslationStarted => TranslationWorkflowState.AIGenerated,
-        EventTypes.ValidationStarted => TranslationWorkflowState.ValidationComplete,
-        EventTypes.InternalReviewSubmitted => TranslationWorkflowState.InternalReviewSubmitted,
-        EventTypes.ExternalReviewInitiated => TranslationWorkflowState.AwaitingThirdParty,
-        EventTypes.ExternalReviewSubmitted => TranslationWorkflowState.ExternalReviewSubmitted,
-        EventTypes.ExternalReviewConfirmed => TranslationWorkflowState.ExternalReviewConfirmed,
-        EventTypes.AcceptedAsFinal => TranslationWorkflowState.Accepted,
-        EventTypes.MarkedStale => TranslationWorkflowState.Stale,
-        _ => TranslationWorkflowState.NotStarted
+        WorkflowEventTypes.TranslationCompleted    => TranslationWorkflowState.AIGenerated,
+        WorkflowEventTypes.ValidationCompleted     => TranslationWorkflowState.Validated,
+        WorkflowEventTypes.InternalReviewSubmitted => TranslationWorkflowState.ReviewerAccepted,
+        WorkflowEventTypes.ExternalReviewInitiated => TranslationWorkflowState.AwaitingThirdParty,
+        WorkflowEventTypes.ExternalReviewSubmitted => TranslationWorkflowState.ThirdPartyReviewed,
+        WorkflowEventTypes.ExternalReviewConfirmed => TranslationWorkflowState.Accepted,
+        WorkflowEventTypes.ExternalReviewRejected  => TranslationWorkflowState.ReviewerAccepted,
+        WorkflowEventTypes.AcceptedAsFinal         => TranslationWorkflowState.Accepted,
+        WorkflowEventTypes.MarkedStale             => TranslationWorkflowState.Stale,
+        // TODO Phase 2: Started events imply transient in-progress state,
+        // not Initial. Phase 2 will introduce in-progress states or compute
+        // GetState from the most recent terminal event.
+        _ => TranslationWorkflowState.Initial
     };
 
     private void AddEvent(Guid talkId, string languageCode, string eventType, string? payloadJson)
