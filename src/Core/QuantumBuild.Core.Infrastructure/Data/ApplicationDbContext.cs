@@ -8,7 +8,9 @@ using QuantumBuild.Core.Domain.Common;
 using QuantumBuild.Core.Domain.Entities;
 using QuantumBuild.Core.Infrastructure.Data.Configurations;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
+using QuantumBuild.Modules.ToolboxTalks.Domain.Entities.Workflows;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Persistence.Configurations;
+using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Persistence.Configurations.Workflows;
 
 namespace QuantumBuild.Core.Infrastructure.Data;
 
@@ -128,6 +130,14 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
 
     // Monitoring DbSets
     public DbSet<CustomerUsageReportState> CustomerUsageReportStates => Set<CustomerUsageReportState>();
+
+    // Workflow primitive DbSets
+    public DbSet<WorkflowEvent> WorkflowEvents => Set<WorkflowEvent>();
+    public DbSet<WorkflowReview> WorkflowReviews => Set<WorkflowReview>();
+    public DbSet<ExternalParticipantInvitation> ExternalParticipantInvitations => Set<ExternalParticipantInvitation>();
+
+    // Translation flag DbSets
+    public DbSet<TranslationFlag> TranslationFlags => Set<TranslationFlag>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -296,6 +306,14 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.ApplyConfiguration(new QrSessionConfiguration());
         modelBuilder.ApplyConfiguration(new CustomerUsageReportStateConfiguration());
 
+        // Apply Workflow primitive entity configurations
+        modelBuilder.ApplyConfiguration(new WorkflowEventConfiguration());
+        modelBuilder.ApplyConfiguration(new WorkflowReviewConfiguration());
+        modelBuilder.ApplyConfiguration(new ExternalParticipantInvitationConfiguration());
+
+        // Apply Translation flag entity configuration
+        modelBuilder.ApplyConfiguration(new TranslationFlagConfiguration());
+
         // Apply global query filters - Core entities
         // BypassTenantFilter allows SuperUser to see all tenants' data when no tenant is selected
         modelBuilder.Entity<Site>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
@@ -341,6 +359,12 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
 
         // Apply query filter for Tenant (not tenant-scoped, global)
         modelBuilder.Entity<Tenant>().HasQueryFilter(e => !e.IsDeleted);
+
+        // Workflow primitives tenant + soft-delete filters
+        modelBuilder.Entity<WorkflowEvent>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
+        modelBuilder.Entity<WorkflowReview>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
+        modelBuilder.Entity<ExternalParticipantInvitation>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
+        modelBuilder.Entity<TranslationFlag>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
     }
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
