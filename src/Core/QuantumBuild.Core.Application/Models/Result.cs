@@ -26,6 +26,16 @@ public class Result
         };
     }
 
+    public static Result Fail(string error, FailureCode code)
+    {
+        return new Result
+        {
+            Success = false,
+            Errors = new List<string> { error },
+            ErrorCode = code
+        };
+    }
+
     public static Result Fail(List<string> errors)
     {
         return new Result

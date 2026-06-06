@@ -28,7 +28,9 @@ using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Mapping;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Sectors;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.ContentCreation;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Workflows;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Ingestion;
+using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Workflows;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 using Microsoft.Extensions.Logging;
 using QuantumBuild.Core.Application.Http;
@@ -309,6 +311,9 @@ public static class ServiceCollectionExtensions
         })
         .AddPolicyHandler((sp, _) => ResiliencePolicies.GetClaudePolicy(
             sp.GetRequiredService<ILogger<RequirementMappingJob>>()));
+
+        // Register translation workflow service (Phase 1b — event log, no state machine enforcement yet)
+        services.AddScoped<ITranslationWorkflowService, TranslationWorkflowService>();
 
         // Note: SignalR hubs are registered in Program.cs with app.MapHub<>()
         //   - SubtitleProcessingHub: /api/hubs/subtitle-processing

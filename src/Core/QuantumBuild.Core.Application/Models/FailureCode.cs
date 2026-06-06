@@ -2,5 +2,8 @@ namespace QuantumBuild.Core.Application.Models;
 
 public enum FailureCode
 {
-    DuplicateEmail
+    DuplicateEmail,
+    WorkflowTokenInvalid,
+    WorkflowTokenAlreadyUsed,
+    WorkflowTokenExpired
 }
