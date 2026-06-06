@@ -745,6 +745,59 @@ After cascade reset clears `ValidationRunIds`, steps 5 and 6 render in an amber 
 
 ---
 
+## 8. Migrations
+
+## 8.1 — Migration name must match migration content
+
+### Finding
+
+The migration file `20260424221512_AddQrCodeCourseId.cs`, named as if it
+added a single `CourseId` column to `QrCodes`, actually contained the
+full schema for QR Codes and QR Locations — duplicating two earlier
+migrations (`AddQrLocationAndQrCode`, `AddQrSession`). The duplicate
+`CreateTable` calls would fail with PostgreSQL error 42P07 ("relation
+already exists") on any fresh database that ran the migrations in order.
+
+The bug sat in `main` for six weeks without detonating because no
+environment ran the migration sequence end-to-end against a fresh
+database in that window. Production had applied this migration on
+April 24 from a baseline that didn't yet have the QR tables;
+Development was on a March 29 baseline and never advanced through it.
+It was caught when Phase 1c added Testcontainers-based integration
+tests that spin up a fresh Postgres per test run, applying every
+migration from scratch every time.
+
+### Rule
+
+A migration's filename describes the *full schema effect* of the
+migration, not the smallest user-visible change. If a developer sets out
+to add a column and finds the generated migration contains `CreateTable`
+or other unexpected operations, that's a sign the EF model snapshot is
+out of sync with the database. Resolve the snapshot mismatch before
+committing the migration — do not let the unintended operations ship
+under a misleading name.
+
+A migration must also assume its predecessors have run. Never
+re-`CreateTable` an object an earlier migration created.
+
+### Detection
+
+Testcontainers-based integration tests are the canary for this class of
+bug. Any non-trivial database work should be exercised by at least one
+integration test that runs against a fresh container, not against a
+persistent dev database that masks idempotency problems with prior
+state.
+
+### Fixed in
+
+Commit `330f8ae` — `fix(migrations): rewrite AddQrCodeCourseId to add
+only CourseId column`. The rewrite is safe for already-migrated
+environments because EF tracks applied migrations by ID, not content;
+Production (which ran the original) will see `AddQrCodeCourseId` as
+already-applied and the rewrite will not re-execute there.
+
+---
+
 **[RESOLVED] Open Question 3 — Subtitle jobs on cascade-reset.**
 
 `UpdateSectionsAsync` does **not** modify `SubtitleJobId` — it is retained through cascade reset. In-flight `SubtitleProcessingJob` instances are **not cancelled**.
