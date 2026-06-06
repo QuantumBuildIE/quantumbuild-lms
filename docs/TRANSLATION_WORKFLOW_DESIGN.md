@@ -19,7 +19,7 @@ Fork-and-improved from the existing wizard. Existing steps adapted, translation+
 **Translation step:**
 
 - Per-language panel showing current state from the workflow service
-- "Translate" button per language (enabled when state is NotYetTranslated or Stale; requires confirm if state is Accepted)
+- "Translate" button per language (enabled when state is Initial or Stale; requires confirm if state is Accepted)
 - "Validate" button per language (enabled when state is AIGenerated)
 - "Review" button per language (opens validation results with flagged phrases highlighted; reviewer can edit and accept)
 - "Send for external review" button (enabled when state is ReviewerAccepted; opens flag-confirmation dialog showing word count)
@@ -76,6 +76,8 @@ Generic `WorkflowEvent`, `WorkflowReview`, `ExternalParticipantInvitation` table
 **Deliverable:** the service compiles, has tests, writes its own event log. Generic primitives in place for future workflows.
 
 **Estimate:** 7–10 days.
+
+**Status:** Complete (2026-06-06). Commits b17c53a, 4cc4bb4, c617d80, 9f45906.
 
 ### Phase 2 — Validation engine enhancement
 
@@ -158,7 +160,7 @@ To be resolved before or during build:
 3. **Stale detection.** What exactly triggers a translation transitioning to Stale? Section edits, source rewrites — needs precise specification.
 4. **Multiple in-flight external invitations per (talk, language).** Allow? Block? Simplest model: one active invitation at a time.
 5. **What if external submission contains content that re-fails validation?** Auto-re-validate? Surface? Leave to internal reviewer?
-6. **WorkflowInstanceId encoding.** Translation uses `"{TalkId}:{LanguageCode}"` as a composite string. Acceptable for v1, but worth considering whether the type should be richer (e.g., per-workflow-type strategy for instance keys) when the second workflow type is built.
+6. **WorkflowInstanceId encoding.** Resolved 2026-06-06: triple of WorkflowType + TargetEntityId + TargetEntitySubKey. For translation: Translation + ToolboxTalkId + languageCode. See TranslationWorkflowService and the workflows schema. (Commit hashes: 1a=b17c53a, 1b=4cc4bb4, 1b.5=c617d80, 1c=9f45906.)
 7. **Background operation modelling.** The wizard's new model has a list of `BackgroundOperation` records. Is this a new entity, or do existing job tracking patterns (e.g., the `TranslationJobIds` column from §6.4) absorb into a generalised version?
 8. **Bulk operations.** If a tenant batch-translates 50 talks, that's 50 workflow instances per language. Storage and query performance at scale.
 
