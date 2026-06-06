@@ -202,6 +202,45 @@ public class FakeR2StorageService : IR2StorageService
         return $"https://fake-r2.test/{tenantId}/{folder}/{fileName}";
     }
 
+    public Task<R2UploadResult> UploadQrCodeImageAsync(
+        Guid tenantId,
+        string codeToken,
+        byte[] pngBytes,
+        CancellationToken cancellationToken = default)
+    {
+        var key = $"{tenantId}/qr-codes/{codeToken}.png";
+        _files[key] = pngBytes;
+        return Task.FromResult(R2UploadResult.SuccessResult(
+            $"https://fake-r2.test/{key}", key, pngBytes.Length, "image/png"));
+    }
+
+    public Task<string> UploadBulkImportCsvAsync(
+        Guid tenantId,
+        Guid sessionId,
+        Stream content,
+        CancellationToken cancellationToken = default)
+    {
+        var key = $"{tenantId}/bulk-import/{sessionId}.csv";
+        _files[key] = ReadStream(content);
+        return Task.FromResult(key);
+    }
+
+    public Task DeleteFileAsync(string key, CancellationToken cancellationToken = default)
+    {
+        _files.Remove(key);
+        return Task.CompletedTask;
+    }
+
+    public string GetPublicUrl(string key)
+    {
+        return $"https://fake-r2.test/{key}";
+    }
+
+    public Task<string> GenerateUploadUrlAsync(string key, string contentType, TimeSpan expiry)
+    {
+        return Task.FromResult($"https://fake-r2.test/presigned/{key}");
+    }
+
     private static byte[] ReadStream(Stream stream)
     {
         using var ms = new MemoryStream();
