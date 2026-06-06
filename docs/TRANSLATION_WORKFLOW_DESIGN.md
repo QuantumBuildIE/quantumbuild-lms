@@ -67,7 +67,7 @@ Add a confirmation dialog to the edit page's "Generate translations" button when
 
 **Estimate:** 2–4 hours.
 
-**Status:** Complete ({{COMMIT}}, 2026-06-06).
+**Status:** Complete (2026-06-06).
 
 ### Phase 1 — Workflow primitives + translation workflow service
 

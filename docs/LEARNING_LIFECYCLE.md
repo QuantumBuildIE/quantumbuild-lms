@@ -1108,7 +1108,7 @@ Re-running "Generate Translations" rebuilds the JSON from the live sections — 
 
 **What:** If a reviewer has accepted or edited sections via the TransVal reviewer workflow (`AcceptSection` in `TranslationValidationController` — line ~213–260), those edits are propagated to `ToolboxTalkTranslation.TranslatedSections` via `PropagateEditedTranslationAsync`. The edit page's "Generate Translations" button subsequently overwrites the entire `TranslatedSections` JSON with fresh AI translations, replacing any reviewer-approved content. No audit record of the overwrite is created; the prior `TranslationValidationRun` rows survive in the database but the translations they approved are gone. No warning is shown in the UI before overwriting.
 
-**Status:** Fixed (Phase 0 hotfix, {{COMMIT}}, 2026-06-06). UI-only guard. `ContentTranslationPanel` now shows an explicit overwrite confirmation when any selected language has an existing translation. Backend remains unguarded; the workflow state machine (Phase 1+) is the proper long-term fix.
+**Status:** Fixed (Phase 0 hotfix, 2026-06-06). UI-only guard. `ContentTranslationPanel` now shows an explicit overwrite confirmation when any selected language has an existing translation. Backend remains unguarded; the workflow state machine (Phase 1+) is the proper long-term fix.
 
 Note: the default selection is employee languages, not already-translated languages; the guard fires on overlap with existing translations regardless of how the selection was reached.
 
