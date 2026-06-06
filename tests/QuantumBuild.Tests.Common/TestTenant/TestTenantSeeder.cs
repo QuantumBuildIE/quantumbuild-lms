@@ -123,6 +123,7 @@ public class TestTenantSeeder
     {
         await SeedTenantAsync();
         await SeedUsersAsync();
+        await SeedDpaAsync();
         await SeedSitesAsync();
         await SeedEmployeesAsync();
         await SeedCompaniesAsync();
@@ -152,8 +153,11 @@ public class TestTenantSeeder
         await tenants.AddAsync(tenant);
         await _context.SaveChangesAsync();
         _logger.LogInformation("Created test tenant: {TenantName}", tenant.Name);
+    }
 
-        // Seed DPA acceptance so the tenant clears the DPA gate
+    private async Task SeedDpaAsync()
+    {
+        // DPA seeded after users so FK_DpaAcceptances_Users_AcceptedByUserId is satisfied.
         var dpaAcceptances = _context.Set<DpaAcceptance>();
         if (!await dpaAcceptances.IgnoreQueryFilters().AnyAsync(d => d.TenantId == TestTenantConstants.TenantId))
         {
