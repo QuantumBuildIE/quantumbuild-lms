@@ -91,13 +91,29 @@ Update `TranslationValidationJob` to write `TranslationFlag` rows at section gra
 
 ### Phase 2b — Phrase-level flagging
 
-Replace section-level flag emission with phrase-level flags using the existing-but-unused `WordDiffService`. Diff original section text against consensus back-translation, emit flags for significant runs of Delete/Insert word operations, map word positions to character offsets in the translated text. Heuristic-driven; expect iteration on threshold tuning to manage false positive rate.
+Emit phrase-level `TranslationFlag` rows alongside Phase 2a's section-level flags, using the existing-but-unused `WordDiffService`. Flags are sentence-level highlights in the source-language text (original), not the translated text — reviewers are source-language speakers who can't necessarily read the target language, so highlighting must be on text they can read.
 
-A higher-quality alternative — AI-driven structured annotation — is recorded in §12 as out of scope for v1.
+**Design decisions (locked 2026-06-07, all locked decisions in §11 questions resolved):**
 
-**Investigation outcome (2026-06-07):** Recon confirmed that no validation provider returns phrase-level annotations and no existing service produces sub-section data. `WordDiffService` exists with the right interface and is injected into `TranslationValidationService` but never called (CS9113). Phrase-level flagging is genuinely new work, not wiring-up of existing output.
+- **Diff input.** Compare the original section text against the *highest-scoring* of the four back-translations (BackTranslationA/B/C/D). Cheapest deterministic implementation. Design the back-translation selector so swapping to majority-vote (2-of-4 consensus) later is a single-method change.
+- **Threshold for flag emission.** A contiguous run of `Insert` OR `Delete` operations of length ≥ 2 becomes one `TranslationFlag`. Single-word divergences are excluded (almost always function-word noise). Runs above 2 are capped only by section boundary — one flag per contiguous run regardless of length.
+- **Reference frame for offsets.** `StartOffset` and `EndOffset` index into the **original section text** (source language). Phase 2b inherits Phase 2a's reviewer-readability principle. Once the diff identifies a divergent run, the implementation walks the original text to find the sentence containing those words and sets the offsets to span that entire sentence.
+- **Granularity.** Sentence-level, not word-level. The diff identifies suspect words; the flag highlights the sentence that contains them, giving the reviewer context. Sidesteps the word-position-to-character-offset mapping problem.
+- **Severity.** All phrase-level flags emit at `FlagSeverity.Warning`. Section-level flags (Phase 2a) continue to discriminate Review→Warning / Fail→Error. A reviewer sees one signal per flag — "this is worth looking at" — regardless of granularity.
+- **Relationship to Phase 2a.** Additive, not replacement. Phase 2a's section-level flag continues to emit; Phase 2b's phrase-level flags are written alongside it. Same `TranslationFlag` table, multiple rows per section possible.
 
-**Estimate:** 3–5 days.
+**Open implementation questions (to be resolved at start of implementation):**
+
+- **Sentence detection in the source language.** What languages does the product currently support as source? If source is English-only, naive regex on `.`/`?`/`!` with a small abbreviation list suffices. If source includes CJK or Arabic, a real Unicode sentence-segmentation strategy is needed. Recon at start of implementation session should confirm.
+- **`TranslationFlag.Reason` content for phrase-level flags.** Phase 2a uses `ReviewReasonsJson` aggregated. Phase 2b can be more specific — e.g., "Words missing from back-translation: 'safety equipment'." UX call; defaults to a sensible auto-generated string at implementation time.
+
+**Known limitation (inherited from Phase 2a):** Atomicity gap on retry — flags are saved separately from `TranslationValidationResult`. On `AutomaticRetry`, duplicate flag rows can appear. Bounded to one duplicate per retry per flagged span. Phase 2b makes this slightly more visible because there are now N flags per section instead of 1, but the failure mode is identical.
+
+**Higher-quality alternative deferred to v2.** AI-driven structured annotation (a dedicated Claude/Gemini pass returning structured JSON span annotations) is recorded in §12 as out of scope for v1. Phase 2b ships the heuristic version; v2 may replace it with AI-driven flagging if reviewer feedback shows the heuristic has too many false positives.
+
+**Investigation outcome (2026-06-07):** Recon confirmed that no validation provider returns phrase-level annotations and no existing service produces sub-section data. `WordDiffService` exists with the right interface and is injected into `TranslationValidationService` but never called (CS9113). The `DiffOperation` type carries no position information — word-position-to-character-offset mapping must be built. No frontend infrastructure exists for rendering character-offset highlights. Phrase-level flagging is genuinely new work, not wiring-up of existing output.
+
+**Estimate:** 5–8 days (revised from 3–5 in the original phase split; recon revealed the implementation is greenfield end-to-end, not just wiring up `WordDiffService`).
 
 ### Phase 3 — Edit page refactor
 
