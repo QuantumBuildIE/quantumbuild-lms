@@ -79,9 +79,19 @@ Generic `WorkflowEvent`, `WorkflowReview`, `ExternalParticipantInvitation` table
 
 **Status:** Complete (2026-06-06). Commits b17c53a, 4cc4bb4, c617d80, 9f45906.
 
-### Phase 2 — Validation engine enhancement
+### Phase 2a — Section-level flagging (fallback shipped first)
 
-Investigate and extend validation engine to produce `TranslationFlag` output. Update existing `TranslationValidationJob` to write flag rows.
+Update `TranslationValidationJob` to write `TranslationFlag` rows at section granularity for sections scoring below threshold. One flag per qualifying section, spanning the full section text (StartOffset=0, EndOffset=section length). Severity derived from outcome (Review → Warning, Fail → Error). Reason populated from `ReviewReasonsJson`. This is the fallback the design doc allows in §8; it ships first so the data path is honest end-to-end and Phase 3 has something to display.
+
+**Estimate:** 1–2 days.
+
+### Phase 2b — Phrase-level flagging
+
+Replace section-level flag emission with phrase-level flags using the existing-but-unused `WordDiffService`. Diff original section text against consensus back-translation, emit flags for significant runs of Delete/Insert word operations, map word positions to character offsets in the translated text. Heuristic-driven; expect iteration on threshold tuning to manage false positive rate.
+
+A higher-quality alternative — AI-driven structured annotation — is recorded in §12 as out of scope for v1.
+
+**Investigation outcome (2026-06-07):** Recon confirmed that no validation provider returns phrase-level annotations and no existing service produces sub-section data. `WordDiffService` exists with the right interface and is injected into `TranslationValidationService` but never called (CS9113). Phrase-level flagging is genuinely new work, not wiring-up of existing output.
 
 **Estimate:** 3–5 days.
 
@@ -155,7 +165,7 @@ Confirmed in design conversation:
 
 To be resolved before or during build:
 
-1. **Validation engine output granularity.** Does the current engine produce per-token output internally, or is phrase-level flagging new feature work? Investigation needed at start of Phase 2.
+1. **Validation engine output granularity.** Resolved 2026-06-07: phrase-level flagging is new feature work. The engine produces only section-level scalars; no back-translation provider returns annotations; `WordDiffService` exists but is unused. Phase 2 split into 2a (section-level fallback, ships first) and 2b (phrase-level via WordDiffService). AI-annotation alternative deferred to v2 per §12.
 2. **Cutover plan for the wizard.** What milestone retires the old one? Is there an opt-in flag visible to admin users during the parallel phase?
 3. **Stale detection.** What exactly triggers a translation transitioning to Stale? Section edits, source rewrites — needs precise specification.
 4. **Multiple in-flight external invitations per (talk, language).** Allow? Block? Simplest model: one active invitation at a time.
@@ -182,6 +192,7 @@ Explicitly excluded:
 - System-wide soft-delete consistency cleanup (BACKLOG)
 - Draft-vs-published as a domain concept (BACKLOG)
 - Second concrete workflow (asset lifecycle, content approval) — designed for, not built
+- AI-driven structured-annotation phrase-level flagging (e.g., dedicated Claude/Gemini annotation pass with structured JSON response). Phase 2b uses heuristic word-diff flagging instead. Higher-quality AI annotation deferred pending v1 UX validation.
 
 ---
 
