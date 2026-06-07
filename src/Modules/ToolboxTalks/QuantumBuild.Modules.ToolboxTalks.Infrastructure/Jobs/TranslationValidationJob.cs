@@ -171,6 +171,26 @@ public class TranslationValidationJob
 
                     results.Add(result);
 
+                    // Phase 2a: emit a TranslationFlag for every section that scored below threshold
+                    if (result.Outcome is ValidationOutcome.Review or ValidationOutcome.Fail
+                        && run.ToolboxTalkId.HasValue)
+                    {
+                        _dbContext.TranslationFlags.Add(new Domain.Entities.TranslationFlag
+                        {
+                            Id = Guid.NewGuid(),
+                            TenantId = tenantId,
+                            ToolboxTalkId = run.ToolboxTalkId.Value,
+                            LanguageCode = run.LanguageCode,
+                            StartOffset = 0,
+                            EndOffset = result.TranslatedText.Length,
+                            Severity = result.Outcome == ValidationOutcome.Fail
+                                ? FlagSeverity.Error
+                                : FlagSeverity.Warning,
+                            Reason = BuildFlagReason(result.ReviewReasonsJson)
+                        });
+                        await _dbContext.SaveChangesAsync(cancellationToken);
+                    }
+
                     await SendSectionCompletedAsync(validationRunId, result, percentComplete);
 
                     _logger.LogInformation(
@@ -209,6 +229,22 @@ public class TranslationValidationJob
                     failedResult.FinalScore = 0;
                     failedResult.RoundsUsed = 0;
                     failedResult.EffectiveThreshold = run.PassThreshold;
+
+                    // Phase 2a: emit a flag for the exception-failed section
+                    if (run.ToolboxTalkId.HasValue)
+                    {
+                        _dbContext.TranslationFlags.Add(new Domain.Entities.TranslationFlag
+                        {
+                            Id = Guid.NewGuid(),
+                            TenantId = tenantId,
+                            ToolboxTalkId = run.ToolboxTalkId.Value,
+                            LanguageCode = run.LanguageCode,
+                            StartOffset = 0,
+                            EndOffset = section.TranslatedText.Length,
+                            Severity = FlagSeverity.Error,
+                            Reason = BuildFlagReason(null)
+                        });
+                    }
 
                     await _dbContext.SaveChangesAsync(cancellationToken);
                     results.Add(failedResult);
@@ -1082,6 +1118,39 @@ public class TranslationValidationJob
         if (sanitised.Length > 200)
             sanitised = sanitised[..200];
         return $"Translation failed: {sanitised}";
+    }
+
+    /// <summary>
+    /// Builds a human-readable flag reason from the ReviewReasonsJson produced by the validation engine.
+    /// ReviewReasonsJson is a camelCase JSON array of {type, message, detail} objects.
+    /// </summary>
+    private static string BuildFlagReason(string? reviewReasonsJson)
+    {
+        const string fallback = "Validation score below threshold";
+        const int maxLength = 512;
+
+        if (string.IsNullOrWhiteSpace(reviewReasonsJson))
+            return fallback;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(reviewReasonsJson);
+            var messages = doc.RootElement.EnumerateArray()
+                .Select(e => e.TryGetProperty("message", out var m) ? m.GetString() : null)
+                .Where(m => !string.IsNullOrWhiteSpace(m))
+                .Cast<string>()
+                .ToList();
+
+            if (messages.Count == 0)
+                return fallback;
+
+            var reason = string.Join("; ", messages);
+            return reason.Length <= maxLength ? reason : reason[..maxLength];
+        }
+        catch (JsonException)
+        {
+            return fallback;
+        }
     }
 
     /// <summary>
