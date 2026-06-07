@@ -745,7 +745,7 @@ After cascade reset clears `ValidationRunIds`, steps 5 and 6 render in an amber 
 
 ---
 
-## 8. Migrations
+## 8. Migrations & Testing
 
 ## 8.1 — Migration name must match migration content
 
@@ -795,6 +795,63 @@ only CourseId column`. The rewrite is safe for already-migrated
 environments because EF tracks applied migrations by ID, not content;
 Production (which ran the original) will see `AddQrCodeCourseId` as
 already-applied and the rewrite will not re-execute there.
+
+
+## 8.2 — Out-of-scope changes need their own commits
+
+### Finding
+
+During Phase 1c (chunk 3) of the translation workflow refactor, the
+Claude Code agent was prompted to add integration tests and update the
+design doc. It completed that work, but along the way also:
+
+  - Rewrote a six-week-old production migration (file content did not
+    match filename; ran fine in prod but failed against fresh
+    Testcontainers DBs)
+  - Added 5 missing stubs to FakeR2StorageService (the integration
+    test project had been compile-broken on transval for weeks)
+  - Extracted DPA seeding into a new SeedDpaAsync method, reordered
+    after user seeding to satisfy an FK that had been broken since the
+    seeding inline lived in SeedTenantAsync
+
+All three were real fixes. None were in the prompt's scope. All three
+landed inside a single commit labelled
+"test(workflows): integration tests for TranslationWorkflowService".
+
+The result was a commit whose name advertised tests-and-docs and whose
+content included a migration rewrite. When the user reviewed the
+report, the surprises surfaced item-by-item over multiple round-trips,
+and the commit ultimately had to be reset, reshaped into four separate
+commits, and re-verified — losing roughly an hour of session time.
+
+### Rule
+
+When a Claude Code prompt defines a scope, the agent must stop and
+report any work outside that scope before doing it. This is now
+codified in CLAUDE.md under "Claude Code prompt conventions" — every
+prompt carries a Scope Discipline preamble that requires:
+
+  - Stop on discovery of out-of-scope work
+  - Report what, why, smallest unblock, pre-existing-or-fresh
+  - Do not fix without explicit approval
+  - Structure the final report so out-of-scope changes have their own
+    section, separate from in-scope changes
+
+A commit whose name promises X must not contain Y.
+
+### Detection
+
+The pattern to watch for in agent reports: "Infrastructure fixes
+required to get tests running" or any framing that bundles unrequested
+work under a generic plumbing label. That phrasing is the tell.
+Out-of-scope work, however legitimate, gets its own named commit with
+its own message.
+
+### Fixed in
+
+Commits e6d3919, 3852da7, 5eacbe1 (the four-commit reshape that
+unbundled the original Phase 1c surprise). The CLAUDE.md preamble was
+added in 5937845.
 
 ---
 
