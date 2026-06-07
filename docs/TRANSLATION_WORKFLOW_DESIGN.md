@@ -85,6 +85,10 @@ Update `TranslationValidationJob` to write `TranslationFlag` rows at section gra
 
 **Estimate:** 1–2 days.
 
+**Status:** Complete (2026-06-07). Commit d23bf8b.
+
+**Known limitation:** Flag emission is not transactionally atomic with `TranslationValidationResult` save (the service saves the result before returning; the job saves the flag after). On job retry, a duplicate flag can be written for a section whose result saved but flag did not. Bounded to one duplicate per retry per section per the `AutomaticRetry(Attempts = 1)` policy; does not corrupt data. Acceptable for v1; revisit if duplicate-flag display becomes a UX issue.
+
 ### Phase 2b — Phrase-level flagging
 
 Replace section-level flag emission with phrase-level flags using the existing-but-unused `WordDiffService`. Diff original section text against consensus back-translation, emit flags for significant runs of Delete/Insert word operations, map word positions to character offsets in the translated text. Heuristic-driven; expect iteration on threshold tuning to manage false positive rate.
