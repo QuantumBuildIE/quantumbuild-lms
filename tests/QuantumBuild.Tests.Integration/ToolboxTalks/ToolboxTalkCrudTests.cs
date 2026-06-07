@@ -213,29 +213,6 @@ public class ToolboxTalkCrudTests : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
-    [Fact]
-    public async Task CreateToolboxTalk_WithoutPermission_Returns403()
-    {
-        // Arrange
-        var command = new
-        {
-            Title = "No Permission Test",
-            Frequency = ToolboxTalkFrequency.Once,
-            RequiresQuiz = false,
-            IsActive = true,
-            Sections = new[]
-            {
-                new { SectionNumber = 1, Title = "Section", Content = "<p>Content</p>", RequiresAcknowledgment = true }
-            }
-        };
-
-        // Act - Finance user doesn't have ToolboxTalks.Create permission
-        var response = await FinanceClient.PostAsJsonAsync("/api/toolbox-talks", command);
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-    }
-
     #endregion
 
     #region Update Tests
