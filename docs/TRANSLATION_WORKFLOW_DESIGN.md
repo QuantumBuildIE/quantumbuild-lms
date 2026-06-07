@@ -81,7 +81,7 @@ Generic `WorkflowEvent`, `WorkflowReview`, `ExternalParticipantInvitation` table
 
 ### Phase 2a — Section-level flagging (fallback shipped first)
 
-Update `TranslationValidationJob` to write `TranslationFlag` rows at section granularity for sections scoring below threshold. One flag per qualifying section, spanning the full section text (StartOffset=0, EndOffset=section length). Severity derived from outcome (Review → Warning, Fail → Error). Reason populated from `ReviewReasonsJson`. This is the fallback the design doc allows in §8; it ships first so the data path is honest end-to-end and Phase 3 has something to display.
+Update `TranslationValidationJob` to write `TranslationFlag` rows at section granularity for sections scoring below threshold. One flag per qualifying section, spanning the full section text (StartOffset=0, EndOffset=length of original section text — flags are anchored to the source-language text so reviewers can read what's highlighted). Severity derived from outcome (Review → Warning, Fail → Error). Reason populated from `ReviewReasonsJson`. This is the fallback the design doc allows in §8; it ships first so the data path is honest end-to-end and Phase 3 has something to display.
 
 **Estimate:** 1–2 days.
 

@@ -182,7 +182,7 @@ public class TranslationValidationJob
                             ToolboxTalkId = run.ToolboxTalkId.Value,
                             LanguageCode = run.LanguageCode,
                             StartOffset = 0,
-                            EndOffset = result.TranslatedText.Length,
+                            EndOffset = result.OriginalText.Length,
                             Severity = result.Outcome == ValidationOutcome.Fail
                                 ? FlagSeverity.Error
                                 : FlagSeverity.Warning,
@@ -240,7 +240,7 @@ public class TranslationValidationJob
                             ToolboxTalkId = run.ToolboxTalkId.Value,
                             LanguageCode = run.LanguageCode,
                             StartOffset = 0,
-                            EndOffset = section.TranslatedText.Length,
+                            EndOffset = section.OriginalText.Length,
                             Severity = FlagSeverity.Error,
                             Reason = BuildFlagReason(null)
                         });
