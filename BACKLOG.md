@@ -706,7 +706,28 @@ These are not backlog items — they're explicit product decisions with known tr
 
 ---
 
+# 7. Design review: Auditor audience role on ContentCreationSession.
+
+Added during Ryan's UAT review as an AudienceRole value alongside Operator and Supervisor on quiz generation. Implementation generates different questions per audience string.
+
+Problem: Auditor is not an identity role in the system (production has SuperUser/Admin/Supervisor/Operator). There is no mechanism to assign a quiz to an Auditor user because no such user can exist.
+The "generate questions for Auditor audience" code path has no consumer — the questions cannot be taken.
+
+Two separable intents are conflated in the current design:
+(a) Learner-facing quiz tone varies by identity role (Operator vs Supervisor — both are real users who take quizzes).
+(b) Auditor-facing demonstration content — showing an external auditor "this is the kind of question we can generate" as evidence of training rigour, not as a quiz to be taken.
+
+These are different features with different storage, different UI, and different access patterns. Forcing them into a single AudienceRole string was a misread of the UAT feedback.
+
+Action: design review before more code is built on top of AudienceRole. Decide whether (a) and (b) are both in scope, drop the other, or rescope. Until then, no new features should branch on AudienceRole == "Auditor".
+
+Related: see ContentCreationSession.cs (AudienceRole property), QuizGenerationPrompts.cs (audience text variations), any frontend dropdown surfacing AudienceRole.
+
+---
+
+# ==================================================================
 # 7. Recently Closed
+# ==================================================================
 
 Kept here for trail; prune periodically.
 
