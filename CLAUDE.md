@@ -1444,5 +1444,57 @@ Archived notes 1-89 are in CLAUDE-archive.md
 
 ---
 
-_Last Updated: June 2, 2026 (notes audit — added Note 28 EF migration guard; archived notes 2,4,5,6,7,9,11,13,16,17,25,26; condensed notes 2,25; folded PipelineChangeRecord/TranslationDeviation invariants into entity section; Note 15 deferred)_
+## Claude Code prompt conventions
+
+Every Claude Code prompt sent during build sessions must include the
+following preamble at the top, before the chunk-specific scope:
+
+---
+
+### Scope discipline
+
+The prompt below defines the scope of this chunk. If during
+implementation you discover that work outside that scope is required to
+make the stated scope succeed — failing tests caused by pre-existing
+infrastructure, broken seeders, missing interface implementations,
+schema issues, migration problems, anything — STOP immediately and
+report:
+
+  - What you found
+  - Why it blocks the stated scope
+  - The smallest change that would unblock you
+  - Whether it appears to be a pre-existing bug or freshly introduced
+
+Do NOT fix it yourself. Wait for explicit go-ahead before touching
+anything outside the stated scope. This applies even if the fix seems
+obvious or trivial.
+
+Pre-existing tests that fail for reasons unrelated to this chunk are
+acceptable — note them in the final report but do not attempt to fix.
+
+### Reporting format
+
+The final report must be structured as:
+
+  1. Test results — lead with the actual numbers, e.g.
+     "320 of 321 passing, 1 pre-existing failure unrelated to this chunk"
+     not "all green" or "tests pass"
+
+  2. Files changed in scope — full paths, grouped by purpose
+
+  3. Files changed outside the stated scope — full paths, with rationale
+     for each. If this section is non-empty, the work is on hold
+     pending explicit approval before commit.
+
+  4. Build output — pass/fail and any warnings introduced by this chunk
+
+### Commit discipline
+
+Do not commit unless the prompt explicitly tells you to commit. "Ready
+for commit" means "ready for review." Stop and report; wait for the
+user's explicit "commit + push" before staging anything.
+
+---
+
+_Last Updated: June 7, 2026 (added the 'Claude Code prompt conventions' section)_
 _Architecture: Modular Monolith with Clean Architecture_
