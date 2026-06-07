@@ -725,6 +725,75 @@ Related: see ContentCreationSession.cs (AudienceRole property), QuizGenerationPr
 
 ---
 
+## 8. Integration test suite — full review and revamp
+
+The integration test suite has drifted significantly from the current
+application state. Today's session (2026-06-07) cleaned up the surface
+issues (deprecated roles in TestTenantConstants/Seeder/Factory, broken
+password-validation tests, dead Password/ConfirmPassword fields in
+create-user payloads) but stopped short of a full revamp once the
+scope became clear.
+
+Known issues requiring a dedicated session:
+
+- Three deprecated test users still seeded with deprecated role
+  strings (SiteManager / WarehouseStaff / Finance). Roles do not
+  exist in production. Users authenticate but have no role, so any
+  test asserting role-based behaviour against them is testing the
+  wrong thing.
+
+- Three deprecated client properties on IntegrationTestBase
+  (SiteManagerClient, WarehouseClient, FinanceClient) used heavily
+  across several test files:
+    - tests/QuantumBuild.Tests.Integration/Core/AuthorizationTests.cs
+      (7 references — testing 403 responses against roleless users
+       rather than against actual unauthorized roles)
+    - tests/QuantumBuild.Tests.Integration/Core/TenantIsolationTests.cs
+      (3 references)
+    - tests/QuantumBuild.Tests.Integration/ToolboxTalks/
+      EmployeeCompletionTests.cs (~25 references — likely passes
+      regardless of role because /api/my/* endpoints are user-scoped,
+      but test names imply role-specific behaviour they aren't
+      verifying)
+    - tests/QuantumBuild.Tests.Integration/ToolboxTalks/
+      SchedulingTests.cs (1 reference)
+
+- TestUserType enum cases SiteManager, Warehouse, Finance in
+  CustomWebApplicationFactory map to non-existent roles.
+
+- Four orphaned playwright auth fixtures at
+  tests/QuantumBuild.Tests.E2E/playwright/.auth/ (warehouse.json,
+  finance.json, sitemanager.json, officestaff.json).
+
+- One pre-existing failure unrelated to roles:
+  CreateUser_WeakPassword_ReturnsBadRequest was deleted today (commit
+  cdec2bb) because it asserted on a CreateUserDto.Password field that
+  does not exist. A replacement test was added asserting the actual
+  contract.
+
+- Role-not-found warnings logged during test seeding for every
+  integration run — silent failures that mask the deprecated state.
+
+Scope of the revamp session:
+
+- Inventory every TestUserType reference and every Client property
+  use across the entire integration suite (this session's grep was
+  incomplete — only surfaced through a follow-up grep mid-session).
+- Decide per-test whether to migrate to a current role
+  (Operator/Supervisor), delete as obsolete, or rewrite to test
+  current product behaviour.
+- Remove the deprecated TestTenantConstants user classes, seeder
+  array entries, factory enum cases, and IntegrationTestBase
+  properties.
+- Clean up orphaned E2E playwright auth fixtures.
+- Audit role-not-found warnings end to end so the test run is silent.
+
+Estimated effort: 1-2 focused sessions. Should happen before any
+significant new feature work that adds tests, so the new tests are
+written against a clean suite rather than perpetuating the drift.
+
+---
+
 # ==================================================================
 # 7. Recently Closed
 # ==================================================================
