@@ -217,42 +217,16 @@ public class UserTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task CreateUser_PasswordMismatch_ReturnsExpectedResponse()
+    public async Task CreateUser_NoPasswordField_ReturnsCreatedWithTempPassword()
     {
-        // Note: This test verifies password mismatch validation
-        // The API behavior depends on whether password match validation is enforced
-
-        // Arrange
+        // Arrange — CreateUserDto has no Password field; the service
+        // generates a temp password and the user must reset on first login.
+        // This test asserts that contract.
         var command = new
         {
-            Email = $"mismatch-{Guid.NewGuid():N}@test.quantumbuild.ie",
-            FirstName = "Mismatch",
-            LastName = "Password",
-            Password = "Password123!",
-            ConfirmPassword = "DifferentPassword123!",
-            IsActive = true,
-            RoleIds = new List<Guid>()
-        };
-
-        // Act
-        var response = await AdminClient.PostAsJsonAsync("/api/users", command);
-
-        // Assert - API may not enforce password match validation at endpoint level
-        // Accept either BadRequest (if validated) or Created (if not validated)
-        response.StatusCode.Should().BeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.Created);
-    }
-
-    [Fact]
-    public async Task CreateUser_WeakPassword_ReturnsBadRequest()
-    {
-        // Arrange
-        var command = new
-        {
-            Email = $"weak-{Guid.NewGuid():N}@test.quantumbuild.ie",
-            FirstName = "Weak",
-            LastName = "Password",
-            Password = "weak", // Too weak
-            ConfirmPassword = "weak",
+            Email = $"newuser-{Guid.NewGuid():N}@test.quantumbuild.ie",
+            FirstName = "New",
+            LastName = "User",
             IsActive = true,
             RoleIds = new List<Guid>()
         };
@@ -261,7 +235,7 @@ public class UserTests : IntegrationTestBase
         var response = await AdminClient.PostAsJsonAsync("/api/users", command);
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
     }
 
     [Fact]
