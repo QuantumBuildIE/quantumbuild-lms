@@ -87,7 +87,13 @@ Update `TranslationValidationJob` to write `TranslationFlag` rows at section gra
 
 **Status:** Complete (2026-06-07). Commit d23bf8b.
 
-**Known limitation:** Flag emission is not transactionally atomic with `TranslationValidationResult` save (the service saves the result before returning; the job saves the flag after). On job retry, a duplicate flag can be written for a section whose result saved but flag did not. Bounded to one duplicate per retry per section per the `AutomaticRetry(Attempts = 1)` policy; does not corrupt data. Acceptable for v1; revisit if duplicate-flag display becomes a UX issue.
+**Known limitation:** Flag emission is not transactionally atomic with `TranslationValidationResult` save. Two gaps exist:
+
+1. **Happy path:** `ValidateSectionAsync` saves the result before returning; the job saves the flag in a separate `SaveChangesAsync` immediately after. On job retry, a duplicate flag can be written for a section whose result saved but flag did not.
+
+2. **Error path (added in Phase 2b.3a):** When validation throws and the catch block writes a failed-result row plus a section-level flag, the FK on `TranslationFlag.ValidationResultId` (added in Phase 2b.3a) requires the failed-result row to be persisted before the flag is constructed. The catch block therefore calls `SaveChangesAsync` twice — first to materialise the failed-result Id, then again to write the flag. If the process crashes between those two saves, the failed-result row exists without its corresponding flag.
+
+Both gaps are bounded: one duplicate per retry per section under `AutomaticRetry(Attempts = 1)`; one missing flag per crash on the error path. Neither corrupts data. The error path is rare (validation engine exception) and the missing-flag failure mode is graceful — the section appears in the run as a failure with no flag detail. Acceptable for v1; revisit if either becomes a UX issue.
 
 ### Phase 2b — Phrase-level flagging
 
