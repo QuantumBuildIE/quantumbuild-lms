@@ -42,13 +42,24 @@ public class TranslationFlagConfiguration : IEntityTypeConfiguration<Translation
         builder.Property(e => e.UpdatedBy).HasMaxLength(256);
         builder.Property(e => e.IsDeleted).IsRequired().HasDefaultValue(false);
 
+        builder.Property(e => e.ValidationResultId)
+            .IsRequired();
+
         builder.HasOne(e => e.ToolboxTalk)
             .WithMany()
             .HasForeignKey(e => e.ToolboxTalkId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        builder.HasOne(e => e.ValidationResult)
+            .WithMany()
+            .HasForeignKey(e => e.ValidationResultId)
+            .OnDelete(DeleteBehavior.Cascade);
+
         builder.HasIndex(e => new { e.ToolboxTalkId, e.LanguageCode })
             .HasDatabaseName("ix_translation_flags_talk_language");
+
+        builder.HasIndex(e => e.ValidationResultId)
+            .HasDatabaseName("ix_translation_flags_validation_result");
 
         builder.HasIndex(e => e.TenantId)
             .HasDatabaseName("ix_translation_flags_tenant");

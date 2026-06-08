@@ -196,6 +196,7 @@ public class TranslationValidationJob
                             TenantId = tenantId,
                             ToolboxTalkId = run.ToolboxTalkId.Value,
                             LanguageCode = run.LanguageCode,
+                            ValidationResultId = result.Id,
                             StartOffset = 0,
                             EndOffset = result.OriginalText.Length,
                             Severity = result.Outcome == ValidationOutcome.Fail
@@ -237,6 +238,7 @@ public class TranslationValidationJob
                                                 TenantId = tenantId,
                                                 ToolboxTalkId = run.ToolboxTalkId.Value,
                                                 LanguageCode = run.LanguageCode,
+                                                ValidationResultId = result.Id,
                                                 StartOffset = span.StartOffset,
                                                 EndOffset = span.EndOffset,
                                                 Severity = FlagSeverity.Warning,
@@ -297,6 +299,9 @@ public class TranslationValidationJob
                     failedResult.RoundsUsed = 0;
                     failedResult.EffectiveThreshold = run.PassThreshold;
 
+                    // Save failedResult first so its Id is populated before constructing the flag
+                    await _dbContext.SaveChangesAsync(cancellationToken);
+
                     // Phase 2a: emit a flag for the exception-failed section
                     if (run.ToolboxTalkId.HasValue)
                     {
@@ -306,14 +311,15 @@ public class TranslationValidationJob
                             TenantId = tenantId,
                             ToolboxTalkId = run.ToolboxTalkId.Value,
                             LanguageCode = run.LanguageCode,
+                            ValidationResultId = failedResult.Id,
                             StartOffset = 0,
                             EndOffset = section.OriginalText.Length,
                             Severity = FlagSeverity.Error,
                             Reason = BuildFlagReason(null)
                         });
+                        await _dbContext.SaveChangesAsync(cancellationToken);
                     }
 
-                    await _dbContext.SaveChangesAsync(cancellationToken);
                     results.Add(failedResult);
                 }
             }
