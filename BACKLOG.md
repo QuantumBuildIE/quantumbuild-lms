@@ -794,6 +794,57 @@ written against a clean suite rather than perpetuating the drift.
 
 ---
 
+## 9. Hardcoded English assumptions in translation pipeline
+
+The `ToolboxTalk.SourceLanguageCode` field is structurally open to
+non-English values (entity comment names "en", "af", "es" as
+examples), but 13 distinct code paths hardcode English at runtime,
+silently overriding any non-English source language a user might
+set.
+
+Surfaced during Phase 2b sentence-detection recon on 2026-06-08.
+The recon was satisfied that Phase 2b can ship with English-only
+sentence detection because no non-English source talks exist
+today. But the pipeline-wide hardcoding is a separate concern —
+the day someone creates a talk with `SourceLanguageCode = "es"`,
+the validation run and downstream jobs will silently treat it as
+English without error.
+
+Affected sites (file:line — nature):
+
+- ToolboxTalk.cs:231 — Entity default = "en"
+- CreateToolboxTalkCommand.cs:37 — Command default = "en"
+- ContentCreationSessionService.cs:553 — Draft talk hardcoded
+  SourceLanguageCode = "en"
+- ContentCreationSessionService.cs:674 — ValidationRun hardcoded
+  SourceLanguage = "en" (ignores the talk's own SourceLanguageCode)
+- ContentCreationSessionService.cs:631 — Target-language exclusion
+  hardcoded !c.Equals("en", ...)
+- MissingTranslationsJob.cs:81 — `?? "en"` fallback
+- DailyTranslationScanJob.cs:95 — `?? "en"` fallback
+- ContentGenerationJob.cs:495 — `?? "en"` fallback
+- TranslationValidationJob.cs:746 — `?? "English"` fallback
+- ContentTranslationService.cs:51,198 — `?? "English"` fallback (2 sites)
+- SubtitleProcessingOrchestrator.cs:122-123 — Master subtitle track
+  hardcoded Language = "English" / LanguageCode = "en"
+- ContentExtractionService.cs:518-519 — Same hardcoding in
+  extraction path
+- TranscriptService.cs:34 — GetSrtContentAsync(id, "en", ...) —
+  always fetches English
+- EmployeeLanguageChangeHandler.cs:38 — Early-exits on "en"
+  preferred language
+
+Investigation needed: which of these are legitimate (e.g., a
+validation pipeline that intentionally only supports English source
+for now) and which are bugs (e.g., the ValidationRun.SourceLanguage
+hardcoding that ignores the talk's actual SourceLanguageCode).
+
+This is not a Phase 2b dependency. It is a tracking entry so the
+inconsistency does not get rediscovered every time someone touches
+the translation pipeline.
+
+---
+
 # ==================================================================
 # 7. Recently Closed
 # ==================================================================
