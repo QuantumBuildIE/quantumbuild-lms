@@ -4,7 +4,9 @@ using System.Text.RegularExpressions;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using QuantumBuild.Core.Application.Models;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Translations;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Workflows;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services.Subtitles;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
@@ -20,17 +22,20 @@ public class GenerateContentTranslationsCommandHandler
     private readonly IToolboxTalksDbContext _context;
     private readonly IContentTranslationService _translationService;
     private readonly ILanguageCodeService _languageCodeService;
+    private readonly ITranslationWorkflowService _workflowService;
     private readonly ILogger<GenerateContentTranslationsCommandHandler> _logger;
 
     public GenerateContentTranslationsCommandHandler(
         IToolboxTalksDbContext context,
         IContentTranslationService translationService,
         ILanguageCodeService languageCodeService,
+        ITranslationWorkflowService workflowService,
         ILogger<GenerateContentTranslationsCommandHandler> logger)
     {
         _context = context;
         _translationService = translationService;
         _languageCodeService = languageCodeService;
+        _workflowService = workflowService;
         _logger = logger;
     }
 
@@ -92,6 +97,35 @@ public class GenerateContentTranslationsCommandHandler
                 continue;
             }
 
+            // Guard: enforce state machine rules before starting AI work for this language.
+            // StartTranslation blocks if the language is in a protected state (e.g. Accepted) without
+            // explicit confirmation, or if an external review is in progress.
+            var workflowGuard = await _workflowService.StartTranslation(
+                request.ToolboxTalkId,
+                targetCode,
+                request.ConfirmOverwrite,
+                cancellationToken);
+
+            if (!workflowGuard.Success)
+            {
+                var errorMessage = workflowGuard.ErrorCode == FailureCode.WorkflowConfirmationRequired
+                    ? "Confirmation required to overwrite this language."
+                    : workflowGuard.Errors.FirstOrDefault() ?? "Translation blocked by workflow state.";
+
+                _logger.LogWarning(
+                    "StartTranslation guard rejected {Language} ({Code}) for talk {ToolboxTalkId}: {Error}",
+                    language, targetCode, request.ToolboxTalkId, errorMessage);
+
+                results.Add(new LanguageTranslationResult
+                {
+                    Language = language,
+                    LanguageCode = targetCode,
+                    Success = false,
+                    ErrorMessage = errorMessage
+                });
+                continue;
+            }
+
             _logger.LogInformation("Starting translation for language: {Language} (from {Source})", language, sourceLanguageName);
             var result = await TranslateForLanguageAsync(toolboxTalk, language, sourceLanguageName, request.SectorKey, cancellationToken);
             _logger.LogInformation(
@@ -125,6 +159,23 @@ public class GenerateContentTranslationsCommandHandler
                 "ToolboxTalkId: {ToolboxTalkId}, TenantId: {TenantId}, Error: {Error}",
                 request.ToolboxTalkId, request.TenantId, ex.Message);
             throw;
+        }
+
+        foreach (var successfulResult in results.Where(r => r.Success))
+        {
+            var recordResult = await _workflowService.RecordTranslationCompleted(
+                request.ToolboxTalkId,
+                successfulResult.LanguageCode,
+                cancellationToken);
+
+            if (!recordResult.Success)
+            {
+                _logger.LogWarning(
+                    "RecordTranslationCompleted failed for {Language} ({Code}) after successful translation. " +
+                    "Translation is persisted; StartValidation guard will surface the inconsistency. Error: {Error}",
+                    successfulResult.Language, successfulResult.LanguageCode,
+                    recordResult.Errors.FirstOrDefault() ?? "unknown");
+            }
         }
 
         return GenerateContentTranslationsResult.SuccessResult(results);

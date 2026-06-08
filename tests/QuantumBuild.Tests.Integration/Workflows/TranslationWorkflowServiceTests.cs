@@ -593,4 +593,126 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
                           && e.TargetEntitySubKey == "el");
         count.Should().Be(1, "MarkStale from Stale must be a no-op — no new event row");
     }
+
+    // ── RecordTranslationCompleted tests ─────────────────────────────────────
+
+    // 27 — RecordTranslationCompleted from TranslationStarted (legal in-flight state) → success, event written
+    [Fact]
+    public async Task RecordTranslationCompleted_FromTranslationStarted_Succeeds()
+    {
+        await SeedEventAsync(TalkId, "lb", WorkflowEventTypes.TranslationStarted);
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var result = await service.RecordTranslationCompleted(TalkId, "lb");
+
+        result.Success.Should().BeTrue();
+
+        var db = GetDbContext();
+        var events = await db.Set<WorkflowEvent>()
+            .IgnoreQueryFilters()
+            .Where(e => e.WorkflowType == WorkflowType.Translation
+                     && e.TargetEntityId == TalkId
+                     && e.TargetEntitySubKey == "lb")
+            .OrderBy(e => e.OccurredAt)
+            .ToListAsync();
+        events.Should().HaveCount(2);
+        events[0].EventType.Should().Be(WorkflowEventTypes.TranslationStarted);
+        events[1].EventType.Should().Be(WorkflowEventTypes.TranslationCompleted);
+    }
+
+    // 28 — RecordTranslationCompleted from AIGenerated (already completed) → idempotent success, no new event
+    [Fact]
+    public async Task RecordTranslationCompleted_FromAIGenerated_ReturnsSuccessWithNoNewEvent()
+    {
+        await SeedEventAsync(TalkId, "mk", WorkflowEventTypes.TranslationCompleted);
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var result = await service.RecordTranslationCompleted(TalkId, "mk");
+
+        result.Success.Should().BeTrue();
+
+        var db = GetDbContext();
+        var count = await db.Set<WorkflowEvent>()
+            .IgnoreQueryFilters()
+            .CountAsync(e => e.WorkflowType == WorkflowType.Translation
+                          && e.TargetEntityId == TalkId
+                          && e.TargetEntitySubKey == "mk");
+        count.Should().Be(1, "RecordTranslationCompleted from AIGenerated must be a no-op — no new event row");
+    }
+
+    // 29 — RecordTranslationCompleted from Accepted (illegal state) → WorkflowInvalidState
+    [Fact]
+    public async Task RecordTranslationCompleted_FromAccepted_ReturnsWorkflowInvalidState()
+    {
+        await SeedEventAsync(TalkId, "is", WorkflowEventTypes.AcceptedAsFinal);
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var result = await service.RecordTranslationCompleted(TalkId, "is");
+
+        result.Success.Should().BeFalse();
+        result.ErrorCode.Should().Be(FailureCode.WorkflowInvalidState);
+        result.Errors.Should().ContainSingle(e => e.Contains("Accepted") && e.Contains("Translating"));
+    }
+
+    // ── Translating state tests ───────────────────────────────────────────────
+
+    // 30 — GetState after TranslationStarted only → Translating
+    [Fact]
+    public async Task GetState_AfterTranslationStartedOnly_ReturnsTranslating()
+    {
+        await SeedEventAsync(TalkId, "lv", WorkflowEventTypes.TranslationStarted);
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var state = await service.GetState(TalkId, "lv");
+
+        state.State.Should().Be(TranslationWorkflowState.Translating);
+    }
+
+    // 31 — StartTranslation from Translating without confirmOverwrite → WorkflowConfirmationRequired
+    [Fact]
+    public async Task StartTranslation_FromTranslating_WithoutConfirmOverwrite_ReturnsConfirmationRequired()
+    {
+        await SeedEventAsync(TalkId, "lt", WorkflowEventTypes.TranslationStarted);
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var result = await service.StartTranslation(TalkId, "lt", confirmOverwrite: false);
+
+        result.Success.Should().BeFalse();
+        result.ErrorCode.Should().Be(FailureCode.WorkflowConfirmationRequired);
+        result.Errors.Should().ContainSingle(e => e.Contains("in flight") && e.Contains("confirmOverwrite"));
+    }
+
+    // 32 — StartTranslation from Translating with confirmOverwrite=true → success, second TranslationStarted written
+    [Fact]
+    public async Task StartTranslation_FromTranslating_WithConfirmOverwrite_ReturnsSuccess()
+    {
+        await SeedEventAsync(TalkId, "mt", WorkflowEventTypes.TranslationStarted);
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var result = await service.StartTranslation(TalkId, "mt", confirmOverwrite: true);
+
+        result.Success.Should().BeTrue();
+
+        var db = GetDbContext();
+        var events = await db.Set<WorkflowEvent>()
+            .IgnoreQueryFilters()
+            .Where(e => e.WorkflowType == WorkflowType.Translation
+                     && e.TargetEntityId == TalkId
+                     && e.TargetEntitySubKey == "mt"
+                     && e.EventType == WorkflowEventTypes.TranslationStarted)
+            .ToListAsync();
+        events.Should().HaveCount(2, "confirmOverwrite=true on an in-flight translation writes a second TranslationStarted event");
+    }
 }

@@ -3,6 +3,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using QuantumBuild.Core.Application.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Workflows;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
@@ -14,15 +15,18 @@ public class UpdateToolboxTalkCommandHandler : IRequestHandler<UpdateToolboxTalk
 {
     private readonly IToolboxTalksDbContext _dbContext;
     private readonly ICurrentUserService _currentUser;
+    private readonly ITranslationWorkflowService _workflowService;
     private readonly ILogger<UpdateToolboxTalkCommandHandler> _logger;
 
     public UpdateToolboxTalkCommandHandler(
         IToolboxTalksDbContext dbContext,
         ICurrentUserService currentUser,
+        ITranslationWorkflowService workflowService,
         ILogger<UpdateToolboxTalkCommandHandler> logger)
     {
         _dbContext = dbContext;
         _currentUser = currentUser;
+        _workflowService = workflowService;
         _logger = logger;
     }
 
@@ -102,6 +106,11 @@ public class UpdateToolboxTalkCommandHandler : IRequestHandler<UpdateToolboxTalk
             toolboxTalk.Code = request.Code.Trim();
         }
 
+        // Capture whether translated scalar fields changed BEFORE updating them,
+        // so we can mark translations stale if the source text shifts.
+        var scalarStaleningChange = toolboxTalk.Title != request.Title
+                                 || toolboxTalk.Description != request.Description;
+
         // Update basic properties
         toolboxTalk.Title = request.Title;
         toolboxTalk.Description = request.Description;
@@ -128,15 +137,47 @@ public class UpdateToolboxTalkCommandHandler : IRequestHandler<UpdateToolboxTalk
         toolboxTalk.UpdatedAt = DateTime.UtcNow;
         toolboxTalk.UpdatedBy = _currentUser.UserId;
 
-        // Handle sections update - query from DbContext directly to avoid concurrency issues
-        await UpdateSectionsAsync(toolboxTalk, request.Sections, cancellationToken);
+        // Handle sections update - returns true if any section was added, removed, or had
+        // its Title or Content changed (pure reorders do not count as stalening).
+        var sectionStaleningChange = await UpdateSectionsAsync(toolboxTalk, request.Sections, cancellationToken);
 
-        // Handle questions update - query from DbContext directly to avoid concurrency issues
-        await UpdateQuestionsAsync(toolboxTalk, request.Questions, cancellationToken);
+        // Handle questions update - returns true if any question was added, removed, or had
+        // its QuestionText or Options changed (pure reorders do not count as stalening).
+        var questionStaleningChange = await UpdateQuestionsAsync(toolboxTalk, request.Questions, cancellationToken);
+
+        var anyStaleningChange = scalarStaleningChange || sectionStaleningChange || questionStaleningChange;
+
+        // If content that feeds into translations changed, mark existing translations stale
+        // and set NeedsRevalidation in memory so the main SaveChangesAsync persists it.
+        var staledLanguageCodes = new List<string>();
+        if (anyStaleningChange)
+        {
+            var affectedTranslations = await _dbContext.ToolboxTalkTranslations
+                .Where(t => t.ToolboxTalkId == toolboxTalk.Id && !t.IsDeleted)
+                .ToListAsync(cancellationToken);
+
+            foreach (var translation in affectedTranslations)
+            {
+                if (!translation.NeedsRevalidation)
+                    translation.NeedsRevalidation = true;
+                staledLanguageCodes.Add(translation.LanguageCode);
+            }
+
+            _logger.LogInformation(
+                "Stalening change detected on talk {Id}. Marking {Count} language(s) stale: {Languages}",
+                toolboxTalk.Id, staledLanguageCodes.Count, string.Join(", ", staledLanguageCodes));
+        }
 
         _logger.LogInformation("[DEBUG] Calling SaveChangesAsync for UpdateToolboxTalk {Id}...", toolboxTalk.Id);
         await _dbContext.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("[DEBUG] SaveChangesAsync completed for UpdateToolboxTalk {Id}", toolboxTalk.Id);
+
+        // After the main save, emit MarkedStale workflow events for each affected language.
+        // Each MarkStale call is idempotent (Phase 3a), so double-calls are safe.
+        foreach (var languageCode in staledLanguageCodes)
+        {
+            await _workflowService.MarkStale(toolboxTalk.Id, languageCode, cancellationToken);
+        }
 
         // Reload sections and questions for the response
         var sections = await _dbContext.ToolboxTalkSections
@@ -163,8 +204,14 @@ public class UpdateToolboxTalkCommandHandler : IRequestHandler<UpdateToolboxTalk
         return MapToDto(toolboxTalk, sections, questions);
     }
 
-    private async Task UpdateSectionsAsync(ToolboxTalk toolboxTalk, List<UpdateToolboxTalkSectionDto> sectionDtos, CancellationToken cancellationToken)
+    /// <summary>
+    /// Returns true if any stalening change occurred: a section was added, removed,
+    /// or had its Title or Content changed. Pure reorders (same Id, same Title+Content,
+    /// different SectionNumber) return false.
+    /// </summary>
+    private async Task<bool> UpdateSectionsAsync(ToolboxTalk toolboxTalk, List<UpdateToolboxTalkSectionDto>? sectionDtos, CancellationToken cancellationToken)
     {
+        sectionDtos ??= [];
         // Get existing non-deleted sections directly from DbContext
         var existingSections = await _dbContext.ToolboxTalkSections
             .Where(s => s.ToolboxTalkId == toolboxTalk.Id && !s.IsDeleted)
@@ -187,7 +234,9 @@ public class UpdateToolboxTalkCommandHandler : IRequestHandler<UpdateToolboxTalk
             existingSectionIds.Except(incomingSectionIds).Count(),
             sectionDtos.Count(s => !s.Id.HasValue));
 
-        // Soft-delete sections that are in DB but not in request
+        var staleningChange = false;
+
+        // Soft-delete sections that are in DB but not in request (= section removed)
         foreach (var section in existingSections)
         {
             if (!incomingSectionIds.Contains(section.Id))
@@ -195,6 +244,7 @@ public class UpdateToolboxTalkCommandHandler : IRequestHandler<UpdateToolboxTalk
                 section.IsDeleted = true;
                 section.UpdatedAt = DateTime.UtcNow;
                 section.UpdatedBy = _currentUser.UserId;
+                staleningChange = true;
             }
         }
 
@@ -208,6 +258,10 @@ public class UpdateToolboxTalkCommandHandler : IRequestHandler<UpdateToolboxTalk
 
                 if (existingSection != null)
                 {
+                    // Detect content/title edits before overwriting (pure reorders do not count)
+                    if (existingSection.Title != sectionDto.Title || existingSection.Content != sectionDto.Content)
+                        staleningChange = true;
+
                     // Update existing section
                     existingSection.SectionNumber = sectionDto.SectionNumber;
                     existingSection.Title = sectionDto.Title;
@@ -221,8 +275,9 @@ public class UpdateToolboxTalkCommandHandler : IRequestHandler<UpdateToolboxTalk
                 }
                 else
                 {
-                    // ID was provided but doesn't exist in DB - create as new
+                    // ID was provided but doesn't exist in DB - create as new (= section added)
                     _logger.LogWarning("Section ID {SectionId} not found, creating as new", sectionDto.Id.Value);
+                    staleningChange = true;
                     var newSection = new ToolboxTalkSection
                     {
                         Id = Guid.NewGuid(),
@@ -241,7 +296,8 @@ public class UpdateToolboxTalkCommandHandler : IRequestHandler<UpdateToolboxTalk
             }
             else
             {
-                // No ID - create new section
+                // No ID - create new section (= section added)
+                staleningChange = true;
                 var newSection = new ToolboxTalkSection
                 {
                     Id = Guid.NewGuid(),
@@ -258,10 +314,17 @@ public class UpdateToolboxTalkCommandHandler : IRequestHandler<UpdateToolboxTalk
                 _dbContext.ToolboxTalkSections.Add(newSection);
             }
         }
+
+        return staleningChange;
     }
 
-    private async Task UpdateQuestionsAsync(ToolboxTalk toolboxTalk, List<UpdateToolboxTalkQuestionDto> questionDtos, CancellationToken cancellationToken)
+    /// <summary>
+    /// Returns true if any stalening change occurred: a question was added, removed,
+    /// or had its QuestionText or Options changed. Pure reorders return false.
+    /// </summary>
+    private async Task<bool> UpdateQuestionsAsync(ToolboxTalk toolboxTalk, List<UpdateToolboxTalkQuestionDto>? questionDtos, CancellationToken cancellationToken)
     {
+        questionDtos ??= [];
         // Get existing non-deleted questions directly from DbContext
         var existingQuestions = await _dbContext.ToolboxTalkQuestions
             .Where(q => q.ToolboxTalkId == toolboxTalk.Id && !q.IsDeleted)
@@ -273,7 +336,9 @@ public class UpdateToolboxTalkCommandHandler : IRequestHandler<UpdateToolboxTalk
             .Select(q => q.Id!.Value)
             .ToHashSet();
 
-        // Soft-delete questions that are in DB but not in request
+        var staleningChange = false;
+
+        // Soft-delete questions that are in DB but not in request (= question removed)
         foreach (var question in existingQuestions)
         {
             if (!incomingQuestionIds.Contains(question.Id))
@@ -281,6 +346,7 @@ public class UpdateToolboxTalkCommandHandler : IRequestHandler<UpdateToolboxTalk
                 question.IsDeleted = true;
                 question.UpdatedAt = DateTime.UtcNow;
                 question.UpdatedBy = _currentUser.UserId;
+                staleningChange = true;
             }
         }
 
@@ -294,11 +360,19 @@ public class UpdateToolboxTalkCommandHandler : IRequestHandler<UpdateToolboxTalk
 
                 if (existingQuestion != null)
                 {
+                    // Detect text/options changes before overwriting (pure reorders do not count)
+                    var incomingOptions = questionDto.Options != null
+                        ? JsonSerializer.Serialize(questionDto.Options)
+                        : null;
+                    if (existingQuestion.QuestionText != questionDto.QuestionText
+                        || existingQuestion.Options != incomingOptions)
+                        staleningChange = true;
+
                     // Update existing question
                     existingQuestion.QuestionNumber = questionDto.QuestionNumber;
                     existingQuestion.QuestionText = questionDto.QuestionText;
                     existingQuestion.QuestionType = questionDto.QuestionType;
-                    existingQuestion.Options = questionDto.Options != null ? JsonSerializer.Serialize(questionDto.Options) : null;
+                    existingQuestion.Options = incomingOptions;
                     existingQuestion.CorrectAnswer = questionDto.CorrectAnswer;
                     existingQuestion.CorrectOptionIndex = ToolboxTalkQuestion.ComputeCorrectOptionIndex(questionDto.CorrectAnswer, questionDto.Options);
                     existingQuestion.Points = questionDto.Points;
@@ -311,8 +385,9 @@ public class UpdateToolboxTalkCommandHandler : IRequestHandler<UpdateToolboxTalk
                 }
                 else
                 {
-                    // ID was provided but doesn't exist in DB - create as new
+                    // ID was provided but doesn't exist in DB - create as new (= question added)
                     _logger.LogWarning("Question ID {QuestionId} not found, creating as new", questionDto.Id.Value);
+                    staleningChange = true;
                     var newQuestion = new ToolboxTalkQuestion
                     {
                         Id = Guid.NewGuid(),
@@ -335,7 +410,8 @@ public class UpdateToolboxTalkCommandHandler : IRequestHandler<UpdateToolboxTalk
             }
             else
             {
-                // No ID - create new question
+                // No ID - create new question (= question added)
+                staleningChange = true;
                 var newQuestion = new ToolboxTalkQuestion
                 {
                     Id = Guid.NewGuid(),
@@ -356,6 +432,8 @@ public class UpdateToolboxTalkCommandHandler : IRequestHandler<UpdateToolboxTalk
                 _dbContext.ToolboxTalkQuestions.Add(newQuestion);
             }
         }
+
+        return staleningChange;
     }
 
     private static ToolboxTalkDto MapToDto(ToolboxTalk entity, List<ToolboxTalkSection> sections, List<ToolboxTalkQuestion> questions)

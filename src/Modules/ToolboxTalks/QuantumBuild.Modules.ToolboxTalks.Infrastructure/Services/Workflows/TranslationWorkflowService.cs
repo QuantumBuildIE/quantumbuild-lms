@@ -69,6 +69,11 @@ public sealed class TranslationWorkflowService(
         var stateDto = await GetState(talkId, languageCode, ct);
         var state = stateDto.State;
 
+        if (state is TranslationWorkflowState.Translating && !confirmOverwrite)
+            return Result.Fail(
+                "Cannot start translation: a translation is already in flight for this language. Set confirmOverwrite=true to confirm overwrite of the in-progress translation.",
+                FailureCode.WorkflowConfirmationRequired);
+
         if ((state is TranslationWorkflowState.Accepted or TranslationWorkflowState.ReviewerAccepted) && !confirmOverwrite)
             return Result.Fail(
                 $"Cannot start translation: language is in {state} state. Set confirmOverwrite=true to confirm overwrite of accepted translation.",
@@ -81,6 +86,34 @@ public sealed class TranslationWorkflowService(
 
         AddEvent(talkId, languageCode, WorkflowEventTypes.TranslationStarted,
             Serialize(new { languageCode, confirmOverwrite }));
+        await context.SaveChangesAsync(ct);
+
+        // TODO Phase 7: fire WorkflowNotificationTrigger
+        return Result.Ok();
+    }
+
+    /// <summary>
+    /// Records that an in-flight translation has completed successfully.
+    /// Transitions the language's state to AIGenerated. Idempotent —
+    /// calling from AIGenerated returns success without writing a new
+    /// event. Calling from any other state returns
+    /// FailureCode.WorkflowInvalidState.
+    /// </summary>
+    public async Task<Result> RecordTranslationCompleted(Guid talkId, string languageCode, CancellationToken ct = default)
+    {
+        var stateDto = await GetState(talkId, languageCode, ct);
+
+        // Idempotent: already in AIGenerated → no-op success
+        if (stateDto.State == TranslationWorkflowState.AIGenerated)
+            return Result.Ok();
+
+        // Guard: legal source is Translating (started but not yet completed)
+        if (stateDto.State != TranslationWorkflowState.Translating)
+            return Result.Fail(
+                $"Cannot record translation completed from state {stateDto.State}; requires Translating.",
+                FailureCode.WorkflowInvalidState);
+
+        AddEvent(talkId, languageCode, WorkflowEventTypes.TranslationCompleted, payloadJson: null);
         await context.SaveChangesAsync(ct);
 
         // TODO Phase 7: fire WorkflowNotificationTrigger
@@ -307,6 +340,7 @@ public sealed class TranslationWorkflowService(
 
     private static TranslationWorkflowState EventTypeToState(string eventType) => eventType switch
     {
+        WorkflowEventTypes.TranslationStarted      => TranslationWorkflowState.Translating,
         WorkflowEventTypes.TranslationCompleted    => TranslationWorkflowState.AIGenerated,
         WorkflowEventTypes.ValidationCompleted     => TranslationWorkflowState.Validated,
         WorkflowEventTypes.InternalReviewSubmitted => TranslationWorkflowState.ReviewerAccepted,
@@ -316,9 +350,9 @@ public sealed class TranslationWorkflowService(
         WorkflowEventTypes.ExternalReviewRejected  => TranslationWorkflowState.ReviewerAccepted,
         WorkflowEventTypes.AcceptedAsFinal         => TranslationWorkflowState.Accepted,
         WorkflowEventTypes.MarkedStale             => TranslationWorkflowState.Stale,
-        // TODO Phase 2: Started events imply transient in-progress state,
-        // not Initial. Phase 2 will introduce in-progress states or compute
-        // GetState from the most recent terminal event.
+        // ValidationStarted falls through to Initial; see BACKLOG §10
+        // for the deferred fix. TranslationStarted is handled via the
+        // case above.
         _ => TranslationWorkflowState.Initial
     };
 

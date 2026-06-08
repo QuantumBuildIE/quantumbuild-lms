@@ -1096,6 +1096,7 @@ public class ToolboxTalksController : ControllerBase
                 ToolboxTalkId = id,
                 TenantId = _currentUserService.TenantId,
                 TargetLanguages = request.Languages,
+                ConfirmOverwrite = request.ConfirmOverwrite ?? false,
                 SectorKey = sectorKey
             };
 
@@ -1778,6 +1779,12 @@ public record GenerateTranslationsRequest
     /// List of language names to translate to (e.g., "Polish", "Romanian")
     /// </summary>
     public List<string> Languages { get; init; } = new();
+
+    /// <summary>
+    /// When true, allows overwriting a translation in Accepted or ReviewerAccepted state.
+    /// Set to true when the user confirms the overwrite dialog in the UI.
+    /// </summary>
+    public bool? ConfirmOverwrite { get; init; }
 }
 
 /// <summary>

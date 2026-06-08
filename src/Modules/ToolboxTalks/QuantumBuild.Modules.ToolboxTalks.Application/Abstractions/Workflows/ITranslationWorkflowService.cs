@@ -17,6 +17,15 @@ public interface ITranslationWorkflowService
     /// </summary>
     Task<Result> StartTranslation(Guid talkId, string languageCode, bool confirmOverwrite = false, CancellationToken ct = default);
 
+    /// <summary>
+    /// Records that an in-flight translation has completed successfully.
+    /// Transitions the language's state to AIGenerated. Idempotent —
+    /// calling from AIGenerated returns success without writing a new
+    /// event. Calling from any other state returns
+    /// FailureCode.WorkflowInvalidState.
+    /// </summary>
+    Task<Result> RecordTranslationCompleted(Guid talkId, string languageCode, CancellationToken ct = default);
+
     /// <summary>Records that a back-translation validation run was kicked off.</summary>
     Task<Result> StartValidation(Guid talkId, string languageCode, CancellationToken ct = default);
 
