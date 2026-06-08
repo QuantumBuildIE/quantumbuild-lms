@@ -127,7 +127,20 @@ Emit phrase-level `TranslationFlag` rows alongside Phase 2a's section-level flag
 
 Refactor the edit page to consume the workflow service. Per-language status panel, per-language operations. Closes LEARNING_LIFECYCLE §10.9.1, §10.9.2, §10.9.4, §10.9.5, §10.9.6.
 
-**Estimate:** 7–10 days.
+Split into three chunks per the Phase 3 recon outcome (2026-06-08):
+
+**Phase 3a — State machine guards.** Complete the `StartTranslation` / `StartValidation` guard enforcement deferred in Phase 1 (the `// TODO Phase 2: enforce state machine guard` markers in `TranslationWorkflowService`). Pure service-layer work — extends the existing `TranslationWorkflowServiceTests` integration suite. No UI or controller changes. Wiring the UI to a service that doesn't yet enforce its state machine would re-introduce §10.9.5-class issues at the controller layer.
+
+**Phase 3b — Backend integration.** Wires the workflow service into the edit-page command path:
+- New endpoint exposing `GetState` per language for a talk (current `GET /translations` returns a thin DTO with no workflow state).
+- `GenerateContentTranslationsCommandHandler` refactored to call `StartTranslation` (closes §10.9.5 and §10.9.6 backend-side; backend now enforces what the Phase 0 UI hotfix only suggests).
+- `UpdateToolboxTalkCommand` extended to call `MarkStale` on languages whose translations are affected by section edits or section adds/removes (closes §10.9.1 and §10.9.2 backend-side). Automatic, not user-driven — the data really is stale; the user should not have to declare it.
+
+**Phase 3c — Frontend refactor.** Replaces `ContentTranslationPanel`'s batch-of-checkboxes UX with a per-language status panel. Each language renders: current workflow state, last validation outcome, per-language actions (translate, validate, accept, etc.). Closes §10.9.4 via UI clarity — slideshow staleness shown separately from translation staleness, so the asymmetry is no longer silent.
+
+**Out of scope for Phase 3:** §10.9.3 (Regenerate Slideshow destroys all slideshow translations) is a different UI surface, different endpoint, and structurally talk-level rather than per-language. It will be addressed as part of a future slideshow-operations phase alongside §10.9.7 (orphaned `ToolboxTalkSlideTranslation` rows after PDF re-extraction) and the slideshow half of §10.9.4 — those three together form a coherent unit of work that doesn't fit Phase 3's per-language framing.
+
+**Estimate:** 7–10 days (3a: 1-2 days; 3b: 3-4 days; 3c: 3-4 days).
 
 ### Phase 4 — External participant portal
 
@@ -186,6 +199,9 @@ Confirmed in design conversation:
 11. **Skip-if-exists asymmetry on other translation tables:** out of scope; flagged in BACKLOG.
 12. **Notifications:** v2. Generic `WorkflowNotificationTrigger` hooks at all state transitions in v1; no listeners until v2.
 13. **Slide / slideshow / subtitle / video / course translations:** out of scope. The workflow pattern may apply to them later if needed.
+14. **§10.9.3 deferred from Phase 3.** Recon (2026-06-08) confirmed §10.9.3 is structurally talk-level (Regenerate Slideshow button, `POST /generate-slides`, all-languages hard-delete) and does not fit Phase 3's per-language workflow-service framing. Deferred to a future slideshow-operations phase alongside §10.9.7 and the slideshow half of §10.9.4.
+15. **`MarkStale` is automatic, not user-driven.** When the admin edits a section's title or content (or adds/removes a section), `UpdateToolboxTalkCommand` will call `MarkStale` on every language whose translation is now stale. The user does not have to declare staleness — the data model knows. UI shows the resulting Stale state; user-driven re-translation is the response. (Resolves §11 question 3.)
+16. **State machine guards complete before UI wiring.** Phase 1 deferred guard enforcement on `StartTranslation` / `StartValidation` to a later phase (TODO comments still in code). Phase 3a completes those guards before Phase 3b wires the service to controllers. Wiring an unguarded service to the UI would re-introduce §10.9.5-class issues at the controller layer.
 
 ---
 
@@ -195,7 +211,7 @@ To be resolved before or during build:
 
 1. **Validation engine output granularity.** Resolved 2026-06-07: phrase-level flagging is new feature work. The engine produces only section-level scalars; no back-translation provider returns annotations; `WordDiffService` exists but is unused. Phase 2 split into 2a (section-level fallback, ships first) and 2b (phrase-level via WordDiffService). AI-annotation alternative deferred to v2 per §12.
 2. **Cutover plan for the wizard.** What milestone retires the old one? Is there an opt-in flag visible to admin users during the parallel phase?
-3. **Stale detection.** What exactly triggers a translation transitioning to Stale? Section edits, source rewrites — needs precise specification.
+3. **Stale detection.** Resolved 2026-06-08: `MarkStale` triggers automatically from `UpdateToolboxTalkCommand` when a section's title or content is edited, or when sections are added/removed. The handler iterates the affected languages (those with existing translations) and calls `MarkStale` per language. Implementation lands in Phase 3b. See §10 decision 15.
 4. **Multiple in-flight external invitations per (talk, language).** Allow? Block? Simplest model: one active invitation at a time.
 5. **What if external submission contains content that re-fails validation?** Auto-re-validate? Surface? Leave to internal reviewer?
 6. **WorkflowInstanceId encoding.** Resolved 2026-06-06: triple of WorkflowType + TargetEntityId + TargetEntitySubKey. For translation: Translation + ToolboxTalkId + languageCode. See TranslationWorkflowService and the workflows schema. (Commit hashes: 1a=b17c53a, 1b=4cc4bb4, 1b.5=c617d80, 1c=9f45906.)
