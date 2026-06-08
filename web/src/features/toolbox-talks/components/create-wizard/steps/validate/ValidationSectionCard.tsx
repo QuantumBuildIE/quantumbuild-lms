@@ -31,6 +31,7 @@ import type {
   ReviewReason,
   ReviewReasonType,
 } from '@/types/content-creation';
+import { FlaggedText } from './FlaggedText';
 
 // ============================================
 // Types
@@ -381,6 +382,9 @@ export function ValidationSectionCard({
   const renderBody = () => {
     if (!result || !isExpanded) return null;
 
+    const displayText = result.editedSource ?? result.originalText;
+    const displayFlags = result.editedSource ? [] : (result.flags ?? []);
+
     return (
       <div className="space-y-4 border-t px-4 py-4">
         {/* Original / Translation side-by-side */}
@@ -405,7 +409,7 @@ export function ValidationSectionCard({
               </div>
             ) : (
               <div className="rounded-md border bg-muted/20 p-3 text-sm leading-relaxed">
-                {result.editedSource ?? result.originalText}
+                <FlaggedText text={displayText} flags={displayFlags} />
               </div>
             )}
           </div>

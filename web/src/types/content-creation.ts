@@ -221,6 +221,22 @@ export interface ReviewReason {
   detail: string;
 }
 
+// Translation flag types
+export enum FlagSeverity {
+  Info = 'Info',
+  Warning = 'Warning',
+  Error = 'Error',
+}
+
+export interface TranslationFlag {
+  id: string;
+  startOffset: number;
+  endOffset: number;
+  severity: FlagSeverity;
+  reason: string;
+  createdAt: string;
+}
+
 export interface SectionValidationResult {
   id: string;
   sectionIndex: number;
@@ -253,6 +269,7 @@ export interface SectionValidationResult {
   editedSource: string | null;
   decisionAt: string | null;
   decisionBy: string | null;
+  flags: TranslationFlag[];
 }
 
 // ============================================
