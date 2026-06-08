@@ -33,7 +33,8 @@ public class WordToSentenceMapperTests
             [new DiffRun(1, 1, DiffType.Delete)]);
 
         result.Should().HaveCount(1);
-        result[0].Should().Be((0, 15));
+        result[0].StartOffset.Should().Be(0);
+        result[0].EndOffset.Should().Be(15);
     }
 
     [Fact]
@@ -46,7 +47,8 @@ public class WordToSentenceMapperTests
             [new DiffRun(1, 2, DiffType.Delete)]);
 
         result.Should().HaveCount(1);
-        result[0].Should().Be((7, 18));
+        result[0].StartOffset.Should().Be(7);
+        result[0].EndOffset.Should().Be(18);
     }
 
     [Fact]
@@ -59,7 +61,8 @@ public class WordToSentenceMapperTests
             [new DiffRun(0, 0, DiffType.Delete), new DiffRun(1, 1, DiffType.Delete)]);
 
         result.Should().HaveCount(1);
-        result[0].Should().Be((0, 15));
+        result[0].StartOffset.Should().Be(0);
+        result[0].EndOffset.Should().Be(15);
     }
 
     [Fact]
@@ -72,8 +75,10 @@ public class WordToSentenceMapperTests
             [new DiffRun(0, 0, DiffType.Delete), new DiffRun(3, 3, DiffType.Delete)]);
 
         result.Should().HaveCount(2);
-        result[0].Should().Be((0, 6));
-        result[1].Should().Be((19, 25));
+        result[0].StartOffset.Should().Be(0);
+        result[0].EndOffset.Should().Be(6);
+        result[1].StartOffset.Should().Be(19);
+        result[1].EndOffset.Should().Be(25);
     }
 
     [Fact]
@@ -86,7 +91,8 @@ public class WordToSentenceMapperTests
             [new DiffRun(0, 0, DiffType.Delete)]);
 
         result.Should().HaveCount(1);
-        result[0].Should().Be((0, 6));
+        result[0].StartOffset.Should().Be(0);
+        result[0].EndOffset.Should().Be(6);
     }
 
     [Fact]
@@ -99,7 +105,8 @@ public class WordToSentenceMapperTests
             [new DiffRun(3, 3, DiffType.Delete)]);
 
         result.Should().HaveCount(1);
-        result[0].Should().Be((19, 25));
+        result[0].StartOffset.Should().Be(19);
+        result[0].EndOffset.Should().Be(25);
     }
 
     [Fact]
@@ -112,7 +119,8 @@ public class WordToSentenceMapperTests
             [new DiffRun(99, 99, DiffType.Insert)]);
 
         result.Should().HaveCount(1);
-        result[0].Should().Be((19, 25));
+        result[0].StartOffset.Should().Be(19);
+        result[0].EndOffset.Should().Be(25);
     }
 
     [Fact]
@@ -124,5 +132,36 @@ public class WordToSentenceMapperTests
             [new DiffRun(0, 0, DiffType.Delete)]);
 
         result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Map_SingleDiffRun_RunsCollectionContainsThatRun()
+    {
+        // word 1 = "world" at char 6 — single run feeding the single sentence
+        var run = new DiffRun(1, 1, DiffType.Delete);
+        var result = _sut.Map(
+            SingleSentenceText,
+            SingleSentence,
+            [run]);
+
+        result.Should().HaveCount(1);
+        result[0].Runs.Should().ContainSingle().Which.Should().Be(run);
+    }
+
+    [Fact]
+    public void Map_TwoDiffRunsInSameSentence_RunsCollectionContainsBoth()
+    {
+        // Both words 0 and 1 are in the single sentence — both runs must appear in Runs
+        var run1 = new DiffRun(0, 0, DiffType.Delete);
+        var run2 = new DiffRun(1, 1, DiffType.Delete);
+        var result = _sut.Map(
+            SingleSentenceText,
+            SingleSentence,
+            [run1, run2]);
+
+        result.Should().HaveCount(1);
+        result[0].Runs.Should().HaveCount(2)
+            .And.Contain(run1)
+            .And.Contain(run2);
     }
 }

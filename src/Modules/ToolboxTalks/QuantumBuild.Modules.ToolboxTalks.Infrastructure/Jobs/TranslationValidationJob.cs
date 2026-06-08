@@ -33,6 +33,11 @@ public class TranslationValidationJob
     private readonly IPreFlightScanService _preFlightScanService;
     private readonly IPipelineVersionService _pipelineVersionService;
     private readonly ILogger<TranslationValidationJob> _logger;
+    private readonly ISentenceSplitter _sentenceSplitter;
+    private readonly IBackTranslationSelector _backTranslationSelector;
+    private readonly IWordDiffService _wordDiff;
+    private readonly IDiffRunGrouper _diffRunGrouper;
+    private readonly IWordToSentenceMapper _wordToSentenceMapper;
 
     private static readonly JsonSerializerOptions CamelCaseOptions = new()
     {
@@ -48,7 +53,12 @@ public class TranslationValidationJob
         ISafetyClassificationService safetyClassificationService,
         IPreFlightScanService preFlightScanService,
         IPipelineVersionService pipelineVersionService,
-        ILogger<TranslationValidationJob> logger)
+        ILogger<TranslationValidationJob> logger,
+        ISentenceSplitter sentenceSplitter,
+        IBackTranslationSelector backTranslationSelector,
+        IWordDiffService wordDiff,
+        IDiffRunGrouper diffRunGrouper,
+        IWordToSentenceMapper wordToSentenceMapper)
     {
         _validationService = validationService;
         _dbContext = dbContext;
@@ -59,6 +69,11 @@ public class TranslationValidationJob
         _preFlightScanService = preFlightScanService;
         _pipelineVersionService = pipelineVersionService;
         _logger = logger;
+        _sentenceSplitter = sentenceSplitter;
+        _backTranslationSelector = backTranslationSelector;
+        _wordDiff = wordDiff;
+        _diffRunGrouper = diffRunGrouper;
+        _wordToSentenceMapper = wordToSentenceMapper;
     }
 
     /// <summary>
@@ -188,6 +203,58 @@ public class TranslationValidationJob
                                 : FlagSeverity.Warning,
                             Reason = BuildFlagReason(result.ReviewReasonsJson)
                         });
+
+                        // Phase 2b: phrase-level flags alongside the section-level flag above
+                        if (result.BackTranslationA == null && result.BackTranslationB == null
+                            && result.BackTranslationC == null && result.BackTranslationD == null)
+                        {
+                            _logger.LogWarning(
+                                "No back-translations available for section {Index} in run {RunId} — skipping phrase-level flags",
+                                result.SectionIndex, validationRunId);
+                        }
+                        else
+                        {
+                            try
+                            {
+                                var selection = _backTranslationSelector.Select(result);
+                                var phraseWordDiff = _wordDiff.Diff(result.OriginalText, selection.Text);
+                                var phraseRuns = _diffRunGrouper.Group(phraseWordDiff.Operations);
+
+                                if (phraseRuns.Count > 0)
+                                {
+                                    var sentences = _sentenceSplitter.Split(result.OriginalText);
+                                    var sentenceSpans = _wordToSentenceMapper.Map(result.OriginalText, sentences, phraseRuns);
+
+                                    if (sentenceSpans.Count > 0)
+                                    {
+                                        foreach (var span in sentenceSpans)
+                                        {
+                                            var phraseReason = BuildPhraseReason(selection.ProviderLabel, span.Runs, phraseWordDiff.Operations);
+
+                                            _dbContext.TranslationFlags.Add(new Domain.Entities.TranslationFlag
+                                            {
+                                                Id = Guid.NewGuid(),
+                                                TenantId = tenantId,
+                                                ToolboxTalkId = run.ToolboxTalkId.Value,
+                                                LanguageCode = run.LanguageCode,
+                                                StartOffset = span.StartOffset,
+                                                EndOffset = span.EndOffset,
+                                                Severity = FlagSeverity.Warning,
+                                                Reason = phraseReason,
+                                                CreatedAt = DateTime.UtcNow
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                            catch (Exception phraseEx)
+                            {
+                                _logger.LogWarning(phraseEx,
+                                    "Phrase-level flag emission failed for section {Index} in run {RunId} — continuing",
+                                    result.SectionIndex, validationRunId);
+                            }
+                        }
+
                         await _dbContext.SaveChangesAsync(cancellationToken);
                     }
 
@@ -1151,6 +1218,62 @@ public class TranslationValidationJob
         {
             return fallback;
         }
+    }
+
+    /// <summary>
+    /// Builds a phrase-level flag reason from the diff runs and words involved.
+    /// Called once per sentence span with the runs that anchor to that span.
+    /// </summary>
+    private static string BuildPhraseReason(
+        string providerLabel,
+        IReadOnlyList<DiffRun> runsInSentence,
+        IReadOnlyList<DiffOperation> allOperations)
+    {
+        const int maxLength = 512;
+
+        var deleteRanges = runsInSentence
+            .Where(r => r.Type == DiffType.Delete)
+            .ToList();
+        var insertPositions = runsInSentence
+            .Where(r => r.Type == DiffType.Insert)
+            .Select(r => r.StartWordIndex)
+            .ToHashSet();
+
+        var deleteWords = new List<string>();
+        var insertWords = new List<string>();
+        int counter = 0;
+
+        foreach (var op in allOperations)
+        {
+            switch (op.Type)
+            {
+                case DiffType.Delete:
+                    if (deleteRanges.Any(r => counter >= r.StartWordIndex && counter <= r.EndWordIndex))
+                        deleteWords.Add(op.Word);
+                    counter++;
+                    break;
+                case DiffType.Insert:
+                    if (insertPositions.Contains(counter))
+                        insertWords.Add(op.Word);
+                    break;
+                case DiffType.Equal:
+                    counter++;
+                    break;
+            }
+        }
+
+        bool hasDelete = runsInSentence.Any(r => r.Type == DiffType.Delete);
+        bool hasInsert = runsInSentence.Any(r => r.Type == DiffType.Insert);
+
+        string reason;
+        if (hasDelete && !hasInsert)
+            reason = $"Words missing from back-translation ({providerLabel}): '{string.Join(" ", deleteWords)}'";
+        else if (hasInsert && !hasDelete)
+            reason = $"Extra words in back-translation ({providerLabel}): '{string.Join(" ", insertWords)}'";
+        else
+            reason = $"Words differ in back-translation ({providerLabel}): missing '{string.Join(" ", deleteWords)}', extra '{string.Join(" ", insertWords)}'";
+
+        return reason.Length <= maxLength ? reason : reason[..maxLength];
     }
 
     /// <summary>

@@ -13,11 +13,21 @@ public interface IWordToSentenceMapper
     /// <param name="sentences">Sentence spans produced by ISentenceSplitter.</param>
     /// <param name="diffRuns">Qualifying diff runs produced by IDiffRunGrouper.</param>
     /// <returns>
-    /// Deduplicated list of (StartOffset, EndOffset) sentence character spans.
+    /// Deduplicated list of <see cref="SentenceFlagSpan"/> values in sentence-first-hit order.
+    /// Each span carries the DiffRuns that anchored to it.
     /// Returns an empty list when the original text has no words.
     /// </returns>
-    IReadOnlyList<(int StartOffset, int EndOffset)> Map(
+    IReadOnlyList<SentenceFlagSpan> Map(
         string originalText,
         IReadOnlyList<SentenceSpan> sentences,
         IReadOnlyList<DiffRun> diffRuns);
 }
+
+/// <summary>
+/// A sentence character span together with the diff runs that map to it.
+/// StartOffset is inclusive; EndOffset is exclusive.
+/// </summary>
+public record SentenceFlagSpan(
+    int StartOffset,
+    int EndOffset,
+    IReadOnlyList<DiffRun> Runs);

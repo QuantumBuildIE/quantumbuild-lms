@@ -9,7 +9,7 @@ namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Validation;
 public class WordToSentenceMapper : IWordToSentenceMapper
 {
     /// <inheritdoc />
-    public IReadOnlyList<(int StartOffset, int EndOffset)> Map(
+    public IReadOnlyList<SentenceFlagSpan> Map(
         string originalText,
         IReadOnlyList<SentenceSpan> sentences,
         IReadOnlyList<DiffRun> diffRuns)
@@ -22,8 +22,8 @@ public class WordToSentenceMapper : IWordToSentenceMapper
         if (wordCharMap.Length == 0)
             return [];
 
-        var seen = new HashSet<(int, int)>();
-        var result = new List<(int StartOffset, int EndOffset)>();
+        var runsBySpan = new Dictionary<(int, int), List<DiffRun>>();
+        var insertionOrder = new List<(int, int)>();
 
         foreach (var run in diffRuns)
         {
@@ -34,11 +34,18 @@ public class WordToSentenceMapper : IWordToSentenceMapper
             var sentence = FindSentence(sentences, charPos);
             var key = (sentence.Start, sentence.End);
 
-            if (seen.Add(key))
-                result.Add((sentence.Start, sentence.End));
+            if (!runsBySpan.TryGetValue(key, out var list))
+            {
+                list = new List<DiffRun>();
+                runsBySpan[key] = list;
+                insertionOrder.Add(key);
+            }
+            list.Add(run);
         }
 
-        return result;
+        return insertionOrder
+            .Select(k => new SentenceFlagSpan(k.Item1, k.Item2, runsBySpan[k]))
+            .ToList();
     }
 
     /// <summary>
