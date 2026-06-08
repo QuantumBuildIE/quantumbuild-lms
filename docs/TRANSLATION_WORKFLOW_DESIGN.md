@@ -131,6 +131,8 @@ Split into three chunks per the Phase 3 recon outcome (2026-06-08):
 
 **Phase 3a — State machine guards.** Complete the `StartTranslation` / `StartValidation` guard enforcement deferred in Phase 1 (the `// TODO Phase 2: enforce state machine guard` markers in `TranslationWorkflowService`). Pure service-layer work — extends the existing `TranslationWorkflowServiceTests` integration suite. No UI or controller changes. Wiring the UI to a service that doesn't yet enforce its state machine would re-introduce §10.9.5-class issues at the controller layer.
 
+**Status (Phase 3a):** Complete (2026-06-08). Commit 2cd8059. 26 of 26 tests passing in TranslationWorkflowServiceTests (was 10). Two new FailureCode values added: WorkflowInvalidState, WorkflowConfirmationRequired.
+
 **Phase 3b — Backend integration.** Wires the workflow service into the edit-page command path:
 - New endpoint exposing `GetState` per language for a talk (current `GET /translations` returns a thin DTO with no workflow state).
 - `GenerateContentTranslationsCommandHandler` refactored to call `StartTranslation` (closes §10.9.5 and §10.9.6 backend-side; backend now enforces what the Phase 0 UI hotfix only suggests).
