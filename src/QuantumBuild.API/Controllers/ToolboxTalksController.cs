@@ -27,6 +27,8 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Features.Certificates.DTOs;
 using QuantumBuild.Modules.ToolboxTalks.Application.Features.Certificates.Queries;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Storage;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Sectors;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Workflows;
+using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Workflows;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 using System.ComponentModel.DataAnnotations;
@@ -53,6 +55,7 @@ public class ToolboxTalksController : ControllerBase
     private readonly ISlideshowGenerationService _slideshowGenerationService;
     private readonly ISupervisorAssignmentService _supervisorAssignmentService;
     private readonly ITenantSectorService _tenantSectorService;
+    private readonly ITranslationWorkflowService _workflowService;
     private readonly UserManager<User> _userManager;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<ToolboxTalksController> _logger;
@@ -68,6 +71,7 @@ public class ToolboxTalksController : ControllerBase
         ISlideshowGenerationService slideshowGenerationService,
         ISupervisorAssignmentService supervisorAssignmentService,
         ITenantSectorService tenantSectorService,
+        ITranslationWorkflowService workflowService,
         UserManager<User> userManager,
         IHttpClientFactory httpClientFactory,
         ILogger<ToolboxTalksController> logger)
@@ -82,6 +86,7 @@ public class ToolboxTalksController : ControllerBase
         _slideshowGenerationService = slideshowGenerationService;
         _supervisorAssignmentService = supervisorAssignmentService;
         _tenantSectorService = tenantSectorService;
+        _workflowService = workflowService;
         _userManager = userManager;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
@@ -1176,6 +1181,52 @@ public class ToolboxTalksController : ControllerBase
         {
             _logger.LogError(ex, "Error retrieving translations for toolbox talk {ToolboxTalkId}", id);
             return StatusCode(500, new { error = "Error retrieving translations" });
+        }
+    }
+
+    /// <summary>
+    /// Gets the workflow state for each translated language of a toolbox talk.
+    /// </summary>
+    /// <param name="id">Toolbox talk ID</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>List of workflow states, one per language that has a translation row</returns>
+    [HttpGet("{id:guid}/translations/workflow-state")]
+    [ProducesResponseType(typeof(List<TranslationWorkflowStateDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<List<TranslationWorkflowStateDto>>> GetTranslationsWorkflowState(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            var query = new GetToolboxTalkByIdQuery
+            {
+                TenantId = _currentUserService.TenantId,
+                Id = id
+            };
+
+            var toolboxTalk = await _mediator.Send(query, ct);
+            if (toolboxTalk == null)
+            {
+                return NotFound(new { error = "Learning not found" });
+            }
+
+            var languageCodes = toolboxTalk.Translations?
+                .Select(t => t.LanguageCode)
+                .Distinct()
+                .ToList() ?? new List<string>();
+
+            var states = new List<TranslationWorkflowStateDto>();
+            foreach (var lang in languageCodes)
+            {
+                var state = await _workflowService.GetState(id, lang, ct);
+                states.Add(state);
+            }
+
+            return Ok(states);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving translation workflow states for toolbox talk {ToolboxTalkId}", id);
+            return StatusCode(500, new { error = "Error retrieving translation workflow states" });
         }
     }
 
