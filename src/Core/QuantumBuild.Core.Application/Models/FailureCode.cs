@@ -5,5 +5,7 @@ public enum FailureCode
     DuplicateEmail,
     WorkflowTokenInvalid,
     WorkflowTokenAlreadyUsed,
-    WorkflowTokenExpired
+    WorkflowTokenExpired,
+    WorkflowInvalidState,
+    WorkflowConfirmationRequired
 }

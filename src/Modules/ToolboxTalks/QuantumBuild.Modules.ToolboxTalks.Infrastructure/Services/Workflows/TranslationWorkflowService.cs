@@ -66,8 +66,18 @@ public sealed class TranslationWorkflowService(
 
     public async Task<Result> StartTranslation(Guid talkId, string languageCode, bool confirmOverwrite = false, CancellationToken ct = default)
     {
-        // TODO Phase 2: enforce state machine guard
-        // Allow only in Initial or Stale; require confirmOverwrite=true if current state is Accepted
+        var stateDto = await GetState(talkId, languageCode, ct);
+        var state = stateDto.State;
+
+        if ((state is TranslationWorkflowState.Accepted or TranslationWorkflowState.ReviewerAccepted) && !confirmOverwrite)
+            return Result.Fail(
+                $"Cannot start translation: language is in {state} state. Set confirmOverwrite=true to confirm overwrite of accepted translation.",
+                FailureCode.WorkflowConfirmationRequired);
+
+        if (state is TranslationWorkflowState.AwaitingThirdParty or TranslationWorkflowState.ThirdPartyReviewed)
+            return Result.Fail(
+                $"Cannot start translation while external review is in progress (current state: {state}).",
+                FailureCode.WorkflowInvalidState);
 
         AddEvent(talkId, languageCode, WorkflowEventTypes.TranslationStarted,
             Serialize(new { languageCode, confirmOverwrite }));
@@ -79,7 +89,13 @@ public sealed class TranslationWorkflowService(
 
     public async Task<Result> StartValidation(Guid talkId, string languageCode, CancellationToken ct = default)
     {
-        // TODO Phase 2: enforce state machine guard — allow only in AIGenerated
+        var stateDto = await GetState(talkId, languageCode, ct);
+        var state = stateDto.State;
+
+        if (state != TranslationWorkflowState.AIGenerated)
+            return Result.Fail(
+                $"Cannot start validation from state {state}; requires AIGenerated.",
+                FailureCode.WorkflowInvalidState);
 
         AddEvent(talkId, languageCode, WorkflowEventTypes.ValidationStarted,
             Serialize(new { languageCode }));
@@ -91,7 +107,13 @@ public sealed class TranslationWorkflowService(
 
     public async Task<Result> SubmitInternalReview(Guid talkId, string languageCode, bool accepted, string? editedContent, CancellationToken ct = default)
     {
-        // TODO Phase 2: enforce state machine guard — allow only in Validated
+        var stateDto = await GetState(talkId, languageCode, ct);
+        var state = stateDto.State;
+
+        if (state != TranslationWorkflowState.Validated)
+            return Result.Fail(
+                $"Cannot submit internal review from state {state}; requires Validated.",
+                FailureCode.WorkflowInvalidState);
 
         context.WorkflowReviews.Add(new WorkflowReview
         {
@@ -116,7 +138,13 @@ public sealed class TranslationWorkflowService(
 
     public async Task<Result<InitiateExternalReviewResult>> InitiateExternalReview(Guid talkId, string languageCode, string invitedEmail, CancellationToken ct = default)
     {
-        // TODO Phase 2: enforce state machine guard — allow only when last InternalReviewSubmitted was accepted
+        var stateDto = await GetState(talkId, languageCode, ct);
+        var state = stateDto.State;
+
+        if (state != TranslationWorkflowState.ReviewerAccepted)
+            return Result.Fail<InitiateExternalReviewResult>(
+                $"Cannot initiate external review from state {state}; requires ReviewerAccepted.",
+                FailureCode.WorkflowInvalidState);
 
         var rawToken = Guid.NewGuid().ToString("N");
         var tokenHash = HashToken(rawToken);
@@ -169,6 +197,22 @@ public sealed class TranslationWorkflowService(
         if (invitation.Status != InvitationStatus.Pending || invitation.ExpiresAt < DateTime.UtcNow)
             return Result.Fail("This invitation link has expired.", FailureCode.WorkflowTokenExpired);
 
+        // State guard: public endpoint — IgnoreQueryFilters since no JWT tenant context
+        var lastEvent = await context.WorkflowEvents
+            .IgnoreQueryFilters()
+            .Where(e => e.WorkflowType == WorkflowType.Translation
+                     && e.TargetEntityId == invitation.TargetEntityId
+                     && e.TargetEntitySubKey == invitation.TargetEntitySubKey
+                     && !e.IsDeleted)
+            .OrderByDescending(e => e.OccurredAt)
+            .FirstOrDefaultAsync(ct);
+
+        var currentState = lastEvent is null ? TranslationWorkflowState.Initial : EventTypeToState(lastEvent.EventType);
+        if (currentState != TranslationWorkflowState.AwaitingThirdParty)
+            return Result.Fail(
+                $"External review submission not accepted from state {currentState}; invitation may be stale.",
+                FailureCode.WorkflowInvalidState);
+
         invitation.Status = InvitationStatus.Used;
         invitation.UsedAt = DateTime.UtcNow;
 
@@ -207,7 +251,13 @@ public sealed class TranslationWorkflowService(
 
     public async Task<Result> ConfirmExternalReview(Guid talkId, string languageCode, bool accepted, CancellationToken ct = default)
     {
-        // TODO Phase 2: enforce state machine guard — allow only in ThirdPartyReviewed
+        var stateDto = await GetState(talkId, languageCode, ct);
+        var state = stateDto.State;
+
+        if (state != TranslationWorkflowState.ThirdPartyReviewed)
+            return Result.Fail(
+                $"Cannot confirm external review from state {state}; requires ThirdPartyReviewed.",
+                FailureCode.WorkflowInvalidState);
 
         AddEvent(talkId, languageCode, WorkflowEventTypes.ExternalReviewConfirmed,
             Serialize(new { accepted }));
@@ -219,7 +269,15 @@ public sealed class TranslationWorkflowService(
 
     public async Task<Result> AcceptAsFinal(Guid talkId, string languageCode, CancellationToken ct = default)
     {
-        // TODO Phase 2: enforce state machine guard
+        var stateDto = await GetState(talkId, languageCode, ct);
+        var state = stateDto.State;
+
+        if (state is not (TranslationWorkflowState.Validated
+                       or TranslationWorkflowState.ReviewerAccepted
+                       or TranslationWorkflowState.ThirdPartyReviewed))
+            return Result.Fail(
+                $"Cannot accept as final from state {state}; requires Validated, ReviewerAccepted, or ThirdPartyReviewed.",
+                FailureCode.WorkflowInvalidState);
 
         AddEvent(talkId, languageCode, WorkflowEventTypes.AcceptedAsFinal, payloadJson: null);
         await context.SaveChangesAsync(ct);
@@ -228,9 +286,15 @@ public sealed class TranslationWorkflowService(
         return Result.Ok();
     }
 
+    /// <summary>
+    /// Marks the translation as stale (requires re-translation).
+    /// <para>Idempotent: if the language is already in Stale state, returns success without writing a new event.</para>
+    /// </summary>
     public async Task<Result> MarkStale(Guid talkId, string languageCode, CancellationToken ct = default)
     {
-        // TODO Phase 2: enforce state machine guard
+        var stateDto = await GetState(talkId, languageCode, ct);
+        if (stateDto.State == TranslationWorkflowState.Stale)
+            return Result.Ok();
 
         AddEvent(talkId, languageCode, WorkflowEventTypes.MarkedStale, payloadJson: null);
         await context.SaveChangesAsync(ct);
