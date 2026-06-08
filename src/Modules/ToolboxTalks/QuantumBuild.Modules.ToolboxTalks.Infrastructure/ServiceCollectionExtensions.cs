@@ -206,6 +206,10 @@ public static class ServiceCollectionExtensions
         // Register translation validation scoring and diff services (pure logic, no HTTP)
         services.AddSingleton<ILexicalScoringService, LexicalScoringService>();
         services.AddSingleton<IWordDiffService, WordDiffService>();
+        services.AddSingleton<ISentenceSplitter, SentenceSplitter>();
+        services.AddSingleton<IBackTranslationSelector, BackTranslationSelector>();
+        services.AddSingleton<IDiffRunGrouper, DiffRunGrouper>();
+        services.AddSingleton<IWordToSentenceMapper, WordToSentenceMapper>();
 
         // Register dialect detection service (uses Claude Haiku API)
         services.AddHttpClient<IDialectDetectionService, DialectDetectionService>(client =>
