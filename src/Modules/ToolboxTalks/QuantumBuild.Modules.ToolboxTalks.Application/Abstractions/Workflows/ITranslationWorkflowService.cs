@@ -1,5 +1,6 @@
 using QuantumBuild.Core.Application.Models;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Workflows;
+using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Workflows;
 
@@ -15,7 +16,7 @@ public interface ITranslationWorkflowService
     /// Records that an AI translation run was kicked off.
     /// <para>Pass <paramref name="confirmOverwrite"/> = true when overwriting an Accepted translation.</para>
     /// </summary>
-    Task<Result> StartTranslation(Guid talkId, string languageCode, bool confirmOverwrite = false, CancellationToken ct = default);
+    Task<Result> StartTranslation(Guid talkId, string languageCode, bool confirmOverwrite = false, TriggeredByType triggeredBy = TriggeredByType.User, CancellationToken ct = default);
 
     /// <summary>
     /// Records that an in-flight translation has completed successfully.
@@ -24,7 +25,7 @@ public interface ITranslationWorkflowService
     /// event. Calling from any other state returns
     /// FailureCode.WorkflowInvalidState.
     /// </summary>
-    Task<Result> RecordTranslationCompleted(Guid talkId, string languageCode, CancellationToken ct = default);
+    Task<Result> RecordTranslationCompleted(Guid talkId, string languageCode, TriggeredByType triggeredBy = TriggeredByType.User, CancellationToken ct = default);
 
     /// <summary>Records that a back-translation validation run was kicked off.</summary>
     Task<Result> StartValidation(Guid talkId, string languageCode, CancellationToken ct = default);
@@ -51,5 +52,5 @@ public interface ITranslationWorkflowService
     Task<Result> AcceptAsFinal(Guid talkId, string languageCode, CancellationToken ct = default);
 
     /// <summary>Marks the translation as stale (requires re-translation).</summary>
-    Task<Result> MarkStale(Guid talkId, string languageCode, CancellationToken ct = default);
+    Task<Result> MarkStale(Guid talkId, string languageCode, TriggeredByType triggeredBy = TriggeredByType.User, CancellationToken ct = default);
 }

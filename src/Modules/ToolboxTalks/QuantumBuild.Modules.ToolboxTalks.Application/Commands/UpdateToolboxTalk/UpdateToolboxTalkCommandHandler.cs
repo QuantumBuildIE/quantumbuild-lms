@@ -176,7 +176,7 @@ public class UpdateToolboxTalkCommandHandler : IRequestHandler<UpdateToolboxTalk
         // Each MarkStale call is idempotent (Phase 3a), so double-calls are safe.
         foreach (var languageCode in staledLanguageCodes)
         {
-            await _workflowService.MarkStale(toolboxTalk.Id, languageCode, cancellationToken);
+            await _workflowService.MarkStale(toolboxTalk.Id, languageCode, ct: cancellationToken);
         }
 
         // Reload sections and questions for the response

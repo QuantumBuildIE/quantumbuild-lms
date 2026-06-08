@@ -1,4 +1,5 @@
 using MediatR;
+using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Application.Commands.GenerateContentTranslations;
 
@@ -34,6 +35,12 @@ public record GenerateContentTranslationsCommand : IRequest<GenerateContentTrans
     /// Nullable because some dispatch sites may not have sector context available.
     /// </summary>
     public string? SectorKey { get; init; }
+
+    /// <summary>
+    /// Who triggered this translation run. Use System for background jobs (Hangfire).
+    /// Defaults to User to preserve existing callers.
+    /// </summary>
+    public TriggeredByType TriggeredBy { get; init; } = TriggeredByType.User;
 }
 
 /// <summary>

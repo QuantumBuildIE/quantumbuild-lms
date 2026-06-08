@@ -715,4 +715,59 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
             .ToListAsync();
         events.Should().HaveCount(2, "confirmOverwrite=true on an in-flight translation writes a second TranslationStarted event");
     }
+
+    // ── TriggeredByType tests ─────────────────────────────────────────────────
+
+    // 33 — StartTranslation with triggeredBy=System → event records System trigger with null user ID
+    [Fact]
+    public async Task StartTranslation_WithSystemTrigger_RecordsSystemAudit()
+    {
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var result = await service.StartTranslation(TalkId, "kk", triggeredBy: TriggeredByType.System);
+
+        result.Success.Should().BeTrue();
+
+        var db = GetDbContext();
+        var events = await db.Set<WorkflowEvent>()
+            .IgnoreQueryFilters()
+            .Where(e => e.WorkflowType == WorkflowType.Translation
+                     && e.TargetEntityId == TalkId
+                     && e.TargetEntitySubKey == "kk")
+            .ToListAsync();
+
+        events.Should().ContainSingle();
+        events[0].EventType.Should().Be(WorkflowEventTypes.TranslationStarted);
+        events[0].TriggeredByType.Should().Be(TriggeredByType.System);
+        events[0].TriggeredByUserId.Should().BeNull("no user identity is available in a background job context");
+    }
+
+    // 34 — StartTranslation with default triggeredBy (User) → event records User trigger
+    //      Locks in the default behaviour so a refactor cannot silently change it.
+    [Fact]
+    public async Task StartTranslation_WithUserTrigger_RecordsUserAudit()
+    {
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        // No triggeredBy specified — defaults to TriggeredByType.User
+        var result = await service.StartTranslation(TalkId, "uz");
+
+        result.Success.Should().BeTrue();
+
+        var db = GetDbContext();
+        var events = await db.Set<WorkflowEvent>()
+            .IgnoreQueryFilters()
+            .Where(e => e.WorkflowType == WorkflowType.Translation
+                     && e.TargetEntityId == TalkId
+                     && e.TargetEntitySubKey == "uz")
+            .ToListAsync();
+
+        events.Should().ContainSingle();
+        events[0].EventType.Should().Be(WorkflowEventTypes.TranslationStarted);
+        events[0].TriggeredByType.Should().Be(TriggeredByType.User);
+        // In a non-HTTP test scope ICurrentUserService.UserIdGuid = Guid.Empty → NullIfEmpty → null
+        events[0].TriggeredByUserId.Should().BeNull();
+    }
 }

@@ -104,6 +104,7 @@ public class GenerateContentTranslationsCommandHandler
                 request.ToolboxTalkId,
                 targetCode,
                 request.ConfirmOverwrite,
+                request.TriggeredBy,
                 cancellationToken);
 
             if (!workflowGuard.Success)
@@ -166,6 +167,7 @@ public class GenerateContentTranslationsCommandHandler
             var recordResult = await _workflowService.RecordTranslationCompleted(
                 request.ToolboxTalkId,
                 successfulResult.LanguageCode,
+                request.TriggeredBy,
                 cancellationToken);
 
             if (!recordResult.Success)

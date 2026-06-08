@@ -64,7 +64,7 @@ public sealed class TranslationWorkflowService(
             .ToListAsync(ct);
     }
 
-    public async Task<Result> StartTranslation(Guid talkId, string languageCode, bool confirmOverwrite = false, CancellationToken ct = default)
+    public async Task<Result> StartTranslation(Guid talkId, string languageCode, bool confirmOverwrite = false, TriggeredByType triggeredBy = TriggeredByType.User, CancellationToken ct = default)
     {
         var stateDto = await GetState(talkId, languageCode, ct);
         var state = stateDto.State;
@@ -85,7 +85,7 @@ public sealed class TranslationWorkflowService(
                 FailureCode.WorkflowInvalidState);
 
         AddEvent(talkId, languageCode, WorkflowEventTypes.TranslationStarted,
-            Serialize(new { languageCode, confirmOverwrite }));
+            Serialize(new { languageCode, confirmOverwrite }), triggeredBy);
         await context.SaveChangesAsync(ct);
 
         // TODO Phase 7: fire WorkflowNotificationTrigger
@@ -99,7 +99,7 @@ public sealed class TranslationWorkflowService(
     /// event. Calling from any other state returns
     /// FailureCode.WorkflowInvalidState.
     /// </summary>
-    public async Task<Result> RecordTranslationCompleted(Guid talkId, string languageCode, CancellationToken ct = default)
+    public async Task<Result> RecordTranslationCompleted(Guid talkId, string languageCode, TriggeredByType triggeredBy = TriggeredByType.User, CancellationToken ct = default)
     {
         var stateDto = await GetState(talkId, languageCode, ct);
 
@@ -113,7 +113,7 @@ public sealed class TranslationWorkflowService(
                 $"Cannot record translation completed from state {stateDto.State}; requires Translating.",
                 FailureCode.WorkflowInvalidState);
 
-        AddEvent(talkId, languageCode, WorkflowEventTypes.TranslationCompleted, payloadJson: null);
+        AddEvent(talkId, languageCode, WorkflowEventTypes.TranslationCompleted, payloadJson: null, triggeredBy);
         await context.SaveChangesAsync(ct);
 
         // TODO Phase 7: fire WorkflowNotificationTrigger
@@ -323,13 +323,13 @@ public sealed class TranslationWorkflowService(
     /// Marks the translation as stale (requires re-translation).
     /// <para>Idempotent: if the language is already in Stale state, returns success without writing a new event.</para>
     /// </summary>
-    public async Task<Result> MarkStale(Guid talkId, string languageCode, CancellationToken ct = default)
+    public async Task<Result> MarkStale(Guid talkId, string languageCode, TriggeredByType triggeredBy = TriggeredByType.User, CancellationToken ct = default)
     {
         var stateDto = await GetState(talkId, languageCode, ct);
         if (stateDto.State == TranslationWorkflowState.Stale)
             return Result.Ok();
 
-        AddEvent(talkId, languageCode, WorkflowEventTypes.MarkedStale, payloadJson: null);
+        AddEvent(talkId, languageCode, WorkflowEventTypes.MarkedStale, payloadJson: null, triggeredBy);
         await context.SaveChangesAsync(ct);
 
         // TODO Phase 7: fire WorkflowNotificationTrigger
@@ -356,7 +356,7 @@ public sealed class TranslationWorkflowService(
         _ => TranslationWorkflowState.Initial
     };
 
-    private void AddEvent(Guid talkId, string languageCode, string eventType, string? payloadJson)
+    private void AddEvent(Guid talkId, string languageCode, string eventType, string? payloadJson, TriggeredByType triggeredBy = TriggeredByType.User)
     {
         context.WorkflowEvents.Add(new WorkflowEvent
         {
@@ -364,8 +364,8 @@ public sealed class TranslationWorkflowService(
             TargetEntityId = talkId,
             TargetEntitySubKey = languageCode,
             EventType = eventType,
-            TriggeredByType = TriggeredByType.User,
-            TriggeredByUserId = NullIfEmpty(currentUser.UserIdGuid),
+            TriggeredByType = triggeredBy,
+            TriggeredByUserId = triggeredBy == TriggeredByType.System ? null : NullIfEmpty(currentUser.UserIdGuid),
             PayloadJson = payloadJson,
             OccurredAt = DateTime.UtcNow
         });
