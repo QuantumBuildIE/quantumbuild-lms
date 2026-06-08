@@ -190,6 +190,7 @@ public class TranslationValidationController : ControllerBase
 
             var run = await _dbContext.TranslationValidationRuns
                 .Include(r => r.Results.OrderBy(res => res.SectionIndex))
+                    .ThenInclude(res => res.Flags)
                 .FirstOrDefaultAsync(r => r.Id == runId
                     && r.ToolboxTalkId == talkId
                     && r.TenantId == tenantId, cancellationToken);
@@ -629,6 +630,7 @@ public class TranslationValidationController : ControllerBase
 
             var run = await _dbContext.TranslationValidationRuns
                 .Include(r => r.Results.OrderBy(res => res.SectionIndex))
+                    .ThenInclude(res => res.Flags)
                 .FirstOrDefaultAsync(r => r.Id == runId
                     && r.CourseId == courseId
                     && r.TenantId == tenantId, cancellationToken);
@@ -857,7 +859,20 @@ public class TranslationValidationController : ControllerBase
                 EditedTranslation = r.EditedTranslation,
                 EditedSource = r.EditedSource,
                 DecisionAt = r.DecisionAt,
-                DecisionBy = r.DecisionBy
+                DecisionBy = r.DecisionBy,
+                Flags = r.Flags
+                    .OrderBy(f => f.StartOffset)
+                    .ThenBy(f => f.CreatedAt)
+                    .Select(f => new TranslationFlagDto
+                    {
+                        Id = f.Id,
+                        StartOffset = f.StartOffset,
+                        EndOffset = f.EndOffset,
+                        Severity = f.Severity,
+                        Reason = f.Reason,
+                        CreatedAt = f.CreatedAt
+                    })
+                    .ToList()
             }).ToList()
         };
     }

@@ -48,4 +48,6 @@ public record ValidationResultDto
     public string? EditedSource { get; init; }
     public DateTime? DecisionAt { get; init; }
     public string? DecisionBy { get; init; }
+
+    public IReadOnlyList<TranslationFlagDto> Flags { get; init; } = [];
 }

@@ -51,7 +51,7 @@ public class TranslationFlagConfiguration : IEntityTypeConfiguration<Translation
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasOne(e => e.ValidationResult)
-            .WithMany()
+            .WithMany(r => r.Flags)
             .HasForeignKey(e => e.ValidationResultId)
             .OnDelete(DeleteBehavior.Cascade);
 
