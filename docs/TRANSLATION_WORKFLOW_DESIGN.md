@@ -121,6 +121,8 @@ Emit phrase-level `TranslationFlag` rows alongside Phase 2a's section-level flag
 
 **Estimate:** 5–8 days (revised from 3–5 in the original phase split; recon revealed the implementation is greenfield end-to-end, not just wiring up `WordDiffService`).
 
+**Status:** Complete (2026-06-08). Commits d511933 (2b.1 utilities), 959951c (2b.2 job integration), 9309840 (2b.3a FK column), b181177 (2b.3b API exposure), fb14ae0 (2b.3c frontend rendering). Actual effort: ~1.5 days across two sessions, well under the 5–8 day estimate. Estimate overshot because the recon's "greenfield end-to-end" framing weighted heavily toward worst-case; in practice each chunk was a tight, focused unit (the four utilities had no external dependencies, the API extension was small, the frontend renderer kept scope tight).
+
 ### Phase 3 — Edit page refactor
 
 Refactor the edit page to consume the workflow service. Per-language status panel, per-language operations. Closes LEARNING_LIFECYCLE §10.9.1, §10.9.2, §10.9.4, §10.9.5, §10.9.6.
