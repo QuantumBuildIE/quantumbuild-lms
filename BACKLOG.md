@@ -845,6 +845,53 @@ the translation pipeline.
 
 ---
 
+## 10. ValidationStarted → Initial state mapping gap (deferred from Phase 3b.1.2)
+
+The `EventTypeToState` mapping in `TranslationWorkflowService` does
+not handle `WorkflowEventTypes.ValidationStarted` — it falls through
+to the default `Initial` state. Phase 3b.1.2 addressed the symmetric
+`TranslationStarted → Initial` gap by adding a `Translating` state
+and updating Phase 3a guards. The validation-side equivalent
+(`Validating` state) was deferred.
+
+**Affected sites:**
+- `TranslationWorkflowService.EventTypeToState` — no case for
+  `ValidationStarted`
+- The Phase 3a guard on `StartValidation` correctly rejects from
+  the current `Initial` fallthrough (since it requires `AIGenerated`),
+  so the gap does not silently break anything today. But it does
+  mean `GetState` reports `Initial` mid-validation, which is misleading.
+
+**Why deferred from Phase 3b:**
+- Phase 3 is the edit-page integration; validation flow integration
+  is a different surface and was addressed in Phase 2.
+- Validation completion happens through `TranslationValidationJob`,
+  not via a `RecordValidationCompleted` method on the workflow
+  service. Closing this gap properly requires either:
+    a) Adding a `RecordValidationCompleted` method that the job calls.
+    b) Having the job write `ValidationCompleted` events directly
+       (consistency with how it works today, but bypasses the
+       workflow service's guard logic).
+- Either approach is wider than Phase 3 should fold in.
+
+**Work required:**
+1. Decide between approach (a) or (b) above.
+2. Add `Validating` to the `TranslationWorkflowState` enum.
+3. Map `ValidationStarted → Validating` in `EventTypeToState`.
+4. If approach (a): add `RecordValidationCompleted` to
+   `ITranslationWorkflowService`, implement with idempotency, wire
+   `TranslationValidationJob` to call it at the right point.
+5. If approach (b): document the bypass explicitly in the service's
+   XML comments.
+6. Update Phase 3a guards that reference `AIGenerated` (e.g.,
+   `StartValidation`) to consider whether `Validating` is also a
+   legal source state.
+7. Add integration tests for the new state and any new method.
+
+**Surfaced:** 2026-06-08, during Phase 3b.1.2 recon.
+
+---
+
 # ==================================================================
 # 7. Recently Closed
 # ==================================================================
