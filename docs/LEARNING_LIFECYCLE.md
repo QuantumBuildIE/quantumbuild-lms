@@ -853,6 +853,58 @@ Commits e6d3919, 3852da7, 5eacbe1 (the four-commit reshape that
 unbundled the original Phase 1c surprise). The CLAUDE.md preamble was
 added in 5937845.
 
+
+### 8.3 Scope-drift via capability-listing during recon
+
+**When:** 2026-06-08, during Phase 3b.2 planning conversation.
+
+**What:** When recon for a chunk surfaces what existing code *can*
+access (data, services, related infrastructure), it is easy to slide
+from "wire this code to the new service" into "and also make it
+smarter while we're there." Each step in the expansion can be locally
+reasonable while the overall framing is wrong.
+
+Concretely: Phase 3b.2's purpose was to wire two background jobs to
+the workflow service for audit-honest event emission. The recon
+surfaced that one of those jobs (`DailyTranslationScanJob`) could
+*also* read the `NeedsRevalidation` flag and `MarkedStale` workflow
+events that Phase 3b.1 had just started writing. From there I built
+a design conversation around auto-healing stale languages, the
+"B-tight" policy (preserve `Validated → Stale`, auto-heal
+`AIGenerated → Stale`), and an `IsAutoHealableStale` method on the
+workflow service. All of it locally reasonable; none of it Phase
+3b.2's actual job.
+
+The catch was the question "what does the 2am run do?" That
+question reframed the conversation from capability ("what can it
+read?") to purpose ("what does it exist to do?"). The 2am job
+exists narrowly: backfill missing-language coverage when new
+employees join a tenant whose existing content doesn't cover their
+preferred language. Staleness recovery is a different concern with
+a different right answer (user-driven via the UI, not auto-healed
+by a background job).
+
+We caught this before writing the implementation prompt. The
+B-tight design conversation produced no code.
+
+**The lesson:** When scoping a chunk that wires into existing code,
+the first question is *what does this code currently exist to do?*
+The chunk's scope is constrained by that purpose, not expanded by
+adjacent capabilities the recon happens to surface. Recon output
+is information about the system, not a list of features to build.
+
+**Practical guard:** During the design conversation between recon
+and implementation, explicitly ask: "Is this expansion within the
+existing code's purpose, or am I adding a new responsibility?" If
+the latter, that's a separate chunk (possibly a separate phase),
+not folded into the current one.
+
+**Related to §8.2:** §8.2 caught scope drift at the commit level
+(work that shouldn't share a commit). §8.3 catches it earlier — at
+the planning level, before any code is written. The mechanism is
+the same: a small local step away from the named scope. The earlier
+the catch, the cheaper the recovery.
+
 ---
 
 **[RESOLVED] Open Question 3 — Subtitle jobs on cascade-reset.**
