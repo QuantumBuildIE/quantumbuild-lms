@@ -21,10 +21,10 @@ Fork-and-improved from the existing wizard. Existing steps adapted, translation+
 - Per-language panel showing current state from the workflow service
 - "Translate" button per language (enabled when state is Initial or Stale; requires confirm if state is Accepted)
 - "Validate" button per language (enabled when state is AIGenerated)
-- "Review" button per language (opens validation results with flagged phrases highlighted; reviewer can edit and accept)
+- "Review" button per language (opens validation results with flagged phrases highlighted; reviewer edits and accepts from within this screen — Accept is not a separate panel button)
 - "Send for external review" button (enabled when state is ReviewerAccepted; opens flag-confirmation dialog showing word count)
 - "Cancel external review" (enabled when state is AwaitingThirdParty)
-- "View history" link per language
+- "View history" link per language (opens a modal showing the workflow event list for that language)
 - Continue button enabled when all languages reach a terminal state (Accepted or explicitly skipped)
 
 ### 7.2 Edit Page (refactored)
