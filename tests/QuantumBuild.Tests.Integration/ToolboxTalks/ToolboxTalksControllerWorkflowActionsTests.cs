@@ -219,6 +219,102 @@ public class ToolboxTalksControllerWorkflowActionsTests : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
+    // ── cancel-external-review tests ──────────────────────────────────────────
+
+    private async Task SeedInvitationAsync(Guid talkId, string languageCode)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        db.Set<ExternalParticipantInvitation>().Add(new ExternalParticipantInvitation
+        {
+            TenantId = TestTenantConstants.TenantId,
+            WorkflowType = WorkflowType.Translation,
+            TargetEntityId = talkId,
+            TargetEntitySubKey = languageCode,
+            InvitedEmail = "reviewer@example.com",
+            TokenHash = "testhash_" + talkId.ToString("N"),
+            ExpiresAt = DateTime.UtcNow.AddDays(30),
+            Status = InvitationStatus.Pending,
+            RequesterUserId = Guid.NewGuid(),
+            InvitedAt = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+    }
+
+    // 11 — Non-existent talk → 404
+    [Fact]
+    public async Task CancelExternalReview_NonExistentTalk_Returns404()
+    {
+        var response = await AdminClient.PostAsync(
+            $"/api/toolbox-talks/{Guid.NewGuid()}/translations/fr/cancel-external-review",
+            new StringContent(string.Empty));
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    // 12 — State is AwaitingThirdParty with a Pending invitation → 200, ExternalReviewCancelled event written, state reverts to ReviewerAccepted
+    [Fact]
+    public async Task CancelExternalReview_FromAwaitingThirdPartyState_Returns200AndWritesCancelledEvent()
+    {
+        var talkId = await CreateTalkAsync();
+        await SeedEventAsync(talkId, "fr", WorkflowEventTypes.TranslationCompleted);
+        await SeedEventAsync(talkId, "fr", WorkflowEventTypes.ValidationCompleted);
+        await SeedEventAsync(talkId, "fr", WorkflowEventTypes.InternalReviewSubmitted);
+        await SeedEventAsync(talkId, "fr", WorkflowEventTypes.ExternalReviewInitiated);
+        await SeedInvitationAsync(talkId, "fr");
+
+        var response = await AdminClient.PostAsync(
+            $"/api/toolbox-talks/{talkId}/translations/fr/cancel-external-review",
+            new StringContent(string.Empty));
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // Verify ExternalReviewCancelled was appended as the last event (which also implies
+        // state reverted to ReviewerAccepted per the EventTypeToState mapping)
+        var historyResponse = await AdminClient.GetAsync(
+            $"/api/toolbox-talks/{talkId}/translations/fr/history");
+        var events = (await historyResponse.Content.ReadFromJsonAsync<List<WorkflowEventResponse>>())!;
+        events.Last().EventType.Should().Be(WorkflowEventTypes.ExternalReviewCancelled);
+    }
+
+    // 13 — State is Initial (no events) → 409 Conflict
+    [Fact]
+    public async Task CancelExternalReview_FromInitialState_Returns409()
+    {
+        var talkId = await CreateTalkAsync();
+
+        var response = await AdminClient.PostAsync(
+            $"/api/toolbox-talks/{talkId}/translations/fr/cancel-external-review",
+            new StringContent(string.Empty));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+    }
+
+    // 14 — State is ReviewerAccepted (no invitation sent yet) → 409 Conflict
+    [Fact]
+    public async Task CancelExternalReview_FromReviewerAcceptedState_Returns409()
+    {
+        var talkId = await CreateTalkAsync();
+        await SeedEventAsync(talkId, "fr", WorkflowEventTypes.InternalReviewSubmitted);
+
+        var response = await AdminClient.PostAsync(
+            $"/api/toolbox-talks/{talkId}/translations/fr/cancel-external-review",
+            new StringContent(string.Empty));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+    }
+
+    // 15 — Unauthenticated → 401
+    [Fact]
+    public async Task CancelExternalReview_Unauthenticated_Returns401()
+    {
+        var response = await UnauthenticatedClient.PostAsync(
+            $"/api/toolbox-talks/{Guid.NewGuid()}/translations/fr/cancel-external-review",
+            new StringContent(string.Empty));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
     // ── local DTOs ────────────────────────────────────────────────────────────
 
     private record WorkflowEventResponse
@@ -230,4 +326,5 @@ public class ToolboxTalksControllerWorkflowActionsTests : IntegrationTestBase
         public string? PayloadJson { get; init; }
         public DateTime OccurredAt { get; init; }
     }
+
 }

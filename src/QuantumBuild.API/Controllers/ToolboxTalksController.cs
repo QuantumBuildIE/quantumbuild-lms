@@ -1312,6 +1312,53 @@ public class ToolboxTalksController : ControllerBase
     }
 
     /// <summary>
+    /// Cancels an outstanding external review invitation, revoking the pending invitation and
+    /// reverting workflow state from AwaitingThirdParty back to ReviewerAccepted.
+    /// </summary>
+    /// <param name="id">Toolbox talk ID</param>
+    /// <param name="languageCode">Language code (e.g., "pl", "ro")</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>200 OK on success</returns>
+    [HttpPost("{id:guid}/translations/{languageCode}/cancel-external-review")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> CancelTranslationExternalReview(
+        Guid id, string languageCode, CancellationToken ct)
+    {
+        try
+        {
+            var query = new GetToolboxTalkByIdQuery
+            {
+                TenantId = _currentUserService.TenantId,
+                Id = id
+            };
+
+            var toolboxTalk = await _mediator.Send(query, ct);
+            if (toolboxTalk == null)
+                return NotFound(new { error = "Learning not found" });
+
+            var result = await _workflowService.CancelExternalReview(id, languageCode, ct);
+            if (!result.Success)
+            {
+                if (result.ErrorCode == FailureCode.WorkflowInvalidState)
+                    return Conflict(new { error = result.Errors.FirstOrDefault() });
+                if (result.ErrorCode == FailureCode.WorkflowInvitationNotFound)
+                    return NotFound(new { error = result.Errors.FirstOrDefault() });
+                return BadRequest(new { error = result.Errors.FirstOrDefault() });
+            }
+
+            return Ok(new { message = "External review cancelled" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error cancelling external review for toolbox talk {ToolboxTalkId}, language {LanguageCode}", id, languageCode);
+            return StatusCode(500, new { error = "Error cancelling external review" });
+        }
+    }
+
+    /// <summary>
     /// Deletes a specific content translation for a toolbox talk.
     /// </summary>
     /// <param name="id">Toolbox talk ID</param>

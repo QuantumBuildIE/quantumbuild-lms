@@ -48,6 +48,12 @@ public interface ITranslationWorkflowService
     /// <summary>Records an internal user's confirmation of the submitted external review.</summary>
     Task<Result> ConfirmExternalReview(Guid talkId, string languageCode, bool accepted, CancellationToken ct = default);
 
+    /// <summary>
+    /// Cancels an outstanding external review invitation, revoking the pending invitation and
+    /// reverting state from AwaitingThirdParty back to ReviewerAccepted.
+    /// </summary>
+    Task<Result> CancelExternalReview(Guid talkId, string languageCode, CancellationToken ct = default);
+
     /// <summary>Marks the translation as accepted and final.</summary>
     Task<Result> AcceptAsFinal(Guid talkId, string languageCode, CancellationToken ct = default);
 

@@ -309,6 +309,38 @@ public sealed class TranslationWorkflowService(
         return Result.Ok();
     }
 
+    public async Task<Result> CancelExternalReview(Guid talkId, string languageCode, CancellationToken ct = default)
+    {
+        var stateDto = await GetState(talkId, languageCode, ct);
+        var state = stateDto.State;
+
+        if (state != TranslationWorkflowState.AwaitingThirdParty)
+            return Result.Fail(
+                $"Cannot cancel external review from state {state}; requires AwaitingThirdParty.",
+                FailureCode.WorkflowInvalidState);
+
+        var invitation = await context.ExternalParticipantInvitations
+            .Where(i => i.WorkflowType == WorkflowType.Translation
+                     && i.TargetEntityId == talkId
+                     && i.TargetEntitySubKey == languageCode
+                     && i.Status == InvitationStatus.Pending
+                     && !i.IsDeleted)
+            .FirstOrDefaultAsync(ct);
+
+        if (invitation is null)
+            return Result.Fail(
+                "No active invitation found for this language.",
+                FailureCode.WorkflowInvitationNotFound);
+
+        invitation.Status = InvitationStatus.Revoked;
+
+        AddEvent(talkId, languageCode, WorkflowEventTypes.ExternalReviewCancelled, payloadJson: null);
+        await context.SaveChangesAsync(ct);
+
+        // TODO Phase 7: fire WorkflowNotificationTrigger
+        return Result.Ok();
+    }
+
     public async Task<Result> AcceptAsFinal(Guid talkId, string languageCode, CancellationToken ct = default)
     {
         var stateDto = await GetState(talkId, languageCode, ct);
@@ -356,8 +388,9 @@ public sealed class TranslationWorkflowService(
         WorkflowEventTypes.ExternalReviewInitiated => TranslationWorkflowState.AwaitingThirdParty,
         WorkflowEventTypes.ExternalReviewSubmitted => TranslationWorkflowState.ThirdPartyReviewed,
         WorkflowEventTypes.ExternalReviewConfirmed => TranslationWorkflowState.Accepted,
-        WorkflowEventTypes.ExternalReviewRejected  => TranslationWorkflowState.ReviewerAccepted,
-        WorkflowEventTypes.AcceptedAsFinal         => TranslationWorkflowState.Accepted,
+        WorkflowEventTypes.ExternalReviewRejected   => TranslationWorkflowState.ReviewerAccepted,
+        WorkflowEventTypes.ExternalReviewCancelled  => TranslationWorkflowState.ReviewerAccepted,
+        WorkflowEventTypes.AcceptedAsFinal          => TranslationWorkflowState.Accepted,
         WorkflowEventTypes.MarkedStale             => TranslationWorkflowState.Stale,
         // ValidationStarted falls through to Initial; see BACKLOG §10
         // for the deferred fix. TranslationStarted is handled via the
