@@ -54,6 +54,24 @@ public interface ITranslationWorkflowService
     /// </summary>
     Task<Result> CancelExternalReview(Guid talkId, string languageCode, CancellationToken ct = default);
 
+    /// <summary>
+    /// Records an external reviewer's explicit decline of the review invitation via their token.
+    /// Reason is mandatory. Returns domain errors for expired, already-used, or state-invalid tokens.
+    /// </summary>
+    Task<Result> DeclineExternalReview(
+        string token,
+        string reason,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns the portal render context for a given raw invitation token.
+    /// Looks up the invitation regardless of status so the portal can render the correct error state
+    /// for expired/revoked/used invitations. Returns WorkflowTokenInvalid if the token is unknown.
+    /// </summary>
+    Task<Result<ExternalReviewPortalDto?>> GetPortalContext(
+        string token,
+        CancellationToken ct = default);
+
     /// <summary>Marks the translation as accepted and final.</summary>
     Task<Result> AcceptAsFinal(Guid talkId, string languageCode, CancellationToken ct = default);
 

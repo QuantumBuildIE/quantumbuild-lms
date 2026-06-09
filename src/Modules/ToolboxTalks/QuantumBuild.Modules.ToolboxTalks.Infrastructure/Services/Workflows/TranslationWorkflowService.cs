@@ -8,6 +8,7 @@ using QuantumBuild.Core.Application.Models;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Workflows;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Workflows;
+using QuantumBuild.Modules.ToolboxTalks.Application.Services.Subtitles;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities.Workflows;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 
@@ -16,7 +17,8 @@ namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Workflows;
 public sealed class TranslationWorkflowService(
     IToolboxTalksDbContext context,
     ICurrentUserService currentUser,
-    ITenantSettingsService tenantSettings) : ITranslationWorkflowService
+    ITenantSettingsService tenantSettings,
+    ILanguageCodeService languageCodeService) : ITranslationWorkflowService
 {
     public async Task<TranslationWorkflowStateDto> GetState(Guid talkId, string languageCode, CancellationToken ct = default)
     {
@@ -251,16 +253,10 @@ public sealed class TranslationWorkflowService(
             return Result.Fail("This invitation link has expired.", FailureCode.WorkflowTokenExpired);
 
         // State guard: public endpoint — IgnoreQueryFilters since no JWT tenant context
-        var lastEvent = await context.WorkflowEvents
-            .IgnoreQueryFilters()
-            .Where(e => e.WorkflowType == WorkflowType.Translation
-                     && e.TargetEntityId == invitation.TargetEntityId
-                     && e.TargetEntitySubKey == invitation.TargetEntitySubKey
-                     && !e.IsDeleted)
-            .OrderByDescending(e => e.OccurredAt)
-            .FirstOrDefaultAsync(ct);
-
-        var currentState = lastEvent is null ? TranslationWorkflowState.Initial : EventTypeToState(lastEvent.EventType);
+        var currentState = await GetStateIgnoringTenantAsync(
+            invitation.TargetEntityId,
+            invitation.TargetEntitySubKey,
+            ct);
         if (currentState != TranslationWorkflowState.AwaitingThirdParty)
             return Result.Fail(
                 $"External review submission not accepted from state {currentState}; invitation may be stale.",
@@ -352,6 +348,164 @@ public sealed class TranslationWorkflowService(
         return Result.Ok();
     }
 
+    public async Task<Result> DeclineExternalReview(string token, string reason, CancellationToken ct = default)
+    {
+        var tokenHash = HashToken(token);
+
+        // IgnoreQueryFilters: public endpoint has no JWT, so tenant filter would block the lookup
+        var invitation = await context.ExternalParticipantInvitations
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(i => i.TokenHash == tokenHash && !i.IsDeleted, ct);
+
+        if (invitation is null)
+            return Result.Fail("Invitation not found.", FailureCode.WorkflowTokenInvalid);
+
+        if (invitation.Status != InvitationStatus.Pending || invitation.ExpiresAt < DateTime.UtcNow)
+            return Result.Fail("This invitation link has expired.", FailureCode.WorkflowTokenExpired);
+
+        if (string.IsNullOrWhiteSpace(reason))
+            return Result.Fail("A reason is required when declining.", FailureCode.WorkflowReasonRequired);
+
+        // State guard: IgnoreQueryFilters since no JWT tenant context
+        var currentState = await GetStateIgnoringTenantAsync(
+            invitation.TargetEntityId,
+            invitation.TargetEntitySubKey,
+            ct);
+        if (currentState != TranslationWorkflowState.AwaitingThirdParty)
+            return Result.Fail(
+                $"External review decline not accepted from state {currentState}; invitation may be stale.",
+                FailureCode.WorkflowInvalidState);
+
+        invitation.Status = InvitationStatus.Used;
+        invitation.UsedAt = DateTime.UtcNow;
+
+        context.WorkflowReviews.Add(new WorkflowReview
+        {
+            TenantId = invitation.TenantId,
+            WorkflowType = invitation.WorkflowType,
+            TargetEntityId = invitation.TargetEntityId,
+            TargetEntitySubKey = invitation.TargetEntitySubKey,
+            ReviewerType = ReviewerType.External,
+            ExternalParticipantInvitationId = invitation.Id,
+            Accepted = false,
+            EditedContent = null,
+            DeclineReason = reason.Trim(),
+            SubmittedAt = DateTime.UtcNow
+        });
+
+        // Event written on behalf of the external reviewer: no internal user, tenant from invitation
+        context.WorkflowEvents.Add(new WorkflowEvent
+        {
+            TenantId = invitation.TenantId,
+            WorkflowType = WorkflowType.Translation,
+            TargetEntityId = invitation.TargetEntityId,
+            TargetEntitySubKey = invitation.TargetEntitySubKey,
+            EventType = WorkflowEventTypes.ExternalReviewDeclined,
+            TriggeredByType = TriggeredByType.User,
+            TriggeredByUserId = null,
+            PayloadJson = Serialize(new { reason = reason.Trim() }),
+            OccurredAt = DateTime.UtcNow
+        });
+
+        await context.SaveChangesAsync(ct);
+
+        // TODO Phase 7: fire WorkflowNotificationTrigger
+        return Result.Ok();
+    }
+
+    public async Task<Result<ExternalReviewPortalDto?>> GetPortalContext(string token, CancellationToken ct = default)
+    {
+        var tokenHash = HashToken(token);
+
+        // IgnoreQueryFilters: public endpoint has no JWT; look up regardless of status
+        // so the portal can render the correct error state for expired/revoked/used invitations
+        var invitation = await context.ExternalParticipantInvitations
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(i => i.TokenHash == tokenHash && !i.IsDeleted, ct);
+
+        if (invitation is null)
+            return Result.Fail<ExternalReviewPortalDto?>("Invitation not found.", FailureCode.WorkflowTokenInvalid);
+
+        var portalStatus = DerivePortalStatus(invitation);
+        var languageCode = invitation.TargetEntitySubKey ?? string.Empty;
+
+        // Look up talk title (IgnoreQueryFilters: public path)
+        var talk = await context.ToolboxTalks
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(t => t.Id == invitation.TargetEntityId && !t.IsDeleted, ct);
+
+        var talkTitle = talk?.Title ?? string.Empty;
+
+        // Look up display name for the language code; fall back to the code itself
+        string languageName;
+        try
+        {
+            languageName = await languageCodeService.GetLanguageNameAsync(languageCode);
+            if (string.IsNullOrEmpty(languageName))
+                languageName = languageCode;
+        }
+        catch
+        {
+            languageName = languageCode;
+        }
+
+        var flaggedWordCount = ParseFlaggedWordCount(invitation.ContextPayload);
+
+        var sections = new List<ExternalReviewSectionDto>();
+
+        if (portalStatus == "Active")
+        {
+            // Load latest completed validation run (IgnoreQueryFilters: public path)
+            var run = await context.TranslationValidationRuns
+                .IgnoreQueryFilters()
+                .Where(r => r.ToolboxTalkId == invitation.TargetEntityId
+                         && r.LanguageCode == languageCode
+                         && r.Status == ValidationRunStatus.Completed
+                         && !r.IsDeleted)
+                .OrderByDescending(r => r.CompletedAt)
+                .FirstOrDefaultAsync(ct);
+
+            if (run is not null)
+            {
+                var results = await context.TranslationValidationResults
+                    .IgnoreQueryFilters()
+                    .Where(r => r.ValidationRunId == run.Id)
+                    .Include(r => r.Flags)
+                    .OrderBy(r => r.SectionIndex)
+                    .ToListAsync(ct);
+
+                sections = results.Select(r => new ExternalReviewSectionDto
+                {
+                    SectionIndex = r.SectionIndex,
+                    SectionTitle = r.SectionTitle,
+                    OriginalText = r.OriginalText,
+                    TranslatedText = r.TranslatedText,
+                    Flags = r.Flags.Select(f => new ExternalReviewFlagDto
+                    {
+                        StartOffset = f.StartOffset,
+                        EndOffset = f.EndOffset,
+                        Severity = f.Severity.ToString(),
+                        Reason = f.Reason
+                    }).ToList()
+                }).ToList();
+            }
+        }
+
+        var dto = new ExternalReviewPortalDto
+        {
+            TalkTitle = talkTitle,
+            LanguageCode = languageCode,
+            LanguageName = languageName,
+            ExpiresAt = invitation.ExpiresAt,
+            PortalStatus = portalStatus,
+            ContextType = invitation.ContextType,
+            FlaggedWordCount = flaggedWordCount,
+            Sections = sections
+        };
+
+        return Result.Ok<ExternalReviewPortalDto?>(dto);
+    }
+
     public async Task<Result> AcceptAsFinal(Guid talkId, string languageCode, CancellationToken ct = default)
     {
         var stateDto = await GetState(talkId, languageCode, ct);
@@ -390,6 +544,25 @@ public sealed class TranslationWorkflowService(
 
     // -- Private helpers --
 
+    private async Task<TranslationWorkflowState> GetStateIgnoringTenantAsync(
+        Guid talkId,
+        string? languageCode,
+        CancellationToken ct)
+    {
+        var lastEvent = await context.WorkflowEvents
+            .IgnoreQueryFilters()
+            .Where(e => e.WorkflowType == WorkflowType.Translation
+                     && e.TargetEntityId == talkId
+                     && e.TargetEntitySubKey == languageCode
+                     && !e.IsDeleted)
+            .OrderByDescending(e => e.OccurredAt)
+            .FirstOrDefaultAsync(ct);
+
+        return lastEvent is null
+            ? TranslationWorkflowState.Initial
+            : EventTypeToState(lastEvent.EventType);
+    }
+
     private static TranslationWorkflowState EventTypeToState(string eventType) => eventType switch
     {
         WorkflowEventTypes.TranslationStarted      => TranslationWorkflowState.Translating,
@@ -401,6 +574,7 @@ public sealed class TranslationWorkflowService(
         WorkflowEventTypes.ExternalReviewConfirmed => TranslationWorkflowState.Accepted,
         WorkflowEventTypes.ExternalReviewRejected   => TranslationWorkflowState.ReviewerAccepted,
         WorkflowEventTypes.ExternalReviewCancelled  => TranslationWorkflowState.ReviewerAccepted,
+        WorkflowEventTypes.ExternalReviewDeclined   => TranslationWorkflowState.ReviewerAccepted,
         WorkflowEventTypes.AcceptedAsFinal          => TranslationWorkflowState.Accepted,
         WorkflowEventTypes.MarkedStale             => TranslationWorkflowState.Stale,
         // ValidationStarted falls through to Initial; see BACKLOG §10
@@ -431,6 +605,36 @@ public sealed class TranslationWorkflowService(
     }
 
     private static string Serialize<T>(T value) => JsonSerializer.Serialize(value);
+
+    private static string DerivePortalStatus(ExternalParticipantInvitation invitation)
+    {
+        if (invitation.Status == InvitationStatus.Used)
+            return "Used";
+        if (invitation.Status == InvitationStatus.Revoked)
+            return "Revoked";
+        if (invitation.Status == InvitationStatus.Pending && invitation.ExpiresAt < DateTime.UtcNow)
+            return "Expired";
+        if (invitation.Status == InvitationStatus.Pending)
+            return "Active";
+        return "Unknown";
+    }
+
+    private static int ParseFlaggedWordCount(string? contextPayload)
+    {
+        if (string.IsNullOrEmpty(contextPayload))
+            return 0;
+        try
+        {
+            using var doc = JsonDocument.Parse(contextPayload);
+            if (doc.RootElement.TryGetProperty("flaggedWordCount", out var prop) && prop.TryGetInt32(out var count))
+                return count;
+            return 0;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
 
     private static Guid? NullIfEmpty(Guid id) => id == Guid.Empty ? null : id;
 
