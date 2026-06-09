@@ -892,6 +892,28 @@ and updating Phase 3a guards. The validation-side equivalent
 
 ---
 
+## 11. Cancel external review — end-to-end
+
+No backend implementation exists for cancelling an external review
+invitation. The `InvitationStatus.Revoked` value is defined in the
+enum but is never written by any code path. There is no service
+method, no controller endpoint, no state transition out of
+`AwaitingThirdParty` via cancellation.
+
+Phase 4 must build, end-to-end:
+- `CancelExternalReview` service method on `ITranslationWorkflowService`
+  (transitions from `AwaitingThirdParty` back to `ReviewerAccepted`,
+  marks the invitation `Revoked`, emits `ExternalReviewCancelled` event)
+- Controller endpoint exposing it
+- Frontend trigger on the per-language panel (Phase 4 work alongside
+  the Send for external review button)
+
+Surfaced during Phase 3c recon (commit 38ba9c8). Scope was deferred
+rather than built in 3c because the Send for external review action
+itself is a Phase 4 concern — Cancel without Send is meaningless.
+
+---
+
 # ==================================================================
 # 7. Recently Closed
 # ==================================================================

@@ -21,9 +21,9 @@ Fork-and-improved from the existing wizard. Existing steps adapted, translation+
 - Per-language panel showing current state from the workflow service
 - "Translate" button per language (enabled when state is Initial or Stale; requires confirm if state is Accepted)
 - "Validate" button per language (enabled when state is AIGenerated)
-- "Review" button per language (opens validation results with flagged phrases highlighted; reviewer edits and accepts from within this screen — Accept is not a separate panel button)
-- "Send for external review" button (enabled when state is ReviewerAccepted; opens flag-confirmation dialog showing word count)
-- "Cancel external review" (enabled when state is AwaitingThirdParty)
+- "Review" button per language (opens validation results with flagged phrases highlighted; reviewer edits and accepts from within this screen — Accept is not a separate panel button). Review uses a sectioned flow: per-section accept/edit/retry decisions reusing the existing wizard endpoints (PUT .../sections/{sectionIndex}/accept and siblings), with a final per-language Accept button at the bottom of the Review screen that fires AcceptAsFinal once all sections are decided.
+- "Send for external review" button (enabled when state is ReviewerAccepted; opens flag-confirmation dialog showing word count). Edit-page implementation deferred to Phase 4 alongside the external participant portal — the 3c panel renders AwaitingThirdParty as a read-only state with no action button.
+- "Cancel external review" (enabled when state is AwaitingThirdParty). Edit-page implementation deferred to Phase 4. Backend implementation also pending: no service method, endpoint, or state transition exists yet — InvitationStatus.Revoked is defined in the enum but never written. Phase 4 owns end-to-end.
 - "View history" link per language (opens a modal showing the workflow event list for that language)
 - Continue button enabled when all languages reach a terminal state (Accepted or explicitly skipped)
 
