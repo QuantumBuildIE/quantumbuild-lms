@@ -50,7 +50,8 @@ public sealed class TranslationWorkflowService(
             TranslatedTitle = translation?.TranslatedTitle,
             TranslatedAt = translation?.TranslatedAt,
             NeedsRevalidation = translation?.NeedsRevalidation ?? false,
-            LastValidationOutcome = lastValidationRun?.OverallOutcome
+            LastValidationOutcome = lastValidationRun?.OverallOutcome,
+            LastValidationRunId = lastValidationRun?.Id
         };
     }
 

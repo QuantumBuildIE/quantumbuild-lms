@@ -115,12 +115,14 @@ public class ToolboxTalksControllerWorkflowStateTests : IntegrationTestBase
     /// Seeds a completed TranslationValidationRun for the given talk and language.
     /// TenantId is set explicitly per Note 22.
     /// </summary>
-    private async Task SeedValidationRunAsync(Guid talkId, string languageCode, ValidationOutcome outcome)
+    private async Task<Guid> SeedValidationRunAsync(Guid talkId, string languageCode, ValidationOutcome outcome)
     {
+        var runId = Guid.NewGuid();
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         db.Set<TranslationValidationRun>().Add(new TranslationValidationRun
         {
+            Id = runId,
             TenantId = TestTenantConstants.TenantId,
             ToolboxTalkId = talkId,
             LanguageCode = languageCode,
@@ -133,6 +135,7 @@ public class ToolboxTalksControllerWorkflowStateTests : IntegrationTestBase
             CreatedBy = "test"
         });
         await db.SaveChangesAsync();
+        return runId;
     }
 
     // ── tests ─────────────────────────────────────────────────────────────────
@@ -175,7 +178,7 @@ public class ToolboxTalksControllerWorkflowStateTests : IntegrationTestBase
         await SeedTranslationAsync(talkId, "lt");
         await SeedTranslationAsync(talkId, "lv");
         await SeedEventAsync(talkId, "lv", WorkflowEventTypes.TranslationCompleted);
-        await SeedValidationRunAsync(talkId, "lv", ValidationOutcome.Pass);
+        var lvRunId = await SeedValidationRunAsync(talkId, "lv", ValidationOutcome.Pass);
 
         var response = await AdminClient.GetAsync(
             $"/api/toolbox-talks/{talkId}/translations/workflow-state");
@@ -189,10 +192,12 @@ public class ToolboxTalksControllerWorkflowStateTests : IntegrationTestBase
         var ltState = result!.Single(s => s.LanguageCode == "lt");
         ltState.State.Should().Be(TranslationWorkflowState.Initial);
         ltState.LastValidationOutcome.Should().BeNull();
+        ltState.LastValidationRunId.Should().BeNull();
 
         var lvState = result!.Single(s => s.LanguageCode == "lv");
         lvState.State.Should().Be(TranslationWorkflowState.AIGenerated);
         lvState.LastValidationOutcome.Should().Be(ValidationOutcome.Pass);
+        lvState.LastValidationRunId.Should().Be(lvRunId);
     }
 
     // 4 — No auth → 401
@@ -220,5 +225,6 @@ public class ToolboxTalksControllerWorkflowStateTests : IntegrationTestBase
         public bool NeedsRevalidation { get; init; }
         [JsonConverter(typeof(JsonStringEnumConverter))]
         public ValidationOutcome? LastValidationOutcome { get; init; }
+        public Guid? LastValidationRunId { get; init; }
     }
 }

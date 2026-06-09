@@ -13,4 +13,5 @@ public record TranslationWorkflowStateDto
     public DateTime? TranslatedAt { get; init; }
     public bool NeedsRevalidation { get; init; }
     public ValidationOutcome? LastValidationOutcome { get; init; }
+    public Guid? LastValidationRunId { get; init; }
 }
