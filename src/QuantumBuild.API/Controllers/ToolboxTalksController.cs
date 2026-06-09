@@ -1231,6 +1231,87 @@ public class ToolboxTalksController : ControllerBase
     }
 
     /// <summary>
+    /// Gets the chronological event history for a specific language's translation workflow.
+    /// </summary>
+    /// <param name="id">Toolbox talk ID</param>
+    /// <param name="languageCode">Language code (e.g., "pl", "ro")</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Ordered list of workflow events; empty list if talk exists but has no events for this language</returns>
+    [HttpGet("{id:guid}/translations/{languageCode}/history")]
+    [Authorize(Policy = "Learnings.View")]
+    [ProducesResponseType(typeof(IReadOnlyList<WorkflowEventDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<IReadOnlyList<WorkflowEventDto>>> GetTranslationHistory(
+        Guid id, string languageCode, CancellationToken ct)
+    {
+        try
+        {
+            var query = new GetToolboxTalkByIdQuery
+            {
+                TenantId = _currentUserService.TenantId,
+                Id = id
+            };
+
+            var toolboxTalk = await _mediator.Send(query, ct);
+            if (toolboxTalk == null)
+                return NotFound(new { error = "Learning not found" });
+
+            var history = await _workflowService.GetHistory(id, languageCode, ct);
+            return Ok(history);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving translation history for toolbox talk {ToolboxTalkId}, language {LanguageCode}", id, languageCode);
+            return StatusCode(500, new { error = "Error retrieving translation history" });
+        }
+    }
+
+    /// <summary>
+    /// Marks a language's translation as accepted and final.
+    /// Valid from states: Validated, ReviewerAccepted, ThirdPartyReviewed.
+    /// </summary>
+    /// <param name="id">Toolbox talk ID</param>
+    /// <param name="languageCode">Language code (e.g., "pl", "ro")</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>200 OK on success</returns>
+    [HttpPost("{id:guid}/translations/{languageCode}/accept")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> AcceptTranslationAsFinal(
+        Guid id, string languageCode, CancellationToken ct)
+    {
+        try
+        {
+            var query = new GetToolboxTalkByIdQuery
+            {
+                TenantId = _currentUserService.TenantId,
+                Id = id
+            };
+
+            var toolboxTalk = await _mediator.Send(query, ct);
+            if (toolboxTalk == null)
+                return NotFound(new { error = "Learning not found" });
+
+            var result = await _workflowService.AcceptAsFinal(id, languageCode, ct);
+            if (!result.Success)
+            {
+                if (result.ErrorCode == FailureCode.WorkflowInvalidState)
+                    return Conflict(new { error = result.Errors.FirstOrDefault() });
+                return BadRequest(new { error = result.Errors.FirstOrDefault() });
+            }
+
+            return Ok(new { message = "Translation accepted as final" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error accepting translation as final for toolbox talk {ToolboxTalkId}, language {LanguageCode}", id, languageCode);
+            return StatusCode(500, new { error = "Error accepting translation as final" });
+        }
+    }
+
+    /// <summary>
     /// Deletes a specific content translation for a toolbox talk.
     /// </summary>
     /// <param name="id">Toolbox talk ID</param>
