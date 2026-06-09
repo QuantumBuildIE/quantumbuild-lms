@@ -30,6 +30,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { WorkflowStateBadge } from './WorkflowStateBadge';
+import { WorkflowHistoryModal } from './WorkflowHistoryModal';
 import {
   useAvailableLanguages,
   useGenerateContentTranslations,
@@ -77,6 +78,8 @@ export function TranslationWorkflowPanel({
   >({});
   const [overwriteLanguageCode, setOverwriteLanguageCode] = useState<string | null>(null);
   const [overwriteLanguageName, setOverwriteLanguageName] = useState<string | null>(null);
+  const [historyLanguageCode, setHistoryLanguageCode] = useState<string | null>(null);
+  const [historyLanguageName, setHistoryLanguageName] = useState<string | null>(null);
 
   const existingCodes = new Set(existingTranslations.map((t) => t.languageCode));
 
@@ -313,7 +316,7 @@ export function TranslationWorkflowPanel({
                     </Tooltip>
                   </TooltipProvider>
 
-                  {/* View history — stubbed for 3c.5 */}
+                  {/* View history */}
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -322,14 +325,17 @@ export function TranslationWorkflowPanel({
                             type="button"
                             size="sm"
                             variant="ghost"
-                            disabled
+                            onClick={() => {
+                              setHistoryLanguageCode(row.languageCode);
+                              setHistoryLanguageName(row.languageName);
+                            }}
                           >
                             <History className="h-3 w-3" />
                           </Button>
                         </span>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Available shortly</p>
+                        <p>View history</p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -339,6 +345,20 @@ export function TranslationWorkflowPanel({
           })}
         </CardContent>
       </Card>
+
+      {/* Workflow history modal */}
+      <WorkflowHistoryModal
+        toolboxTalkId={toolboxTalkId}
+        languageCode={historyLanguageCode}
+        languageName={historyLanguageName}
+        open={historyLanguageCode !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setHistoryLanguageCode(null);
+            setHistoryLanguageName(null);
+          }
+        }}
+      />
 
       {/* Overwrite confirmation for Accepted state */}
       <AlertDialog

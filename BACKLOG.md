@@ -310,6 +310,27 @@ Source: `CertifiedIQ_Translator_UAT_Brief_Ryans_Bakery_v3.pdf` (27 May 2026). Re
 - **Risk:** Identify every caller of the generate endpoint before changing the contract. If it's only the panel (and the wizard's equivalent step), straightforward. If external callers exist, breaking change.
 - **Estimate:** Half a day if scope is panel + wizard. Up to a day if other callers exist.
 
+#### 1.2.13 Workflow event history — render structured payloads
+- **Priority:** P3
+- **Origin:** `[Engineering]`
+- **Status:** Open (new — surfaced during Phase 3c.5, 9 Jun 2026)
+- **Description:** The Phase 3c.5 history modal renders event type, triggered-by source (User/System), and timestamp for each `WorkflowEventDto`. The DTO also carries a `PayloadJson` string with event-specific data — for example, `ExternalReviewInitiated` carries the invited email and expiry, and per-section events likely carry the section index. 3c.5 deferred payload rendering because no documented inventory of payload shapes per event type exists.
+- **Fix direction:**
+  - Recon: catalogue every event type the backend writes, and document the `PayloadJson` shape for each. Likely lives in the workflow service implementation.
+  - Define per-event-type render functions on the frontend, similar to the WorkflowStateBadge mapping table.
+  - Update WorkflowHistoryModal to render structured payload under each event entry when a renderer exists. Events with no renderer continue to show only the high-level summary.
+- **Estimate:** Half a day if event types are well-documented; day if recon is needed.
+
+#### 1.2.14 Workflow event history — show triggered-by user name
+- **Priority:** P3
+- **Origin:** `[Engineering]`
+- **Status:** Open (new — surfaced during Phase 3c.5, 9 Jun 2026)
+- **Description:** `WorkflowEventDto` carries `TriggeredByUserId` (nullable Guid) but no user name. The Phase 3c.5 history modal shows "by User" or "by System" without resolving the user's display name. For a reviewer auditing who accepted a translation last Tuesday, "by User" is not actionable.
+- **Fix direction:**
+  - Backend: extend `WorkflowEventDto` with `TriggeredByUserName` (nullable string), populated in the `GetHistory` implementation via a join to the user table on `TriggeredByUserId`. For System events the field stays null.
+  - Frontend: update the modal's triggered-by line to "by {userName}" when present, falling back to "by User" when the type is User but the name is missing (defensive).
+- **Estimate:** Half a day, mostly backend.
+
 ---
 
 ## 1.3 Wizard / Create Content UX
