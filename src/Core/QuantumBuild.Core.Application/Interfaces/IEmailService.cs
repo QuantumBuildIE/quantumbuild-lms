@@ -46,4 +46,16 @@ public interface IEmailService
         string email,
         string firstName,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Sends an external review invitation email to a third-party reviewer.
+    /// </summary>
+    Task SendExternalReviewInvitationEmailAsync(
+        string reviewerEmail,
+        string talkTitle,
+        string languageName,
+        DateTime expiresAt,
+        string portalUrl,
+        string requesterName,
+        CancellationToken cancellationToken = default);
 }

@@ -14,6 +14,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Core.Domain.Entities;
 using QuantumBuild.Core.Infrastructure.Data;
 using QuantumBuild.Core.Infrastructure.Identity;
@@ -65,6 +66,11 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
     /// Fake email sender for capturing sent emails in tests.
     /// </summary>
     public FakeEmailSender FakeEmailSender { get; } = new();
+
+    /// <summary>
+    /// Fake IEmailService that captures invitation email sends for assertion in tests.
+    /// </summary>
+    public FakeEmailService FakeEmailService { get; } = new();
 
     /// <summary>
     /// Fake subtitle services for testing subtitle processing without external APIs.
@@ -183,6 +189,11 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
 
             // Register fake services for testing
             // services.AddSingleton<IEmailSender>(FakeEmailSender);
+
+            // Replace the real EmailService with a fake so tests can assert email sends
+            // without actually calling MailerSend or requiring SMTP configuration.
+            services.RemoveAll<IEmailService>();
+            services.AddSingleton<IEmailService>(FakeEmailService);
 
             // Register fake subtitle processing services to avoid external API calls
             services.RemoveAll<ITranscriptionService>();

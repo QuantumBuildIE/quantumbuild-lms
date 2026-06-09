@@ -74,6 +74,11 @@ public abstract class IntegrationTestBase : IAsyncLifetime
         return Scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     }
 
+    /// <summary>
+    /// Gets the fake email service for asserting invitation email sends.
+    /// </summary>
+    protected FakeEmailService FakeEmailService => Factory.FakeEmailService;
+
     #region Fake Subtitle Services
 
     /// <summary>

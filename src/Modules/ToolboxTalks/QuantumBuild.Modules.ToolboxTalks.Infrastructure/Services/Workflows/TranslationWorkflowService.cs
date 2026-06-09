@@ -2,6 +2,8 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using QuantumBuild.Core.Application.Features.TenantSettings;
 using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Core.Application.Models;
@@ -16,9 +18,13 @@ namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Workflows;
 
 public sealed class TranslationWorkflowService(
     IToolboxTalksDbContext context,
+    ICoreDbContext coreContext,
     ICurrentUserService currentUser,
     ITenantSettingsService tenantSettings,
-    ILanguageCodeService languageCodeService) : ITranslationWorkflowService
+    ILanguageCodeService languageCodeService,
+    IEmailService emailService,
+    IConfiguration configuration,
+    ILogger<TranslationWorkflowService> logger) : ITranslationWorkflowService
 {
     public async Task<TranslationWorkflowStateDto> GetState(Guid talkId, string languageCode, CancellationToken ct = default)
     {
@@ -225,7 +231,39 @@ public sealed class TranslationWorkflowService(
 
         await context.SaveChangesAsync(ct);
 
-        // TODO Phase 7: fire WorkflowNotificationTrigger (email dispatch handled separately in Phase 4)
+        // Fire-and-forget: dispatch invitation email. Failure is non-fatal — the
+        // invitation row is already committed. MailerSend retry/resilience improvements
+        // are tracked in BACKLOG §5.6.
+        try
+        {
+            var baseUrl = configuration["AppSettings:BaseUrl"]
+                ?? "https://quantumbuild-lms-web-production.up.railway.app";
+            var portalUrl = $"{baseUrl.TrimEnd('/')}/external-review/{rawToken}";
+
+            var talk = await context.ToolboxTalks.AsNoTracking()
+                .FirstOrDefaultAsync(t => t.Id == talkId && !t.IsDeleted, ct);
+            var talkTitle = talk?.Title ?? string.Empty;
+
+            string langName;
+            try { langName = await languageCodeService.GetLanguageNameAsync(languageCode); }
+            catch { langName = languageCode; }
+            if (string.IsNullOrEmpty(langName)) langName = languageCode;
+
+            var user = await coreContext.Users.AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Id == currentUser.UserIdGuid, ct);
+            var requesterName = user?.FullName is { Length: > 0 } n ? n : currentUser.UserName;
+
+            await emailService.SendExternalReviewInvitationEmailAsync(
+                invitedEmail, talkTitle, langName, expiresAt, portalUrl, requesterName, ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "Failed to dispatch external review invitation email to {Email} for talk {TalkId}",
+                invitedEmail, talkId);
+        }
+
+        // TODO Phase 7: fire WorkflowNotificationTrigger
         return Result.Ok(new InitiateExternalReviewResult
         {
             InvitationId = invitation.Id,

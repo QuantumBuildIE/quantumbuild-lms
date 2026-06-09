@@ -834,6 +834,64 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
         doc.RootElement.GetProperty("flaggedWordCount").GetInt32().Should().Be(4);
     }
 
+    // ── Phase 4.4 — invitation email dispatch ────────────────────────────────
+
+    // 36 — InitiateExternalReview on success triggers exactly one invitation email with the correct params
+    [Fact]
+    public async Task InitiateExternalReview_OnSuccess_TriggersEmailSend()
+    {
+        const string lang = "et";
+        await SeedEventAsync(TalkId, lang, WorkflowEventTypes.InternalReviewSubmitted);
+
+        FakeEmailService.Reset();
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var result = await service.InitiateExternalReview(TalkId, lang, "reviewer@example.com");
+
+        result.Success.Should().BeTrue();
+
+        FakeEmailService.SentInvitations.Should().HaveCount(1);
+
+        var sent = FakeEmailService.SentInvitations[0];
+        sent.ReviewerEmail.Should().Be("reviewer@example.com");
+        sent.PortalUrl.Should().Contain(result.Data!.Token);
+        sent.ExpiresAt.Should().BeCloseTo(result.Data.ExpiresAt, TimeSpan.FromSeconds(5));
+    }
+
+    // 37 — InitiateExternalReview when email delivery throws still returns Ok and persists the invitation
+    [Fact]
+    public async Task InitiateExternalReview_WhenEmailFails_StillReturnsOkAndCreatesInvitation()
+    {
+        const string lang = "gl";
+        await SeedEventAsync(TalkId, lang, WorkflowEventTypes.InternalReviewSubmitted);
+
+        FakeEmailService.Reset();
+        FakeEmailService.ShouldThrowOnInvitationEmail = true;
+
+        try
+        {
+            using var scope = Factory.Services.CreateScope();
+            var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+            var result = await service.InitiateExternalReview(TalkId, lang, "reviewer@example.com");
+
+            result.Success.Should().BeTrue("email failure must not surface as a service error");
+
+            var db = GetDbContext();
+            var invitation = await db.Set<ExternalParticipantInvitation>()
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(i => i.Id == result.Data!.InvitationId);
+            invitation.Should().NotBeNull("invitation row must be persisted regardless of email outcome");
+            invitation!.Status.Should().Be(InvitationStatus.Pending);
+        }
+        finally
+        {
+            FakeEmailService.Reset();
+        }
+    }
+
     // ── Seed helpers for Phase 4.2b tests ────────────────────────────────────
 
     /// <summary>
