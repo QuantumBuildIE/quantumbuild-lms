@@ -25,6 +25,7 @@ export interface TranslationWorkflowStateDto {
   translatedAt: string | null;
   needsRevalidation: boolean;
   lastValidationOutcome: ValidationOutcome | null;
+  lastValidationRunId: string | null;
 }
 
 export interface WorkflowEventDto {

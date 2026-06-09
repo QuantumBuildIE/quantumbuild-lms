@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { Languages, History, ClipboardCheck } from 'lucide-react';
 import { toast } from 'sonner';
@@ -57,10 +58,15 @@ function canValidate(state: TranslationWorkflowState): boolean {
   return state === 'AIGenerated';
 }
 
+function canReview(state: TranslationWorkflowState): boolean {
+  return state === 'Validated' || state === 'ReviewerAccepted' || state === 'ThirdPartyReviewed';
+}
+
 export function TranslationWorkflowPanel({
   toolboxTalkId,
   existingTranslations,
 }: TranslationWorkflowPanelProps) {
+  const router = useRouter();
   const { data: languagesData } = useAvailableLanguages();
   const { data: workflowStates } = useWorkflowStates(toolboxTalkId);
   const generateMutation = useGenerateContentTranslations();
@@ -279,7 +285,7 @@ export function TranslationWorkflowPanel({
                     </Tooltip>
                   </TooltipProvider>
 
-                  {/* Review — stubbed for 3c.4 */}
+                  {/* Review */}
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -288,15 +294,22 @@ export function TranslationWorkflowPanel({
                             type="button"
                             size="sm"
                             variant="outline"
-                            disabled
+                            disabled={isBusy || !canReview(row.state)}
+                            onClick={() =>
+                              router.push(
+                                `/admin/toolbox-talks/talks/${toolboxTalkId}/translations/${row.languageCode}/review`
+                              )
+                            }
                           >
                             Review
                           </Button>
                         </span>
                       </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Available shortly</p>
-                      </TooltipContent>
+                      {!canReview(row.state) && (
+                        <TooltipContent>
+                          <p>Review only available after validation.</p>
+                        </TooltipContent>
+                      )}
                     </Tooltip>
                   </TooltipProvider>
 
