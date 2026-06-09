@@ -298,6 +298,18 @@ Source: `CertifiedIQ_Translator_UAT_Brief_Ryans_Bakery_v3.pdf` (27 May 2026). Re
 - **Status:** Open
 - **Description:** When admin edits a section after parse, regenerate the quiz questions tied to that section. Currently quiz is one-shot at creation.
 
+#### 1.2.12 Translation generate API: accept language codes instead of names
+- **Priority:** P3
+- **Origin:** `[Engineering]`
+- **Status:** Open (new — surfaced during Phase 3c.3, 9 Jun 2026)
+- **Description:** The `POST /toolbox-talks/{id}/translations/generate` endpoint accepts a `languages: string[]` payload where the strings are language *names* ("Spanish", "Latvian") rather than codes ("es", "lv"). The new Phase 3c per-language panel inherited this convention from the deleted `ContentTranslationPanel` to preserve production behaviour, but names are fragile: any localisation, capitalisation, or labelling change to the language list would break the resolver silently.
+- **Fix direction:** Three layers, in this order:
+  - Backend: locate the controller action handling `/translations/generate` (likely in `ToolboxTalksController.cs` since the search for handlers under `Application/Commands/` came up empty). Switch language resolution from name lookup to code lookup against the language reference table.
+  - Frontend: change the panel and any other caller of `generateContentTranslations` to pass language codes instead of names. The new panel currently passes `row.languageName`; after the refactor it would pass `row.languageCode`.
+  - Tests: backend integration tests for generate-translations currently seed name-based requests; rewrite to use codes.
+- **Risk:** Identify every caller of the generate endpoint before changing the contract. If it's only the panel (and the wizard's equivalent step), straightforward. If external callers exist, breaking change.
+- **Estimate:** Half a day if scope is panel + wizard. Up to a day if other callers exist.
+
 ---
 
 ## 1.3 Wizard / Create Content UX
@@ -331,6 +343,8 @@ Source: `CertifiedIQ_Translator_UAT_Brief_Ryans_Bakery_v3.pdf` (27 May 2026). Re
 - **Origin:** `[Engineering]`
 - **Status:** Open
 - **Description:** Replace polling-based progress UI for bulk import, content generation, validation, corpus runs with a fire-and-notify pattern (e.g. SignalR + notification). Improves UX (less network chatter) and lets users navigate away during long jobs.
+
+  **Phase 3c.3 instance (9 Jun 2026):** the per-language panel's Validate action fires `POST /validation/validate` and toasts "Validation started for {language}", but the panel does not subscribe to SignalR `ValidationComplete` events. The state badge does not update until React Query refetches `workflow-state` on the next user action that invalidates that key. From the user's perspective, validation appears to do nothing until they reload. The proper fix is to subscribe to the existing validation hub (`useValidationHub` pattern in the wizard) from the panel and invalidate `workflow-state` on `ValidationComplete`. Wire-up effort: small. Deferred from 3c.3 to keep scope tight per the scope-drift learning in LEARNING_LIFECYCLE.md §8.12.
 
 #### 1.3.6 Translations as background task
 - **Priority:** P3

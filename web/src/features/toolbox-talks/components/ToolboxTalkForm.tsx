@@ -33,7 +33,7 @@ import { useLookupValues } from '@/hooks/use-lookups';
 import { SectionEditor } from './SectionEditor';
 import { QuestionEditor } from './QuestionEditor';
 import { SubtitleProcessingPanel } from './SubtitleProcessingPanel';
-import { ContentTranslationPanel } from './ContentTranslationPanel';
+import { TranslationWorkflowPanel } from './TranslationWorkflowPanel';
 import { useCreateToolboxTalk, useUpdateToolboxTalk, TOOLBOX_TALKS_KEY } from '@/lib/api/toolbox-talks';
 import { generateSlides } from '@/lib/api/toolbox-talks/toolbox-talks';
 import type {
@@ -1054,14 +1054,11 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
               />
             )}
 
-            {/* Content Translations - show if talk has sections or questions */}
-            {(talk.sections.length > 0 || talk.questions.length > 0) && (
-              <ContentTranslationPanel
+            {/* Content Translations - show if talk has translations, sections, or questions */}
+            {(talk.translations.length > 0 || talk.sections.length > 0 || talk.questions.length > 0) && (
+              <TranslationWorkflowPanel
                 toolboxTalkId={talk.id}
                 existingTranslations={talk.translations}
-                onTranslationsGenerated={() => {
-                  queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, talk.id] });
-                }}
               />
             )}
           </>

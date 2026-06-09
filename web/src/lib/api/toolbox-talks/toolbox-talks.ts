@@ -1,5 +1,6 @@
 import { apiClient } from '@/lib/api/client';
 import type { ApiResponse } from '@/types/auth';
+import type { TranslationWorkflowStateDto, WorkflowEventDto } from '@/types/workflows';
 import type {
   ToolboxTalk,
   ToolboxTalkListItem,
@@ -463,6 +464,43 @@ export async function getAdminSlideshowHtml(
     { params }
   );
   return response.data;
+}
+
+// ============================================
+// Translation Workflow
+// ============================================
+
+export async function getWorkflowStates(
+  id: string
+): Promise<TranslationWorkflowStateDto[]> {
+  const response = await apiClient.get<TranslationWorkflowStateDto[]>(
+    `/toolbox-talks/${id}/translations/workflow-state`
+  );
+  return response.data;
+}
+
+export async function getWorkflowHistory(
+  id: string,
+  languageCode: string
+): Promise<WorkflowEventDto[]> {
+  const response = await apiClient.get<WorkflowEventDto[]>(
+    `/toolbox-talks/${id}/translations/${languageCode}/history`
+  );
+  return response.data;
+}
+
+export async function acceptTranslation(
+  id: string,
+  languageCode: string
+): Promise<void> {
+  await apiClient.post(`/toolbox-talks/${id}/translations/${languageCode}/accept`);
+}
+
+export async function validateTranslation(
+  id: string,
+  languageCode: string
+): Promise<void> {
+  await apiClient.post(`/toolbox-talks/${id}/validation/validate`, { languageCode });
 }
 
 // ============================================

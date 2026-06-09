@@ -14,6 +14,10 @@ import {
   getToolboxTalkPreviewSlides,
   getAdminSlideshowHtml,
   regenerateCertificate,
+  getWorkflowStates,
+  getWorkflowHistory,
+  acceptTranslation,
+  validateTranslation,
 } from './toolbox-talks';
 import type {
   GenerateTranslationsRequest,
@@ -138,6 +142,7 @@ export function useGenerateContentTranslations() {
     onSuccess: (_, { toolboxTalkId }) => {
       queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId] });
       queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId, 'translations'] });
+      queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId, 'workflow-state'] });
     },
   });
 }
@@ -178,6 +183,50 @@ export function useRegenerateCertificate() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reports'] });
       queryClient.invalidateQueries({ queryKey: TOOLBOX_TALKS_KEY });
+    },
+  });
+}
+
+// ============================================
+// Translation Workflow Hooks
+// ============================================
+
+export function useWorkflowStates(toolboxTalkId: string) {
+  return useQuery({
+    queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId, 'workflow-state'],
+    queryFn: () => getWorkflowStates(toolboxTalkId),
+    enabled: !!toolboxTalkId,
+  });
+}
+
+export function useWorkflowHistory(toolboxTalkId: string, languageCode: string) {
+  return useQuery({
+    queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId, 'workflow-history', languageCode],
+    queryFn: () => getWorkflowHistory(toolboxTalkId, languageCode),
+    enabled: !!toolboxTalkId && !!languageCode,
+  });
+}
+
+export function useAcceptTranslation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ toolboxTalkId, languageCode }: { toolboxTalkId: string; languageCode: string }) =>
+      acceptTranslation(toolboxTalkId, languageCode),
+    onSuccess: (_, { toolboxTalkId }) => {
+      queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId, 'workflow-state'] });
+      queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId] });
+    },
+  });
+}
+
+export function useValidateTranslation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ toolboxTalkId, languageCode }: { toolboxTalkId: string; languageCode: string }) =>
+      validateTranslation(toolboxTalkId, languageCode),
+    onSuccess: (_, { toolboxTalkId }) => {
+      queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId, 'workflow-state'] });
+      queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId] });
     },
   });
 }
