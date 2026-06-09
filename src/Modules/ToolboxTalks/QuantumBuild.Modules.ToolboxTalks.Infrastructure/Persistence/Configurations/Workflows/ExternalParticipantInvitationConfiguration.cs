@@ -37,6 +37,12 @@ public class ExternalParticipantInvitationConfiguration : IEntityTypeConfigurati
             .IsRequired()
             .HasConversion<int>();
 
+        builder.Property(e => e.ContextType)
+            .IsRequired()
+            .HasMaxLength(64);
+
+        builder.Property(e => e.ContextPayload);
+
         builder.Property(e => e.RequesterUserId)
             .IsRequired();
 

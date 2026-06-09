@@ -12,6 +12,8 @@ public class ExternalParticipantInvitation : TenantEntity
     public string TokenHash { get; set; } = string.Empty;
     public DateTime ExpiresAt { get; set; }
     public InvitationStatus Status { get; set; }
+    public string ContextType { get; set; } = string.Empty;
+    public string? ContextPayload { get; set; }
     public Guid RequesterUserId { get; set; }
     public DateTime InvitedAt { get; set; }
     public DateTime? UsedAt { get; set; }

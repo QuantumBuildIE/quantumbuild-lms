@@ -33,6 +33,9 @@ public class WorkflowReviewConfiguration : IEntityTypeConfiguration<WorkflowRevi
         builder.Property(e => e.EditedContent)
             .HasColumnType("text");
 
+        builder.Property(e => e.DeclineReason)
+            .HasMaxLength(1000);
+
         builder.Property(e => e.Accepted)
             .IsRequired();
 

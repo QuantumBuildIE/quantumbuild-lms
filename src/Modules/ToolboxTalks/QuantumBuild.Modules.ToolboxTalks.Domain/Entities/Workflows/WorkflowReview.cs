@@ -12,6 +12,7 @@ public class WorkflowReview : TenantEntity
     public Guid? ReviewerUserId { get; set; }
     public Guid? ExternalParticipantInvitationId { get; set; }
     public string? EditedContent { get; set; }
+    public string? DeclineReason { get; set; }
     public bool Accepted { get; set; }
     public DateTime SubmittedAt { get; set; }
 

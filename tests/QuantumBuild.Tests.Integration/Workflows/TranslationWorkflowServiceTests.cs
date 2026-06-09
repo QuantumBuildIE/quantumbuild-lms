@@ -452,6 +452,8 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
     }
 
     // 20 — InitiateExternalReview from ReviewerAccepted (legal) → writes event and invitation
+    //      No setting seeded → defaults to 30-day lifetime.
+    //      Verifies ContextType and ContextPayload placeholder populated (Phase 4.2a).
     [Fact]
     public async Task InitiateExternalReview_FromReviewerAccepted_WritesEventAndInvitation()
     {
@@ -464,7 +466,8 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
 
         result.Success.Should().BeTrue();
         result.Data!.Token.Should().NotBeNullOrEmpty();
-        result.Data.ExpiresAt.Should().BeAfter(DateTime.UtcNow);
+        // Default path: no ExternalParticipantTokenLifetimeDays setting seeded → 30 days
+        result.Data.ExpiresAt.Should().BeCloseTo(DateTime.UtcNow.AddDays(30), TimeSpan.FromMinutes(1));
 
         var db = GetDbContext();
 
@@ -475,6 +478,8 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
         invitation!.Status.Should().Be(InvitationStatus.Pending);
         invitation.InvitedEmail.Should().Be("external@example.com");
         invitation.TokenHash.Should().NotBe(result.Data.Token); // hash ≠ raw token
+        invitation.ContextType.Should().Be("TranslationReview");
+        invitation.ContextPayload.Should().Be("{\"contextType\":\"TranslationReview\"}");
 
         var events = await db.Set<WorkflowEvent>()
             .IgnoreQueryFilters()

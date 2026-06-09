@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using QuantumBuild.Core.Application.Features.TenantSettings;
 using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Core.Application.Models;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Workflows;
@@ -14,7 +15,8 @@ namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Workflows;
 
 public sealed class TranslationWorkflowService(
     IToolboxTalksDbContext context,
-    ICurrentUserService currentUser) : ITranslationWorkflowService
+    ICurrentUserService currentUser,
+    ITenantSettingsService tenantSettings) : ITranslationWorkflowService
 {
     public async Task<TranslationWorkflowStateDto> GetState(Guid talkId, string languageCode, CancellationToken ct = default)
     {
@@ -190,8 +192,13 @@ public sealed class TranslationWorkflowService(
 
         var rawToken = Guid.NewGuid().ToString("N");
         var tokenHash = HashToken(rawToken);
-        // TODO Phase 4: read token lifetime from tenant settings (TenantSettings.ExternalParticipantTokenLifetimeDays)
-        var expiresAt = DateTime.UtcNow.AddDays(30);
+        var lifetimeRaw = await tenantSettings.GetSettingAsync(
+            currentUser.TenantId,
+            TenantSettingKeys.ExternalParticipantTokenLifetimeDays,
+            "30",
+            ct);
+        var lifetimeDays = int.TryParse(lifetimeRaw, out var parsed) && parsed > 0 ? parsed : 30;
+        var expiresAt = DateTime.UtcNow.AddDays(lifetimeDays);
 
         var invitation = new ExternalParticipantInvitation
         {
@@ -202,6 +209,8 @@ public sealed class TranslationWorkflowService(
             TokenHash = tokenHash,
             ExpiresAt = expiresAt,
             Status = InvitationStatus.Pending,
+            ContextType = "TranslationReview",
+            ContextPayload = "{\"contextType\":\"TranslationReview\"}", // TODO Phase 4.2b: replace placeholder with computed FlaggedWordCount
             RequesterUserId = currentUser.UserIdGuid,
             InvitedAt = DateTime.UtcNow
         };
