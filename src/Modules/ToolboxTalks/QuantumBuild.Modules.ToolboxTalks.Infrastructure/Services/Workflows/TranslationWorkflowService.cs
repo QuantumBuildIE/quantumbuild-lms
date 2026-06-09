@@ -200,6 +200,8 @@ public sealed class TranslationWorkflowService(
         var lifetimeDays = int.TryParse(lifetimeRaw, out var parsed) && parsed > 0 ? parsed : 30;
         var expiresAt = DateTime.UtcNow.AddDays(lifetimeDays);
 
+        var flaggedWordCount = await ComputeFlaggedWordCountAsync(talkId, languageCode, ct);
+
         var invitation = new ExternalParticipantInvitation
         {
             WorkflowType = WorkflowType.Translation,
@@ -210,7 +212,7 @@ public sealed class TranslationWorkflowService(
             ExpiresAt = expiresAt,
             Status = InvitationStatus.Pending,
             ContextType = "TranslationReview",
-            ContextPayload = "{\"contextType\":\"TranslationReview\"}", // TODO Phase 4.2b: replace placeholder with computed FlaggedWordCount
+            ContextPayload = JsonSerializer.Serialize(new { contextType = "TranslationReview", flaggedWordCount }),
             RequesterUserId = currentUser.UserIdGuid,
             InvitedAt = DateTime.UtcNow
         };
@@ -431,4 +433,66 @@ public sealed class TranslationWorkflowService(
     private static string Serialize<T>(T value) => JsonSerializer.Serialize(value);
 
     private static Guid? NullIfEmpty(Guid id) => id == Guid.Empty ? null : id;
+
+    private async Task<int> ComputeFlaggedWordCountAsync(Guid talkId, string languageCode, CancellationToken ct)
+    {
+        var run = await context.TranslationValidationRuns
+            .Where(r => r.ToolboxTalkId == talkId
+                     && r.LanguageCode == languageCode
+                     && r.Status == ValidationRunStatus.Completed)
+            .OrderByDescending(r => r.CompletedAt)
+            .FirstOrDefaultAsync(ct);
+
+        if (run is null)
+            return 0;
+
+        var results = await context.TranslationValidationResults
+            .Where(r => r.ValidationRunId == run.Id)
+            .Include(r => r.Flags)
+            .ToListAsync(ct);
+
+        var total = 0;
+        foreach (var result in results)
+        {
+            if (string.IsNullOrEmpty(result.OriginalText))
+                continue;
+
+            var spans = result.Flags.Select(f => (Start: f.StartOffset, End: f.EndOffset));
+            var merged = MergeSpans(spans);
+
+            foreach (var (start, end) in merged)
+                total += CountWordsInRange(result.OriginalText, start, end);
+        }
+
+        return total;
+    }
+
+    private static List<(int Start, int End)> MergeSpans(IEnumerable<(int Start, int End)> spans)
+    {
+        var sorted = spans.OrderBy(s => s.Start).ToList();
+        var merged = new List<(int Start, int End)>();
+
+        foreach (var span in sorted)
+        {
+            if (merged.Count == 0 || span.Start > merged[^1].End)
+                merged.Add(span);
+            else
+                merged[^1] = (merged[^1].Start, Math.Max(merged[^1].End, span.End));
+        }
+
+        return merged;
+    }
+
+    private static int CountWordsInRange(string text, int start, int end)
+    {
+        var clampedStart = Math.Clamp(start, 0, text.Length);
+        var clampedEnd = Math.Clamp(end, 0, text.Length);
+
+        if (clampedStart >= clampedEnd)
+            return 0;
+
+        return text[clampedStart..clampedEnd]
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+            .Length;
+    }
 }

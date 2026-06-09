@@ -1,9 +1,12 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using QuantumBuild.Core.Application.Models;
+using QuantumBuild.Core.Infrastructure.Data;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Workflows;
+using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities.Workflows;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 
@@ -479,7 +482,8 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
         invitation.InvitedEmail.Should().Be("external@example.com");
         invitation.TokenHash.Should().NotBe(result.Data.Token); // hash ≠ raw token
         invitation.ContextType.Should().Be("TranslationReview");
-        invitation.ContextPayload.Should().Be("{\"contextType\":\"TranslationReview\"}");
+        // No validation run seeded for this talk/language → flaggedWordCount = 0
+        invitation.ContextPayload.Should().Be("{\"contextType\":\"TranslationReview\",\"flaggedWordCount\":0}");
 
         var events = await db.Set<WorkflowEvent>()
             .IgnoreQueryFilters()
@@ -774,5 +778,132 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
         events[0].TriggeredByType.Should().Be(TriggeredByType.User);
         // In a non-HTTP test scope ICurrentUserService.UserIdGuid = Guid.Empty → NullIfEmpty → null
         events[0].TriggeredByUserId.Should().BeNull();
+    }
+
+    // ── Phase 4.2b — FlaggedWordCount in ContextPayload ──────────────────────
+
+    // 35 — InitiateExternalReview seeds a completed validation run with flags and asserts
+    //      the ContextPayload contains the computed FlaggedWordCount.
+    //
+    //  Result 1: OriginalText = "The quick brown fox jumps over the lazy dog" (9 words)
+    //    Flag A: [4..9)  → "quick"      → 1 word
+    //    Flag B: [16..19) → "fox"       → 1 word
+    //    Merged (non-overlapping): (4,9) and (16,19) → 1 + 1 = 2 words
+    //  Result 2: OriginalText = "Hello world" (2 words)
+    //    Flag C: [0..11) → "Hello world" → 2 words
+    //  Expected total: 1 + 1 + 2 = 4
+    [Fact]
+    public async Task InitiateExternalReview_PopulatesContextPayloadWithFlaggedWordCount()
+    {
+        const string lang = "xh";
+
+        // Pre-condition: ReviewerAccepted state
+        await SeedEventAsync(TalkId, lang, WorkflowEventTypes.InternalReviewSubmitted);
+
+        // Seed a completed validation run for (TalkId, lang)
+        var runId = await SeedValidationRunAsync(TalkId, lang);
+
+        // Seed Result 1 with two non-overlapping flags
+        var result1Id = await SeedValidationResultAsync(runId, sectionIndex: 0,
+            originalText: "The quick brown fox jumps over the lazy dog");
+        await SeedFlagAsync(result1Id, startOffset: 4, endOffset: 9);   // "quick" → 1 word
+        await SeedFlagAsync(result1Id, startOffset: 16, endOffset: 19); // "fox"   → 1 word
+
+        // Seed Result 2 with a flag spanning the whole text
+        var result2Id = await SeedValidationResultAsync(runId, sectionIndex: 1,
+            originalText: "Hello world");
+        await SeedFlagAsync(result2Id, startOffset: 0, endOffset: 11);  // "Hello world" → 2 words
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var result = await service.InitiateExternalReview(TalkId, lang, "reviewer@example.com");
+
+        result.Success.Should().BeTrue();
+
+        var db = GetDbContext();
+        var invitation = await db.Set<ExternalParticipantInvitation>()
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(i => i.Id == result.Data!.InvitationId);
+
+        invitation.Should().NotBeNull();
+        invitation!.ContextType.Should().Be("TranslationReview");
+
+        using var doc = JsonDocument.Parse(invitation.ContextPayload!);
+        doc.RootElement.GetProperty("contextType").GetString().Should().Be("TranslationReview");
+        doc.RootElement.GetProperty("flaggedWordCount").GetInt32().Should().Be(4);
+    }
+
+    // ── Seed helpers for Phase 4.2b tests ────────────────────────────────────
+
+    /// <summary>
+    /// Seeds a completed TranslationValidationRun for (talkId, languageCode).
+    /// TenantId is left unset so it is auto-stamped to Guid.Empty — consistent with
+    /// how the service is resolved in the non-HTTP test scope.
+    /// </summary>
+    private async Task<Guid> SeedValidationRunAsync(Guid talkId, string languageCode)
+    {
+        var runId = Guid.NewGuid();
+        var db = GetDbContext();
+        db.Set<TranslationValidationRun>().Add(new TranslationValidationRun
+        {
+            Id = runId,
+            ToolboxTalkId = talkId,
+            LanguageCode = languageCode,
+            Status = ValidationRunStatus.Completed,
+            OverallOutcome = ValidationOutcome.Pass,
+            PassThreshold = 75,
+            SourceLanguage = "en",
+            CompletedAt = DateTime.UtcNow,
+            CreatedAt = DateTime.UtcNow,
+            CreatedBy = "test"
+        });
+        await db.SaveChangesAsync();
+        return runId;
+    }
+
+    /// <summary>
+    /// Seeds a TranslationValidationResult (BaseEntity — no TenantId) for the given run.
+    /// </summary>
+    private async Task<Guid> SeedValidationResultAsync(Guid runId, int sectionIndex, string originalText)
+    {
+        var resultId = Guid.NewGuid();
+        var db = GetDbContext();
+        db.Set<TranslationValidationResult>().Add(new TranslationValidationResult
+        {
+            Id = resultId,
+            ValidationRunId = runId,
+            SectionIndex = sectionIndex,
+            SectionTitle = $"Section {sectionIndex}",
+            OriginalText = originalText,
+            TranslatedText = string.Empty,
+            CreatedAt = DateTime.UtcNow,
+            CreatedBy = "test"
+        });
+        await db.SaveChangesAsync();
+        return resultId;
+    }
+
+    /// <summary>
+    /// Seeds a TranslationFlag (TenantEntity) linked to the given result.
+    /// TenantId is left unset so it is auto-stamped to Guid.Empty, matching the
+    /// non-HTTP test scope's tenant filter predicate.
+    /// </summary>
+    private async Task SeedFlagAsync(Guid resultId, int startOffset, int endOffset)
+    {
+        var db = GetDbContext();
+        db.Set<TranslationFlag>().Add(new TranslationFlag
+        {
+            ToolboxTalkId = TalkId,
+            LanguageCode = "xh",
+            ValidationResultId = resultId,
+            StartOffset = startOffset,
+            EndOffset = endOffset,
+            Severity = FlagSeverity.Warning,
+            Reason = "test flag",
+            CreatedAt = DateTime.UtcNow,
+            CreatedBy = "test"
+        });
+        await db.SaveChangesAsync();
     }
 }
