@@ -26,6 +26,7 @@ export interface TranslationWorkflowStateDto {
   needsRevalidation: boolean;
   lastValidationOutcome: ValidationOutcome | null;
   lastValidationRunId: string | null;
+  flaggedWordCount: number;
 }
 
 export interface WorkflowEventDto {

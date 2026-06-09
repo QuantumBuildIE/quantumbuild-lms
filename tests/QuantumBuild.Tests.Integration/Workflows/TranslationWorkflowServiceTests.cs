@@ -965,6 +965,29 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
         await db.SaveChangesAsync();
     }
 
+    /// <summary>
+    /// Seeds a TranslationFlag (TenantEntity) linked to the given result for a specific language code.
+    /// TenantId is left unset so it is auto-stamped to Guid.Empty, matching the
+    /// non-HTTP test scope's tenant filter predicate.
+    /// </summary>
+    private async Task SeedFlagForLangAsync(Guid resultId, int startOffset, int endOffset, string languageCode)
+    {
+        var db = GetDbContext();
+        db.Set<TranslationFlag>().Add(new TranslationFlag
+        {
+            ToolboxTalkId = TalkId,
+            LanguageCode = languageCode,
+            ValidationResultId = resultId,
+            StartOffset = startOffset,
+            EndOffset = endOffset,
+            Severity = FlagSeverity.Warning,
+            Reason = "test flag",
+            CreatedAt = DateTime.UtcNow,
+            CreatedBy = "test"
+        });
+        await db.SaveChangesAsync();
+    }
+
     // ── Seed helpers for Phase 4.5a tests ────────────────────────────────────
 
     /// <summary>
@@ -1243,6 +1266,58 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
         sections.Should().HaveCount(2, "no new sections should be appended for out-of-range indices");
         sections![0].Content.Should().Be("Section zero was updated", "valid edit for index 0 must be applied");
         sections[1].Content.Should().Be("Original section one content", "index 1 was not in the edits");
+    }
+
+    // ── Phase 4.6 — FlaggedWordCount in GetState ──────────────────────────────
+
+    // 43 — GetState with a seeded validation run and flags returns the computed FlaggedWordCount.
+    //
+    //  Result 1: OriginalText = "The quick brown fox jumps over the lazy dog"
+    //    Flag A: [4..9)   → "quick"       → 1 word
+    //    Flag B: [16..19) → "fox"         → 1 word
+    //    Merged (non-overlapping): (4,9) and (16,19) → 1 + 1 = 2 words
+    //  Result 2: OriginalText = "Hello world"
+    //    Flag C: [0..11)  → "Hello world" → 2 words
+    //  Expected total: 1 + 1 + 2 = 4
+    [Fact]
+    public async Task GetState_WithFlaggedSections_ReturnsFlaggedWordCount()
+    {
+        const string lang = "ta";
+
+        // Any event gives a non-Initial state; FlaggedWordCount populates regardless of state.
+        await SeedEventAsync(TalkId, lang, WorkflowEventTypes.TranslationCompleted);
+
+        var runId = await SeedValidationRunAsync(TalkId, lang);
+
+        var result1Id = await SeedValidationResultAsync(runId, sectionIndex: 0,
+            originalText: "The quick brown fox jumps over the lazy dog");
+        await SeedFlagForLangAsync(result1Id, startOffset: 4,  endOffset: 9,  languageCode: lang); // "quick" → 1 word
+        await SeedFlagForLangAsync(result1Id, startOffset: 16, endOffset: 19, languageCode: lang); // "fox"   → 1 word
+
+        var result2Id = await SeedValidationResultAsync(runId, sectionIndex: 1,
+            originalText: "Hello world");
+        await SeedFlagForLangAsync(result2Id, startOffset: 0, endOffset: 11, languageCode: lang); // "Hello world" → 2 words
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var state = await service.GetState(TalkId, lang);
+
+        state.Should().NotBeNull();
+        state.FlaggedWordCount.Should().Be(4);
+    }
+
+    // 44 — GetState with no validation run returns FlaggedWordCount = 0
+    [Fact]
+    public async Task GetState_WithNoValidationRun_ReturnsFlaggedWordCountZero()
+    {
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var state = await service.GetState(TalkId, "ms");
+
+        state.Should().NotBeNull();
+        state.FlaggedWordCount.Should().Be(0);
     }
 
     // ── Local helper type for asserting TranslatedSections content ────────────

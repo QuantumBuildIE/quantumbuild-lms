@@ -18,6 +18,8 @@ import {
   getWorkflowHistory,
   acceptTranslation,
   validateTranslation,
+  initiateExternalReview,
+  cancelExternalReview,
 } from './toolbox-talks';
 import type {
   GenerateTranslationsRequest,
@@ -227,6 +229,30 @@ export function useValidateTranslation() {
     onSuccess: (_, { toolboxTalkId }) => {
       queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId, 'workflow-state'] });
       queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId] });
+    },
+  });
+}
+
+export function useInitiateExternalReview() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ toolboxTalkId, languageCode, reviewerEmail }: { toolboxTalkId: string; languageCode: string; reviewerEmail: string }) =>
+      initiateExternalReview(toolboxTalkId, languageCode, reviewerEmail),
+    onSuccess: (_, { toolboxTalkId, languageCode }) => {
+      queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId, 'workflow-state'] });
+      queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId, 'workflow-history', languageCode] });
+    },
+  });
+}
+
+export function useCancelExternalReview() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ toolboxTalkId, languageCode }: { toolboxTalkId: string; languageCode: string }) =>
+      cancelExternalReview(toolboxTalkId, languageCode),
+    onSuccess: (_, { toolboxTalkId, languageCode }) => {
+      queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId, 'workflow-state'] });
+      queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId, 'workflow-history', languageCode] });
     },
   });
 }

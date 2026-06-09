@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
-import { Languages, History, ClipboardCheck } from 'lucide-react';
+import { Languages, History, ClipboardCheck, Send, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
@@ -36,7 +36,11 @@ import {
   useGenerateContentTranslations,
   useWorkflowStates,
   useValidateTranslation,
+  useInitiateExternalReview,
+  useCancelExternalReview,
 } from '@/lib/api/toolbox-talks';
+import { SendExternalReviewDialog } from './SendExternalReviewDialog';
+import { CancelExternalReviewDialog } from './CancelExternalReviewDialog';
 import type { ToolboxTalkTranslation } from '@/types/toolbox-talks';
 import type { TranslationWorkflowState, ValidationOutcome } from '@/types/workflows';
 
@@ -63,6 +67,14 @@ function canReview(state: TranslationWorkflowState): boolean {
   return state === 'Validated' || state === 'ReviewerAccepted' || state === 'ThirdPartyReviewed';
 }
 
+function canSendForExternalReview(state: TranslationWorkflowState): boolean {
+  return state === 'ReviewerAccepted';
+}
+
+function canCancelExternalReview(state: TranslationWorkflowState): boolean {
+  return state === 'AwaitingThirdParty';
+}
+
 export function TranslationWorkflowPanel({
   toolboxTalkId,
   existingTranslations,
@@ -72,6 +84,8 @@ export function TranslationWorkflowPanel({
   const { data: workflowStates } = useWorkflowStates(toolboxTalkId);
   const generateMutation = useGenerateContentTranslations();
   const validateMutation = useValidateTranslation();
+  const initiateExternalReviewMutation = useInitiateExternalReview();
+  const cancelExternalReviewMutation = useCancelExternalReview();
 
   const [pendingByLanguage, setPendingByLanguage] = useState<
     Record<string, 'translating' | 'validating' | null>
@@ -80,6 +94,10 @@ export function TranslationWorkflowPanel({
   const [overwriteLanguageName, setOverwriteLanguageName] = useState<string | null>(null);
   const [historyLanguageCode, setHistoryLanguageCode] = useState<string | null>(null);
   const [historyLanguageName, setHistoryLanguageName] = useState<string | null>(null);
+  const [sendReviewLanguageCode, setSendReviewLanguageCode] = useState<string | null>(null);
+  const [sendReviewLanguageName, setSendReviewLanguageName] = useState<string | null>(null);
+  const [sendReviewFlaggedCount, setSendReviewFlaggedCount] = useState(0);
+  const [cancelReviewLanguageCode, setCancelReviewLanguageCode] = useState<string | null>(null);
 
   const existingCodes = new Set(existingTranslations.map((t) => t.languageCode));
 
@@ -159,6 +177,35 @@ export function TranslationWorkflowPanel({
       toast.error(`Failed to start validation for ${languageName}`);
     } finally {
       setPendingByLanguage((prev) => ({ ...prev, [languageCode]: null }));
+    }
+  };
+
+  const handleSendForExternalReview = async (email: string) => {
+    if (!sendReviewLanguageCode || !sendReviewLanguageName) return;
+    try {
+      await initiateExternalReviewMutation.mutateAsync({
+        toolboxTalkId,
+        languageCode: sendReviewLanguageCode,
+        reviewerEmail: email,
+      });
+      toast.success(`Invitation sent to ${email}`);
+      setSendReviewLanguageCode(null);
+    } catch {
+      toast.error(`Failed to send invitation for ${sendReviewLanguageName}`);
+    }
+  };
+
+  const handleCancelExternalReview = async () => {
+    if (!cancelReviewLanguageCode) return;
+    try {
+      await cancelExternalReviewMutation.mutateAsync({
+        toolboxTalkId,
+        languageCode: cancelReviewLanguageCode,
+      });
+      toast.success('Invitation cancelled');
+      setCancelReviewLanguageCode(null);
+    } catch {
+      toast.error('Failed to cancel invitation');
     }
   };
 
@@ -316,6 +363,38 @@ export function TranslationWorkflowPanel({
                     </Tooltip>
                   </TooltipProvider>
 
+                  {/* Send for external review — only when ReviewerAccepted */}
+                  {canSendForExternalReview(row.state) && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={isBusy}
+                      onClick={() => {
+                        setSendReviewLanguageCode(row.languageCode);
+                        setSendReviewLanguageName(row.languageName);
+                        setSendReviewFlaggedCount(dto?.flaggedWordCount ?? 0);
+                      }}
+                    >
+                      <Send className="mr-1 h-3 w-3" />
+                      Send for review
+                    </Button>
+                  )}
+
+                  {/* Cancel external review — only when AwaitingThirdParty */}
+                  {canCancelExternalReview(row.state) && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={isBusy}
+                      onClick={() => setCancelReviewLanguageCode(row.languageCode)}
+                    >
+                      <X className="mr-1 h-3 w-3" />
+                      Cancel invitation
+                    </Button>
+                  )}
+
                   {/* View history */}
                   <TooltipProvider>
                     <Tooltip>
@@ -358,6 +437,31 @@ export function TranslationWorkflowPanel({
             setHistoryLanguageName(null);
           }
         }}
+      />
+
+      {/* Send for external review dialog */}
+      <SendExternalReviewDialog
+        open={sendReviewLanguageCode !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSendReviewLanguageCode(null);
+            setSendReviewLanguageName(null);
+          }
+        }}
+        onConfirm={handleSendForExternalReview}
+        isLoading={initiateExternalReviewMutation.isPending}
+        flaggedWordCount={sendReviewFlaggedCount}
+        languageName={sendReviewLanguageName ?? ''}
+      />
+
+      {/* Cancel external review dialog */}
+      <CancelExternalReviewDialog
+        open={cancelReviewLanguageCode !== null}
+        onOpenChange={(open) => {
+          if (!open) setCancelReviewLanguageCode(null);
+        }}
+        onConfirm={handleCancelExternalReview}
+        isLoading={cancelExternalReviewMutation.isPending}
       />
 
       {/* Overwrite confirmation for Accepted state */}

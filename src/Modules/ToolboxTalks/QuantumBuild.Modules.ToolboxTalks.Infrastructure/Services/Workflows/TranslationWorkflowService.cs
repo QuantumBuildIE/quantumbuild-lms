@@ -50,6 +50,8 @@ public sealed class TranslationWorkflowService(
             ? TranslationWorkflowState.Initial
             : EventTypeToState(lastEvent.EventType);
 
+        var flaggedWordCount = await ComputeFlaggedWordCountAsync(talkId, languageCode, ct);
+
         return new TranslationWorkflowStateDto
         {
             TalkId = talkId,
@@ -61,7 +63,8 @@ public sealed class TranslationWorkflowService(
             TranslatedAt = translation?.TranslatedAt,
             NeedsRevalidation = translation?.NeedsRevalidation ?? false,
             LastValidationOutcome = lastValidationRun?.OverallOutcome,
-            LastValidationRunId = lastValidationRun?.Id
+            LastValidationRunId = lastValidationRun?.Id,
+            FlaggedWordCount = flaggedWordCount
         };
     }
 

@@ -1359,6 +1359,52 @@ public class ToolboxTalksController : ControllerBase
     }
 
     /// <summary>
+    /// Initiates an external review by creating an invitation for a third-party reviewer.
+    /// Valid from state: ReviewerAccepted. Transitions workflow to AwaitingThirdParty.
+    /// </summary>
+    /// <param name="id">Toolbox talk ID</param>
+    /// <param name="languageCode">Language code (e.g., "pl", "ro")</param>
+    /// <param name="request">Reviewer email address</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>200 OK with invitation details on success</returns>
+    [HttpPost("{id:guid}/translations/{languageCode}/initiate-external-review")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> InitiateTranslationExternalReview(
+        Guid id, string languageCode, [FromBody] InitiateExternalReviewRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var query = new GetToolboxTalkByIdQuery
+            {
+                TenantId = _currentUserService.TenantId,
+                Id = id
+            };
+
+            var toolboxTalk = await _mediator.Send(query, ct);
+            if (toolboxTalk == null)
+                return NotFound(new { error = "Learning not found" });
+
+            var result = await _workflowService.InitiateExternalReview(id, languageCode, request.ReviewerEmail, ct);
+            if (!result.Success)
+            {
+                if (result.ErrorCode == FailureCode.WorkflowInvalidState)
+                    return Conflict(new { error = result.Errors.FirstOrDefault() });
+                return BadRequest(new { error = result.Errors.FirstOrDefault() });
+            }
+
+            return Ok(new { message = "External review invitation sent" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error initiating external review for toolbox talk {ToolboxTalkId}, language {LanguageCode}", id, languageCode);
+            return StatusCode(500, new { error = "Error initiating external review" });
+        }
+    }
+
+    /// <summary>
     /// Deletes a specific content translation for a toolbox talk.
     /// </summary>
     /// <param name="id">Toolbox talk ID</param>
@@ -2226,4 +2272,10 @@ public record SmartGenerateContentResponse
     // Missing translations job info (if content was fully reused but some languages are missing)
     public bool MissingTranslationsJobQueued { get; init; }
     public string? MissingTranslationsJobId { get; init; }
+}
+
+
+public record InitiateExternalReviewRequest
+{
+    public string ReviewerEmail { get; init; } = string.Empty;
 }

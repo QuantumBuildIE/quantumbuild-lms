@@ -503,6 +503,26 @@ export async function validateTranslation(
   await apiClient.post(`/toolbox-talks/${id}/validation/validate`, { languageCode });
 }
 
+export async function initiateExternalReview(
+  toolboxTalkId: string,
+  languageCode: string,
+  reviewerEmail: string
+): Promise<void> {
+  await apiClient.post(
+    `/toolbox-talks/${toolboxTalkId}/translations/${languageCode}/initiate-external-review`,
+    { reviewerEmail }
+  );
+}
+
+export async function cancelExternalReview(
+  toolboxTalkId: string,
+  languageCode: string
+): Promise<void> {
+  await apiClient.post(
+    `/toolbox-talks/${toolboxTalkId}/translations/${languageCode}/cancel-external-review`
+  );
+}
+
 // ============================================
 // Regenerate Certificate
 // ============================================

@@ -14,4 +14,5 @@ public record TranslationWorkflowStateDto
     public bool NeedsRevalidation { get; init; }
     public ValidationOutcome? LastValidationOutcome { get; init; }
     public Guid? LastValidationRunId { get; init; }
+    public int FlaggedWordCount { get; init; }
 }
