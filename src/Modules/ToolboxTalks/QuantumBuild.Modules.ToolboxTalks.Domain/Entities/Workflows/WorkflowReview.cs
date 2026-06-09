@@ -11,6 +11,14 @@ public class WorkflowReview : TenantEntity
     public ReviewerType ReviewerType { get; set; }
     public Guid? ReviewerUserId { get; set; }
     public Guid? ExternalParticipantInvitationId { get; set; }
+    /// <summary>
+    /// Reviewer's edited content. Semantics depend on ReviewerType:
+    /// - Internal: a single section's edited text (paired with the
+    ///   section that the WorkflowReview targets).
+    /// - External: a JSON array of [{ sectionIndex, translatedText }]
+    ///   representing the whole session's edits. Propagated into
+    ///   TranslatedSections by ConfirmExternalReview when accepted.
+    /// </summary>
     public string? EditedContent { get; set; }
     public string? DeclineReason { get; set; }
     public bool Accepted { get; set; }

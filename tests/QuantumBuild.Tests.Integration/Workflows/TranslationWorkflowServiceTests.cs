@@ -964,4 +964,293 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
         });
         await db.SaveChangesAsync();
     }
+
+    // ── Seed helpers for Phase 4.5a tests ────────────────────────────────────
+
+    /// <summary>
+    /// Seeds a ToolboxTalkTranslation for (talkId, languageCode) with the given JSON sections.
+    /// TenantId is auto-stamped to Guid.Empty in the non-HTTP test scope.
+    /// </summary>
+    private async Task SeedToolboxTalkTranslationAsync(
+        Guid talkId, string languageCode, string translatedSectionsJson)
+    {
+        var db = GetDbContext();
+        db.Set<ToolboxTalkTranslation>().Add(new ToolboxTalkTranslation
+        {
+            ToolboxTalkId = talkId,
+            LanguageCode = languageCode,
+            TranslatedTitle = $"Test translation ({languageCode})",
+            TranslatedSections = translatedSectionsJson,
+            TranslatedAt = DateTime.UtcNow,
+            TranslationProvider = "test"
+        });
+        await db.SaveChangesAsync();
+    }
+
+    // ── Phase 4.5a — propagate external reviewer edits into TranslatedSections ─
+
+    // 38 — ConfirmExternalReview with accepted=true propagates all edits into TranslatedSections,
+    //      preserving SectionId and Title on each section.
+    [Fact]
+    public async Task ConfirmExternalReview_WithAcceptedTrue_PropagatesEditedSectionsIntoTranslatedSections()
+    {
+        const string lang = "xk";
+        var section1Id = Guid.NewGuid();
+        var section2Id = Guid.NewGuid();
+
+        var originalSectionsJson = JsonSerializer.Serialize(new[]
+        {
+            new { SectionId = section1Id, Title = "Section 1 Title", Content = "Original section one content" },
+            new { SectionId = section2Id, Title = "Section 2 Title", Content = "Original section two content" }
+        });
+        await SeedToolboxTalkTranslationAsync(TalkId, lang, originalSectionsJson);
+
+        await SeedEventAsync(TalkId, lang, WorkflowEventTypes.InternalReviewSubmitted);
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var initiateResult = await service.InitiateExternalReview(TalkId, lang, "reviewer@example.com");
+        initiateResult.Success.Should().BeTrue();
+
+        var editsJson = JsonSerializer.Serialize(new[]
+        {
+            new { SectionIndex = 0, TranslatedText = "Edited section one" },
+            new { SectionIndex = 1, TranslatedText = "Edited section two" }
+        });
+        await service.SubmitExternalReview(initiateResult.Data!.Token, accepted: true, editedContent: editsJson);
+
+        var result = await service.ConfirmExternalReview(TalkId, lang, accepted: true);
+
+        result.Success.Should().BeTrue();
+
+        var db = GetDbContext();
+        var translation = await db.Set<ToolboxTalkTranslation>()
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(t => t.ToolboxTalkId == TalkId && t.LanguageCode == lang && !t.IsDeleted);
+
+        translation.Should().NotBeNull();
+        var sections = JsonSerializer.Deserialize<List<TranslatedSectionSnapshot>>(translation!.TranslatedSections);
+        sections.Should().HaveCount(2);
+        sections![0].Content.Should().Be("Edited section one");
+        sections[1].Content.Should().Be("Edited section two");
+        sections[0].SectionId.Should().Be(section1Id, "SectionId must be preserved");
+        sections[0].Title.Should().Be("Section 1 Title", "Title must be preserved");
+        sections[1].SectionId.Should().Be(section2Id, "SectionId must be preserved");
+        sections[1].Title.Should().Be("Section 2 Title", "Title must be preserved");
+
+        var events = await db.Set<WorkflowEvent>()
+            .IgnoreQueryFilters()
+            .Where(e => e.WorkflowType == WorkflowType.Translation
+                     && e.TargetEntityId == TalkId
+                     && e.TargetEntitySubKey == lang
+                     && e.EventType == WorkflowEventTypes.ExternalReviewConfirmed)
+            .ToListAsync();
+        events.Should().ContainSingle();
+    }
+
+    // 39 — ConfirmExternalReview with accepted=false does NOT propagate edits;
+    //      TranslatedSections retains original content.
+    [Fact]
+    public async Task ConfirmExternalReview_WithAcceptedFalse_DoesNotPropagateEdits()
+    {
+        const string lang = "so";
+        var section1Id = Guid.NewGuid();
+        var section2Id = Guid.NewGuid();
+
+        var originalSectionsJson = JsonSerializer.Serialize(new[]
+        {
+            new { SectionId = section1Id, Title = "Section 1 Title", Content = "Original section one content" },
+            new { SectionId = section2Id, Title = "Section 2 Title", Content = "Original section two content" }
+        });
+        await SeedToolboxTalkTranslationAsync(TalkId, lang, originalSectionsJson);
+
+        await SeedEventAsync(TalkId, lang, WorkflowEventTypes.InternalReviewSubmitted);
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var initiateResult = await service.InitiateExternalReview(TalkId, lang, "reviewer@example.com");
+
+        var editsJson = JsonSerializer.Serialize(new[]
+        {
+            new { SectionIndex = 0, TranslatedText = "Edited section one" },
+            new { SectionIndex = 1, TranslatedText = "Edited section two" }
+        });
+        await service.SubmitExternalReview(initiateResult.Data!.Token, accepted: true, editedContent: editsJson);
+
+        // Internal team rejects — no propagation should occur
+        var result = await service.ConfirmExternalReview(TalkId, lang, accepted: false);
+
+        result.Success.Should().BeTrue();
+
+        var db = GetDbContext();
+        var translation = await db.Set<ToolboxTalkTranslation>()
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(t => t.ToolboxTalkId == TalkId && t.LanguageCode == lang && !t.IsDeleted);
+
+        translation.Should().NotBeNull();
+        var sections = JsonSerializer.Deserialize<List<TranslatedSectionSnapshot>>(translation!.TranslatedSections);
+        sections![0].Content.Should().Be("Original section one content", "rejected edits must not be propagated");
+        sections[1].Content.Should().Be("Original section two content", "rejected edits must not be propagated");
+
+        var events = await db.Set<WorkflowEvent>()
+            .IgnoreQueryFilters()
+            .Where(e => e.WorkflowType == WorkflowType.Translation
+                     && e.TargetEntityId == TalkId
+                     && e.TargetEntitySubKey == lang
+                     && e.EventType == WorkflowEventTypes.ExternalReviewConfirmed)
+            .ToListAsync();
+        events.Should().ContainSingle();
+    }
+
+    // 40 — ConfirmExternalReview with accepted=true and edits for only one of three sections
+    //      updates only the edited section; others are untouched.
+    [Fact]
+    public async Task ConfirmExternalReview_WithAcceptedTrueAndPartialEdits_PropagatesOnlyEditedSections()
+    {
+        const string lang = "sq";
+        var section1Id = Guid.NewGuid();
+        var section2Id = Guid.NewGuid();
+        var section3Id = Guid.NewGuid();
+
+        var originalSectionsJson = JsonSerializer.Serialize(new[]
+        {
+            new { SectionId = section1Id, Title = "Section 1", Content = "Original content one" },
+            new { SectionId = section2Id, Title = "Section 2", Content = "Original content two" },
+            new { SectionId = section3Id, Title = "Section 3", Content = "Original content three" }
+        });
+        await SeedToolboxTalkTranslationAsync(TalkId, lang, originalSectionsJson);
+
+        await SeedEventAsync(TalkId, lang, WorkflowEventTypes.InternalReviewSubmitted);
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var initiateResult = await service.InitiateExternalReview(TalkId, lang, "reviewer@example.com");
+
+        // Reviewer only edited section index 1
+        var editsJson = JsonSerializer.Serialize(new[]
+        {
+            new { SectionIndex = 1, TranslatedText = "Only section two was edited" }
+        });
+        await service.SubmitExternalReview(initiateResult.Data!.Token, accepted: true, editedContent: editsJson);
+
+        var result = await service.ConfirmExternalReview(TalkId, lang, accepted: true);
+
+        result.Success.Should().BeTrue();
+
+        var db = GetDbContext();
+        var translation = await db.Set<ToolboxTalkTranslation>()
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(t => t.ToolboxTalkId == TalkId && t.LanguageCode == lang && !t.IsDeleted);
+
+        var sections = JsonSerializer.Deserialize<List<TranslatedSectionSnapshot>>(translation!.TranslatedSections);
+        sections.Should().HaveCount(3);
+        sections![0].Content.Should().Be("Original content one", "section 0 was not edited");
+        sections[1].Content.Should().Be("Only section two was edited", "section 1 edit must be applied");
+        sections[2].Content.Should().Be("Original content three", "section 2 was not edited");
+    }
+
+    // 41 — ConfirmExternalReview with malformed EditedContent logs a warning and
+    //      returns success without modifying TranslatedSections.
+    [Fact]
+    public async Task ConfirmExternalReview_WithMalformedEditedContent_DoesNotPropagateAndDoesNotFail()
+    {
+        const string lang = "sw";
+        var sectionId = Guid.NewGuid();
+
+        var originalSectionsJson = JsonSerializer.Serialize(new[]
+        {
+            new { SectionId = sectionId, Title = "Section Title", Content = "Original content" }
+        });
+        await SeedToolboxTalkTranslationAsync(TalkId, lang, originalSectionsJson);
+
+        await SeedEventAsync(TalkId, lang, WorkflowEventTypes.InternalReviewSubmitted);
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var initiateResult = await service.InitiateExternalReview(TalkId, lang, "reviewer@example.com");
+
+        // Submit with malformed JSON — not a valid ExternalReviewEditedSectionDto array
+        await service.SubmitExternalReview(initiateResult.Data!.Token, accepted: true, editedContent: "this is not valid JSON");
+
+        var result = await service.ConfirmExternalReview(TalkId, lang, accepted: true);
+
+        // Service must succeed despite unparseable content
+        result.Success.Should().BeTrue();
+
+        var db = GetDbContext();
+        var translation = await db.Set<ToolboxTalkTranslation>()
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(t => t.ToolboxTalkId == TalkId && t.LanguageCode == lang && !t.IsDeleted);
+
+        var sections = JsonSerializer.Deserialize<List<TranslatedSectionSnapshot>>(translation!.TranslatedSections);
+        sections![0].Content.Should().Be("Original content", "malformed edits must not alter TranslatedSections");
+
+        var events = await db.Set<WorkflowEvent>()
+            .IgnoreQueryFilters()
+            .Where(e => e.WorkflowType == WorkflowType.Translation
+                     && e.TargetEntityId == TalkId
+                     && e.TargetEntitySubKey == lang
+                     && e.EventType == WorkflowEventTypes.ExternalReviewConfirmed)
+            .ToListAsync();
+        events.Should().ContainSingle();
+    }
+
+    // 42 — ConfirmExternalReview with a sectionIndex that is out of range skips that entry
+    //      but still applies valid edits; result is success with no extra sections added.
+    [Fact]
+    public async Task ConfirmExternalReview_WithSectionIndexOutOfRange_SkipsThatEntryButPropagatesValidOnes()
+    {
+        const string lang = "yo";
+        var section1Id = Guid.NewGuid();
+        var section2Id = Guid.NewGuid();
+
+        var originalSectionsJson = JsonSerializer.Serialize(new[]
+        {
+            new { SectionId = section1Id, Title = "Section 0", Content = "Original section zero content" },
+            new { SectionId = section2Id, Title = "Section 1", Content = "Original section one content" }
+        });
+        await SeedToolboxTalkTranslationAsync(TalkId, lang, originalSectionsJson);
+
+        await SeedEventAsync(TalkId, lang, WorkflowEventTypes.InternalReviewSubmitted);
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var initiateResult = await service.InitiateExternalReview(TalkId, lang, "reviewer@example.com");
+
+        // Index 0 is valid; index 5 is out of range for a 2-section list
+        var editsJson = JsonSerializer.Serialize(new[]
+        {
+            new { SectionIndex = 0, TranslatedText = "Section zero was updated" },
+            new { SectionIndex = 5, TranslatedText = "This index does not exist" }
+        });
+        await service.SubmitExternalReview(initiateResult.Data!.Token, accepted: true, editedContent: editsJson);
+
+        var result = await service.ConfirmExternalReview(TalkId, lang, accepted: true);
+
+        result.Success.Should().BeTrue();
+
+        var db = GetDbContext();
+        var translation = await db.Set<ToolboxTalkTranslation>()
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(t => t.ToolboxTalkId == TalkId && t.LanguageCode == lang && !t.IsDeleted);
+
+        var sections = JsonSerializer.Deserialize<List<TranslatedSectionSnapshot>>(translation!.TranslatedSections);
+        sections.Should().HaveCount(2, "no new sections should be appended for out-of-range indices");
+        sections![0].Content.Should().Be("Section zero was updated", "valid edit for index 0 must be applied");
+        sections[1].Content.Should().Be("Original section one content", "index 1 was not in the edits");
+    }
+
+    // ── Local helper type for asserting TranslatedSections content ────────────
+
+    private sealed class TranslatedSectionSnapshot
+    {
+        public Guid SectionId { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public string Content { get; set; } = string.Empty;
+    }
 }

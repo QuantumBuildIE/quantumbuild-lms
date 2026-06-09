@@ -346,6 +346,11 @@ public sealed class TranslationWorkflowService(
                 $"Cannot confirm external review from state {state}; requires ThirdPartyReviewed.",
                 FailureCode.WorkflowInvalidState);
 
+        if (accepted)
+        {
+            await PropagateExternalReviewEditsAsync(talkId, languageCode, ct);
+        }
+
         AddEvent(talkId, languageCode, WorkflowEventTypes.ExternalReviewConfirmed,
             Serialize(new { accepted }));
         await context.SaveChangesAsync(ct);
@@ -736,5 +741,104 @@ public sealed class TranslationWorkflowService(
         return text[clampedStart..clampedEnd]
             .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
             .Length;
+    }
+
+    private async Task PropagateExternalReviewEditsAsync(
+        Guid talkId,
+        string languageCode,
+        CancellationToken ct)
+    {
+        // (a) Find the most recent accepted external WorkflowReview for this talk + language
+        var review = await context.WorkflowReviews
+            .IgnoreQueryFilters()
+            .Where(r => r.WorkflowType == WorkflowType.Translation
+                     && r.TargetEntityId == talkId
+                     && r.TargetEntitySubKey == languageCode
+                     && r.ReviewerType == ReviewerType.External
+                     && r.Accepted
+                     && !r.IsDeleted)
+            .OrderByDescending(r => r.SubmittedAt)
+            .FirstOrDefaultAsync(ct);
+
+        // (b) Nothing to propagate — defensive no-op
+        if (review is null)
+            return;
+
+        // (c) No edits to merge
+        if (string.IsNullOrWhiteSpace(review.EditedContent))
+            return;
+
+        // (d) Deserialise the reviewer's edit payload
+        List<ExternalReviewEditedSectionDto>? edits;
+        try
+        {
+            edits = JsonSerializer.Deserialize<List<ExternalReviewEditedSectionDto>>(review.EditedContent);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "PropagateExternalReviewEdits: failed to deserialise EditedContent for talk {TalkId} language {LanguageCode}; skipping propagation",
+                talkId, languageCode);
+            return;
+        }
+
+        if (edits is null || edits.Count == 0)
+            return;
+
+        // (e) Load the translation row
+        var translation = await context.ToolboxTalkTranslations
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(t => t.ToolboxTalkId == talkId
+                                   && t.LanguageCode == languageCode
+                                   && !t.IsDeleted, ct);
+
+        if (translation is null)
+        {
+            logger.LogWarning(
+                "PropagateExternalReviewEdits: no translation found for talk {TalkId} language {LanguageCode}; skipping propagation",
+                talkId, languageCode);
+            return;
+        }
+
+        // (f) Deserialise TranslatedSections
+        List<TranslatedSectionEntry>? sections;
+        try
+        {
+            sections = JsonSerializer.Deserialize<List<TranslatedSectionEntry>>(translation.TranslatedSections);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "PropagateExternalReviewEdits: failed to deserialise TranslatedSections for talk {TalkId} language {LanguageCode}; skipping propagation",
+                talkId, languageCode);
+            return;
+        }
+
+        if (sections is null || sections.Count == 0)
+            return;
+
+        // (g) Apply each edit; skip out-of-range indices
+        foreach (var edit in edits)
+        {
+            if (edit.SectionIndex < 0 || edit.SectionIndex >= sections.Count)
+            {
+                logger.LogWarning(
+                    "PropagateExternalReviewEdits: sectionIndex {SectionIndex} is out of range (count={Count}) for talk {TalkId} language {LanguageCode}; skipping entry",
+                    edit.SectionIndex, sections.Count, talkId, languageCode);
+                continue;
+            }
+
+            sections[edit.SectionIndex].Content = edit.TranslatedText;
+        }
+
+        // (h) Re-serialise and assign; caller's SaveChangesAsync persists this
+        translation.TranslatedSections = JsonSerializer.Serialize(sections);
+    }
+
+    private sealed class TranslatedSectionEntry
+    {
+        public Guid SectionId { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public string Content { get; set; } = string.Empty;
     }
 }
