@@ -181,6 +181,11 @@ Public-facing page for token-scoped external reviews. Token issuance and verific
   ContextType is populated as "TranslationReview" and ContextPayload as a placeholder JSON — Phase 4.2b replaces the placeholder with the computed `FlaggedWordCount`. The `DeclineReason` column is added but unused in this chunk; Phase 4.3 populates it from `DeclineExternalReview`. 376/376 
   tests passing, no new warnings.
 
+  **Status (Phase 4.2b):** Complete (2026-06-09). Commit 30915d2. Replaces the Phase 4.2a placeholder `ContextPayload` with a computed `FlaggedWordCount`. New private 
+  `ComputeFlaggedWordCountAsync` on `TranslationWorkflowService`: finds the most recent completed `TranslationValidationRun` for the (talkId, languageCode) pair, loads its 
+  `TranslationValidationResults` with their `Flags`, merges overlapping flag spans per result (private static `MergeSpans` helper with greedy merge after sort), counts whitespace-separated words in each merged span via `CountWordsInRange`, sums across results. Union semantics — words covered by at least one flag are counted once. Returns 0 when no completed run exists. `InitiateExternalReview` calls the helper and builds `ContextPayload` via 'JsonSerializer.Serialize(new { contextType, 
+  flaggedWordCount })'. Per §10 Decision 10's framing, this is an internal billing-reconciliation snapshot at the moment of invitation send (tenant works out invoicing offline), not reviewer-facing data. Computed at invitation time rather than stored on the validation run, so re-validation between runs doesn't require historical recomputation. New integration test seeds two results with three flags totalling four flagged words across the run, asserts `flaggedWordCount == 4` in the deserialised payload; existing test extended to assert `flaggedWordCount == 0` in the no-run path. 377/377 tests passing, no new warnings.
+
 **Estimate:** 5–7 days.
 
 ### Phase 5 — New parallel wizard (fork-and-improve)
