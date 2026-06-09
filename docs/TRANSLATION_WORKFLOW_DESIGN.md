@@ -175,6 +175,8 @@ Split into three chunks per the Phase 3 recon outcome (2026-06-08):
 
 Public-facing page for token-scoped external reviews. Token issuance and verification. Email template. Submit/cancel endpoints. Generic enough to be reused by future workflow types.
 
+  **Status (Phase 4.1):** Complete (2026-06-09). Commit 686e550. Closes BACKLOG §11. Adds `CancelExternalReview` to `ITranslationWorkflowService` and implementation in `TranslationWorkflowService`: precondition state `AwaitingThirdParty`, looks up the active Pending invitation by (talkId, languageCode), sets `Status = InvitationStatus.Revoked`, emits new event type `ExternalReviewCancelled` (added to `WorkflowEventTypes` constants), state transitions back to `ReviewerAccepted` via the `EventTypeToState` map. New controller action `POST /api/toolbox-talks/{id}/translations/{languageCode}/cancel-external-review` with auth `Learnings.Manage`, maps `WorkflowInvalidState` → 409 and `WorkflowInvitationNotFound` → 404 (new `FailureCode` value added in this chunk, named to match the `Workflow*` prefix convention rather than the broader `NotFound` originally drafted). Five new integration tests covering the 200 happy path (state transitions correctly, event appended), 404 (talk not found), 409 from Initial state, 409 from ReviewerAccepted (no invitation sent yet), and 401 (unauthenticated). 376/376 tests passing, no new warnings. Frontend Cancel button on the per-language panel is Phase 4.6; the corresponding email-to-reviewer notification of a cancellation is out of scope here and remains an open question for Phase 4.4 or Phase 7.
+
 **Estimate:** 5–7 days.
 
 ### Phase 5 — New parallel wizard (fork-and-improve)
