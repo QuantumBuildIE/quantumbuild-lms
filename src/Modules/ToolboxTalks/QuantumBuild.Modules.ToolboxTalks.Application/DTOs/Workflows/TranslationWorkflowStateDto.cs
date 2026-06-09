@@ -12,4 +12,5 @@ public record TranslationWorkflowStateDto
     public string? TranslatedTitle { get; init; }
     public DateTime? TranslatedAt { get; init; }
     public bool NeedsRevalidation { get; init; }
+    public ValidationOutcome? LastValidationOutcome { get; init; }
 }

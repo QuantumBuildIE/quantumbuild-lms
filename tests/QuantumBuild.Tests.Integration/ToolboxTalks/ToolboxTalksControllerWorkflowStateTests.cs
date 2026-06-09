@@ -111,6 +111,30 @@ public class ToolboxTalksControllerWorkflowStateTests : IntegrationTestBase
         await db.SaveChangesAsync();
     }
 
+    /// <summary>
+    /// Seeds a completed TranslationValidationRun for the given talk and language.
+    /// TenantId is set explicitly per Note 22.
+    /// </summary>
+    private async Task SeedValidationRunAsync(Guid talkId, string languageCode, ValidationOutcome outcome)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        db.Set<TranslationValidationRun>().Add(new TranslationValidationRun
+        {
+            TenantId = TestTenantConstants.TenantId,
+            ToolboxTalkId = talkId,
+            LanguageCode = languageCode,
+            Status = ValidationRunStatus.Completed,
+            OverallOutcome = outcome,
+            PassThreshold = 75,
+            SourceLanguage = "en",
+            CompletedAt = DateTime.UtcNow,
+            CreatedAt = DateTime.UtcNow,
+            CreatedBy = "test"
+        });
+        await db.SaveChangesAsync();
+    }
+
     // ── tests ─────────────────────────────────────────────────────────────────
 
     // 1 — Non-existent talk → 404
@@ -140,15 +164,18 @@ public class ToolboxTalksControllerWorkflowStateTests : IntegrationTestBase
     }
 
     // 3 — Talk with two translations in different states → correct State per language
+    //     "lv" has a completed validation run (Pass) → LastValidationOutcome = Pass
+    //     "lt" has no validation run                  → LastValidationOutcome = null
     [Fact]
     public async Task GetWorkflowState_TalkWithTwoTranslations_ReturnsCorrectStates()
     {
         // "lt" → no events        → Initial
-        // "lv" → TranslationCompleted event → AIGenerated
+        // "lv" → TranslationCompleted event → AIGenerated; plus a completed validation run (Pass)
         var talkId = await CreateTalkAsync();
         await SeedTranslationAsync(talkId, "lt");
         await SeedTranslationAsync(talkId, "lv");
         await SeedEventAsync(talkId, "lv", WorkflowEventTypes.TranslationCompleted);
+        await SeedValidationRunAsync(talkId, "lv", ValidationOutcome.Pass);
 
         var response = await AdminClient.GetAsync(
             $"/api/toolbox-talks/{talkId}/translations/workflow-state");
@@ -161,9 +188,11 @@ public class ToolboxTalksControllerWorkflowStateTests : IntegrationTestBase
 
         var ltState = result!.Single(s => s.LanguageCode == "lt");
         ltState.State.Should().Be(TranslationWorkflowState.Initial);
+        ltState.LastValidationOutcome.Should().BeNull();
 
         var lvState = result!.Single(s => s.LanguageCode == "lv");
         lvState.State.Should().Be(TranslationWorkflowState.AIGenerated);
+        lvState.LastValidationOutcome.Should().Be(ValidationOutcome.Pass);
     }
 
     // 4 — No auth → 401
@@ -189,5 +218,7 @@ public class ToolboxTalksControllerWorkflowStateTests : IntegrationTestBase
         public string? TranslatedTitle { get; init; }
         public DateTime? TranslatedAt { get; init; }
         public bool NeedsRevalidation { get; init; }
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public ValidationOutcome? LastValidationOutcome { get; init; }
     }
 }

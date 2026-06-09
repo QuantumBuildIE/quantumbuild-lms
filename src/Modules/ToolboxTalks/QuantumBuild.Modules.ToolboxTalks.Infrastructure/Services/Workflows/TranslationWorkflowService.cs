@@ -29,6 +29,13 @@ public sealed class TranslationWorkflowService(
             .Where(t => t.ToolboxTalkId == talkId && t.LanguageCode == languageCode)
             .FirstOrDefaultAsync(ct);
 
+        var lastValidationRun = await context.TranslationValidationRuns
+            .Where(r => r.ToolboxTalkId == talkId
+                     && r.LanguageCode == languageCode
+                     && r.Status == ValidationRunStatus.Completed)
+            .OrderByDescending(r => r.CompletedAt)
+            .FirstOrDefaultAsync(ct);
+
         var state = lastEvent is null
             ? TranslationWorkflowState.Initial
             : EventTypeToState(lastEvent.EventType);
@@ -42,7 +49,8 @@ public sealed class TranslationWorkflowService(
             LastEventAt = lastEvent?.OccurredAt,
             TranslatedTitle = translation?.TranslatedTitle,
             TranslatedAt = translation?.TranslatedAt,
-            NeedsRevalidation = translation?.NeedsRevalidation ?? false
+            NeedsRevalidation = translation?.NeedsRevalidation ?? false,
+            LastValidationOutcome = lastValidationRun?.OverallOutcome
         };
     }
 
