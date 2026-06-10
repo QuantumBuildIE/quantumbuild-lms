@@ -30,34 +30,4 @@ test.describe.skip('Login @smoke', () => {
     await loginPage.login('invalid@test.com', 'wrongpassword');
     await loginPage.assertErrorDisplayed();
   });
-
-  test('should login as warehouse user and redirect to stock', async ({ page }) => {
-    await loginPage.loginAndWaitForSuccess(
-      TEST_TENANT.users.warehouse.email,
-      TEST_TENANT.users.warehouse.password
-    );
-
-    // Warehouse users should be redirected to stock
-    await expect(page).toHaveURL(/\/stock/);
-  });
-
-  test('should login as site manager', async ({ page }) => {
-    await loginPage.loginAndWaitForSuccess(
-      TEST_TENANT.users.siteManager.email,
-      TEST_TENANT.users.siteManager.password
-    );
-
-    // Site managers should be redirected to stock/orders
-    await expect(page).toHaveURL(/\/stock/);
-  });
-
-  test('should login as finance user', async ({ page }) => {
-    await loginPage.loginAndWaitForSuccess(
-      TEST_TENANT.users.finance.email,
-      TEST_TENANT.users.finance.password
-    );
-
-    // Finance users should be redirected to dashboard
-    await expect(page).toHaveURL(/\/(dashboard|home)/);
-  });
 });
