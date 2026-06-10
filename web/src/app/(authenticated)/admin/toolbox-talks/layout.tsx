@@ -67,6 +67,11 @@ export default function AdminToolboxTalksLayout({
     if (exact) {
       return pathname === href;
     }
+    // The learning wizard lives at /admin/toolbox-talks/learnings/** but belongs
+    // to the Learnings tab (which links to /admin/toolbox-talks/talks).
+    if (href === '/admin/toolbox-talks/talks' && pathname.startsWith('/admin/toolbox-talks/learnings')) {
+      return true;
+    }
     return pathname.startsWith(href);
   };
 

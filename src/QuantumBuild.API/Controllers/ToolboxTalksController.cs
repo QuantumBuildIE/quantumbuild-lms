@@ -9,6 +9,7 @@ using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Core.Application.Models;
 using QuantumBuild.Core.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.CreateToolboxTalk;
+using QuantumBuild.Modules.ToolboxTalks.Application.Commands.InitialiseToolboxTalk;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.DeleteToolboxTalk;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.GenerateContentTranslations;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.SmartGenerateContent;
@@ -335,6 +336,66 @@ public class ToolboxTalksController : ControllerBase
             _logger.LogError(ex, "Error creating learning");
             return StatusCode(500, new { message = "Error creating learning" });
         }
+    }
+
+    /// <summary>
+    /// Initialise a Draft learning shell from the new learning wizard (Step 1).
+    /// Creates a minimal ToolboxTalk row with no sections or questions.
+    /// </summary>
+    [HttpPost("initialise")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(typeof(ToolboxTalkDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> Initialise([FromBody] InitialiseToolboxTalkCommand command)
+    {
+        try
+        {
+            var commandWithTenant = command with { TenantId = _currentUserService.TenantId };
+            var result = await _mediator.Send(commandWithTenant);
+            return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
+        }
+        catch (FluentValidation.ValidationException ex)
+        {
+            return BadRequest(new { message = ex.Message, errors = ex.Errors });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error initialising learning");
+            return StatusCode(500, new { message = "Error initialising learning" });
+        }
+    }
+
+    /// <summary>
+    /// Generates a presigned R2 PUT URL for direct browser-to-R2 upload of a wizard
+    /// source file before the talk row exists. The file is stored at a temp key:
+    /// uploads/{tenantId}/{guid}/{filename}. The caller passes the resulting public URL
+    /// to InitialiseToolboxTalkCommand.SourceFileUrl.
+    /// </summary>
+    [HttpPost("learning-wizard/upload-source-url")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(typeof(UploadSourceUrlResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> GetUploadSourceUrl([FromBody] UploadSourceUrlRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.FileName))
+            return BadRequest(new { message = "FileName is required." });
+        if (string.IsNullOrWhiteSpace(request.ContentType))
+            return BadRequest(new { message = "ContentType is required." });
+
+        var key = $"uploads/{_currentUserService.TenantId}/{Guid.NewGuid():N}/{request.FileName}";
+        var presignedUrl = await _r2StorageService.GenerateUploadUrlAsync(key, request.ContentType, TimeSpan.FromMinutes(15));
+        var publicUrl = _r2StorageService.GetPublicUrl(key);
+
+        return Ok(new UploadSourceUrlResponse
+        {
+            UploadUrl = presignedUrl,
+            PublicUrl = publicUrl,
+            Key = key,
+        });
     }
 
     /// <summary>
@@ -2316,4 +2377,24 @@ public record InitiateExternalReviewRequest
 public record UpdateLastEditedStepRequest
 {
     public int Step { get; init; }
+}
+
+/// <summary>Request DTO for obtaining a presigned R2 upload URL for a wizard source file.</summary>
+public record UploadSourceUrlRequest
+{
+    public string FileName { get; init; } = string.Empty;
+    public string ContentType { get; init; } = string.Empty;
+}
+
+/// <summary>Response DTO returned by the upload-source-url endpoint.</summary>
+public record UploadSourceUrlResponse
+{
+    /// <summary>Presigned S3/R2 PUT URL. Expires in 15 minutes.</summary>
+    public string UploadUrl { get; init; } = string.Empty;
+
+    /// <summary>Public URL of the file after upload completes. Pass this as SourceFileUrl when initialising the talk.</summary>
+    public string PublicUrl { get; init; } = string.Empty;
+
+    /// <summary>R2 storage key for the file.</summary>
+    public string Key { get; init; } = string.Empty;
 }

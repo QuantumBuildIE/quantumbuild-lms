@@ -216,6 +216,48 @@ public class ToolboxTalkConfiguration : IEntityTypeConfiguration<ToolboxTalk>
             .HasForeignKey(st => st.ToolboxTalkId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        // Learning wizard — source file
+        builder.Property(t => t.SourceFileUrl)
+            .HasMaxLength(500);
+
+        builder.Property(t => t.SourceFileName)
+            .HasMaxLength(255);
+
+        builder.Property(t => t.SourceFileType)
+            .HasMaxLength(64);
+
+        builder.Property(t => t.SourceText)
+            .HasColumnType("text");
+
+        builder.Property(t => t.TargetLanguageCodes)
+            .HasColumnType("text");
+
+        // Learning wizard — audit metadata
+        builder.Property(t => t.ReviewerName)
+            .HasMaxLength(200);
+
+        builder.Property(t => t.ReviewerOrg)
+            .HasMaxLength(200);
+
+        builder.Property(t => t.ReviewerRole)
+            .HasMaxLength(200);
+
+        builder.Property(t => t.DocumentRef)
+            .HasMaxLength(100);
+
+        builder.Property(t => t.ClientName)
+            .HasMaxLength(200);
+
+        builder.Property(t => t.AuditPurpose)
+            .HasMaxLength(500);
+
+        builder.Property(t => t.AudienceRole)
+            .HasMaxLength(50);
+
+        builder.Property(t => t.PreserveSourceWording)
+            .IsRequired()
+            .HasDefaultValue(false);
+
         // Indexes
         builder.HasIndex(t => new { t.TenantId, t.Code })
             .IsUnique()

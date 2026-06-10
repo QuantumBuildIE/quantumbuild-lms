@@ -102,7 +102,9 @@ export default function AdminLayout({
         <p className="text-muted-foreground">
           {isSupervisorOnly
             ? "Manage schedules and learning reports"
-            : "Manage employees and users"}
+            : pathname.startsWith('/admin/toolbox-talks')
+              ? "Manage learnings and training"
+              : "Manage employees and users"}
         </p>
       </div>
       <nav className="border-b bg-background -mx-4 px-4 sm:mx-0 sm:px-6">
