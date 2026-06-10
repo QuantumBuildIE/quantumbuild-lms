@@ -760,72 +760,35 @@ Related: see ContentCreationSession.cs (AudienceRole property), QuizGenerationPr
 
 ---
 
-## 8. Integration test suite — full review and revamp
+## 8. Integration test suite — comprehensive review post-Phase 5
 
-The integration test suite has drifted significantly from the current
-application state. Today's session (2026-06-07) cleaned up the surface
-issues (deprecated roles in TestTenantConstants/Seeder/Factory, broken
-password-validation tests, dead Password/ConfirmPassword fields in
-create-user payloads) but stopped short of a full revamp once the
-scope became clear.
+The deprecated test user cleanup (SiteManager / Warehouse / Finance
+removal) shipped in commits `<insert hash 1>` and `<insert hash 2>`
+before Phase 5.2. 397 tests passing, no role-not-found warnings.
 
-Known issues requiring a dedicated session:
+The remaining drift in the test suite — including the seeder/JWT
+divergence (§14), tests with assertions weaker than their names imply,
+playwright fixtures still in use that should be reviewed, the
+absence of frontend coverage, the inconsistent skipping patterns — is
+deferred to a dedicated post-Phase-5 review task.
 
-- Three deprecated test users still seeded with deprecated role
-  strings (SiteManager / WarehouseStaff / Finance). Roles do not
-  exist in production. Users authenticate but have no role, so any
-  test asserting role-based behaviour against them is testing the
-  wrong thing.
+Rationale: the test suite is too important to be repaired in piecemeal
+between feature chunks. Phase 5 will not add tests to it beyond what
+strictly verifies non-obvious new behaviour (per PHASE_5_STANDARDS §11).
+The comprehensive review happens once Phase 5 closes and gets the
+time and attention it warrants.
 
-- Three deprecated client properties on IntegrationTestBase
-  (SiteManagerClient, WarehouseClient, FinanceClient) used heavily
-  across several test files:
-    - tests/QuantumBuild.Tests.Integration/Core/AuthorizationTests.cs
-      (7 references — testing 403 responses against roleless users
-       rather than against actual unauthorized roles)
-    - tests/QuantumBuild.Tests.Integration/Core/TenantIsolationTests.cs
-      (3 references)
-    - tests/QuantumBuild.Tests.Integration/ToolboxTalks/
-      EmployeeCompletionTests.cs (~25 references — likely passes
-      regardless of role because /api/my/* endpoints are user-scoped,
-      but test names imply role-specific behaviour they aren't
-      verifying)
-    - tests/QuantumBuild.Tests.Integration/ToolboxTalks/
-      SchedulingTests.cs (1 reference)
-
-- TestUserType enum cases SiteManager, Warehouse, Finance in
-  CustomWebApplicationFactory map to non-existent roles.
-
-- Four orphaned playwright auth fixtures at
-  tests/QuantumBuild.Tests.E2E/playwright/.auth/ (warehouse.json,
-  finance.json, sitemanager.json, officestaff.json).
-
-- One pre-existing failure unrelated to roles:
-  CreateUser_WeakPassword_ReturnsBadRequest was deleted today (commit
-  cdec2bb) because it asserted on a CreateUserDto.Password field that
-  does not exist. A replacement test was added asserting the actual
-  contract.
-
-- Role-not-found warnings logged during test seeding for every
-  integration run — silent failures that mask the deprecated state.
-
-Scope of the revamp session:
-
-- Inventory every TestUserType reference and every Client property
-  use across the entire integration suite (this session's grep was
-  incomplete — only surfaced through a follow-up grep mid-session).
-- Decide per-test whether to migrate to a current role
-  (Operator/Supervisor), delete as obsolete, or rewrite to test
-  current product behaviour.
-- Remove the deprecated TestTenantConstants user classes, seeder
-  array entries, factory enum cases, and IntegrationTestBase
-  properties.
-- Clean up orphaned E2E playwright auth fixtures.
-- Audit role-not-found warnings end to end so the test run is silent.
-
-Estimated effort: 1-2 focused sessions. Should happen before any
-significant new feature work that adds tests, so the new tests are
-written against a clean suite rather than perpetuating the drift.
+Scope when picked up:
+- Per-test triage of every integration test: still meaningful as
+  written, misleading and rewriteable, or delete as obsolete
+- Playwright fixture audit (which fixtures are still active, which
+  describe blocks should be unskipped or deleted)
+- Frontend test coverage decision: extend, leave sparse, or
+  deliberately scope out
+- The seeder/JWT reconciliation (§14)
+- The login.spec.ts skipped block (3 tests remain after the
+  pre-Phase-5 cleanup; review whether to delete the block or
+  rewrite the tests)
 
 ---
 
@@ -946,6 +909,42 @@ Phase 4 must build, end-to-end:
 Surfaced during Phase 3c recon (commit 38ba9c8). Scope was deferred
 rather than built in 3c because the Send for external review action
 itself is a Phase 4 concern — Cancel without Send is meaningless.
+
+---
+
+## 12. Seeder/JWT user representation divergence
+
+`TestTenantSeeder.SeedUsersWithUserManagerAsync` creates users via
+ASP.NET Identity (UserManager), looking up roles by string and
+assigning them. `CustomWebApplicationFactory.GenerateTestToken`
+forges JWTs with hardcoded role and permission claims, bypassing
+Identity entirely.
+
+These two paths can silently produce different user representations
+for the same email. A test that authenticates via JWT-forge sees
+hardcoded permission claims; the same user looked up via the
+Identity-backed path sees whatever roles the seeder actually
+assigned (or, historically, none — see §8).
+
+This was masked during the pre-Phase-5 cleanup because all the
+affected deprecated-role users have been removed. The divergence
+remains a structural risk: any future test that mixes the two
+authentication paths for the same user (e.g., login-via-API then
+JWT-forge for the same employee) could exhibit role/permission
+inconsistencies that are hard to debug.
+
+Fix direction:
+- Reconcile so both paths produce the same user state for the same
+  email — most likely by having JWT-forge derive its claims from
+  the Identity-backed user rather than carrying its own hardcoded
+  set.
+- Or, deliberately use only one path per test and document the
+  constraint in `IntegrationTestBase`.
+
+Surfaced during the pre-Phase-5 test suite cleanup recon
+(2026-06-10). Deferred to the post-Phase-5 comprehensive test
+review (§8) because fixing it well requires touching test
+infrastructure that the review will be reshaping anyway.
 
 ---
 

@@ -433,46 +433,51 @@ Chrome DevTools device emulator is acceptable for routine work; real-device veri
 
 ## 11. Testing
 
-### 11.1 Per-step backend requirements
+### 11.1 Posture
 
-Every step that calls a backend command must have integration tests for:
+Tests are added where they meaningfully verify behaviour. They are not
+added as a per-step checkbox to satisfy this document. A step whose
+correctness is obvious from its code and verified by manual walk-through
+does not need integration tests written just to claim coverage.
 
-- The happy path (command succeeds, expected state change)
-- Each precondition guard (command rejected from each invalid state, returns the right `FailureCode`)
-- The authorisation guard (401/403 for missing/insufficient permission)
-- Any cascade or side effect (e.g., `MarkStale` calls trigger workflow events for the right languages)
+The bar is: when a Phase 5 chunk's code does something non-obvious — a
+state transition, a cascade, a permission boundary, a workflow service
+call with multiple guarded preconditions — that behaviour gets a test.
+When a chunk is mechanical wiring with no real branching, manual
+verification and the existing surrounding coverage are enough.
 
-These follow the patterns established in Phases 1-4 — xUnit + FluentAssertions + `CustomWebApplicationFactory` + the existing `IntegrationTestBase`.
+This is a deliberate softening from earlier framing in this document.
+The test suite has accumulated drift (BACKLOG §8) and the right time to
+address it comprehensively is after Phase 5 ships, as its own focused
+task (BACKLOG §14 — added when Phase 5 closes). Phase 5 chunks should
+not add tests onto a suite that is itself due a proper review.
 
-### 11.2 Per-step frontend requirements
+### 11.2 What chunks should do
 
-Frontend tests are sparser than backend in this codebase by convention. Phase 5 holds the existing standard rather than introducing a new one. What's expected:
+- Test the non-obvious. Workflow service transitions, cascade effects,
+  permission boundaries, anything the chunk is the first to introduce.
+- Reuse existing test infrastructure (`IntegrationTestBase`,
+  `CustomWebApplicationFactory`, the established Phase 1-4 patterns).
+- If a chunk discovers existing tests are blocking, misleading, or
+  broken, STOP and report — do not fold a test fix into a Phase 5
+  feature commit. The post-Phase-5 review will pick it up.
+- Manual verification before commit remains the standard: diff against
+  code, walk the affected paths, confirm the change behaves as
+  described in the report.
 
-- Zod schemas have unit tests covering edge cases (missing required, format violations, max-length)
-- Hooks with non-trivial logic (e.g., `useStepNavigation`) have unit tests
-- Complex sub-components (the workflow panel rows, the section editor) have rendering tests if behaviour is non-obvious from the JSX
+### 11.3 What chunks should not do
 
-No requirement for end-to-end React Testing Library coverage of every step's UI. The wizard's correctness is anchored by backend tests + manual verification + the E2E suite (§11.3).
+- Write tests purely to satisfy this document.
+- Add Playwright E2E coverage as a Phase 5 deliverable. The existing
+  E2E suite has known drift; adding to it now is premature.
+- Rewrite, repair, or migrate existing tests beyond what the chunk's
+  feature change strictly requires.
 
-### 11.3 End-to-end coverage (closes BACKLOG §1.3.7)
+### 11.4 Pre-Phase-5 cleanup status
 
-Phase 5 ships with Playwright E2E coverage of the wizard's primary paths. Minimum:
-
-- Text source → published lesson, no quiz, single language
-- PDF source → published lesson, with quiz, multi-language with one language validated and accepted
-- Video source → published course, multi-language with one language sent for external review and submitted
-
-These run against a real backend (Testcontainers Postgres, `FakeEmailService`, etc. — per the Phase 4 conventions). E2E tests live in `tests/QuantumBuild.Tests.E2E/`.
-
-E2E tests are added as part of the chunk that ships the relevant step. They are not a Phase 5.7 afterthought.
-
-### 11.4 Manual verification before commit
-
-Per the kickoff's working pattern — `findstr`, `Get-Content`, `git diff > file.txt; type file.txt` — every chunk verifies its diff against the actual code before committing. The standards doc inherits this; nothing in §11 above replaces it.
-
-### 11.5 Pre-Phase-5 dependency: integration test suite revamp
-
-BACKLOG §8 documents significant drift in the integration test suite (deprecated roles, orphaned playwright fixtures, role-not-found warnings on every run). Adding Phase 5 integration tests on top of this drift perpetuates it. The right sequencing is to revamp the suite *before* Phase 5 starts writing new tests, as its own pre-Phase-5 chunk. This is a sequencing call for the user; flagging here so the call is explicit.
+The deprecated test user cleanup (BACKLOG §8) was completed in two
+commits before Phase 5.2 started. The remaining drift documented in
+BACKLOG §8 is deferred to the post-Phase-5 review.
 
 ---
 
