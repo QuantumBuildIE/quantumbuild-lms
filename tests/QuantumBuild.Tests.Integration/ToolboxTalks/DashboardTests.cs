@@ -156,7 +156,7 @@ public class DashboardTests : IntegrationTestBase
             SendEmailReminders = true
         };
 
-        // Act - SiteManager has ToolboxTalks.Manage but not ToolboxTalks.Admin
+        // Act - Operator doesn't have ToolboxTalks.Admin permission
         var response = await OperatorClient.PutAsJsonAsync("/api/toolbox-talks/settings", updateDto);
 
         // Assert

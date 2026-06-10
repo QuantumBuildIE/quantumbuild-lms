@@ -227,9 +227,10 @@ test.describe.skip('Toolbox Talks Management', () => {
 });
 
 // TODO: Re-enable once toolbox talks E2E tests are updated to match current UI
+// TODO: When un-skipping, rewrite to use operator.json fixture and current role model
 test.describe.skip('Toolbox Talk Completion @critical', () => {
   test.describe('Employee Talk Completion Flow', () => {
-    test.use({ storageState: 'playwright/.auth/warehouse.json' });
+    test.use({ storageState: 'playwright/.auth/operator.json' });
 
     test('employee can view assigned talks', async ({ page }) => {
       await page.goto('/my/toolbox-talks');
@@ -327,8 +328,9 @@ test.describe.skip('Toolbox Talk Completion @critical', () => {
 });
 
 // TODO: Re-enable once toolbox talks E2E tests are updated to match current UI
+// TODO: When un-skipping, rewrite to use operator.json fixture and current role model
 test.describe.skip('Toolbox Talk with Quiz @critical', () => {
-  test.use({ storageState: 'playwright/.auth/warehouse.json' });
+  test.use({ storageState: 'playwright/.auth/operator.json' });
 
   test('employee can complete talk with quiz', async ({ page }) => {
     await page.goto('/my/toolbox-talks');

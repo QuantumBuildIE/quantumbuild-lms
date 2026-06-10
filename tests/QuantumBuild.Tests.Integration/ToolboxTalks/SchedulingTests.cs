@@ -182,8 +182,8 @@ public class SchedulingTests : IntegrationTestBase
             AssignToAllEmployees = true
         };
 
-        // Act - Finance user doesn't have ToolboxTalks.Schedule permission
-        var response = await FinanceClient.PostAsJsonAsync("/api/toolbox-talks/schedules", command);
+        // Act - Operator doesn't have ToolboxTalks.Schedule permission
+        var response = await OperatorClient.PostAsJsonAsync("/api/toolbox-talks/schedules", command);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);

@@ -376,28 +376,6 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
                 Permissions.GetAll(),
                 (Guid?)null // Admin may not have employee record
             ),
-            TestUserType.SiteManager => (
-                TestTenantConstants.Users.SiteManager.Id,
-                TestTenantConstants.Users.SiteManager.Email,
-                TestTenantConstants.Users.SiteManager.FirstName,
-                TestTenantConstants.Users.SiteManager.LastName,
-                new[] { "SiteManager" },
-                new[] {
-                    "Learnings.View", "Learnings.Manage", "Learnings.Schedule"
-                },
-                (Guid?)TestTenantConstants.Employees.ManagerEmployee // Link to manager employee
-            ),
-            TestUserType.Warehouse => (
-                TestTenantConstants.Users.Warehouse.Id,
-                TestTenantConstants.Users.Warehouse.Email,
-                TestTenantConstants.Users.Warehouse.FirstName,
-                TestTenantConstants.Users.Warehouse.LastName,
-                new[] { "WarehouseStaff" },
-                new[] {
-                    "Learnings.View"
-                },
-                (Guid?)null
-            ),
             TestUserType.Operator => (
                 TestTenantConstants.Users.Operator.Id,
                 TestTenantConstants.Users.Operator.Email,
@@ -408,17 +386,6 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
                     "Learnings.View"
                 },
                 (Guid?)TestTenantConstants.Employees.OperatorEmployee // Link to operator employee
-            ),
-            TestUserType.Finance => (
-                TestTenantConstants.Users.Finance.Id,
-                TestTenantConstants.Users.Finance.Email,
-                TestTenantConstants.Users.Finance.FirstName,
-                TestTenantConstants.Users.Finance.LastName,
-                new[] { "Finance" },
-                new[] {
-                    "Learnings.View"
-                },
-                (Guid?)null
             ),
             _ => throw new ArgumentOutOfRangeException(nameof(userType))
         };
@@ -494,22 +461,7 @@ public enum TestUserType
     Admin,
 
     /// <summary>
-    /// Site Manager with site and attendance management permissions.
+    /// Operator with Learnings.View permission only.
     /// </summary>
-    SiteManager,
-
-    /// <summary>
-    /// Warehouse staff with stock management permissions.
-    /// </summary>
-    Warehouse,
-
-    /// <summary>
-    /// Operator with limited view and basic action permissions.
-    /// </summary>
-    Operator,
-
-    /// <summary>
-    /// Finance user with view and costing permissions.
-    /// </summary>
-    Finance
+    Operator
 }

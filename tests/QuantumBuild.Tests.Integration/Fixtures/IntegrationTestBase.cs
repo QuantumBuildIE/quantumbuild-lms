@@ -17,10 +17,7 @@ public abstract class IntegrationTestBase : IAsyncLifetime
 
     // Pre-configured authenticated clients for different user types
     protected HttpClient AdminClient { get; private set; } = null!;
-    protected HttpClient SiteManagerClient { get; private set; } = null!;
-    protected HttpClient WarehouseClient { get; private set; } = null!;
     protected HttpClient OperatorClient { get; private set; } = null!;
-    protected HttpClient FinanceClient { get; private set; } = null!;
     protected HttpClient UnauthenticatedClient { get; private set; } = null!;
 
     protected IntegrationTestBase(CustomWebApplicationFactory factory)
@@ -36,10 +33,7 @@ public abstract class IntegrationTestBase : IAsyncLifetime
 
         // Initialize authenticated clients
         AdminClient = Factory.CreateAuthenticatedClient(TestUserType.Admin);
-        SiteManagerClient = Factory.CreateAuthenticatedClient(TestUserType.SiteManager);
-        WarehouseClient = Factory.CreateAuthenticatedClient(TestUserType.Warehouse);
         OperatorClient = Factory.CreateAuthenticatedClient(TestUserType.Operator);
-        FinanceClient = Factory.CreateAuthenticatedClient(TestUserType.Finance);
         UnauthenticatedClient = Factory.CreateClient();
     }
 
@@ -47,10 +41,7 @@ public abstract class IntegrationTestBase : IAsyncLifetime
     {
         Scope?.Dispose();
         AdminClient?.Dispose();
-        SiteManagerClient?.Dispose();
-        WarehouseClient?.Dispose();
         OperatorClient?.Dispose();
-        FinanceClient?.Dispose();
         UnauthenticatedClient?.Dispose();
 
         await Task.CompletedTask;

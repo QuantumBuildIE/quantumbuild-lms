@@ -64,8 +64,8 @@ test.describe.skip('Smoke Tests @smoke', () => {
     });
   });
 
-  test.describe('Finance User Smoke Tests', () => {
-    test.use({ storageState: 'playwright/.auth/finance.json' });
+  test.describe('Operator User Smoke Tests', () => {
+    test.use({ storageState: 'playwright/.auth/operator.json' });
 
     test('can access dashboard', async ({ page }) => {
       await page.goto('/dashboard');
