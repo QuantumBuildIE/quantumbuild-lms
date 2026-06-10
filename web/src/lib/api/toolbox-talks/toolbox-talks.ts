@@ -50,6 +50,9 @@ export async function getToolboxTalks(
   if (params?.isActive !== undefined) {
     queryParams.append('isActive', String(params.isActive));
   }
+  if (params?.status) {
+    queryParams.append('status', params.status);
+  }
   if (params?.pageNumber) {
     queryParams.append('pageNumber', String(params.pageNumber));
   }
@@ -103,6 +106,10 @@ export async function updateToolboxTalk(
 
 export async function deleteToolboxTalk(id: string): Promise<void> {
   await apiClient.delete(`/toolbox-talks/${id}`);
+}
+
+export async function updateLastEditedStep(id: string, step: number): Promise<void> {
+  await apiClient.patch(`/toolbox-talks/${id}/step`, { step });
 }
 
 // ============================================

@@ -130,7 +130,8 @@ public class GetToolboxTalkByIdQueryHandler : IRequestHandler<GetToolboxTalkById
                     : 0
             } : null,
             CreatedAt = talk.CreatedAt,
-            UpdatedAt = talk.UpdatedAt
+            UpdatedAt = talk.UpdatedAt,
+            LastEditedStep = talk.LastEditedStep
         };
     }
 

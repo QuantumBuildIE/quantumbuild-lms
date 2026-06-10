@@ -71,6 +71,9 @@ public record ToolboxTalkDto
     // Audit
     public DateTime CreatedAt { get; init; }
     public DateTime? UpdatedAt { get; init; }
+
+    // Learning wizard
+    public int? LastEditedStep { get; init; }
 }
 
 /// <summary>

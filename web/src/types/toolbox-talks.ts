@@ -125,6 +125,8 @@ export interface ToolboxTalk {
   completionStats: ToolboxTalkCompletionStats | null;
   createdAt: string;
   updatedAt: string | null;
+  // Learning wizard
+  lastEditedStep: number | null;
 }
 
 export interface ToolboxTalkListItem {
@@ -146,6 +148,9 @@ export interface ToolboxTalkListItem {
   autoAssignToNewEmployees: boolean;
   completionStats: ToolboxTalkCompletionStats | null;
   createdAt: string;
+  createdBy: string;
+  createdByName: string | null;
+  lastEditedStep: number | null;
 }
 
 // ============================================
@@ -646,6 +651,7 @@ export interface GetToolboxTalksParams {
   searchTerm?: string;
   frequency?: ToolboxTalkFrequency;
   isActive?: boolean;
+  status?: ToolboxTalkStatus;
   pageNumber?: number;
   pageSize?: number;
 }

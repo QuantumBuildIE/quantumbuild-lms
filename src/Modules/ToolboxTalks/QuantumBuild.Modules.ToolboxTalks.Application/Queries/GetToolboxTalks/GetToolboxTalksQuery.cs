@@ -31,6 +31,11 @@ public record GetToolboxTalksQuery : IRequest<PaginatedList<ToolboxTalkListDto>>
     public bool? IsActive { get; init; }
 
     /// <summary>
+    /// Optional filter by talk status (Draft, Processing, ReadyForReview, Published)
+    /// </summary>
+    public ToolboxTalkStatus? Status { get; init; }
+
+    /// <summary>
     /// Page number (1-based)
     /// </summary>
     public int PageNumber { get; init; } = 1;

@@ -230,6 +230,12 @@ public class ToolboxTalk : TenantEntity
     /// </summary>
     public string SourceLanguageCode { get; set; } = "en";
 
+    /// <summary>
+    /// The wizard step last edited in the new learning-wizard (1-7).
+    /// Null for talks created outside the new wizard. Used for resume navigation.
+    /// </summary>
+    public int? LastEditedStep { get; set; }
+
     // Navigation properties
 
     /// <summary>

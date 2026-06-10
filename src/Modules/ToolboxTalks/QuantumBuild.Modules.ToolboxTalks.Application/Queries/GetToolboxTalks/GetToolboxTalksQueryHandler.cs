@@ -1,5 +1,6 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Core.Application.Models;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs;
@@ -10,10 +11,12 @@ namespace QuantumBuild.Modules.ToolboxTalks.Application.Queries.GetToolboxTalks;
 public class GetToolboxTalksQueryHandler : IRequestHandler<GetToolboxTalksQuery, PaginatedList<ToolboxTalkListDto>>
 {
     private readonly IToolboxTalksDbContext _context;
+    private readonly ICoreDbContext _coreContext;
 
-    public GetToolboxTalksQueryHandler(IToolboxTalksDbContext context)
+    public GetToolboxTalksQueryHandler(IToolboxTalksDbContext context, ICoreDbContext coreContext)
     {
         _context = context;
+        _coreContext = coreContext;
     }
 
     public async Task<PaginatedList<ToolboxTalkListDto>> Handle(GetToolboxTalksQuery request, CancellationToken cancellationToken)
@@ -44,6 +47,12 @@ public class GetToolboxTalksQueryHandler : IRequestHandler<GetToolboxTalksQuery,
             query = query.Where(t => t.IsActive == request.IsActive.Value);
         }
 
+        // Apply talk status filter
+        if (request.Status.HasValue)
+        {
+            query = query.Where(t => t.Status == request.Status.Value);
+        }
+
         // Get total count before pagination
         var totalCount = await query.CountAsync(cancellationToken);
 
@@ -71,7 +80,9 @@ public class GetToolboxTalksQueryHandler : IRequestHandler<GetToolboxTalksQuery,
                 AutoAssignToNewEmployees = t.AutoAssignToNewEmployees,
                 SectionCount = t.Sections.Count,
                 QuestionCount = t.Questions.Count,
-                CreatedAt = t.CreatedAt
+                CreatedAt = t.CreatedAt,
+                CreatedBy = t.CreatedBy,
+                LastEditedStep = t.LastEditedStep
             })
             .ToListAsync(cancellationToken);
 
@@ -79,13 +90,38 @@ public class GetToolboxTalksQueryHandler : IRequestHandler<GetToolboxTalksQuery,
         var talkIds = items.Select(i => i.Id).ToList();
         var completionStats = await GetCompletionStats(talkIds, request.TenantId, cancellationToken);
 
-        // Map completion stats to items
+        // Resolve creator display names via User table
+        var creatorIds = items
+            .Where(i => !string.IsNullOrEmpty(i.CreatedBy) && Guid.TryParse(i.CreatedBy, out _))
+            .Select(i => Guid.Parse(i.CreatedBy))
+            .Distinct()
+            .ToList();
+
+        var creatorUsers = await _coreContext.Users
+            .Where(u => creatorIds.Contains(u.Id))
+            .Select(u => new { u.Id, u.FirstName, u.LastName, u.UserName })
+            .ToListAsync(cancellationToken);
+
+        var creatorNames = creatorUsers.ToDictionary(
+            u => u.Id.ToString(),
+            u =>
+            {
+                var fullName = $"{u.FirstName} {u.LastName}".Trim();
+                return fullName.Length > 0 ? fullName : (u.UserName ?? u.Id.ToString());
+            });
+
+        // Map completion stats and creator names to items
         for (var i = 0; i < items.Count; i++)
         {
-            if (completionStats.TryGetValue(items[i].Id, out var stats))
+            var item = items[i];
+            var hasStats = completionStats.TryGetValue(item.Id, out var stats);
+            var hasName = creatorNames.TryGetValue(item.CreatedBy, out var creatorName);
+
+            items[i] = item with
             {
-                items[i] = items[i] with { CompletionStats = stats };
-            }
+                CompletionStats = hasStats ? stats : null,
+                CreatedByName = hasName ? creatorName : null
+            };
         }
 
         return new PaginatedList<ToolboxTalkListDto>(items, totalCount, request.PageNumber, request.PageSize);

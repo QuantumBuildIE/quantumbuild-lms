@@ -12,6 +12,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Commands.CreateToolboxTalk;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.DeleteToolboxTalk;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.GenerateContentTranslations;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.SmartGenerateContent;
+using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateLastEditedStep;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalk;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Reports;
@@ -150,6 +151,7 @@ public class ToolboxTalksController : ControllerBase
         [FromQuery] string? searchTerm = null,
         [FromQuery] ToolboxTalkFrequency? frequency = null,
         [FromQuery] bool? isActive = null,
+        [FromQuery] ToolboxTalkStatus? status = null,
         [FromQuery] int pageNumber = 1,
         [FromQuery] int pageSize = 10)
     {
@@ -161,6 +163,7 @@ public class ToolboxTalksController : ControllerBase
                 SearchTerm = searchTerm,
                 Frequency = frequency,
                 IsActive = isActive,
+                Status = status,
                 PageNumber = pageNumber,
                 PageSize = pageSize
             };
@@ -411,6 +414,36 @@ public class ToolboxTalksController : ControllerBase
         {
             _logger.LogError(ex, "Error deleting toolbox talk {ToolboxTalkId}", id);
             return StatusCode(500, new { message = "Error deleting learning" });
+        }
+    }
+
+    /// <summary>
+    /// Update the wizard step last edited — used by the learning-wizard for resume navigation.
+    /// </summary>
+    [HttpPatch("{id:guid}/step")]
+    [Authorize(Policy = "Learnings.View")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateLastEditedStep(Guid id, [FromBody] UpdateLastEditedStepRequest request)
+    {
+        try
+        {
+            await _mediator.Send(new UpdateLastEditedStepCommand
+            {
+                TenantId = _currentUserService.TenantId,
+                TalkId = id,
+                Step = request.Step
+            });
+            return NoContent();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating step for toolbox talk {ToolboxTalkId}", id);
+            return StatusCode(500, new { message = "Error updating step" });
         }
     }
 
@@ -2278,4 +2311,9 @@ public record SmartGenerateContentResponse
 public record InitiateExternalReviewRequest
 {
     public string ReviewerEmail { get; init; } = string.Empty;
+}
+
+public record UpdateLastEditedStepRequest
+{
+    public int Step { get; init; }
 }
