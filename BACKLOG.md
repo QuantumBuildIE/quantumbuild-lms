@@ -762,33 +762,45 @@ Related: see ContentCreationSession.cs (AudienceRole property), QuizGenerationPr
 
 ## 8. Integration test suite — comprehensive review post-Phase 5
 
-The deprecated test user cleanup (SiteManager / Warehouse / Finance
-removal) shipped in commits `<insert hash 1>` and `<insert hash 2>`
-before Phase 5.2. 397 tests passing, no role-not-found warnings.
+The deprecated test user cleanup that the previous version of this
+entry scoped was completed in two commits before Phase 5.2:
 
-The remaining drift in the test suite — including the seeder/JWT
-divergence (§14), tests with assertions weaker than their names imply,
-playwright fixtures still in use that should be reviewed, the
-absence of frontend coverage, the inconsistent skipping patterns — is
-deferred to a dedicated post-Phase-5 review task.
+- `<insert hash 1>` — test(cleanup): remove deprecated test users
+  and migrate to Operator
+- `<insert hash 2>` — test(cleanup): delete misleading and orphaned
+  tests
 
-Rationale: the test suite is too important to be repaired in piecemeal
-between feature chunks. Phase 5 will not add tests to it beyond what
-strictly verifies non-obvious new behaviour (per PHASE_5_STANDARDS §11).
-The comprehensive review happens once Phase 5 closes and gets the
-time and attention it warrants.
+End state: 397 integration tests passing, zero role-not-found
+warnings, deprecated `TestUserType` values / `IntegrationTestBase`
+client properties / `TestTenantConstants` entries / orphaned
+playwright fixtures all removed. Three misleading tests
+(`AllAuthenticatedUsers_CanAccessEmployeesList`,
+`OnlyManagePermission_CanModifyEmployees`,
+`AllUsersInTenant_SeesSameEmployeeList`) deleted rather than
+rewritten.
+
+The remaining drift in the test suite is deferred to a dedicated
+post-Phase-5 review task. The test suite is too important to be
+repaired piecemeal between Phase 5 feature chunks. Phase 5 will
+not add tests to it beyond what strictly verifies non-obvious new
+behaviour (per `PHASE_5_STANDARDS` §11). The comprehensive review
+happens once Phase 5 closes and gets the time and attention it
+warrants.
 
 Scope when picked up:
+
 - Per-test triage of every integration test: still meaningful as
   written, misleading and rewriteable, or delete as obsolete
-- Playwright fixture audit (which fixtures are still active, which
-  describe blocks should be unskipped or deleted)
+- Playwright fixture audit (which fixtures are still active,
+  which describe blocks should be unskipped or deleted)
 - Frontend test coverage decision: extend, leave sparse, or
   deliberately scope out
-- The seeder/JWT reconciliation (§14)
-- The login.spec.ts skipped block (3 tests remain after the
-  pre-Phase-5 cleanup; review whether to delete the block or
-  rewrite the tests)
+- The seeder/JWT reconciliation (§12)
+- The `login.spec.ts` skipped block (3 tests remain in
+  `test.describe.skip` after the pre-Phase-5 cleanup; review
+  whether to delete the block or rewrite the tests)
+- E2E suite breadth — what's covered, what's missing, what's
+  stale
 
 ---
 
@@ -915,7 +927,7 @@ itself is a Phase 4 concern — Cancel without Send is meaningless.
 ## 12. Seeder/JWT user representation divergence
 
 `TestTenantSeeder.SeedUsersWithUserManagerAsync` creates users via
-ASP.NET Identity (UserManager), looking up roles by string and
+ASP.NET Identity (`UserManager`), looking up roles by string and
 assigning them. `CustomWebApplicationFactory.GenerateTestToken`
 forges JWTs with hardcoded role and permission claims, bypassing
 Identity entirely.
@@ -924,7 +936,7 @@ These two paths can silently produce different user representations
 for the same email. A test that authenticates via JWT-forge sees
 hardcoded permission claims; the same user looked up via the
 Identity-backed path sees whatever roles the seeder actually
-assigned (or, historically, none — see §8).
+assigned (or, historically, none — see §8 history).
 
 This was masked during the pre-Phase-5 cleanup because all the
 affected deprecated-role users have been removed. The divergence
@@ -934,6 +946,7 @@ JWT-forge for the same employee) could exhibit role/permission
 inconsistencies that are hard to debug.
 
 Fix direction:
+
 - Reconcile so both paths produce the same user state for the same
   email — most likely by having JWT-forge derive its claims from
   the Identity-backed user rather than carrying its own hardcoded
