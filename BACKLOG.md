@@ -961,6 +961,47 @@ infrastructure that the review will be reshaping anyway.
 
 ---
 
+## 13. Mobile audit at Phase 5 closure
+
+PHASE_5_STANDARDS §10 requires the wizard to be seamless on mobile.
+Verifying after every chunk is overkill; doing it never is wrong.
+A dedicated mobile pass at Phase 5 closure (or sooner if something
+obviously breaks earlier) covers:
+
+- 375px / 768px / 1280px verification of every step + drafts list
+- Touch target sizes
+- Drag-to-reorder works with touch (per §10.2 + BACKLOG §1.3.3)
+- Modal full-screen vs centred behaviour
+- No horizontal scroll at any width ≥ 320px
+
+Surfaced 2026-06-10 during 5.2 smoke.
+
+---
+
+## 14. Learning wizard page header inherits wrong context
+
+The new learning-wizard routes
+(/admin/toolbox-talks/learnings/...) render with the page header
+"Administration / Manage employees and users" — inherited from a
+parent layout that thinks the page is in the employees subsection.
+
+Affects all 8 new routes scaffolded in Phase 5.2.
+
+Fix direction: either the routes need their own layout override
+that sets the correct page header, or the shared admin layout
+needs to derive its header from the active route segment rather
+than from a default. Look at how the existing toolbox-talks
+pages (talks/, courses/, schedules/) handle this — they don't
+show the "Manage employees" header, so the pattern exists.
+
+Also: breadcrumbs render as "Administration / Learnings" with
+no leaf segment ("Drafts", "New", etc.). Worth adding.
+
+Surfaced 2026-06-10 during 5.2 smoke. Fold into 5.3's framing
+as a polish item rather than a dedicated chunk.
+
+---
+
 # ==================================================================
 # 7. Recently Closed
 # ==================================================================
