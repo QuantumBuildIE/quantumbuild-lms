@@ -12,7 +12,6 @@ import {
   Info,
   Trash2,
 } from 'lucide-react';
-import axios from 'axios';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import {
@@ -477,14 +476,8 @@ export function ParseStep({ state, updateState, onNext, onBack, onReset }: Parse
       });
       refreshSnapshot();
       onNext();
-    } catch (error) {
-      let message = 'Failed to proceed';
-      if (axios.isAxiosError(error) && error.response?.data?.error) {
-        message = error.response.data.error;
-      } else if (error instanceof Error) {
-        message = error.message;
-      }
-      toast.error('Error', { description: message });
+    } catch {
+      // Error surfaced via mutation isError banner above Continue.
     }
   };
 
@@ -646,6 +639,18 @@ export function ParseStep({ state, updateState, onNext, onBack, onReset }: Parse
             disabled={isInFlight}
           />
         </>
+      )}
+
+      {/* Form-level error: mutation failure shown above the action cluster per PHASE_5_STANDARDS §6.2. */}
+      {updateSections.isError && (
+        <Alert variant="destructive" role="alert">
+          <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+          <AlertDescription>
+            {updateSections.error instanceof Error
+              ? updateSections.error.message
+              : 'Failed to save sections. Please try again.'}
+          </AlertDescription>
+        </Alert>
       )}
 
       {/* Bottom Bar */}

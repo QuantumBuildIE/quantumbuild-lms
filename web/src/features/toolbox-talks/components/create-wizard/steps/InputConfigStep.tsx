@@ -382,10 +382,8 @@ export function InputConfigStep({
       }
 
       onNext();
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Failed to create session';
-      toast.error('Error', { description: message });
+    } catch {
+      // Error surfaced via mutation isError banner above Continue.
     } finally {
       setIsUploading(false);
     }
@@ -1010,6 +1008,21 @@ export function InputConfigStep({
           <AlertDescription>
             No languages configured for your organisation. Contact your
             administrator to set up target languages.
+          </AlertDescription>
+        </Alert>
+      )}
+      {/* Form-level error: mutation failure shown above the action cluster per PHASE_5_STANDARDS §6.2. */}
+      {(createSession.isError || updateSource.isError || uploadFile.isError) && (
+        <Alert variant="destructive" role="alert">
+          <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+          <AlertDescription>
+            {createSession.error instanceof Error
+              ? createSession.error.message
+              : updateSource.error instanceof Error
+                ? updateSource.error.message
+                : uploadFile.error instanceof Error
+                  ? uploadFile.error.message
+                  : 'Failed to create session. Please try again.'}
           </AlertDescription>
         </Alert>
       )}

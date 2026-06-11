@@ -18,7 +18,6 @@ import { WizardSectionDivider } from '@/components/ui/wizard-section-divider';
 import { Loader2, Sparkles, AlertCircle, RotateCcw, ArrowLeft, ArrowRight, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import axios from 'axios';
 import {
   useCreationSession,
   useSessionQuizData,
@@ -183,10 +182,7 @@ export function QuizStep({ state, updateState, onNext, onBack }: QuizStepProps) 
       if (settingsSaveRef.current) clearTimeout(settingsSaveRef.current);
       settingsSaveRef.current = setTimeout(() => {
         if (sessionId) {
-          updateSettings.mutate(
-            { sessionId, settings: newSettings },
-            { onError: () => toast.error('Failed to save quiz settings') }
-          );
+          updateSettings.mutate({ sessionId, settings: newSettings });
         }
       }, 500);
     },
@@ -280,14 +276,8 @@ export function QuizStep({ state, updateState, onNext, onBack }: QuizStepProps) 
       await updateQuestions.mutateAsync({ sessionId, questions });
       refreshSnapshot();
       onNext();
-    } catch (error) {
-      let message = 'Failed to proceed';
-      if (axios.isAxiosError(error) && error.response?.data?.error) {
-        message = error.response.data.error;
-      } else if (error instanceof Error) {
-        message = error.message;
-      }
-      toast.error('Error', { description: message });
+    } catch {
+      // Error surfaced via mutation isError banner above Continue.
     }
   }, [sessionId, questions, updateQuestions, refreshSnapshot, onNext]);
 
@@ -498,6 +488,18 @@ export function QuizStep({ state, updateState, onNext, onBack }: QuizStepProps) 
           </p>
         )}
       </div>
+
+      {/* Form-level error: mutation failure shown above the action cluster per PHASE_5_STANDARDS §6.2. */}
+      {(updateQuestions.isError || updateSettings.isError) && (
+        <Alert variant="destructive" role="alert">
+          <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+          <AlertDescription>
+            {updateQuestions.isError
+              ? (updateQuestions.error instanceof Error ? updateQuestions.error.message : 'Failed to save questions. Please try again.')
+              : (updateSettings.error instanceof Error ? updateSettings.error.message : 'Failed to save quiz settings. Please try again.')}
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Navigation */}
       <div className="flex justify-between pt-4 border-t">

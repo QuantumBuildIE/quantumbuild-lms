@@ -84,9 +84,11 @@ export function TitleDescriptionPanel({
           onBlur={onTitleBlur}
           placeholder="Enter a title for this learning"
           className={titleError ? 'border-destructive' : ''}
+          aria-invalid={!!titleError}
+          aria-describedby={titleError ? 'settings-title-err' : undefined}
         />
         {titleError && (
-          <p className="text-sm text-destructive">{titleError}</p>
+          <p id="settings-title-err" role="alert" className="text-sm text-destructive">{titleError}</p>
         )}
       </div>
 

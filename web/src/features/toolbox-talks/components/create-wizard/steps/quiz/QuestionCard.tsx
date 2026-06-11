@@ -148,7 +148,14 @@ export function QuestionCard({
             onChange={(e) => setDraft({ ...draft, questionText: e.target.value })}
             rows={2}
             className="resize-none"
+            aria-invalid={!draft.questionText.trim()}
+            aria-describedby={!draft.questionText.trim() ? `qcard-${index}-qtext-err` : undefined}
           />
+          {!draft.questionText.trim() && (
+            <p id={`qcard-${index}-qtext-err`} role="alert" className="text-xs text-destructive">
+              Question text is required.
+            </p>
+          )}
         </div>
 
         {/* Answer options */}
