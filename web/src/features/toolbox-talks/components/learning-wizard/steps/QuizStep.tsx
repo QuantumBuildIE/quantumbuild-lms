@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { AlertTriangle, Loader2, Wand2 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -11,14 +13,63 @@ import { useGenerateQuiz } from '../hooks/useGenerateQuiz';
 import { useUpdateTalkQuestions } from '../hooks/useUpdateTalkQuestions';
 import { useUpdateQuizSettings } from '../hooks/useUpdateQuizSettings';
 import { useTalkStatusPolling } from '../hooks/useTalkStatusPolling';
+import { quizStepSchema, type QuizStepFormValues } from '../schemas/quizStepSchema';
 import type { ToolboxTalkQuestion } from '@/types/toolbox-talks';
 import type { QuestionFormData } from '../schemas/questionSchema';
 import type { UpdateTalkQuizSettingsRequest } from '@/lib/api/toolbox-talks/toolbox-talks';
+
+// ============================================
+// Helpers — bridge between form data and ToolboxTalkQuestion display shape
+// ============================================
+
+function toDisplayQuestion(q: QuestionFormData, index: number): ToolboxTalkQuestion {
+  const typeDisplay =
+    q.questionType === 'MultipleChoice' ? 'Multiple Choice' : q.questionType;
+  return {
+    id: q.id ?? '',
+    toolboxTalkId: '',
+    questionNumber: index + 1,
+    questionText: q.questionText,
+    questionType: q.questionType,
+    questionTypeDisplay: typeDisplay,
+    options: q.options ?? null,
+    correctAnswer: q.correctAnswer ?? null,
+    correctOptionIndex: q.correctOptionIndex ?? null,
+    points: q.points,
+    source: (q.source as ToolboxTalkQuestion['source']) ?? 'Manual',
+    isFromVideoFinalPortion: q.isFromVideoFinalPortion ?? false,
+    videoTimestamp: q.videoTimestamp ?? null,
+  };
+}
+
+function toFormQuestion(q: ToolboxTalkQuestion): QuestionFormData {
+  return {
+    id: q.id || undefined,
+    questionNumber: q.questionNumber,
+    questionText: q.questionText,
+    questionType: q.questionType as QuestionFormData['questionType'],
+    options: q.options,
+    correctOptionIndex: q.correctOptionIndex,
+    correctAnswer: q.correctAnswer,
+    points: q.points,
+    source: q.source ?? 'Manual',
+    isFromVideoFinalPortion: q.isFromVideoFinalPortion ?? false,
+    videoTimestamp: q.videoTimestamp ?? null,
+  };
+}
+
+// ============================================
+// Props
+// ============================================
 
 export interface QuizStepProps {
   talkId: string;
   onContinue: () => void | Promise<void>;
 }
+
+// ============================================
+// Component
+// ============================================
 
 export function QuizStep({ talkId, onContinue }: QuizStepProps) {
   const { data: talk, isLoading } = useTalkStatusPolling(talkId, true);
@@ -26,7 +77,12 @@ export function QuizStep({ talkId, onContinue }: QuizStepProps) {
   const updateQuestionsMutation = useUpdateTalkQuestions(talkId);
   const updateSettingsMutation = useUpdateQuizSettings(talkId);
 
-  const [questions, setQuestions] = useState<ToolboxTalkQuestion[]>([]);
+  const form = useForm<QuizStepFormValues>({
+    resolver: zodResolver(quizStepSchema),
+    mode: 'onBlur',
+    defaultValues: { questions: [] },
+  });
+
   // Guard: only auto-init once from server state
   const initializedRef = useRef(false);
 
@@ -36,68 +92,57 @@ export function QuizStep({ talkId, onContinue }: QuizStepProps) {
     if (initializedRef.current) return;
     if (talk.status !== 'Draft') return;
     if (talk.questions.length > 0) {
-      setQuestions(talk.questions);
+      form.reset({ questions: talk.questions.map(toFormQuestion) });
       initializedRef.current = true;
     }
-  }, [talk]);
+  }, [talk, form]);
 
   // After a successful generate, sync the questions from mutation result
   useEffect(() => {
     if (generateMutation.data?.questions) {
-      setQuestions(generateMutation.data.questions);
+      form.reset({ questions: generateMutation.data.questions.map(toFormQuestion) });
       initializedRef.current = true;
     }
-  }, [generateMutation.data]);
+  }, [generateMutation.data, form]);
 
   const handleGenerateQuiz = useCallback(async () => {
     try {
       initializedRef.current = false;
+      form.reset({ questions: [] });
       await generateMutation.mutateAsync();
     } catch {
       toast.error('Failed to generate quiz. Please try again.');
     }
-  }, [generateMutation]);
+  }, [generateMutation, form]);
 
   const handleSaveQuestion = useCallback(
     (index: number, data: QuestionFormData) => {
-      setQuestions((prev) => {
-        const next = [...prev];
-        const existing = next[index];
-        next[index] = {
-          ...existing,
-          questionText: data.questionText,
-          questionType: data.questionType,
-          options: data.options ?? null,
-          correctOptionIndex: data.correctOptionIndex ?? null,
-          correctAnswer: data.options && data.correctOptionIndex != null
-            ? data.options[data.correctOptionIndex]
-            : data.correctAnswer ?? null,
-          points: data.points,
-          source: (data.source as ToolboxTalkQuestion['source']) ?? 'Manual',
-          isFromVideoFinalPortion: data.isFromVideoFinalPortion ?? false,
-          videoTimestamp: data.videoTimestamp ?? null,
-        };
-        return next;
-      });
+      const current = form.getValues('questions');
+      const updated = [...current];
+      updated[index] = { ...data, questionNumber: index + 1 };
+      form.setValue('questions', updated, { shouldValidate: true, shouldDirty: true });
     },
-    []
+    [form]
   );
 
-  const handleDeleteQuestion = useCallback((index: number) => {
-    setQuestions((prev) => {
-      const next = prev.filter((_, i) => i !== index);
-      return next.map((q, i) => ({ ...q, questionNumber: i + 1 }));
-    });
-  }, []);
+  const handleDeleteQuestion = useCallback(
+    (index: number) => {
+      const current = form.getValues('questions');
+      const updated = current
+        .filter((_, i) => i !== index)
+        .map((q, i) => ({ ...q, questionNumber: i + 1 }));
+      form.setValue('questions', updated, { shouldValidate: true, shouldDirty: true });
+    },
+    [form]
+  );
 
   const handleAddQuestion = useCallback(() => {
-    const newQ: ToolboxTalkQuestion = {
-      id: '',
-      toolboxTalkId: talkId,
-      questionNumber: questions.length + 1,
+    const current = form.getValues('questions');
+    const newQ: QuestionFormData = {
+      id: undefined,
+      questionNumber: current.length + 1,
       questionText: '',
       questionType: 'MultipleChoice',
-      questionTypeDisplay: 'Multiple Choice',
       options: ['', '', '', ''],
       correctAnswer: null,
       correctOptionIndex: 0,
@@ -106,8 +151,8 @@ export function QuizStep({ talkId, onContinue }: QuizStepProps) {
       isFromVideoFinalPortion: false,
       videoTimestamp: null,
     };
-    setQuestions((prev) => [...prev, newQ]);
-  }, [questions.length, talkId]);
+    form.setValue('questions', [...current, newQ], { shouldDirty: true });
+  }, [form]);
 
   const handleSaveSettings = useCallback(
     async (settings: UpdateTalkQuizSettingsRequest) => {
@@ -122,12 +167,25 @@ export function QuizStep({ talkId, onContinue }: QuizStepProps) {
 
   // No cascade-reset needed at Step 3 — settings, validation, and translations don't exist yet when questions are saved. The old wizard's cascade-reset UI is intentionally not carried over.
   const handleContinue = useCallback(async () => {
-    if (questions.length === 0) {
-      toast.error('Add at least one question before continuing.');
+    const valid = await form.trigger();
+    if (!valid) {
+      // Best-effort focus on the first erroring question field.
+      // form.setFocus is a no-op when the field isn't RHF-registered (SectionQuestionGroup
+      // uses uncontrolled inputs), so this is informational rather than guaranteed.
+      const errors = form.formState.errors;
+      if (Array.isArray(errors.questions)) {
+        const idx = (errors.questions as Array<unknown>).findIndex(Boolean);
+        if (idx >= 0) {
+          form.setFocus(
+            `questions.${idx}.questionText` as Parameters<typeof form.setFocus>[0]
+          );
+        }
+      }
+      toast.error('Please fix the errors before continuing.');
       return;
     }
 
-    // Map local state → API request shape
+    const questions = form.getValues('questions');
     const payload = questions.map((q, i) => ({
       id: q.id || undefined,
       questionNumber: i + 1,
@@ -148,10 +206,11 @@ export function QuizStep({ talkId, onContinue }: QuizStepProps) {
     } catch {
       toast.error('Failed to save questions. Please try again.');
     }
-  }, [questions, updateQuestionsMutation, onContinue]);
+  }, [form, updateQuestionsMutation, onContinue]);
 
   // ── Derived state ──────────────────────────────────────────────────────────
 
+  const questions = form.watch('questions');
   const isProcessing = talk?.status === 'Processing';
   const isGenerating = generateMutation.isPending || isProcessing;
   const isSaving = updateQuestionsMutation.isPending;
@@ -243,6 +302,8 @@ export function QuizStep({ talkId, onContinue }: QuizStepProps) {
 
   // ── Questions editor ───────────────────────────────────────────────────────
 
+  const questionsError = form.formState.errors.questions?.message;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -268,12 +329,19 @@ export function QuizStep({ talkId, onContinue }: QuizStepProps) {
       </div>
 
       <SectionQuestionGroup
-        questions={questions}
+        questions={questions.map(toDisplayQuestion)}
         onSaveQuestion={handleSaveQuestion}
         onDeleteQuestion={handleDeleteQuestion}
         onAddQuestion={handleAddQuestion}
         isSaving={isSaving}
       />
+
+      {/* Array-level validation error (e.g. "At least one question is required") */}
+      {questionsError && (
+        <p role="alert" className="text-sm text-destructive">
+          {questionsError}
+        </p>
+      )}
 
       {talk && (
         <QuizSettingsPanel

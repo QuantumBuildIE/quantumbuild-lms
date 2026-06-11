@@ -1,14 +1,21 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { Loader2, Wand2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { SectionList, toSectionDrafts, type SectionDraft } from '../components/SectionList';
+import { SectionList, toSectionDrafts } from '../components/SectionList';
 import { useParseTalk } from '../hooks/useParseTalk';
 import { useUpdateTalkSections } from '../hooks/useUpdateTalkSections';
 import { useTalkStatusPolling } from '../hooks/useTalkStatusPolling';
+import {
+  parseStepSchema,
+  type ParseStepFormValues,
+  type SectionFormValue,
+} from '../schemas/parseStepSchema';
 import type { ToolboxTalk } from '@/types/toolbox-talks';
 
 // ============================================
@@ -42,8 +49,12 @@ export function ParseStep({ talkId, onContinue }: ParseStepProps) {
   const parseMutation = useParseTalk(talkId);
   const updateSectionsMutation = useUpdateTalkSections(talkId);
 
-  // Local editable section state
-  const [sections, setSections] = useState<SectionDraft[]>([]);
+  const form = useForm<ParseStepFormValues>({
+    resolver: zodResolver(parseStepSchema),
+    mode: 'onBlur',
+    defaultValues: { sections: [] },
+  });
+
   // Guard: only auto-init once from server state (not on every poll re-render)
   const initializedRef = useRef(false);
   // Track previous status to detect Processing → Draft transition (video mode)
@@ -59,42 +70,61 @@ export function ParseStep({ talkId, onContinue }: ParseStepProps) {
 
     // Video mode: detect Processing → Draft transition — sections just arrived
     if (prev === 'Processing' && current === 'Draft' && talk.sections.length > 0) {
-      setSections(toSectionDrafts(talk.sections));
+      form.reset({ sections: toSectionDrafts(talk.sections) as SectionFormValue[] });
       initializedRef.current = true;
       return;
     }
 
     // Initial load (re-entering step): sections already exist in the talk
     if (!initializedRef.current && current === 'Draft' && talk.sections.length > 0) {
-      setSections(toSectionDrafts(talk.sections));
+      form.reset({ sections: toSectionDrafts(talk.sections) as SectionFormValue[] });
       initializedRef.current = true;
     }
-  }, [talk]);
+  }, [talk, form]);
 
   // After a sync parse (Text / PDF), initialize sections from mutation result
   useEffect(() => {
     if (parseMutation.data && parseMutation.data.sections.length > 0) {
-      setSections(toSectionDrafts(parseMutation.data.sections));
+      form.reset({ sections: toSectionDrafts(parseMutation.data.sections) as SectionFormValue[] });
       initializedRef.current = true;
     }
-  }, [parseMutation.data]);
+  }, [parseMutation.data, form]);
 
   const handleParse = useCallback(async () => {
     try {
       initializedRef.current = false; // allow re-init after parse
       prevStatusRef.current = null;
+      form.reset({ sections: [] });
       await parseMutation.mutateAsync();
     } catch {
       toast.error('Failed to start parsing. Please try again.');
     }
-  }, [parseMutation]);
+  }, [parseMutation, form]);
 
   // No cascade-reset needed at Step 2 — quiz, settings, validation, and translations don't exist yet when sections are saved. The old wizard's cascade-reset UI is intentionally not carried over.
   const handleContinue = useCallback(async () => {
-    if (sections.length === 0) {
-      toast.error('Add at least one section before continuing.');
+    const valid = await form.trigger();
+    if (!valid) {
+      // Best-effort focus on the first erroring section field.
+      // form.setFocus is a no-op when the field isn't RHF-registered (SectionList uses
+      // uncontrolled inputs), so this is informational rather than guaranteed.
+      const errors = form.formState.errors;
+      if (Array.isArray(errors.sections)) {
+        const idx = (errors.sections as Array<unknown>).findIndex(Boolean);
+        if (idx >= 0) {
+          const sectionErr = errors.sections[idx] as Record<string, unknown> | undefined;
+          if (sectionErr?.title) {
+            form.setFocus(`sections.${idx}.title` as Parameters<typeof form.setFocus>[0]);
+          } else if (sectionErr?.content) {
+            form.setFocus(`sections.${idx}.content` as Parameters<typeof form.setFocus>[0]);
+          }
+        }
+      }
+      toast.error('Please fix the errors before continuing.');
       return;
     }
+
+    const sections = form.getValues('sections');
     try {
       await updateSectionsMutation.mutateAsync(
         sections.map((s, i) => ({
@@ -110,10 +140,11 @@ export function ParseStep({ talkId, onContinue }: ParseStepProps) {
     } catch {
       toast.error('Failed to save sections. Please try again.');
     }
-  }, [sections, updateSectionsMutation, onContinue]);
+  }, [form, updateSectionsMutation, onContinue]);
 
   // ── Derived state ─────────────────────────────────────────────────────────
 
+  const sections = form.watch('sections');
   const isProcessing = talk?.status === 'Processing';
   const isParsing = parseMutation.isPending || isProcessing;
   const hasSections = sections.length > 0;
@@ -211,6 +242,8 @@ export function ParseStep({ talkId, onContinue }: ParseStepProps) {
 
   // ── Sections ready — show editor ───────────────────────────────────────────
 
+  const sectionsError = form.formState.errors.sections?.message;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -224,9 +257,21 @@ export function ParseStep({ talkId, onContinue }: ParseStepProps) {
 
       <SectionList
         sections={sections}
-        onChange={setSections}
+        onChange={(newSections) =>
+          form.setValue('sections', newSections as SectionFormValue[], {
+            shouldValidate: true,
+            shouldDirty: true,
+          })
+        }
         disabled={isSaving}
       />
+
+      {/* Array-level validation error (e.g. "At least one section is required") */}
+      {sectionsError && (
+        <p role="alert" className="text-sm text-destructive">
+          {sectionsError}
+        </p>
+      )}
 
       {/* Save & Continue */}
       <div className="flex justify-end pt-2">

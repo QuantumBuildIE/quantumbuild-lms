@@ -136,6 +136,8 @@ export function SettingsStep({ talkId, onContinue }: SettingsStepProps) {
     const values = form.getValues();
     const valid = await form.trigger();
     if (!valid) {
+      const firstError = Object.keys(form.formState.errors)[0];
+      if (firstError) form.setFocus(firstError as keyof SettingsFormData);
       toast.error('Please fix the errors before continuing.');
       return;
     }
@@ -194,7 +196,7 @@ export function SettingsStep({ talkId, onContinue }: SettingsStepProps) {
                       }}
                     />
                   </FormControl>
-                  <FormMessage />
+                  <FormMessage role="alert" />
                 </FormItem>
               )}
             />
@@ -218,7 +220,7 @@ export function SettingsStep({ talkId, onContinue }: SettingsStepProps) {
                       }}
                     />
                   </FormControl>
-                  <FormMessage />
+                  <FormMessage role="alert" />
                 </FormItem>
               )}
             />
@@ -252,7 +254,7 @@ export function SettingsStep({ talkId, onContinue }: SettingsStepProps) {
                       ))}
                     </SelectContent>
                   </Select>
-                  <FormMessage />
+                  <FormMessage role="alert" />
                 </FormItem>
               )}
             />
@@ -309,7 +311,7 @@ export function SettingsStep({ talkId, onContinue }: SettingsStepProps) {
                       ))}
                     </SelectContent>
                   </Select>
-                  <FormMessage />
+                  <FormMessage role="alert" />
                 </FormItem>
               )}
             />
@@ -336,7 +338,7 @@ export function SettingsStep({ talkId, onContinue }: SettingsStepProps) {
                       className="w-24"
                     />
                   </FormControl>
-                  <FormMessage />
+                  <FormMessage role="alert" />
                 </FormItem>
               )}
             />
@@ -448,7 +450,7 @@ export function SettingsStep({ talkId, onContinue }: SettingsStepProps) {
                         className="w-24"
                       />
                     </FormControl>
-                    <FormMessage />
+                    <FormMessage role="alert" />
                   </FormItem>
                 )}
               />

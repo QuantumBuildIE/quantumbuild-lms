@@ -335,7 +335,7 @@ export function InputConfigStep() {
                     </SelectContent>
                   </Select>
                 </FormControl>
-                <FormMessage />
+                <FormMessage role="alert" />
               </FormItem>
             )}
           />
@@ -375,7 +375,7 @@ export function InputConfigStep() {
                 </SelectContent>
               </Select>
             </FormControl>
-            <FormMessage />
+            <FormMessage role="alert" />
           </FormItem>
         )}
       />
@@ -385,7 +385,10 @@ export function InputConfigStep() {
   return (
     <Form {...form}>
       <form
-        onSubmit={form.handleSubmit(onSubmit)}
+        onSubmit={form.handleSubmit(onSubmit, (errors) => {
+          const firstError = Object.keys(errors)[0];
+          if (firstError) form.setFocus(firstError as keyof InputConfigValues);
+        })}
         className="space-y-8"
         aria-label="Learning wizard step 1 — input and configuration"
         noValidate
@@ -653,7 +656,7 @@ export function InputConfigStep() {
                       </SelectContent>
                     </Select>
                   </FormControl>
-                  <FormMessage />
+                  <FormMessage role="alert" />
                 </FormItem>
               )}
             />
@@ -681,7 +684,7 @@ export function InputConfigStep() {
                       </SelectContent>
                     </Select>
                   </FormControl>
-                  <FormMessage />
+                  <FormMessage role="alert" />
                 </FormItem>
               )}
             />
@@ -746,7 +749,7 @@ export function InputConfigStep() {
                   <FormControl>
                     <Input {...field} maxLength={200} />
                   </FormControl>
-                  <FormMessage />
+                  <FormMessage role="alert" />
                 </FormItem>
               )}
             />
@@ -760,7 +763,7 @@ export function InputConfigStep() {
                   <FormControl>
                     <Input {...field} maxLength={200} />
                   </FormControl>
-                  <FormMessage />
+                  <FormMessage role="alert" />
                 </FormItem>
               )}
             />
@@ -774,7 +777,7 @@ export function InputConfigStep() {
                   <FormControl>
                     <Input {...field} maxLength={200} />
                   </FormControl>
-                  <FormMessage />
+                  <FormMessage role="alert" />
                 </FormItem>
               )}
             />
@@ -788,7 +791,7 @@ export function InputConfigStep() {
                   <FormControl>
                     <Input {...field} maxLength={200} />
                   </FormControl>
-                  <FormMessage />
+                  <FormMessage role="alert" />
                 </FormItem>
               )}
             />
@@ -807,7 +810,7 @@ export function InputConfigStep() {
                   <FormControl>
                     <Input {...field} maxLength={100} />
                   </FormControl>
-                  <FormMessage />
+                  <FormMessage role="alert" />
                 </FormItem>
               )}
             />
@@ -828,7 +831,7 @@ export function InputConfigStep() {
                     rows={3}
                   />
                 </FormControl>
-                <FormMessage />
+                <FormMessage role="alert" />
               </FormItem>
             )}
           />
