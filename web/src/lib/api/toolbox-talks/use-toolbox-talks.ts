@@ -20,6 +20,7 @@ import {
   validateTranslation,
   initiateExternalReview,
   cancelExternalReview,
+  startTalkTranslation,
 } from './toolbox-talks';
 import type {
   GenerateTranslationsRequest,
@@ -253,6 +254,25 @@ export function useCancelExternalReview() {
     onSuccess: (_, { toolboxTalkId, languageCode }) => {
       queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId, 'workflow-state'] });
       queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId, 'workflow-history', languageCode] });
+    },
+  });
+}
+
+export function useStartTalkTranslation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      talkId,
+      languageCode,
+      confirmOverwrite,
+    }: {
+      talkId: string;
+      languageCode: string;
+      confirmOverwrite?: boolean;
+    }) => startTalkTranslation(talkId, languageCode, confirmOverwrite),
+    onSuccess: (_, { talkId, languageCode }) => {
+      queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, talkId, 'workflow-state'] });
+      queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, talkId, 'workflow-history', languageCode] });
     },
   });
 }

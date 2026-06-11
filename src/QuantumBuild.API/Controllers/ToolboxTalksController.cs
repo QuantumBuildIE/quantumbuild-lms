@@ -14,6 +14,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Commands.ParseToolboxTalkCon
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalkSections;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.DeleteToolboxTalk;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.GenerateContentTranslations;
+using QuantumBuild.Modules.ToolboxTalks.Application.Commands.StartTalkTranslation;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.SmartGenerateContent;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateLastEditedStep;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalk;
@@ -1480,6 +1481,48 @@ public class ToolboxTalksController : ControllerBase
     }
 
     /// <summary>
+    /// New-wizard translation entry point: start a translation + validation run for a single language.
+    /// Creates a TranslationValidationRun (IsNewWizard=true), records the workflow TranslationStarted event,
+    /// and enqueues TranslationValidationJob which generates the translation then validates it inline.
+    /// Returns the RunId so the frontend can subscribe to SignalR progress.
+    /// </summary>
+    /// <param name="id">Toolbox talk ID</param>
+    /// <param name="code">ISO 639-1 language code (e.g. "fr", "de"). Must be in the talk's TargetLanguageCodes.</param>
+    /// <param name="request">Optional overwrite confirmation</param>
+    /// <param name="ct">Cancellation token</param>
+    [HttpPost("{id:guid}/translations/{code}/start-translation")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> StartTalkTranslation(
+        Guid id, string code, [FromBody] StartTalkTranslationRequest request, CancellationToken ct)
+    {
+        var command = new StartTalkTranslationCommand
+        {
+            TalkId = id,
+            TenantId = _currentUserService.TenantId,
+            LanguageCode = code,
+            ConfirmOverwrite = request.ConfirmOverwrite
+        };
+
+        var result = await _mediator.Send(command, ct);
+
+        if (!result.Success)
+        {
+            return result.ErrorCode switch
+            {
+                FailureCode.WorkflowInvalidState         => Conflict(new { error = result.Errors.FirstOrDefault() }),
+                FailureCode.WorkflowConfirmationRequired => Conflict(new { error = result.Errors.FirstOrDefault() }),
+                _                                        => BadRequest(new { error = result.Errors.FirstOrDefault() })
+            };
+        }
+
+        return Ok(new { runId = result.Data!.RunId });
+    }
+
+    /// <summary>
     /// Gets existing content translations for a toolbox talk.
     /// </summary>
     /// <param name="id">Toolbox talk ID</param>
@@ -2616,6 +2659,11 @@ public record SmartGenerateContentResponse
 public record InitiateExternalReviewRequest
 {
     public string ReviewerEmail { get; init; } = string.Empty;
+}
+
+public record StartTalkTranslationRequest
+{
+    public bool ConfirmOverwrite { get; init; }
 }
 
 public record UpdateLastEditedStepRequest

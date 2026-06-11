@@ -671,3 +671,19 @@ export async function regenerateCertificate(
   );
   return response.data;
 }
+
+// ============================================
+// New Wizard — Start Translation
+// ============================================
+
+export async function startTalkTranslation(
+  talkId: string,
+  languageCode: string,
+  confirmOverwrite = false
+): Promise<{ runId: string }> {
+  const response = await apiClient.post<{ runId: string }>(
+    `/toolbox-talks/${talkId}/translations/${languageCode}/start-translation`,
+    { confirmOverwrite }
+  );
+  return response.data;
+}

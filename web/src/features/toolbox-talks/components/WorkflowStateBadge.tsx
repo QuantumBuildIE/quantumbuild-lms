@@ -43,6 +43,12 @@ const stateConfig: Record<TranslationWorkflowState, StateConfig> = {
     tooltip: 'Translation in progress',
     className: 'bg-blue-100 text-blue-800 hover:bg-blue-100',
   },
+  Validating: {
+    icon: <Loader2 className="h-3 w-3 animate-spin" />,
+    label: 'Validating',
+    tooltip: 'Back-translation validation in progress',
+    className: 'bg-blue-100 text-blue-800 hover:bg-blue-100',
+  },
   AIGenerated: {
     icon: <Sparkles className="h-3 w-3" />,
     label: 'AI generated',

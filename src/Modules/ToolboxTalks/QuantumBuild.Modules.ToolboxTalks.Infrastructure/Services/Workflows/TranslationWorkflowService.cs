@@ -142,14 +142,42 @@ public sealed class TranslationWorkflowService(
         return Result.Ok();
     }
 
+    public async Task<Result> RecordValidationCompleted(Guid talkId, string languageCode, TriggeredByType triggeredBy = TriggeredByType.User, CancellationToken ct = default)
+    {
+        var stateDto = await GetState(talkId, languageCode, ct);
+        var state = stateDto.State;
+
+        // Idempotent: already Validated or further along → no-op success
+        if (state is TranslationWorkflowState.Validated
+                  or TranslationWorkflowState.ReviewerAccepted
+                  or TranslationWorkflowState.AwaitingThirdParty
+                  or TranslationWorkflowState.ThirdPartyReviewed
+                  or TranslationWorkflowState.Accepted)
+            return Result.Ok();
+
+        // Guard: legal source states are Validating (started but not yet completed) or AIGenerated
+        if (state is not (TranslationWorkflowState.Validating or TranslationWorkflowState.AIGenerated))
+            return Result.Fail(
+                $"Cannot record validation completed from state {state}; requires Validating or AIGenerated.",
+                FailureCode.WorkflowInvalidState);
+
+        AddEvent(talkId, languageCode, WorkflowEventTypes.ValidationCompleted, payloadJson: null, triggeredBy);
+        await context.SaveChangesAsync(ct);
+
+        // TODO Phase 7: fire WorkflowNotificationTrigger
+        return Result.Ok();
+    }
+
     public async Task<Result> StartValidation(Guid talkId, string languageCode, CancellationToken ct = default)
     {
         var stateDto = await GetState(talkId, languageCode, ct);
         var state = stateDto.State;
 
-        if (state != TranslationWorkflowState.AIGenerated)
+        // Accept Validating as well as AIGenerated — allows re-entrant calls when
+        // the job restarts after a crash mid-run without needing a full state reset.
+        if (state is not (TranslationWorkflowState.AIGenerated or TranslationWorkflowState.Validating))
             return Result.Fail(
-                $"Cannot start validation from state {state}; requires AIGenerated.",
+                $"Cannot start validation from state {state}; requires AIGenerated or Validating.",
                 FailureCode.WorkflowInvalidState);
 
         AddEvent(talkId, languageCode, WorkflowEventTypes.ValidationStarted,
@@ -613,6 +641,7 @@ public sealed class TranslationWorkflowService(
     {
         WorkflowEventTypes.TranslationStarted      => TranslationWorkflowState.Translating,
         WorkflowEventTypes.TranslationCompleted    => TranslationWorkflowState.AIGenerated,
+        WorkflowEventTypes.ValidationStarted       => TranslationWorkflowState.Validating,  // Fixes BACKLOG §10
         WorkflowEventTypes.ValidationCompleted     => TranslationWorkflowState.Validated,
         WorkflowEventTypes.InternalReviewSubmitted => TranslationWorkflowState.ReviewerAccepted,
         WorkflowEventTypes.ExternalReviewInitiated => TranslationWorkflowState.AwaitingThirdParty,
@@ -623,9 +652,6 @@ public sealed class TranslationWorkflowService(
         WorkflowEventTypes.ExternalReviewDeclined   => TranslationWorkflowState.ReviewerAccepted,
         WorkflowEventTypes.AcceptedAsFinal          => TranslationWorkflowState.Accepted,
         WorkflowEventTypes.MarkedStale             => TranslationWorkflowState.Stale,
-        // ValidationStarted falls through to Initial; see BACKLOG §10
-        // for the deferred fix. TranslationStarted is handled via the
-        // case above.
         _ => TranslationWorkflowState.Initial
     };
 

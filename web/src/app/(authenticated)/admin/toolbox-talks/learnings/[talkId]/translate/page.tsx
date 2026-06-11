@@ -41,7 +41,7 @@ export default function LearningWizardTranslatePage() {
       onNext={goNext}
       isNavigating={isNavigating}
     >
-      <TranslateStep />
+      <TranslateStep talkId={talkId} />
     </WizardLayout>
   );
 }

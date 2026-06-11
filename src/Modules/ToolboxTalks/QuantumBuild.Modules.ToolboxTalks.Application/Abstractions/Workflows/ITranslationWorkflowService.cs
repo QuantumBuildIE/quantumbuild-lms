@@ -30,6 +30,13 @@ public interface ITranslationWorkflowService
     /// <summary>Records that a back-translation validation run was kicked off.</summary>
     Task<Result> StartValidation(Guid talkId, string languageCode, CancellationToken ct = default);
 
+    /// <summary>
+    /// Records that a back-translation validation run completed successfully.
+    /// Transitions to Validated. Idempotent from Validated+.
+    /// Legal source states: Validating, AIGenerated.
+    /// </summary>
+    Task<Result> RecordValidationCompleted(Guid talkId, string languageCode, TriggeredByType triggeredBy = TriggeredByType.User, CancellationToken ct = default);
+
     /// <summary>Records an internal reviewer's decision (accept or edit).</summary>
     Task<Result> SubmitInternalReview(Guid talkId, string languageCode, bool accepted, string? editedContent, CancellationToken ct = default);
 

@@ -48,6 +48,10 @@ public class TranslationValidationRun : TenantEntity
     // Pipeline version stamp (nullable — null for runs that predate this feature)
     public Guid? PipelineVersionId { get; set; }
 
+    // True when the run was created via the new learning wizard (Phase 5.4+).
+    // Old-wizard session-relevance guard is skipped for these runs.
+    public bool IsNewWizard { get; set; }
+
     // Navigation properties
     public ToolboxTalk? ToolboxTalk { get; set; }
     public ToolboxTalkCourse? Course { get; set; }

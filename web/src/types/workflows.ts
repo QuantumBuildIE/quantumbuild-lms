@@ -6,6 +6,7 @@ export type TranslationWorkflowState =
   | 'Initial'
   | 'AIGenerated'
   | 'Translating'
+  | 'Validating'
   | 'Validated'
   | 'ReviewerAccepted'
   | 'AwaitingThirdParty'

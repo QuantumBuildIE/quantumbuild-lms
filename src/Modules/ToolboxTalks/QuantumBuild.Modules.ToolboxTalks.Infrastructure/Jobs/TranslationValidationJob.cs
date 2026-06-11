@@ -8,6 +8,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.PreFlightScan;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Translations;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Validation;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Workflows;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Prompts;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services.Subtitles;
@@ -32,6 +33,7 @@ public class TranslationValidationJob
     private readonly ISafetyClassificationService _safetyClassificationService;
     private readonly IPreFlightScanService _preFlightScanService;
     private readonly IPipelineVersionService _pipelineVersionService;
+    private readonly ITranslationWorkflowService _workflowService;
     private readonly ILogger<TranslationValidationJob> _logger;
     private readonly ISentenceSplitter _sentenceSplitter;
     private readonly IBackTranslationSelector _backTranslationSelector;
@@ -53,6 +55,7 @@ public class TranslationValidationJob
         ISafetyClassificationService safetyClassificationService,
         IPreFlightScanService preFlightScanService,
         IPipelineVersionService pipelineVersionService,
+        ITranslationWorkflowService workflowService,
         ILogger<TranslationValidationJob> logger,
         ISentenceSplitter sentenceSplitter,
         IBackTranslationSelector backTranslationSelector,
@@ -68,6 +71,7 @@ public class TranslationValidationJob
         _safetyClassificationService = safetyClassificationService;
         _preFlightScanService = preFlightScanService;
         _pipelineVersionService = pipelineVersionService;
+        _workflowService = workflowService;
         _logger = logger;
         _sentenceSplitter = sentenceSplitter;
         _backTranslationSelector = backTranslationSelector;
@@ -340,6 +344,17 @@ public class TranslationValidationJob
 
             await _dbContext.SaveChangesAsync(cancellationToken);
 
+            // Record workflow state transition for all talk-scoped runs
+            if (run.ToolboxTalkId.HasValue)
+            {
+                var wfResult = await _workflowService.RecordValidationCompleted(
+                    run.ToolboxTalkId.Value, run.LanguageCode, TriggeredByType.System, cancellationToken);
+                if (!wfResult.Success)
+                    _logger.LogWarning(
+                        "RecordValidationCompleted returned failure for talk {TalkId}, lang {Lang}: {Error}",
+                        run.ToolboxTalkId, run.LanguageCode, wfResult.Errors.FirstOrDefault());
+            }
+
             stopwatch.Stop();
 
             _logger.LogInformation(
@@ -499,7 +514,7 @@ public class TranslationValidationJob
             // Pass sectorKey from the validation run for tiered prompt quality
             translation = await GenerateTranslationForSectionsAsync(
                 run.ToolboxTalkId.Value, tenantId, run.LanguageCode, originalSections,
-                run.SectorKey, run.SourceLanguage, run.Id, cancellationToken);
+                run.SectorKey, run.SourceLanguage, run.Id, run.IsNewWizard, cancellationToken);
 
             if (string.IsNullOrWhiteSpace(translation))
             {
@@ -765,51 +780,57 @@ public class TranslationValidationJob
         string? sectorKey,
         string? sourceLanguage,
         Guid runId,
+        bool isNewWizard,
         CancellationToken cancellationToken)
     {
         // Relevance guard: if this run has been superseded (cascade-reset cleared the session's
         // ValidationRunIds), abort before inserting the ToolboxTalkTranslation row that would
         // conflict on the unique index. This covers the in-flight case where Delete() could not
         // stop an already-running job.
-        var session = await _dbContext.ContentCreationSessions
-            .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(s => s.OutputTalkId == talkId && s.TenantId == tenantId,
-                cancellationToken);
-
-        if (session == null)
+        // New-wizard runs (IsNewWizard=true) skip this guard — they are created without a session
+        // and manage their own lifecycle via TranslationWorkflowService.
+        if (!isNewWizard)
         {
-            _logger.LogInformation(
-                "TranslationValidationJob run {RunId} is no longer relevant — no session found for talk {TalkId}. Aborting before INSERT.",
-                runId, talkId);
-            return null;
-        }
+            var session = await _dbContext.ContentCreationSessions
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(s => s.OutputTalkId == talkId && s.TenantId == tenantId,
+                    cancellationToken);
 
-        if (string.IsNullOrWhiteSpace(session.ValidationRunIds))
-        {
-            _logger.LogInformation(
-                "TranslationValidationJob run {RunId} is no longer relevant — session {SessionId} has no current ValidationRunIds. Aborting before INSERT.",
-                runId, session.Id);
-            return null;
-        }
-
-        try
-        {
-            var currentRunIds = JsonSerializer.Deserialize<List<Guid>>(session.ValidationRunIds);
-            if (currentRunIds == null || !currentRunIds.Contains(runId))
+            if (session == null)
             {
                 _logger.LogInformation(
-                    "TranslationValidationJob run {RunId} is no longer in session {SessionId}'s ValidationRunIds. Aborting before INSERT.",
+                    "TranslationValidationJob run {RunId} is no longer relevant — no session found for talk {TalkId}. Aborting before INSERT.",
+                    runId, talkId);
+                return null;
+            }
+
+            if (string.IsNullOrWhiteSpace(session.ValidationRunIds))
+            {
+                _logger.LogInformation(
+                    "TranslationValidationJob run {RunId} is no longer relevant — session {SessionId} has no current ValidationRunIds. Aborting before INSERT.",
                     runId, session.Id);
                 return null;
             }
-        }
-        catch (JsonException ex)
-        {
-            // Malformed JSON — log and fall through. Better to risk a conflict than to silently
-            // abort on a parse failure.
-            _logger.LogWarning(ex,
-                "Failed to parse session.ValidationRunIds for session {SessionId} — proceeding cautiously.",
-                session.Id);
+
+            try
+            {
+                var currentRunIds = JsonSerializer.Deserialize<List<Guid>>(session.ValidationRunIds);
+                if (currentRunIds == null || !currentRunIds.Contains(runId))
+                {
+                    _logger.LogInformation(
+                        "TranslationValidationJob run {RunId} is no longer in session {SessionId}'s ValidationRunIds. Aborting before INSERT.",
+                        runId, session.Id);
+                    return null;
+                }
+            }
+            catch (JsonException ex)
+            {
+                // Malformed JSON — log and fall through. Better to risk a conflict than to silently
+                // abort on a parse failure.
+                _logger.LogWarning(ex,
+                    "Failed to parse session.ValidationRunIds for session {SessionId} — proceeding cautiously.",
+                    session.Id);
+            }
         }
 
         Domain.Entities.ToolboxTalkTranslation? translation = null;
@@ -1004,6 +1025,17 @@ public class TranslationValidationJob
 
             _dbContext.ToolboxTalkTranslations.Add(translation);
             await _dbContext.SaveChangesAsync(cancellationToken);
+
+            // Advance the workflow state to AIGenerated for new-wizard runs
+            if (isNewWizard)
+            {
+                var translationResult = await _workflowService.RecordTranslationCompleted(
+                    talkId, languageCode, TriggeredByType.System, cancellationToken);
+                if (!translationResult.Success)
+                    _logger.LogWarning(
+                        "RecordTranslationCompleted returned failure for talk {TalkId}, lang {Lang}: {Error}",
+                        talkId, languageCode, translationResult.Errors.FirstOrDefault());
+            }
 
             _logger.LogInformation(
                 "Generated translation for {Count}/{Total} sections to {Language}",

@@ -41,7 +41,7 @@ export default function LearningWizardValidatePage() {
       onNext={goNext}
       isNavigating={isNavigating}
     >
-      <ValidateStep />
+      <ValidateStep talkId={talkId} />
     </WizardLayout>
   );
 }

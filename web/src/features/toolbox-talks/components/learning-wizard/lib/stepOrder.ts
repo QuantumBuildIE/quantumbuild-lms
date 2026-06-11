@@ -50,9 +50,11 @@ export function isStepReachable(step: number, talk: ToolboxTalk | null): boolean
       // Settings: reachable once talk has sections
       return talk.sections.length > 0;
     case 5:
+      // Translate: reachable once sections exist
+      return talk.sections.length > 0;
     case 6:
-      // Translate + Validate: placeholder — 5.4 owns the real rule
-      return false;
+      // Validate: reachable once sections exist (translation may still be running)
+      return talk.sections.length > 0;
     case 7:
       // Publish: placeholder — 5.5 owns the real rule
       return false;

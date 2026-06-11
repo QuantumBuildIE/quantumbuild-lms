@@ -23,5 +23,12 @@ public enum TranslationWorkflowState
     /// Entered when a TranslationStarted event is recorded; exited when
     /// a TranslationCompleted event is recorded (which transitions to AIGenerated).
     /// </summary>
-    Translating = 8
+    Translating = 8,
+    /// <summary>
+    /// A back-translation validation job is currently running (transient state).
+    /// Entered when a ValidationStarted event is recorded; exited when
+    /// a ValidationCompleted event is recorded (which transitions to Validated).
+    /// Fixes BACKLOG §10 — ValidationStarted previously fell through to Initial.
+    /// </summary>
+    Validating = 9
 }
