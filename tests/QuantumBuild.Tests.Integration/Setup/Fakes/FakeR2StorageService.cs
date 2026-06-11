@@ -146,6 +146,34 @@ public class FakeR2StorageService : IR2StorageService
         return Task.CompletedTask;
     }
 
+    public Task<R2UploadResult> UploadCoverImageAsync(
+        Guid tenantId,
+        Guid toolboxTalkId,
+        Stream content,
+        string originalFileName,
+        CancellationToken cancellationToken = default)
+    {
+        var ext = Path.GetExtension(originalFileName).TrimStart('.').ToLowerInvariant();
+        if (ext is not "png" and not "jpg" and not "jpeg") ext = "png";
+        var key = $"{tenantId}/cover-images/{toolboxTalkId:N}-cover.{ext}";
+        var bytes = ReadStream(content);
+        _files[key] = bytes;
+        return Task.FromResult(R2UploadResult.SuccessResult(
+            $"https://fake-r2.test/{key}", key, bytes.Length, "image/png"));
+    }
+
+    public Task DeleteCoverImageAsync(
+        Guid tenantId,
+        Guid toolboxTalkId,
+        CancellationToken cancellationToken = default)
+    {
+        var prefix = $"{tenantId}/cover-images/{toolboxTalkId:N}-cover.";
+        var keysToRemove = _files.Keys.Where(k => k.StartsWith(prefix)).ToList();
+        foreach (var key in keysToRemove)
+            _files.Remove(key);
+        return Task.CompletedTask;
+    }
+
     public Task<R2UploadResult> UploadSessionFileAsync(
         Guid tenantId,
         Guid sessionId,

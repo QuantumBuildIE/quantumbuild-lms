@@ -191,6 +191,56 @@ export async function updateTalkQuizSettings(
 }
 
 // ============================================
+// Learning Wizard — Step 4 (Settings)
+// ============================================
+
+export interface UpdateTalkSettingsRequest {
+  title: string;
+  description?: string | null;
+  category?: string | null;
+  refresherFrequency: 'Once' | 'Monthly' | 'Quarterly' | 'Annually';
+  isActive: boolean;
+  generateCertificate: boolean;
+  minimumVideoWatchPercent: number;
+  autoAssignToNewEmployees: boolean;
+  autoAssignDueDays: number;
+  generateSlidesFromPdf: boolean;
+}
+
+export async function updateTalkSettings(
+  id: string,
+  settings: UpdateTalkSettingsRequest
+): Promise<ToolboxTalk> {
+  const response = await apiClient.put<ToolboxTalk>(`/toolbox-talks/${id}/settings`, settings);
+  return response.data;
+}
+
+export interface CoverImageResponse {
+  coverImageUrl: string | null;
+}
+
+export async function uploadCoverImage(
+  id: string,
+  file: File
+): Promise<CoverImageResponse> {
+  const form = new FormData();
+  form.append('file', file);
+  const response = await apiClient.post<CoverImageResponse>(
+    `/toolbox-talks/${id}/cover-image`,
+    form,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  );
+  return response.data;
+}
+
+export async function removeCoverImage(id: string): Promise<CoverImageResponse> {
+  const response = await apiClient.delete<CoverImageResponse>(
+    `/toolbox-talks/${id}/cover-image`
+  );
+  return response.data;
+}
+
+// ============================================
 // Dashboard
 // ============================================
 

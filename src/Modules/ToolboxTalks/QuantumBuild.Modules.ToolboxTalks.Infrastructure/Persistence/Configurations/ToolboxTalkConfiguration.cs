@@ -272,6 +272,9 @@ public class ToolboxTalkConfiguration : IEntityTypeConfiguration<ToolboxTalk>
             .IsRequired()
             .HasDefaultValue(false);
 
+        builder.Property(t => t.CoverImageUrl)
+            .HasMaxLength(500);
+
         // Indexes
         builder.HasIndex(t => new { t.TenantId, t.Code })
             .IsUnique()

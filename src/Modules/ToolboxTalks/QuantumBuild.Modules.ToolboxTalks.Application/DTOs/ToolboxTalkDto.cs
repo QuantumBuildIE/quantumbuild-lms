@@ -99,6 +99,9 @@ public record ToolboxTalkDto
 
     // Learning wizard — input mode
     public InputMode InputMode { get; init; }
+
+    // Learning wizard — cover image (Step 4)
+    public string? CoverImageUrl { get; init; }
 }
 
 /// <summary>

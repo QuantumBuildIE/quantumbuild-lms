@@ -1139,4 +1139,62 @@ cross-cutting cleanup.
 
 ---
 
+---
+
+## 19. Wizard Step 4 Settings — tenant defaults (deferred from Phase 5.3d)
+
+**Priority:** P3 — Low  
+**Source:** Phase 5.3d spec item I1  
+**Status:** Deferred — not in scope for 5.3d
+
+When an admin creates a learning, the Settings step (Step 4) defaults
+`minimumVideoWatchPercent`, `autoAssignDueDays`, `generateCertificate`,
+`refresherFrequency`, and `isActive` from hardcoded values:
+- `minimumVideoWatchPercent = 90`
+- `autoAssignDueDays = 14`
+- `generateCertificate = true`
+- `refresherFrequency = "Once"`
+- `isActive = true`
+
+These should instead be read from `ToolboxTalkSettings` (tenant-level
+defaults configured in the module settings page) so the wizard inherits
+whatever the tenant has configured.
+
+**How to apply:** When initialising the SettingsStep form (`useEffect`
+populating from server talk), also fetch `ToolboxTalkSettings` for the
+tenant and use those as the default values for fields that haven't been
+previously saved (i.e. `talk.lastEditedStep < 4`). The `useTalk` hook
+already provides the talk; a parallel `useToolboxTalkSettings` hook
+provides the tenant defaults.
+
+---
+
+## 20. ToolboxTalk.Frequency vs RequiresRefresher/RefresherIntervalMonths conflict (Phase 5.3d)
+
+**Priority:** P3 — Low  
+**Source:** Phase 5.3d spec item I2  
+**Status:** Deferred — not in scope for 5.3d
+
+`ToolboxTalk` has two overlapping mechanisms for refresher scheduling:
+- **Legacy:** `Frequency` column (enum: Once/Weekly/Monthly/Annually) used
+  by the old wizard and `ToolboxTalkSchedule`
+- **New wizard:** `RequiresRefresher` + `RefresherIntervalMonths` (Phase 5.3d)
+
+The `UpdateToolboxTalkSettingsCommandHandler` writes to
+`RequiresRefresher`/`RefresherIntervalMonths` and leaves `Frequency`
+unchanged. The `Frequency` value is still read by the old wizard's edit
+form and some schedule processing jobs.
+
+**Risk:** An admin who edits a new-wizard talk via the old edit form may
+see a stale `Frequency` value and accidentally re-set it, overwriting the
+refresher configuration from Step 4.
+
+**Fix direction:** Either:
+1. Mirror the `RefresherFrequency → Frequency` translation in
+   `UpdateToolboxTalkSettingsCommandHandler` (keeping old field in sync), or
+2. Remove `Frequency` from the old edit form and fully migrate to the new
+   model — a larger cross-cutting change.
+
+---
+
 *End of BACKLOG.md. For active prioritised work, see `SPRINT.md`.*

@@ -300,6 +300,12 @@ public class ToolboxTalk : TenantEntity
     /// </summary>
     public bool PreserveSourceWording { get; set; } = false;
 
+    /// <summary>
+    /// Public URL for the cover image uploaded in wizard Step 4.
+    /// Nullable — existing talks and talks without a cover image remain valid.
+    /// </summary>
+    public string? CoverImageUrl { get; set; }
+
     // Navigation properties
 
     /// <summary>

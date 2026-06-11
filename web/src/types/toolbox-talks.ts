@@ -148,6 +148,8 @@ export interface ToolboxTalk {
   auditPurpose: string | null;
   audienceRole: string | null;
   preserveSourceWording: boolean;
+  // Learning wizard — cover image (Step 4)
+  coverImageUrl: string | null;
 }
 
 export interface ToolboxTalkListItem {

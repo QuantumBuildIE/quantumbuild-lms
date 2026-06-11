@@ -2,23 +2,21 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { WizardLayout } from '@/features/toolbox-talks/components/learning-wizard/components/WizardLayout';
-import { LoadingState } from '@/features/toolbox-talks/components/learning-wizard/components/LoadingState';
 import { ErrorState } from '@/features/toolbox-talks/components/learning-wizard/components/ErrorState';
 import { SettingsStep } from '@/features/toolbox-talks/components/learning-wizard/steps/SettingsStep';
 import { useTalk } from '@/features/toolbox-talks/components/learning-wizard/hooks/useTalk';
 import { useStepNavigation } from '@/features/toolbox-talks/components/learning-wizard/hooks/useStepNavigation';
-import { getDraftsUrl } from '@/features/toolbox-talks/components/learning-wizard/lib/urlState';
+import { getDraftsUrl, getStepUrl } from '@/features/toolbox-talks/components/learning-wizard/lib/urlState';
 
 export default function LearningWizardSettingsPage() {
   const params = useParams();
   const talkId = params.talkId as string;
   const router = useRouter();
 
-  const { talk, isLoading, isError, error, refetch } = useTalk(talkId);
-  const { reachableSteps, canGoBack, canGoNext, goBack, goNext, goToStep, isNavigating } =
+  const { talk, isError, error, refetch } = useTalk(talkId);
+  const { reachableSteps, canGoBack, goBack, goToStep } =
     useStepNavigation({ talkId, currentStep: 4, talk: talk ?? null });
 
-  if (isLoading) return <LoadingState label="Loading learning…" />;
   if (isError)
     return (
       <ErrorState
@@ -36,12 +34,13 @@ export default function LearningWizardSettingsPage() {
       currentStep={4}
       onStepClick={goToStep}
       canGoBack={canGoBack}
-      canGoNext={canGoNext}
       onBack={goBack}
-      onNext={goNext}
-      isNavigating={isNavigating}
     >
-      <SettingsStep />
+      {/* SettingsStep owns its own Continue button and saves on blur (see SettingsStep.tsx §4.4 deviation note) */}
+      <SettingsStep
+        talkId={talkId}
+        onContinue={() => router.push(getStepUrl(talkId, 5))}
+      />
     </WizardLayout>
   );
 }

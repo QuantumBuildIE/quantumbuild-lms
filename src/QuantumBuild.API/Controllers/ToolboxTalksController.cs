@@ -20,6 +20,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalk;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.GenerateToolboxTalkQuiz;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalkQuestions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalkQuizSettings;
+using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalkSettings;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Reports;
 using QuantumBuild.Modules.ToolboxTalks.Application.Queries.GetSlideshowHtml;
@@ -596,6 +597,49 @@ public class ToolboxTalksController : ControllerBase
             _logger.LogError(ex, "Error updating quiz settings for learning {TalkId}", id);
             return StatusCode(500, new { error = "Error updating quiz settings" });
         }
+    }
+
+    /// <summary>
+    /// Update wizard Step 4 settings on a draft learning.
+    /// Handles title/description/category, behaviour toggles, refresher, and slideshow config.
+    /// Title/Description changes automatically stale any existing translations.
+    /// </summary>
+    [HttpPut("{id:guid}/settings")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(typeof(ToolboxTalkDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> UpdateLearningSettings(Guid id, [FromBody] UpdateLearningSettingsRequest request, CancellationToken ct)
+    {
+        var command = new UpdateToolboxTalkSettingsCommand(
+            TalkId: id,
+            TenantId: _currentUserService.TenantId,
+            Title: request.Title,
+            Description: request.Description,
+            Category: request.Category,
+            RefresherFrequency: request.RefresherFrequency,
+            IsActive: request.IsActive,
+            GenerateCertificate: request.GenerateCertificate,
+            MinimumVideoWatchPercent: request.MinimumVideoWatchPercent,
+            AutoAssignToNewEmployees: request.AutoAssignToNewEmployees,
+            AutoAssignDueDays: request.AutoAssignDueDays,
+            GenerateSlidesFromPdf: request.GenerateSlidesFromPdf);
+
+        var result = await _mediator.Send(command, ct);
+
+        if (!result.Success)
+        {
+            if (result.ErrorCode == FailureCode.WorkflowInvalidState)
+                return Conflict(new { error = result.Errors.FirstOrDefault() });
+            if (result.ErrorCode == FailureCode.TitleNotUnique)
+                return Conflict(new { error = result.Errors.FirstOrDefault(), code = "TitleNotUnique" });
+            if (result.Errors.FirstOrDefault()?.Contains("not found", StringComparison.OrdinalIgnoreCase) == true)
+                return NotFound(new { error = result.Errors.FirstOrDefault() });
+            return BadRequest(new { error = result.Errors.FirstOrDefault() });
+        }
+
+        return Ok(result.Data);
     }
 
     /// <summary>
@@ -2621,4 +2665,18 @@ public record UpdateTalkQuizSettingsRequest
     public bool ShuffleOptions { get; init; }
     public bool UseQuestionPool { get; init; }
     public bool AllowRetry { get; init; } = true;
+}
+
+public record UpdateLearningSettingsRequest
+{
+    [Required, MaxLength(200)] public string Title { get; init; } = string.Empty;
+    [MaxLength(2000)] public string? Description { get; init; }
+    public string? Category { get; init; }
+    public RefresherFrequency RefresherFrequency { get; init; } = RefresherFrequency.Once;
+    public bool IsActive { get; init; } = true;
+    public bool GenerateCertificate { get; init; } = true;
+    [Range(50, 100)] public int MinimumVideoWatchPercent { get; init; } = 90;
+    public bool AutoAssignToNewEmployees { get; init; }
+    [Range(1, 90)] public int AutoAssignDueDays { get; init; } = 14;
+    public bool GenerateSlidesFromPdf { get; init; }
 }

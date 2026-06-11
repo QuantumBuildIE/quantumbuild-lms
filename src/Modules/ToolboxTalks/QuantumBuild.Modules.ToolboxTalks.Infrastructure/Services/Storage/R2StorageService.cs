@@ -25,6 +25,7 @@ public class R2StorageService : IR2StorageService, IDisposable
     private const string CertificatesFolder = "certificates";
     private const string ValidationReportsFolder = "validation-reports";
     private const string QrCodesFolder = "qr-codes";
+    private const string CoverImagesFolder = "cover-images";
 
     public R2StorageService(
         IOptions<R2StorageSettings> settings,
@@ -486,6 +487,72 @@ public class R2StorageService : IR2StorageService, IDisposable
     {
         await DeleteFilesByFolderAsync(tenantId, toolboxTalkId, PdfsFolder, cancellationToken);
     }
+
+    public async Task<R2UploadResult> UploadCoverImageAsync(
+        Guid tenantId,
+        Guid toolboxTalkId,
+        Stream content,
+        string originalFileName,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var extension = Path.GetExtension(originalFileName).TrimStart('.').ToLower();
+            if (extension != "png" && extension != "jpg" && extension != "jpeg")
+                extension = "jpg";
+
+            var fileName = $"{toolboxTalkId:N}-cover.{extension}";
+            var key = BuildKey(tenantId, CoverImagesFolder, fileName);
+            var contentType = extension == "png" ? "image/png" : "image/jpeg";
+
+            _logger.LogInformation("Uploading cover image to R2: {Key}", key);
+
+            var request = new PutObjectRequest
+            {
+                BucketName = _settings.BucketName,
+                Key = key,
+                InputStream = content,
+                ContentType = contentType,
+                DisablePayloadSigning = true,
+                UseChunkEncoding = false
+            };
+
+            var contentLength = content.Length;
+            await _s3Client.PutObjectAsync(request, cancellationToken);
+
+            var publicUrl = GeneratePublicUrl(tenantId, CoverImagesFolder, fileName);
+
+            _logger.LogInformation("Successfully uploaded cover image: {Url}", publicUrl);
+
+            return R2UploadResult.SuccessResult(publicUrl, key, contentLength, contentType);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to upload cover image for ToolboxTalk {TalkId}", toolboxTalkId);
+            return R2UploadResult.FailureResult($"Cover image upload failed: {ex.Message}");
+        }
+    }
+
+    public async Task DeleteCoverImageAsync(
+        Guid tenantId,
+        Guid toolboxTalkId,
+        CancellationToken cancellationToken = default)
+    {
+        // Try both extensions — only one will exist, the other is a no-op on R2.
+        foreach (var ext in new[] { "jpg", "jpeg", "png" })
+        {
+            var key = BuildKey(tenantId, CoverImagesFolder, $"{toolboxTalkId:N}-cover.{ext}");
+            try
+            {
+                await _s3Client.DeleteObjectAsync(_settings.BucketName, key, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Non-fatal: could not delete cover image key {Key}", key);
+            }
+        }
+    }
+
 
     private async Task DeleteFilesByFolderAsync(
         Guid tenantId,
