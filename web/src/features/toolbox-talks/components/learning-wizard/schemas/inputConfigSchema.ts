@@ -58,14 +58,14 @@ export const inputConfigSchema = z
         path: ['sourceText'],
       });
     }
-    if (data.inputMode === 'Pdf' && !data.sourceFileUrl) {
+    if (data.inputMode === 'Pdf' && !data.sourceFileUrl && !data.sourceFileName) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Please upload a PDF file',
         path: ['sourceFileUrl'],
       });
     }
-    if (data.inputMode === 'Video' && !data.videoUrl && !data.sourceFileUrl) {
+    if (data.inputMode === 'Video' && !data.videoUrl && !data.sourceFileUrl && !data.sourceFileName) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Please enter a video URL or upload a video file',

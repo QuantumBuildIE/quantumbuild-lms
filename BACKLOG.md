@@ -1082,4 +1082,50 @@ Kept here for trail; prune periodically.
 
 ---
 
+---
+
+## 18. TenantQueryInvalidator parent-path redirect doesn't know which paths are routable
+
+web/src/lib/providers.tsx — TenantQueryInvalidator strips the
+UUID segment from the URL on tenant change and uses
+router.replace() with the resulting parent path. The logic
+doesn't validate that a page.tsx exists at the target — it
+just assumes "parent of any UUID route is itself a valid
+page."
+
+This held for existing admin detail pages (talks/{id},
+courses/{id}, etc.) because their parent paths happen to
+have list pages. Phase 5's learning-wizard routes broke
+the assumption: /learnings/{talkId}/quiz has no
+/learnings/ landing page, so the redirect hit 404.
+
+Phase 5.3b smoke fix added a /learnings/ index page that
+redirects to drafts, resolving the 404 for the wizard's
+routes. The underlying logic in TenantQueryInvalidator is
+still fragile — any future route tree that adds UUID
+segments without a parent landing page will hit the same
+bug.
+
+Fix direction:
+  - Either: have TenantQueryInvalidator redirect to a
+    known-safe fallback (e.g. tenant dashboard) when the
+    parent path can't be confirmed routable.
+  - Or: add a manifest of valid parent paths and check
+    against it before redirecting.
+  - Or: stop stripping UUID segments altogether and just
+    invalidate React Query — the redirect was a defensive
+    guard against showing stale tenant data, but query
+    invalidation alone may be sufficient.
+
+Only reproducible on accounts that transition activeTenantId
+from null to non-null (SuperUser with stored tenant ID).
+Regular admins don't trigger it.
+
+Surfaced 2026-06-11 during Phase 5.3b smoke testing.
+Deferred — the index-page fix in Phase 5.3b unblocks the
+new wizard's routes; the structural fix can wait for a
+cross-cutting cleanup.
+
+---
+
 *End of BACKLOG.md. For active prioritised work, see `SPRINT.md`.*
