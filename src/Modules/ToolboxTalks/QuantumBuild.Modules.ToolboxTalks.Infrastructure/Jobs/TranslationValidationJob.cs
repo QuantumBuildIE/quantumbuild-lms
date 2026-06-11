@@ -348,7 +348,8 @@ public class TranslationValidationJob
             if (run.ToolboxTalkId.HasValue)
             {
                 var wfResult = await _workflowService.RecordValidationCompleted(
-                    run.ToolboxTalkId.Value, run.LanguageCode, TriggeredByType.System, cancellationToken);
+                    run.ToolboxTalkId.Value, run.LanguageCode, TriggeredByType.System,
+                    explicitTenantId: tenantId, ct: cancellationToken);
                 if (!wfResult.Success)
                     _logger.LogWarning(
                         "RecordValidationCompleted returned failure for talk {TalkId}, lang {Lang}: {Error}",
@@ -1030,7 +1031,8 @@ public class TranslationValidationJob
             if (isNewWizard)
             {
                 var translationResult = await _workflowService.RecordTranslationCompleted(
-                    talkId, languageCode, TriggeredByType.System, cancellationToken);
+                    talkId, languageCode, TriggeredByType.System,
+                    explicitTenantId: tenantId, ct: cancellationToken);
                 if (!translationResult.Success)
                     _logger.LogWarning(
                         "RecordTranslationCompleted returned failure for talk {TalkId}, lang {Lang}: {Error}",

@@ -105,7 +105,7 @@ public class GenerateContentTranslationsCommandHandler
                 targetCode,
                 request.ConfirmOverwrite,
                 request.TriggeredBy,
-                cancellationToken);
+                ct: cancellationToken);
 
             if (!workflowGuard.Success)
             {
@@ -168,7 +168,7 @@ public class GenerateContentTranslationsCommandHandler
                 request.ToolboxTalkId,
                 successfulResult.LanguageCode,
                 request.TriggeredBy,
-                cancellationToken);
+                ct: cancellationToken);
 
             if (!recordResult.Success)
             {

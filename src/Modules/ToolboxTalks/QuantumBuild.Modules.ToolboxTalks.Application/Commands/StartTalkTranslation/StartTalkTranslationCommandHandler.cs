@@ -56,7 +56,7 @@ public class StartTalkTranslationCommandHandler
             request.LanguageCode,
             request.ConfirmOverwrite,
             TriggeredByType.User,
-            cancellationToken);
+            ct: cancellationToken);
 
         if (!wfResult.Success)
             return Result.Fail<StartTalkTranslationResult>(

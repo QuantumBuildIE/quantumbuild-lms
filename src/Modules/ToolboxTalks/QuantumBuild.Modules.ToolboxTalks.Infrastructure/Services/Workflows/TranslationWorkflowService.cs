@@ -26,21 +26,71 @@ public sealed class TranslationWorkflowService(
     IConfiguration configuration,
     ILogger<TranslationWorkflowService> logger) : ITranslationWorkflowService
 {
-    public async Task<TranslationWorkflowStateDto> GetState(Guid talkId, string languageCode, CancellationToken ct = default)
+    // -- Tenant resolution --
+
+    /// <summary>
+    /// Resolves the effective tenant ID for a service call.
+    /// When <paramref name="explicitTenantId"/> is provided (non-null), it is used directly —
+    /// allowing Hangfire jobs (which have no HTTP context) to pass their job-parameter tenant.
+    /// When null, falls back to <c>ICurrentUserService.TenantId</c> (standard HTTP-context path).
+    /// </summary>
+    private Guid ResolveTenantId(Guid? explicitTenantId)
+        => explicitTenantId ?? currentUser?.TenantId ?? Guid.Empty;
+
+    /// <summary>
+    /// Guard called at the top of every Result-returning public method.
+    /// Callers must not pass Guid.Empty as an explicit override — that is a bug at the call site.
+    /// Null (default) is always legal.
+    /// </summary>
+    private Result? ValidateExplicitTenantId(Guid? explicitTenantId)
     {
+        if (explicitTenantId.HasValue && explicitTenantId.Value == Guid.Empty)
+        {
+            logger.LogWarning(
+                "TranslationWorkflowService: explicitTenantId = Guid.Empty was passed explicitly. " +
+                "This is a caller bug — pass null to fall back to HTTP context, or pass the real tenant ID.");
+            return Result.Fail(
+                "explicitTenantId must not be Guid.Empty when explicitly provided. Pass null to use the HTTP-context tenant.",
+                FailureCode.WorkflowInvalidState);
+        }
+        return null;
+    }
+
+    // -- Public interface --
+
+    public async Task<TranslationWorkflowStateDto> GetState(
+        Guid talkId,
+        string languageCode,
+        Guid? explicitTenantId = null,
+        CancellationToken ct = default)
+    {
+        var tenantId = ResolveTenantId(explicitTenantId);
+
+        // IgnoreQueryFilters: the tenant predicate is applied explicitly so this method is
+        // correct regardless of whether HttpContext is present (Hangfire jobs have no HttpContext).
         var lastEvent = await context.WorkflowEvents
-            .Where(e => e.WorkflowType == WorkflowType.Translation
+            .IgnoreQueryFilters()
+            .Where(e => !e.IsDeleted
+                     && e.TenantId == tenantId
+                     && e.WorkflowType == WorkflowType.Translation
                      && e.TargetEntityId == talkId
                      && e.TargetEntitySubKey == languageCode)
             .OrderByDescending(e => e.OccurredAt)
             .FirstOrDefaultAsync(ct);
 
         var translation = await context.ToolboxTalkTranslations
-            .Where(t => t.ToolboxTalkId == talkId && t.LanguageCode == languageCode)
+            .IgnoreQueryFilters()
+            .Where(t => !t.IsDeleted
+                     && t.TenantId == tenantId
+                     && t.ToolboxTalkId == talkId
+                     && t.LanguageCode == languageCode)
             .FirstOrDefaultAsync(ct);
 
         var lastValidationRun = await context.TranslationValidationRuns
-            .Where(r => r.ToolboxTalkId == talkId
+            .IgnoreQueryFilters()
+            .Where(r => !r.IsDeleted
+                     && r.TenantId == tenantId
+                     && r.ToolboxTalkId == talkId
                      && r.LanguageCode == languageCode
                      && r.Status == ValidationRunStatus.Completed)
             .OrderByDescending(r => r.CompletedAt)
@@ -50,7 +100,7 @@ public sealed class TranslationWorkflowService(
             ? TranslationWorkflowState.Initial
             : EventTypeToState(lastEvent.EventType);
 
-        var flaggedWordCount = await ComputeFlaggedWordCountAsync(talkId, languageCode, ct);
+        var flaggedWordCount = await ComputeFlaggedWordCountAsync(talkId, languageCode, tenantId, ct);
 
         return new TranslationWorkflowStateDto
         {
@@ -68,10 +118,19 @@ public sealed class TranslationWorkflowService(
         };
     }
 
-    public async Task<IReadOnlyList<WorkflowEventDto>> GetHistory(Guid talkId, string languageCode, CancellationToken ct = default)
+    public async Task<IReadOnlyList<WorkflowEventDto>> GetHistory(
+        Guid talkId,
+        string languageCode,
+        Guid? explicitTenantId = null,
+        CancellationToken ct = default)
     {
+        var tenantId = ResolveTenantId(explicitTenantId);
+
         return await context.WorkflowEvents
-            .Where(e => e.WorkflowType == WorkflowType.Translation
+            .IgnoreQueryFilters()
+            .Where(e => !e.IsDeleted
+                     && e.TenantId == tenantId
+                     && e.WorkflowType == WorkflowType.Translation
                      && e.TargetEntityId == talkId
                      && e.TargetEntitySubKey == languageCode)
             .OrderBy(e => e.OccurredAt)
@@ -86,9 +145,19 @@ public sealed class TranslationWorkflowService(
             .ToListAsync(ct);
     }
 
-    public async Task<Result> StartTranslation(Guid talkId, string languageCode, bool confirmOverwrite = false, TriggeredByType triggeredBy = TriggeredByType.User, CancellationToken ct = default)
+    public async Task<Result> StartTranslation(
+        Guid talkId,
+        string languageCode,
+        bool confirmOverwrite = false,
+        TriggeredByType triggeredBy = TriggeredByType.User,
+        Guid? explicitTenantId = null,
+        CancellationToken ct = default)
     {
-        var stateDto = await GetState(talkId, languageCode, ct);
+        var guard = ValidateExplicitTenantId(explicitTenantId);
+        if (guard is not null) return guard;
+
+        var tenantId = ResolveTenantId(explicitTenantId);
+        var stateDto = await GetState(talkId, languageCode, explicitTenantId, ct);
         var state = stateDto.State;
 
         if (state is TranslationWorkflowState.Translating && !confirmOverwrite)
@@ -107,7 +176,7 @@ public sealed class TranslationWorkflowService(
                 FailureCode.WorkflowInvalidState);
 
         AddEvent(talkId, languageCode, WorkflowEventTypes.TranslationStarted,
-            Serialize(new { languageCode, confirmOverwrite }), triggeredBy);
+            Serialize(new { languageCode, confirmOverwrite }), triggeredBy, tenantId);
         await context.SaveChangesAsync(ct);
 
         // TODO Phase 7: fire WorkflowNotificationTrigger
@@ -121,9 +190,18 @@ public sealed class TranslationWorkflowService(
     /// event. Calling from any other state returns
     /// FailureCode.WorkflowInvalidState.
     /// </summary>
-    public async Task<Result> RecordTranslationCompleted(Guid talkId, string languageCode, TriggeredByType triggeredBy = TriggeredByType.User, CancellationToken ct = default)
+    public async Task<Result> RecordTranslationCompleted(
+        Guid talkId,
+        string languageCode,
+        TriggeredByType triggeredBy = TriggeredByType.User,
+        Guid? explicitTenantId = null,
+        CancellationToken ct = default)
     {
-        var stateDto = await GetState(talkId, languageCode, ct);
+        var guard = ValidateExplicitTenantId(explicitTenantId);
+        if (guard is not null) return guard;
+
+        var tenantId = ResolveTenantId(explicitTenantId);
+        var stateDto = await GetState(talkId, languageCode, explicitTenantId, ct);
 
         // Idempotent: already in AIGenerated → no-op success
         if (stateDto.State == TranslationWorkflowState.AIGenerated)
@@ -135,16 +213,25 @@ public sealed class TranslationWorkflowService(
                 $"Cannot record translation completed from state {stateDto.State}; requires Translating.",
                 FailureCode.WorkflowInvalidState);
 
-        AddEvent(talkId, languageCode, WorkflowEventTypes.TranslationCompleted, payloadJson: null, triggeredBy);
+        AddEvent(talkId, languageCode, WorkflowEventTypes.TranslationCompleted, payloadJson: null, triggeredBy, tenantId);
         await context.SaveChangesAsync(ct);
 
         // TODO Phase 7: fire WorkflowNotificationTrigger
         return Result.Ok();
     }
 
-    public async Task<Result> RecordValidationCompleted(Guid talkId, string languageCode, TriggeredByType triggeredBy = TriggeredByType.User, CancellationToken ct = default)
+    public async Task<Result> RecordValidationCompleted(
+        Guid talkId,
+        string languageCode,
+        TriggeredByType triggeredBy = TriggeredByType.User,
+        Guid? explicitTenantId = null,
+        CancellationToken ct = default)
     {
-        var stateDto = await GetState(talkId, languageCode, ct);
+        var guard = ValidateExplicitTenantId(explicitTenantId);
+        if (guard is not null) return guard;
+
+        var tenantId = ResolveTenantId(explicitTenantId);
+        var stateDto = await GetState(talkId, languageCode, explicitTenantId, ct);
         var state = stateDto.State;
 
         // Idempotent: already Validated or further along → no-op success
@@ -161,16 +248,24 @@ public sealed class TranslationWorkflowService(
                 $"Cannot record validation completed from state {state}; requires Validating or AIGenerated.",
                 FailureCode.WorkflowInvalidState);
 
-        AddEvent(talkId, languageCode, WorkflowEventTypes.ValidationCompleted, payloadJson: null, triggeredBy);
+        AddEvent(talkId, languageCode, WorkflowEventTypes.ValidationCompleted, payloadJson: null, triggeredBy, tenantId);
         await context.SaveChangesAsync(ct);
 
         // TODO Phase 7: fire WorkflowNotificationTrigger
         return Result.Ok();
     }
 
-    public async Task<Result> StartValidation(Guid talkId, string languageCode, CancellationToken ct = default)
+    public async Task<Result> StartValidation(
+        Guid talkId,
+        string languageCode,
+        Guid? explicitTenantId = null,
+        CancellationToken ct = default)
     {
-        var stateDto = await GetState(talkId, languageCode, ct);
+        var guard = ValidateExplicitTenantId(explicitTenantId);
+        if (guard is not null) return guard;
+
+        var tenantId = ResolveTenantId(explicitTenantId);
+        var stateDto = await GetState(talkId, languageCode, explicitTenantId, ct);
         var state = stateDto.State;
 
         // Accept Validating as well as AIGenerated — allows re-entrant calls when
@@ -181,16 +276,26 @@ public sealed class TranslationWorkflowService(
                 FailureCode.WorkflowInvalidState);
 
         AddEvent(talkId, languageCode, WorkflowEventTypes.ValidationStarted,
-            Serialize(new { languageCode }));
+            Serialize(new { languageCode }), TriggeredByType.User, tenantId);
         await context.SaveChangesAsync(ct);
 
         // TODO Phase 7: fire WorkflowNotificationTrigger
         return Result.Ok();
     }
 
-    public async Task<Result> SubmitInternalReview(Guid talkId, string languageCode, bool accepted, string? editedContent, CancellationToken ct = default)
+    public async Task<Result> SubmitInternalReview(
+        Guid talkId,
+        string languageCode,
+        bool accepted,
+        string? editedContent,
+        Guid? explicitTenantId = null,
+        CancellationToken ct = default)
     {
-        var stateDto = await GetState(talkId, languageCode, ct);
+        var guard = ValidateExplicitTenantId(explicitTenantId);
+        if (guard is not null) return guard;
+
+        var tenantId = ResolveTenantId(explicitTenantId);
+        var stateDto = await GetState(talkId, languageCode, explicitTenantId, ct);
         var state = stateDto.State;
 
         if (state != TranslationWorkflowState.Validated)
@@ -200,6 +305,7 @@ public sealed class TranslationWorkflowService(
 
         context.WorkflowReviews.Add(new WorkflowReview
         {
+            TenantId = tenantId,
             WorkflowType = WorkflowType.Translation,
             TargetEntityId = talkId,
             TargetEntitySubKey = languageCode,
@@ -211,7 +317,8 @@ public sealed class TranslationWorkflowService(
         });
 
         AddEvent(talkId, languageCode, WorkflowEventTypes.InternalReviewSubmitted,
-            Serialize(new { accepted, hasEditedContent = editedContent is not null }));
+            Serialize(new { accepted, hasEditedContent = editedContent is not null }),
+            TriggeredByType.User, tenantId);
 
         await context.SaveChangesAsync(ct);
 
@@ -219,9 +326,18 @@ public sealed class TranslationWorkflowService(
         return Result.Ok();
     }
 
-    public async Task<Result<InitiateExternalReviewResult>> InitiateExternalReview(Guid talkId, string languageCode, string invitedEmail, CancellationToken ct = default)
+    public async Task<Result<InitiateExternalReviewResult>> InitiateExternalReview(
+        Guid talkId,
+        string languageCode,
+        string invitedEmail,
+        Guid? explicitTenantId = null,
+        CancellationToken ct = default)
     {
-        var stateDto = await GetState(talkId, languageCode, ct);
+        var guard = ValidateExplicitTenantId(explicitTenantId);
+        if (guard is not null) return Result.Fail<InitiateExternalReviewResult>(guard.Errors.FirstOrDefault() ?? "Invalid tenant.", guard.ErrorCode.GetValueOrDefault());
+
+        var tenantId = ResolveTenantId(explicitTenantId);
+        var stateDto = await GetState(talkId, languageCode, explicitTenantId, ct);
         var state = stateDto.State;
 
         if (state != TranslationWorkflowState.ReviewerAccepted)
@@ -232,17 +348,18 @@ public sealed class TranslationWorkflowService(
         var rawToken = Guid.NewGuid().ToString("N");
         var tokenHash = HashToken(rawToken);
         var lifetimeRaw = await tenantSettings.GetSettingAsync(
-            currentUser.TenantId,
+            tenantId,
             TenantSettingKeys.ExternalParticipantTokenLifetimeDays,
             "30",
             ct);
         var lifetimeDays = int.TryParse(lifetimeRaw, out var parsed) && parsed > 0 ? parsed : 30;
         var expiresAt = DateTime.UtcNow.AddDays(lifetimeDays);
 
-        var flaggedWordCount = await ComputeFlaggedWordCountAsync(talkId, languageCode, ct);
+        var flaggedWordCount = await ComputeFlaggedWordCountAsync(talkId, languageCode, tenantId, ct);
 
         var invitation = new ExternalParticipantInvitation
         {
+            TenantId = tenantId,
             WorkflowType = WorkflowType.Translation,
             TargetEntityId = talkId,
             TargetEntitySubKey = languageCode,
@@ -258,7 +375,7 @@ public sealed class TranslationWorkflowService(
         context.ExternalParticipantInvitations.Add(invitation);
 
         AddEvent(talkId, languageCode, WorkflowEventTypes.ExternalReviewInitiated,
-            Serialize(new { invitedEmail }));
+            Serialize(new { invitedEmail }), TriggeredByType.User, tenantId);
 
         await context.SaveChangesAsync(ct);
 
@@ -367,9 +484,18 @@ public sealed class TranslationWorkflowService(
         return Result.Ok();
     }
 
-    public async Task<Result> ConfirmExternalReview(Guid talkId, string languageCode, bool accepted, CancellationToken ct = default)
+    public async Task<Result> ConfirmExternalReview(
+        Guid talkId,
+        string languageCode,
+        bool accepted,
+        Guid? explicitTenantId = null,
+        CancellationToken ct = default)
     {
-        var stateDto = await GetState(talkId, languageCode, ct);
+        var guard = ValidateExplicitTenantId(explicitTenantId);
+        if (guard is not null) return guard;
+
+        var tenantId = ResolveTenantId(explicitTenantId);
+        var stateDto = await GetState(talkId, languageCode, explicitTenantId, ct);
         var state = stateDto.State;
 
         if (state != TranslationWorkflowState.ThirdPartyReviewed)
@@ -383,16 +509,24 @@ public sealed class TranslationWorkflowService(
         }
 
         AddEvent(talkId, languageCode, WorkflowEventTypes.ExternalReviewConfirmed,
-            Serialize(new { accepted }));
+            Serialize(new { accepted }), TriggeredByType.User, tenantId);
         await context.SaveChangesAsync(ct);
 
         // TODO Phase 7: fire WorkflowNotificationTrigger
         return Result.Ok();
     }
 
-    public async Task<Result> CancelExternalReview(Guid talkId, string languageCode, CancellationToken ct = default)
+    public async Task<Result> CancelExternalReview(
+        Guid talkId,
+        string languageCode,
+        Guid? explicitTenantId = null,
+        CancellationToken ct = default)
     {
-        var stateDto = await GetState(talkId, languageCode, ct);
+        var guard = ValidateExplicitTenantId(explicitTenantId);
+        if (guard is not null) return guard;
+
+        var tenantId = ResolveTenantId(explicitTenantId);
+        var stateDto = await GetState(talkId, languageCode, explicitTenantId, ct);
         var state = stateDto.State;
 
         if (state != TranslationWorkflowState.AwaitingThirdParty)
@@ -400,12 +534,15 @@ public sealed class TranslationWorkflowService(
                 $"Cannot cancel external review from state {state}; requires AwaitingThirdParty.",
                 FailureCode.WorkflowInvalidState);
 
+        // IgnoreQueryFilters + explicit tenant: invitation lookup must work in Hangfire context
         var invitation = await context.ExternalParticipantInvitations
-            .Where(i => i.WorkflowType == WorkflowType.Translation
+            .IgnoreQueryFilters()
+            .Where(i => !i.IsDeleted
+                     && i.TenantId == tenantId
+                     && i.WorkflowType == WorkflowType.Translation
                      && i.TargetEntityId == talkId
                      && i.TargetEntitySubKey == languageCode
-                     && i.Status == InvitationStatus.Pending
-                     && !i.IsDeleted)
+                     && i.Status == InvitationStatus.Pending)
             .FirstOrDefaultAsync(ct);
 
         if (invitation is null)
@@ -415,7 +552,7 @@ public sealed class TranslationWorkflowService(
 
         invitation.Status = InvitationStatus.Revoked;
 
-        AddEvent(talkId, languageCode, WorkflowEventTypes.ExternalReviewCancelled, payloadJson: null);
+        AddEvent(talkId, languageCode, WorkflowEventTypes.ExternalReviewCancelled, payloadJson: null, TriggeredByType.User, tenantId);
         await context.SaveChangesAsync(ct);
 
         // TODO Phase 7: fire WorkflowNotificationTrigger
@@ -580,9 +717,17 @@ public sealed class TranslationWorkflowService(
         return Result.Ok<ExternalReviewPortalDto?>(dto);
     }
 
-    public async Task<Result> AcceptAsFinal(Guid talkId, string languageCode, CancellationToken ct = default)
+    public async Task<Result> AcceptAsFinal(
+        Guid talkId,
+        string languageCode,
+        Guid? explicitTenantId = null,
+        CancellationToken ct = default)
     {
-        var stateDto = await GetState(talkId, languageCode, ct);
+        var guard = ValidateExplicitTenantId(explicitTenantId);
+        if (guard is not null) return guard;
+
+        var tenantId = ResolveTenantId(explicitTenantId);
+        var stateDto = await GetState(talkId, languageCode, explicitTenantId, ct);
         var state = stateDto.State;
 
         if (state is not (TranslationWorkflowState.Validated
@@ -592,7 +737,7 @@ public sealed class TranslationWorkflowService(
                 $"Cannot accept as final from state {state}; requires Validated, ReviewerAccepted, or ThirdPartyReviewed.",
                 FailureCode.WorkflowInvalidState);
 
-        AddEvent(talkId, languageCode, WorkflowEventTypes.AcceptedAsFinal, payloadJson: null);
+        AddEvent(talkId, languageCode, WorkflowEventTypes.AcceptedAsFinal, payloadJson: null, TriggeredByType.User, tenantId);
         await context.SaveChangesAsync(ct);
 
         // TODO Phase 7: fire WorkflowNotificationTrigger
@@ -603,13 +748,22 @@ public sealed class TranslationWorkflowService(
     /// Marks the translation as stale (requires re-translation).
     /// <para>Idempotent: if the language is already in Stale state, returns success without writing a new event.</para>
     /// </summary>
-    public async Task<Result> MarkStale(Guid talkId, string languageCode, TriggeredByType triggeredBy = TriggeredByType.User, CancellationToken ct = default)
+    public async Task<Result> MarkStale(
+        Guid talkId,
+        string languageCode,
+        TriggeredByType triggeredBy = TriggeredByType.User,
+        Guid? explicitTenantId = null,
+        CancellationToken ct = default)
     {
-        var stateDto = await GetState(talkId, languageCode, ct);
+        var guard = ValidateExplicitTenantId(explicitTenantId);
+        if (guard is not null) return guard;
+
+        var tenantId = ResolveTenantId(explicitTenantId);
+        var stateDto = await GetState(talkId, languageCode, explicitTenantId, ct);
         if (stateDto.State == TranslationWorkflowState.Stale)
             return Result.Ok();
 
-        AddEvent(talkId, languageCode, WorkflowEventTypes.MarkedStale, payloadJson: null, triggeredBy);
+        AddEvent(talkId, languageCode, WorkflowEventTypes.MarkedStale, payloadJson: null, triggeredBy, tenantId);
         await context.SaveChangesAsync(ct);
 
         // TODO Phase 7: fire WorkflowNotificationTrigger
@@ -618,6 +772,10 @@ public sealed class TranslationWorkflowService(
 
     // -- Private helpers --
 
+    /// <summary>
+    /// Returns state by ignoring all query filters (for token-based public endpoints that have no JWT).
+    /// Used only by <see cref="SubmitExternalReview"/> and <see cref="DeclineExternalReview"/>.
+    /// </summary>
     private async Task<TranslationWorkflowState> GetStateIgnoringTenantAsync(
         Guid talkId,
         string? languageCode,
@@ -655,10 +813,23 @@ public sealed class TranslationWorkflowService(
         _ => TranslationWorkflowState.Initial
     };
 
-    private void AddEvent(Guid talkId, string languageCode, string eventType, string? payloadJson, TriggeredByType triggeredBy = TriggeredByType.User)
+    /// <summary>
+    /// Appends a workflow event to the context's change tracker.
+    /// <paramref name="tenantId"/> is set explicitly on the entity rather than relying on the
+    /// DbContext's auto-stamp interceptor, which reads from <c>ICurrentUserService</c> and returns
+    /// <c>Guid.Empty</c> when there is no HTTP context (e.g. Hangfire jobs).
+    /// </summary>
+    private void AddEvent(
+        Guid talkId,
+        string languageCode,
+        string eventType,
+        string? payloadJson,
+        TriggeredByType triggeredBy = TriggeredByType.User,
+        Guid tenantId = default)
     {
         context.WorkflowEvents.Add(new WorkflowEvent
         {
+            TenantId = tenantId,
             WorkflowType = WorkflowType.Translation,
             TargetEntityId = talkId,
             TargetEntitySubKey = languageCode,
@@ -710,10 +881,14 @@ public sealed class TranslationWorkflowService(
 
     private static Guid? NullIfEmpty(Guid id) => id == Guid.Empty ? null : id;
 
-    private async Task<int> ComputeFlaggedWordCountAsync(Guid talkId, string languageCode, CancellationToken ct)
+    private async Task<int> ComputeFlaggedWordCountAsync(Guid talkId, string languageCode, Guid tenantId, CancellationToken ct)
     {
+        // IgnoreQueryFilters + explicit tenant: correct in both HTTP and Hangfire contexts
         var run = await context.TranslationValidationRuns
-            .Where(r => r.ToolboxTalkId == talkId
+            .IgnoreQueryFilters()
+            .Where(r => !r.IsDeleted
+                     && r.TenantId == tenantId
+                     && r.ToolboxTalkId == talkId
                      && r.LanguageCode == languageCode
                      && r.Status == ValidationRunStatus.Completed)
             .OrderByDescending(r => r.CompletedAt)
@@ -722,7 +897,12 @@ public sealed class TranslationWorkflowService(
         if (run is null)
             return 0;
 
+        // TranslationValidationResults are BaseEntity (no TenantId filter).
+        // IgnoreQueryFilters on this query also bypasses the Flags (TenantEntity) query filter
+        // via Include, which is correct: flags are already scoped to the correct tenant through
+        // their ValidationResultId → run → tenant chain.
         var results = await context.TranslationValidationResults
+            .IgnoreQueryFilters()
             .Where(r => r.ValidationRunId == run.Id)
             .Include(r => r.Flags)
             .ToListAsync(ct);

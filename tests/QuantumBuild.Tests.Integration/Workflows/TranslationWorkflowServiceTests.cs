@@ -1320,6 +1320,173 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
         state.FlaggedWordCount.Should().Be(0);
     }
 
+    // ── System context tests (explicit tenant ID — Hangfire job path) ─────────
+    // These tests verify that passing explicitTenantId bypasses the HTTP-context
+    // tenant filter. The scenario mirrors a Hangfire job calling the service when
+    // HttpContext is null and ICurrentUserService.TenantId returns Guid.Empty.
+
+    /// <summary>
+    /// Seeds a WorkflowEvent row with an explicitly set TenantId.
+    /// Simulates rows written by the service operating in system (Hangfire) context
+    /// with a real tenant GUID rather than the Guid.Empty auto-stamp.
+    /// Note: the auto-stamp interceptor only overwrites TenantId when it is Guid.Empty
+    /// (see CLAUDE.md note 22), so a non-empty TenantId set before Add() is safe.
+    /// </summary>
+    private async Task SeedEventWithTenantAsync(Guid talkId, string languageCode, string eventType, Guid tenantId)
+    {
+        var db = GetDbContext();
+        db.Set<WorkflowEvent>().Add(new WorkflowEvent
+        {
+            TenantId = tenantId,
+            WorkflowType = WorkflowType.Translation,
+            TargetEntityId = talkId,
+            TargetEntitySubKey = languageCode,
+            EventType = eventType,
+            TriggeredByType = TriggeredByType.System,
+            TriggeredByUserId = null,
+            PayloadJson = null,
+            OccurredAt = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+    }
+
+    // 45 — Guid.Empty passed explicitly as explicitTenantId → guard returns WorkflowInvalidState
+    [Fact]
+    public async Task WorkflowService_SystemContext_ExplicitTenantIdGuidEmpty_ReturnsResultFail()
+    {
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var result = await service.StartTranslation(TalkId, "zz", explicitTenantId: Guid.Empty);
+
+        result.Success.Should().BeFalse();
+        result.ErrorCode.Should().Be(FailureCode.WorkflowInvalidState);
+    }
+
+    // 46 — RecordTranslationCompleted with a real tenantId writes event row stamped with that tenantId
+    [Fact]
+    public async Task WorkflowService_SystemContext_RecordTranslationCompleted_WithExplicitTenant_WritesEventWithCorrectTenantId()
+    {
+        var systemTenantId = Guid.NewGuid();
+        const string lang = "zy";
+
+        // Pre-condition: Translating state under systemTenantId (TranslationStarted → Translating)
+        await SeedEventWithTenantAsync(TalkId, lang, WorkflowEventTypes.TranslationStarted, systemTenantId);
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var result = await service.RecordTranslationCompleted(TalkId, lang, TriggeredByType.System,
+            explicitTenantId: systemTenantId);
+
+        result.Success.Should().BeTrue();
+
+        var db = GetDbContext();
+        var events = await db.Set<WorkflowEvent>()
+            .IgnoreQueryFilters()
+            .Where(e => e.WorkflowType == WorkflowType.Translation
+                     && e.TargetEntityId == TalkId
+                     && e.TargetEntitySubKey == lang
+                     && e.EventType == WorkflowEventTypes.TranslationCompleted)
+            .ToListAsync();
+
+        events.Should().ContainSingle();
+        events[0].TenantId.Should().Be(systemTenantId,
+            "AddEvent must stamp TenantId from explicitTenantId, not from HttpContext (which is null in Hangfire)");
+    }
+
+    // 47 — RecordValidationCompleted with a real tenantId writes event row stamped with that tenantId
+    [Fact]
+    public async Task WorkflowService_SystemContext_RecordValidationCompleted_WithExplicitTenant_WritesEventWithCorrectTenantId()
+    {
+        var systemTenantId = Guid.NewGuid();
+        const string lang = "zx";
+
+        // Pre-condition: AIGenerated state under systemTenantId (TranslationCompleted → AIGenerated)
+        await SeedEventWithTenantAsync(TalkId, lang, WorkflowEventTypes.TranslationCompleted, systemTenantId);
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var result = await service.RecordValidationCompleted(TalkId, lang, TriggeredByType.System,
+            explicitTenantId: systemTenantId);
+
+        result.Success.Should().BeTrue();
+
+        var db = GetDbContext();
+        var events = await db.Set<WorkflowEvent>()
+            .IgnoreQueryFilters()
+            .Where(e => e.WorkflowType == WorkflowType.Translation
+                     && e.TargetEntityId == TalkId
+                     && e.TargetEntitySubKey == lang
+                     && e.EventType == WorkflowEventTypes.ValidationCompleted)
+            .ToListAsync();
+
+        events.Should().ContainSingle();
+        events[0].TenantId.Should().Be(systemTenantId,
+            "AddEvent must stamp TenantId from explicitTenantId, not from HttpContext (which is null in Hangfire)");
+    }
+
+    // 48 — MarkStale with explicit tenantId writes event row stamped with that tenantId
+    [Fact]
+    public async Task WorkflowService_SystemContext_MarkStale_WithExplicitTenant_WritesEventWithCorrectTenantId()
+    {
+        var systemTenantId = Guid.NewGuid();
+        const string lang = "zw";
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        // No prior event needed — MarkStale is legal from any state (Initial included)
+        var result = await service.MarkStale(TalkId, lang, TriggeredByType.System,
+            explicitTenantId: systemTenantId);
+
+        result.Success.Should().BeTrue();
+
+        var db = GetDbContext();
+        var events = await db.Set<WorkflowEvent>()
+            .IgnoreQueryFilters()
+            .Where(e => e.WorkflowType == WorkflowType.Translation
+                     && e.TargetEntityId == TalkId
+                     && e.TargetEntitySubKey == lang
+                     && e.EventType == WorkflowEventTypes.MarkedStale)
+            .ToListAsync();
+
+        events.Should().ContainSingle();
+        events[0].TenantId.Should().Be(systemTenantId,
+            "AddEvent must stamp TenantId from explicitTenantId, not from HttpContext (which is null in Hangfire)");
+    }
+
+    // 49 — GetState with explicitTenantId sees only events for that tenant, excluding Guid.Empty rows
+    //
+    //  Setup:
+    //    t₁: TranslationStarted  seeded with TenantId = systemTenantId  → last event for systemTenantId = Translating
+    //    t₂: TranslationCompleted seeded with TenantId = Guid.Empty      → would give AIGenerated if cross-tenant bleed occurred
+    //
+    //  With fix: WHERE TenantId == systemTenantId finds only TranslationStarted → Translating ✓
+    //  Without fix: WHERE TenantId == Guid.Empty finds only TranslationCompleted → AIGenerated ✗ (or Initial if neither is found)
+    [Fact]
+    public async Task WorkflowService_SystemContext_GetState_WithExplicitTenant_ExcludesEventsFromOtherTenants()
+    {
+        var systemTenantId = Guid.NewGuid();
+        const string lang = "zv";
+
+        // t₁: systemTenantId's last event is TranslationStarted → state should be Translating
+        await SeedEventWithTenantAsync(TalkId, lang, WorkflowEventTypes.TranslationStarted, systemTenantId);
+
+        // t₂: Guid.Empty tenant event that would bleed through if tenant predicate is missing
+        await SeedEventAsync(TalkId, lang, WorkflowEventTypes.TranslationCompleted);
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var state = await service.GetState(TalkId, lang, explicitTenantId: systemTenantId);
+
+        state.State.Should().Be(TranslationWorkflowState.Translating,
+            "only TranslationStarted belongs to systemTenantId; " +
+            "the Guid.Empty TranslationCompleted must be excluded by the explicit TenantId predicate");
+    }
+
     // ── Local helper type for asserting TranslatedSections content ────────────
 
     private sealed class TranslatedSectionSnapshot

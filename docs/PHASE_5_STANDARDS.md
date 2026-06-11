@@ -308,7 +308,21 @@ Phase 3a completed the state-machine guards on `StartTranslation` and `StartVali
 
 If a chunk discovers a needed operation isn't in the service yet, the chunk stops and adds the service method (with its guard) before wiring the UI. This is the §10 decision 16 discipline applied to Phase 5.
 
-### 7.5 SignalR live updates for workflow state (closes BACKLOG §1.3.5 Phase 3c.3 paragraph)
+### 7.5 Services callable from Hangfire must accept an explicit tenant ID (added 5.4 fix)
+
+`ICurrentUserService.TenantId` reads from `HttpContext`, which is null in Hangfire jobs. Any service method that reads or writes `TenantEntity` rows and may be called from a Hangfire job MUST accept an optional `Guid? explicitTenantId = null` parameter. When provided (non-null), the implementation MUST:
+
+1. **Reject `Guid.Empty`** at the top of the method via the `ValidateExplicitTenantId` guard (returns `WorkflowInvalidState` failure).
+2. **Bypass the EF Core tenant query filter** on all reads via `IgnoreQueryFilters()`.
+3. **Apply an explicit `WHERE TenantId == tenantId` predicate** on every filtered read — `IgnoreQueryFilters()` without this predicate is a cross-tenant data leak.
+4. **Set `TenantId = tenantId` explicitly** on every entity added to the context — do not rely on the auto-stamp interceptor, which reads `ICurrentUserService.TenantId` and stamps `Guid.Empty` in Hangfire context.
+
+HTTP callers pass no argument (default `null`) — zero changes required at existing call sites. Hangfire job callers pass `explicitTenantId: tenantId` where `tenantId` is already available as a job parameter.
+
+**Reference implementation:** `TranslationWorkflowService` — `ResolveTenantId`, `ValidateExplicitTenantId`, `GetState`, `AddEvent`.  
+**Pattern also applies to:** any future service added to `ToolboxTalks.Infrastructure/Services/` that touches `TenantEntity` rows and has a job invocation path.
+
+### 7.6 SignalR live updates for workflow state (closes BACKLOG §1.3.5 Phase 3c.3 paragraph)
 
 Phase 3c.3 shipped without SignalR subscription on the per-language panel. Phase 5 closes that for the wizard's Translate step. The step subscribes to a workflow-state hub for the current talk and invalidates the `["workflow-state", talkId]` query key on receipt of any state-change event for any language on that talk.
 

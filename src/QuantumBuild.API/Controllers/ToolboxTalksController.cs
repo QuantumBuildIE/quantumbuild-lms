@@ -1598,7 +1598,7 @@ public class ToolboxTalksController : ControllerBase
             var states = new List<TranslationWorkflowStateDto>();
             foreach (var lang in languageCodes)
             {
-                var state = await _workflowService.GetState(id, lang, ct);
+                var state = await _workflowService.GetState(id, lang, ct: ct);
                 states.Add(state);
             }
 
@@ -1637,7 +1637,7 @@ public class ToolboxTalksController : ControllerBase
             if (toolboxTalk == null)
                 return NotFound(new { error = "Learning not found" });
 
-            var history = await _workflowService.GetHistory(id, languageCode, ct);
+            var history = await _workflowService.GetHistory(id, languageCode, ct: ct);
             return Ok(history);
         }
         catch (Exception ex)
@@ -1675,7 +1675,7 @@ public class ToolboxTalksController : ControllerBase
             if (toolboxTalk == null)
                 return NotFound(new { error = "Learning not found" });
 
-            var result = await _workflowService.AcceptAsFinal(id, languageCode, ct);
+            var result = await _workflowService.AcceptAsFinal(id, languageCode, ct: ct);
             if (!result.Success)
             {
                 if (result.ErrorCode == FailureCode.WorkflowInvalidState)
@@ -1720,7 +1720,7 @@ public class ToolboxTalksController : ControllerBase
             if (toolboxTalk == null)
                 return NotFound(new { error = "Learning not found" });
 
-            var result = await _workflowService.CancelExternalReview(id, languageCode, ct);
+            var result = await _workflowService.CancelExternalReview(id, languageCode, ct: ct);
             if (!result.Success)
             {
                 if (result.ErrorCode == FailureCode.WorkflowInvalidState)
@@ -1768,7 +1768,7 @@ public class ToolboxTalksController : ControllerBase
             if (toolboxTalk == null)
                 return NotFound(new { error = "Learning not found" });
 
-            var result = await _workflowService.InitiateExternalReview(id, languageCode, request.ReviewerEmail, ct);
+            var result = await _workflowService.InitiateExternalReview(id, languageCode, request.ReviewerEmail, ct: ct);
             if (!result.Success)
             {
                 if (result.ErrorCode == FailureCode.WorkflowInvalidState)
