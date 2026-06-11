@@ -95,6 +95,9 @@ public record ToolboxTalkDto
     // Learning wizard — generation preferences
     public string? AudienceRole { get; init; }
     public bool PreserveSourceWording { get; init; }
+
+    // Learning wizard — input mode
+    public InputMode InputMode { get; init; }
 }
 
 /// <summary>

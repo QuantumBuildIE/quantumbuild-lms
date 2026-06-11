@@ -105,6 +105,9 @@ public static class ServiceCollectionExtensions
         // Translation job scheduler (fire-and-forget Hangfire enqueue, used by cross-module callers)
         services.AddSingleton<ITranslationJobScheduler, TranslationJobScheduler>();
 
+        // Parse job scheduler (fire-and-forget Hangfire enqueue for new-wizard video parse pipeline)
+        services.AddSingleton<IParseJobScheduler, ParseJobScheduler>();
+
         // Register SRT storage provider based on configuration
         var srtStorageType = configuration
             .GetSection($"{SubtitleProcessingSettings.SectionName}:SrtStorage:Type")

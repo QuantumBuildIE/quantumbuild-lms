@@ -10,6 +10,8 @@ using QuantumBuild.Core.Application.Models;
 using QuantumBuild.Core.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.CreateToolboxTalk;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.InitialiseToolboxTalk;
+using QuantumBuild.Modules.ToolboxTalks.Application.Commands.ParseToolboxTalkContent;
+using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalkSections;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.DeleteToolboxTalk;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.GenerateContentTranslations;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.SmartGenerateContent;
@@ -396,6 +398,80 @@ public class ToolboxTalksController : ControllerBase
             PublicUrl = publicUrl,
             Key = key,
         });
+    }
+
+    /// <summary>
+    /// Parse uploaded source content (text, PDF, or video) into sections for a wizard-drafted learning.
+    /// Text and PDF modes run inline and return sections immediately.
+    /// Video mode sets status to Processing, enqueues a background job, and returns immediately — poll for status.
+    /// </summary>
+    [HttpPost("{id:guid}/parse")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(typeof(ToolboxTalkDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> ParseContent(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            var command = new ParseToolboxTalkContentCommand(
+                TalkId: id,
+                TenantId: _currentUserService.TenantId,
+                UserId: _currentUserService.UserId != null ? Guid.TryParse(_currentUserService.UserId, out var uid) ? uid : (Guid?)null : null);
+
+            var result = await _mediator.Send(command, ct);
+
+            if (!result.Success)
+            {
+                if (result.ErrorCode == FailureCode.WorkflowInvalidState)
+                    return Conflict(new { error = result.Errors.FirstOrDefault() });
+                if (result.Errors.FirstOrDefault()?.Contains("not found", StringComparison.OrdinalIgnoreCase) == true)
+                    return NotFound(new { error = result.Errors.FirstOrDefault() });
+                return BadRequest(new { error = result.Errors.FirstOrDefault() });
+            }
+
+            return Ok(result.Data);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error parsing content for learning {TalkId}", id);
+            return StatusCode(500, new { error = "Error parsing content" });
+        }
+    }
+
+    /// <summary>
+    /// Update sections on a wizard-drafted learning (Step 2 save).
+    /// Upserts provided sections and soft-deletes any removed sections.
+    /// </summary>
+    [HttpPut("{id:guid}/sections")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(typeof(ToolboxTalkDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateSections(Guid id, [FromBody] UpdateTalkSectionsRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var command = new UpdateToolboxTalkSectionsCommand(
+                TalkId: id,
+                TenantId: _currentUserService.TenantId,
+                Sections: request.Sections);
+
+            var result = await _mediator.Send(command, ct);
+
+            if (!result.Success)
+            {
+                if (result.Errors.FirstOrDefault()?.Contains("not found", StringComparison.OrdinalIgnoreCase) == true)
+                    return NotFound(new { error = result.Errors.FirstOrDefault() });
+                return BadRequest(new { error = result.Errors.FirstOrDefault() });
+            }
+
+            return Ok(result.Data);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating sections for learning {TalkId}", id);
+            return StatusCode(500, new { error = "Error updating sections" });
+        }
     }
 
     /// <summary>
@@ -2397,4 +2473,10 @@ public record UploadSourceUrlResponse
 
     /// <summary>R2 storage key for the file.</summary>
     public string Key { get; init; } = string.Empty;
+}
+
+/// <summary>Request body for PUT {id}/sections (Step 2 section save).</summary>
+public record UpdateTalkSectionsRequest
+{
+    public List<UpdateToolboxTalkSectionDto> Sections { get; init; } = [];
 }

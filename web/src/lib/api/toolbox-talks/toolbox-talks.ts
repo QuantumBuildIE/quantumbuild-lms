@@ -108,6 +108,33 @@ export async function deleteToolboxTalk(id: string): Promise<void> {
   await apiClient.delete(`/toolbox-talks/${id}`);
 }
 
+// ============================================
+// Learning Wizard — Step 2 (Parse)
+// ============================================
+
+export async function parseTalk(id: string): Promise<ToolboxTalk> {
+  const response = await apiClient.post<ToolboxTalk>(`/toolbox-talks/${id}/parse`);
+  return response.data;
+}
+
+export interface UpdateTalkSectionRequest {
+  id?: string;
+  sectionNumber: number;
+  title: string;
+  content: string;
+  requiresAcknowledgment: boolean;
+  source: string;
+  videoTimestamp?: string | null;
+}
+
+export async function updateTalkSections(
+  id: string,
+  sections: UpdateTalkSectionRequest[]
+): Promise<ToolboxTalk> {
+  const response = await apiClient.put<ToolboxTalk>(`/toolbox-talks/${id}/sections`, { sections });
+  return response.data;
+}
+
 export async function updateLastEditedStep(id: string, step: number): Promise<void> {
   await apiClient.patch(`/toolbox-talks/${id}/step`, { step });
 }

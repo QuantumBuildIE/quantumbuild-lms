@@ -19,6 +19,8 @@ using QuantumBuild.Core.Domain.Entities;
 using QuantumBuild.Core.Infrastructure.Data;
 using QuantumBuild.Core.Infrastructure.Identity;
 using QuantumBuild.Core.Infrastructure.Persistence;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.ContentCreation;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Pdf;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Storage;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Subtitles;
 using QuantumBuild.Tests.Common.TestTenant;
@@ -81,6 +83,12 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
     public FakeVideoSourceProvider FakeVideoSourceProvider { get; } = new();
     public FakeSubtitleProgressReporter FakeSubtitleProgressReporter { get; } = new();
     public FakeR2StorageService FakeR2StorageService { get; } = new();
+
+    /// <summary>
+    /// Fake content creation services for testing parse/PDF extract without AI or network calls.
+    /// </summary>
+    public FakeContentParserService FakeContentParserService { get; } = new();
+    public FakePdfExtractionService FakePdfExtractionService { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -211,6 +219,12 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
             // Replace R2 storage service to avoid requiring AWS/R2 configuration
             services.RemoveAll<IR2StorageService>();
             services.AddSingleton<IR2StorageService>(FakeR2StorageService);
+
+            // Replace AI/HTTP services used by the new learning-wizard parse pipeline
+            services.RemoveAll<IContentParserService>();
+            services.AddSingleton<IContentParserService>(FakeContentParserService);
+            services.RemoveAll<IPdfExtractionService>();
+            services.AddSingleton<IPdfExtractionService>(FakePdfExtractionService);
         });
 
         builder.UseEnvironment("Testing");

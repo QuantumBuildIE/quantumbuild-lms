@@ -131,7 +131,23 @@ public class GetToolboxTalkByIdQueryHandler : IRequestHandler<GetToolboxTalkById
             } : null,
             CreatedAt = talk.CreatedAt,
             UpdatedAt = talk.UpdatedAt,
-            LastEditedStep = talk.LastEditedStep
+            LastEditedStep = talk.LastEditedStep,
+
+            // Learning wizard fields
+            SourceFileUrl = talk.SourceFileUrl,
+            SourceFileName = talk.SourceFileName,
+            SourceFileType = talk.SourceFileType,
+            SourceText = talk.SourceText,
+            TargetLanguageCodes = talk.TargetLanguageCodes,
+            ReviewerName = talk.ReviewerName,
+            ReviewerOrg = talk.ReviewerOrg,
+            ReviewerRole = talk.ReviewerRole,
+            DocumentRef = talk.DocumentRef,
+            ClientName = talk.ClientName,
+            AuditPurpose = talk.AuditPurpose,
+            AudienceRole = talk.AudienceRole,
+            PreserveSourceWording = talk.PreserveSourceWording,
+            InputMode = talk.InputMode,
         };
     }
 

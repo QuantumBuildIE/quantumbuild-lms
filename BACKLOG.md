@@ -1002,6 +1002,24 @@ as a polish item rather than a dedicated chunk.
 
 ---
 
+## 15. InputMode column added in wrong migration
+
+The InputMode column on ToolboxTalk was added in
+20260611072549_AddTranscriptWordsJsonToToolboxTalk (Phase 5.3b's
+migration) instead of 20260610202622_AddLearningWizardFieldsToToolboxTalk
+(Phase 5.3a's migration, where the other Step 1 wizard fields live).
+
+Both migrations apply cleanly in sequence on fresh and existing
+databases; the ordering is enforced by EF's migration history.
+This is cosmetic untidiness, not a functional bug.
+
+Surfaced 2026-06-11 during Phase 5.3b implementation review.
+Deferred because the fix would require rewriting pushed migration
+history. Acceptable to live with; flagged so future schema reviews
+don't waste time wondering.
+
+---
+
 # ==================================================================
 # 7. Recently Closed
 # ==================================================================

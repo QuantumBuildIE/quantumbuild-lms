@@ -20,6 +20,9 @@ export type ToolboxTalkStatus = 'Draft' | 'Processing' | 'ReadyForReview' | 'Pub
 /** Source of content for learning sections and questions */
 export type ContentSource = 'Manual' | 'Video' | 'Pdf' | 'Both';
 
+/** Input mode chosen in wizard Step 1 */
+export type InputMode = 'Text' | 'Pdf' | 'Video';
+
 // ============================================
 // Learning DTOs
 // ============================================
@@ -127,6 +130,21 @@ export interface ToolboxTalk {
   updatedAt: string | null;
   // Learning wizard
   lastEditedStep: number | null;
+  inputMode: InputMode;
+  sourceFileUrl: string | null;
+  sourceFileName: string | null;
+  sourceFileType: string | null;
+  sourceText: string | null;
+  /** JSON-encoded string[] of language codes, e.g. '["fr","de"]' */
+  targetLanguageCodes: string | null;
+  reviewerName: string | null;
+  reviewerOrg: string | null;
+  reviewerRole: string | null;
+  documentRef: string | null;
+  clientName: string | null;
+  auditPurpose: string | null;
+  audienceRole: string | null;
+  preserveSourceWording: boolean;
 }
 
 export interface ToolboxTalkListItem {

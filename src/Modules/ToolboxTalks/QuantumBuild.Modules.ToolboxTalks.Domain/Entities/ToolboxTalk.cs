@@ -120,6 +120,12 @@ public class ToolboxTalk : TenantEntity
     public DateTime? VideoTranscriptExtractedAt { get; set; }
 
     /// <summary>
+    /// Word-level timing JSON from ElevenLabs transcription (array of TranscriptWord objects).
+    /// Consumed by subtitle generation in later wizard steps.
+    /// </summary>
+    public string? TranscriptWordsJson { get; set; }
+
+    /// <summary>
     /// SHA-256 hash of the PDF file content.
     /// Used for deduplication to detect identical files across toolbox talks.
     /// </summary>
@@ -246,6 +252,9 @@ public class ToolboxTalk : TenantEntity
 
     /// <summary>MIME type of the uploaded source file (e.g. "application/pdf").</summary>
     public string? SourceFileType { get; set; }
+
+    /// <summary>Input mode chosen in wizard Step 1 (Text, Pdf, Video).</summary>
+    public InputMode InputMode { get; set; } = InputMode.Text;
 
     /// <summary>Inline text input used when InputMode is Text.</summary>
     public string? SourceText { get; set; }

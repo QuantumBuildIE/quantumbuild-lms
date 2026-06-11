@@ -36,12 +36,11 @@ export default function LearningWizardParsePage() {
       currentStep={2}
       onStepClick={goToStep}
       canGoBack={canGoBack}
-      canGoNext={canGoNext}
+      canGoNext={false}
       onBack={goBack}
-      onNext={goNext}
       isNavigating={isNavigating}
     >
-      <ParseStep />
+      <ParseStep talkId={talkId} onContinue={goNext} />
     </WizardLayout>
   );
 }

@@ -70,6 +70,9 @@ public class InitialiseToolboxTalkCommandHandler : IRequestHandler<InitialiseToo
             Category = request.Category,
             SourceLanguageCode = request.SourceLanguageCode,
 
+            // Input mode (Step 1 choice)
+            InputMode = request.InputMode,
+
             // Source file / text
             SourceFileUrl = request.SourceFileUrl,
             SourceFileName = request.SourceFileName,
@@ -225,6 +228,7 @@ public class InitialiseToolboxTalkCommandHandler : IRequestHandler<InitialiseToo
             AuditPurpose = entity.AuditPurpose,
             AudienceRole = entity.AudienceRole,
             PreserveSourceWording = entity.PreserveSourceWording,
+            InputMode = entity.InputMode,
 
             CreatedAt = entity.CreatedAt,
             UpdatedAt = entity.UpdatedAt,

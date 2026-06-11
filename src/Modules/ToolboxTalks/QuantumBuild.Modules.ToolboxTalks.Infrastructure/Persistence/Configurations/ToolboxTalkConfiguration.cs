@@ -98,6 +98,10 @@ public class ToolboxTalkConfiguration : IEntityTypeConfiguration<ToolboxTalk>
 
         builder.Property(t => t.VideoTranscriptExtractedAt);
 
+        // Word-level transcript timing for subtitle generation — no max length
+        builder.Property(t => t.TranscriptWordsJson)
+            .HasColumnType("text");
+
         // File hash fields for deduplication
         builder.Property(t => t.PdfFileHash)
             .HasMaxLength(64); // SHA-256 produces 64 hex characters
@@ -225,6 +229,12 @@ public class ToolboxTalkConfiguration : IEntityTypeConfiguration<ToolboxTalk>
 
         builder.Property(t => t.SourceFileType)
             .HasMaxLength(64);
+
+        builder.Property(t => t.InputMode)
+            .IsRequired()
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .HasDefaultValue(InputMode.Text);
 
         builder.Property(t => t.SourceText)
             .HasColumnType("text");
