@@ -17,6 +17,9 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Commands.GenerateContentTran
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.SmartGenerateContent;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateLastEditedStep;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalk;
+using QuantumBuild.Modules.ToolboxTalks.Application.Commands.GenerateToolboxTalkQuiz;
+using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalkQuestions;
+using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalkQuizSettings;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Reports;
 using QuantumBuild.Modules.ToolboxTalks.Application.Queries.GetSlideshowHtml;
@@ -471,6 +474,127 @@ public class ToolboxTalksController : ControllerBase
         {
             _logger.LogError(ex, "Error updating sections for learning {TalkId}", id);
             return StatusCode(500, new { error = "Error updating sections" });
+        }
+    }
+
+    /// <summary>
+    /// Generate AI quiz questions from the talk's existing sections (Step 3 — Quiz).
+    /// Replaces any previously generated questions atomically.
+    /// </summary>
+    [HttpPost("{id:guid}/quiz/generate")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(typeof(ToolboxTalkDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> GenerateQuiz(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            var userId = _currentUserService.UserId != null && Guid.TryParse(_currentUserService.UserId, out var uid) ? uid : (Guid?)null;
+            var command = new GenerateToolboxTalkQuizCommand(
+                TalkId: id,
+                TenantId: _currentUserService.TenantId,
+                UserId: userId);
+
+            var result = await _mediator.Send(command, ct);
+
+            if (!result.Success)
+            {
+                if (result.ErrorCode == FailureCode.WorkflowInvalidState)
+                    return Conflict(new { error = result.Errors.FirstOrDefault() });
+                if (result.Errors.FirstOrDefault()?.Contains("not found", StringComparison.OrdinalIgnoreCase) == true)
+                    return NotFound(new { error = result.Errors.FirstOrDefault() });
+                return BadRequest(new { error = result.Errors.FirstOrDefault() });
+            }
+
+            return Ok(result.Data);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating quiz for learning {TalkId}", id);
+            return StatusCode(500, new { error = "Error generating quiz" });
+        }
+    }
+
+    /// <summary>
+    /// Upsert quiz questions on a wizard-drafted learning (Step 3 save).
+    /// Questions omitted from the list are hard-deleted.
+    /// </summary>
+    [HttpPut("{id:guid}/questions")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(typeof(ToolboxTalkDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> UpdateQuestions(Guid id, [FromBody] UpdateTalkQuestionsRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var command = new UpdateToolboxTalkQuestionsCommand(
+                TalkId: id,
+                TenantId: _currentUserService.TenantId,
+                Questions: request.Questions);
+
+            var result = await _mediator.Send(command, ct);
+
+            if (!result.Success)
+            {
+                if (result.ErrorCode == FailureCode.WorkflowInvalidState)
+                    return Conflict(new { error = result.Errors.FirstOrDefault() });
+                if (result.Errors.FirstOrDefault()?.Contains("not found", StringComparison.OrdinalIgnoreCase) == true)
+                    return NotFound(new { error = result.Errors.FirstOrDefault() });
+                return BadRequest(new { error = result.Errors.FirstOrDefault() });
+            }
+
+            return Ok(result.Data);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating questions for learning {TalkId}", id);
+            return StatusCode(500, new { error = "Error updating questions" });
+        }
+    }
+
+    /// <summary>
+    /// Update quiz settings on a wizard-drafted learning (Step 3 QuizSettingsPanel auto-save).
+    /// Writes 7 fields: RequiresQuiz, PassingScore, QuizQuestionCount, ShuffleQuestions, ShuffleOptions, UseQuestionPool, AllowRetry.
+    /// </summary>
+    [HttpPut("{id:guid}/quiz-settings")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(typeof(ToolboxTalkDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> UpdateQuizSettings(Guid id, [FromBody] UpdateTalkQuizSettingsRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var command = new UpdateToolboxTalkQuizSettingsCommand(
+                TalkId: id,
+                TenantId: _currentUserService.TenantId,
+                RequiresQuiz: request.RequiresQuiz,
+                PassingScore: request.PassingScore,
+                QuizQuestionCount: request.QuizQuestionCount,
+                ShuffleQuestions: request.ShuffleQuestions,
+                ShuffleOptions: request.ShuffleOptions,
+                UseQuestionPool: request.UseQuestionPool,
+                AllowRetry: request.AllowRetry);
+
+            var result = await _mediator.Send(command, ct);
+
+            if (!result.Success)
+            {
+                if (result.ErrorCode == FailureCode.WorkflowInvalidState)
+                    return Conflict(new { error = result.Errors.FirstOrDefault() });
+                if (result.Errors.FirstOrDefault()?.Contains("not found", StringComparison.OrdinalIgnoreCase) == true)
+                    return NotFound(new { error = result.Errors.FirstOrDefault() });
+                return BadRequest(new { error = result.Errors.FirstOrDefault() });
+            }
+
+            return Ok(result.Data);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating quiz settings for learning {TalkId}", id);
+            return StatusCode(500, new { error = "Error updating quiz settings" });
         }
     }
 
@@ -2479,4 +2603,22 @@ public record UploadSourceUrlResponse
 public record UpdateTalkSectionsRequest
 {
     public List<UpdateToolboxTalkSectionDto> Sections { get; init; } = [];
+}
+
+/// <summary>Request body for PUT {id}/questions (Step 3 question upsert).</summary>
+public record UpdateTalkQuestionsRequest
+{
+    public List<UpdateToolboxTalkQuestionDto> Questions { get; init; } = [];
+}
+
+/// <summary>Request body for PUT {id}/quiz-settings (Step 3 quiz settings auto-save).</summary>
+public record UpdateTalkQuizSettingsRequest
+{
+    public bool RequiresQuiz { get; init; } = true;
+    public int PassingScore { get; init; } = 80;
+    public int? QuizQuestionCount { get; init; }
+    public bool ShuffleQuestions { get; init; }
+    public bool ShuffleOptions { get; init; }
+    public bool UseQuestionPool { get; init; }
+    public bool AllowRetry { get; init; } = true;
 }

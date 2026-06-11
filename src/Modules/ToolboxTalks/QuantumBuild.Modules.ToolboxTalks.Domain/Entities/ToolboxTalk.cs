@@ -169,6 +169,12 @@ public class ToolboxTalk : TenantEntity
     /// </summary>
     public bool UseQuestionPool { get; set; } = false;
 
+    /// <summary>
+    /// Whether the employee may retake a failed quiz without rewatching the video first.
+    /// Captured in wizard Step 3; previously dropped silently by SyncQuizSettingsToTalk in the old wizard.
+    /// </summary>
+    public bool AllowRetry { get; set; } = true;
+
     // Certificate settings (Phase 5)
 
     /// <summary>

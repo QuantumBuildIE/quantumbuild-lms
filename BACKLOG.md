@@ -1020,6 +1020,17 @@ don't waste time wondering.
 
 ---
 
+## 16. Refresh Amendment
+
+Phase 5.3b smoke (2026-06-11) confirmed the side effect: refresh
+on any /learnings/{talkId}/{step} route lands on /drafts rather
+than the step the user was on. Functional (user clicks Resume to
+return) but not refresh-recovery as PHASE_5_STANDARDS §5.4
+prescribes. Resolution scope expanded to include preserving the
+target step on tenant-aware redirects when the proper fix lands.
+
+---
+
 # ==================================================================
 # 7. Recently Closed
 # ==================================================================

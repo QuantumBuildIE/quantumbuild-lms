@@ -57,7 +57,17 @@ public class ParseToolboxTalkContentCommandHandlerTests : IntegrationTestBase
             PreserveSourceWording = false,
             IncludeQuiz = true,
         };
-        var response = await AdminClient.PostAsJsonAsync("/api/toolbox-talks/initialise", request);
+        // Serialize with WhenWritingNull so VideoSource is omitted when null.
+        // VideoSource is a non-nullable enum on InitialiseToolboxTalkCommand; sending
+        // "VideoSource": null causes model-binding failure on non-video tests.
+        var json = System.Text.Json.JsonSerializer.Serialize(request,
+            new System.Text.Json.JsonSerializerOptions
+            {
+                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+            });
+        var response = await AdminClient.PostAsync(
+            "/api/toolbox-talks/initialise",
+            new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<InitTalkDto>()
                ?? throw new InvalidOperationException("Initialise returned null");

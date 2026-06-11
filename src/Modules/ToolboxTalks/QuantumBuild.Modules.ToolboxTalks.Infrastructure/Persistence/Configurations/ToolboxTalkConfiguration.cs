@@ -126,6 +126,10 @@ public class ToolboxTalkConfiguration : IEntityTypeConfiguration<ToolboxTalk>
             .IsRequired()
             .HasDefaultValue(false);
 
+        builder.Property(t => t.AllowRetry)
+            .IsRequired()
+            .HasDefaultValue(true);
+
         // Refresher settings
         builder.Property(t => t.RequiresRefresher)
             .IsRequired()

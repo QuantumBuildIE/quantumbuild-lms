@@ -36,12 +36,11 @@ export default function LearningWizardQuizPage() {
       currentStep={3}
       onStepClick={goToStep}
       canGoBack={canGoBack}
-      canGoNext={canGoNext}
+      canGoNext={false}
       onBack={goBack}
-      onNext={goNext}
       isNavigating={isNavigating}
     >
-      <QuizStep />
+      <QuizStep talkId={talkId} onContinue={goNext} />
     </WizardLayout>
   );
 }

@@ -4,7 +4,7 @@ import { useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { updateLastEditedStep } from '@/lib/api/toolbox-talks/toolbox-talks';
-import { isStepReachable, WIZARD_STEPS, TOTAL_STEPS } from '../lib/stepOrder';
+import { isStepReachable, isStepSkipped, WIZARD_STEPS, TOTAL_STEPS } from '../lib/stepOrder';
 import { getStepUrl } from '../lib/urlState';
 import type { ToolboxTalk } from '@/types/toolbox-talks';
 
@@ -65,6 +65,7 @@ export function useStepNavigation({ talkId, currentStep, talk }: UseStepNavigati
   const reachableSteps = WIZARD_STEPS.map((s) => ({
     ...s,
     reachable: isStepReachable(s.number, talk),
+    skipped: isStepSkipped(s.number, talk),
   }));
 
   return {

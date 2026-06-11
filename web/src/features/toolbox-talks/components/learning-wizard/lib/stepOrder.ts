@@ -43,8 +43,11 @@ export function isStepReachable(step: number, talk: ToolboxTalk | null): boolean
       // Parse: reachable as soon as a talk exists
       return true;
     case 3:
+      // Quiz: reachable once talk has sections AND requiresQuiz is true
+      // When requiresQuiz is false, the step is skipped (not unreachable — it was intentionally disabled)
+      return talk.sections.length > 0 && talk.requiresQuiz;
     case 4:
-      // Quiz + Settings: reachable once talk has sections
+      // Settings: reachable once talk has sections
       return talk.sections.length > 0;
     case 5:
     case 6:
@@ -56,6 +59,17 @@ export function isStepReachable(step: number, talk: ToolboxTalk | null): boolean
     default:
       return false;
   }
+}
+
+/**
+ * Returns true if the step exists but has been intentionally bypassed by a user config choice
+ * (e.g. requiresQuiz=false skips step 3). Distinct from "unreachable" — a skipped step is
+ * shown with strikethrough in the StepIndicator, not greyed out as "not yet available".
+ */
+export function isStepSkipped(step: number, talk: ToolboxTalk | null): boolean {
+  if (!talk) return false;
+  if (step === 3) return talk.sections.length > 0 && !talk.requiresQuiz;
+  return false;
 }
 
 export function firstReachableStep(talk: ToolboxTalk | null): number {

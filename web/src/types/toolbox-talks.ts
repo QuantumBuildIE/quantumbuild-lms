@@ -47,8 +47,10 @@ export interface ToolboxTalkQuestion {
   questionTypeDisplay: string;
   options: string[] | null;
   correctAnswer: string | null;
+  correctOptionIndex: number | null;
   points: number;
   source?: ContentSource;
+  isFromVideoFinalPortion: boolean;
   videoTimestamp?: string | null;
 }
 
@@ -110,6 +112,7 @@ export interface ToolboxTalk {
   shuffleQuestions: boolean;
   shuffleOptions: boolean;
   useQuestionPool: boolean;
+  allowRetry: boolean;
   // Course membership
   isPartOfCourse: boolean;
   // Source language

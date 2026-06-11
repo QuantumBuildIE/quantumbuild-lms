@@ -140,6 +140,57 @@ export async function updateLastEditedStep(id: string, step: number): Promise<vo
 }
 
 // ============================================
+// Learning Wizard — Step 3 (Quiz)
+// ============================================
+
+export async function generateQuiz(id: string): Promise<ToolboxTalk> {
+  const response = await apiClient.post<ToolboxTalk>(`/toolbox-talks/${id}/quiz/generate`);
+  return response.data;
+}
+
+export interface UpdateTalkQuestionRequest {
+  id?: string;
+  questionNumber: number;
+  questionText: string;
+  questionType: string;
+  options?: string[] | null;
+  correctAnswer?: string | null;
+  correctOptionIndex?: number | null;
+  points: number;
+  source: string;
+  isFromVideoFinalPortion: boolean;
+  videoTimestamp?: string | null;
+}
+
+export async function updateTalkQuestions(
+  id: string,
+  questions: UpdateTalkQuestionRequest[]
+): Promise<ToolboxTalk> {
+  const response = await apiClient.put<ToolboxTalk>(`/toolbox-talks/${id}/questions`, {
+    questions,
+  });
+  return response.data;
+}
+
+export interface UpdateTalkQuizSettingsRequest {
+  requiresQuiz: boolean;
+  passingScore: number;
+  quizQuestionCount?: number | null;
+  shuffleQuestions: boolean;
+  shuffleOptions: boolean;
+  useQuestionPool: boolean;
+  allowRetry: boolean;
+}
+
+export async function updateTalkQuizSettings(
+  id: string,
+  settings: UpdateTalkQuizSettingsRequest
+): Promise<ToolboxTalk> {
+  const response = await apiClient.put<ToolboxTalk>(`/toolbox-talks/${id}/quiz-settings`, settings);
+  return response.data;
+}
+
+// ============================================
 // Dashboard
 // ============================================
 

@@ -42,6 +42,7 @@ public record ToolboxTalkDto
     public bool ShuffleQuestions { get; init; }
     public bool ShuffleOptions { get; init; }
     public bool UseQuestionPool { get; init; }
+    public bool AllowRetry { get; init; }
 
     // Course membership
     public bool IsPartOfCourse { get; init; }

@@ -22,7 +22,13 @@ public record UpdateToolboxTalkQuestionDto
     /// </summary>
     public List<string>? Options { get; init; }
 
-    public string CorrectAnswer { get; init; } = string.Empty;
+    public string? CorrectAnswer { get; init; }
+
+    /// <summary>
+    /// 0-based index of the correct option. When set, CorrectAnswer is derived from Options[CorrectOptionIndex].
+    /// </summary>
+    public int? CorrectOptionIndex { get; init; }
+
     public int Points { get; init; } = 1;
     public ContentSource Source { get; init; } = ContentSource.Manual;
     public bool IsFromVideoFinalPortion { get; init; } = false;
