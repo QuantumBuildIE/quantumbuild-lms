@@ -231,10 +231,11 @@ export function SettingsStep({ talkId, onContinue }: SettingsStepProps) {
                 <FormItem>
                   <FormLabel>Category</FormLabel>
                   <Select
-                    value={field.value ?? ''}
+                    value={field.value ?? '__none__'}
                     onValueChange={async (val) => {
-                      field.onChange(val || null);
-                      await saveField({ ...form.getValues(), category: val || null });
+                      const category = val === '__none__' ? null : val;
+                      field.onChange(category);
+                      await saveField({ ...form.getValues(), category });
                     }}
                   >
                     <FormControl>
@@ -243,7 +244,7 @@ export function SettingsStep({ talkId, onContinue }: SettingsStepProps) {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">None</SelectItem>
+                      <SelectItem value="__none__">None</SelectItem>
                       {categories.map((c) => (
                         <SelectItem key={c.id} value={c.name}>
                           {c.name}
