@@ -176,7 +176,7 @@ export function ValidateStep({ talkId }: ValidateStepProps) {
                   {run && (
                     <Button asChild size="sm" variant="outline">
                       <Link
-                        href={`/admin/toolbox-talks/talks/${talkId}/validation/${run.id}`}
+                        href={`/admin/toolbox-talks/talks/${talkId}/validation/${run.id}?from=wizard`}
                         aria-label={`View validation details for ${LANG_NAMES[code] ?? code}`}
                       >
                         Details
