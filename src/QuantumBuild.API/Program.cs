@@ -210,7 +210,16 @@ if (!string.IsNullOrEmpty(connectionString))
 }
 
 // Add SignalR for real-time subtitle processing progress updates
-builder.Services.AddSignalR();
+// KeepAliveInterval: server pings client every 10 s — defeats Railway proxy idle timeout (assumed ~60 s)
+// ClientTimeoutInterval: server waits 2 min before treating a silent client as disconnected
+// Change is global; all five registered hubs (SubtitleProcessingHub, ContentGenerationHub,
+// TranslationValidationHub, CorpusRunHub, LessonParserHub) inherit these settings.
+// Shorter keep-alive is strictly more conservative; longer client timeout is strictly more lenient — safe for all hubs.
+builder.Services.AddSignalR(options =>
+{
+    options.KeepAliveInterval = TimeSpan.FromSeconds(10);
+    options.ClientTimeoutInterval = TimeSpan.FromMinutes(2);
+});
 
 var app = builder.Build();
 

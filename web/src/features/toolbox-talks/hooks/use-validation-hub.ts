@@ -68,6 +68,10 @@ export function useValidationHub(
       .configureLogging(LogLevel.Warning)
       .build();
 
+    // Match server-side KeepAliveInterval / ClientTimeoutInterval set in Program.cs
+    connection.serverTimeoutInMilliseconds = 120_000;       // 2 min — matches server ClientTimeoutInterval
+    connection.keepAliveIntervalInMilliseconds = 10_000;    // 10 s — matches server KeepAliveInterval
+
     connectionRef.current = connection;
 
     /**
@@ -87,6 +91,10 @@ export function useValidationHub(
           .withAutomaticReconnect(RECONNECT_DELAYS)
           .configureLogging(LogLevel.Warning)
           .build();
+
+        // Match server-side timeout settings
+        fresh.serverTimeoutInMilliseconds = 120_000;
+        fresh.keepAliveIntervalInMilliseconds = 10_000;
 
         // Re-register all handlers on the new connection
         registerHandlers(fresh);
