@@ -21,9 +21,11 @@ namespace QuantumBuild.Tests.Integration.ToolboxTalks;
 /// therefore leave TenantId unset on seeded events.
 ///
 /// Language codes used:
-///   "lt" (Lithuanian) — Initial state (no events)
-///   "lv" (Latvian)    — AIGenerated state (TranslationCompleted event)
-/// Neither code is used by any other test class.
+///   "lt" (Lithuanian) — Initial state (no events) [tests 2–3]
+///   "lv" (Latvian)    — AIGenerated state (TranslationCompleted event) [test 3]
+///   "ru" (Russian)    — In-progress / target-only tests [B1, B2]
+///   "af" (Afrikaans)  — Target-but-no-events [B1]
+/// None of these codes are used by any other test class.
 /// </summary>
 [Collection("Integration")]
 public class ToolboxTalksControllerWorkflowStateTests : IntegrationTestBase
@@ -37,9 +39,13 @@ public class ToolboxTalksControllerWorkflowStateTests : IntegrationTestBase
     /// TenantId is set explicitly per Note 22 — the HTTP scope's auto-stamp is not available here.
     /// Uses a self-contained scope to avoid leaking DB connections.
     /// </summary>
-    private async Task<Guid> CreateTalkAsync()
+    private async Task<Guid> CreateTalkAsync(string[]? targetLanguageCodes = null)
     {
         var talkId = Guid.NewGuid();
+        string? targetLanguageCodesJson = targetLanguageCodes is { Length: > 0 }
+            ? "[" + string.Join(",", targetLanguageCodes.Select(c => $"\"{c}\"")) + "]"
+            : null;
+
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         db.Set<ToolboxTalk>().Add(new ToolboxTalk
@@ -55,6 +61,7 @@ public class ToolboxTalksControllerWorkflowStateTests : IntegrationTestBase
             RequiresQuiz = false,
             IsActive = true,
             GenerateCertificate = false,
+            TargetLanguageCodes = targetLanguageCodesJson,
             CreatedAt = DateTime.UtcNow,
             CreatedBy = "test"
         });
@@ -174,7 +181,7 @@ public class ToolboxTalksControllerWorkflowStateTests : IntegrationTestBase
     {
         // "lt" → no events        → Initial
         // "lv" → TranslationCompleted event → AIGenerated; plus a completed validation run (Pass)
-        var talkId = await CreateTalkAsync();
+        var talkId = await CreateTalkAsync(targetLanguageCodes: ["lt", "lv"]);
         await SeedTranslationAsync(talkId, "lt");
         await SeedTranslationAsync(talkId, "lv");
         await SeedEventAsync(talkId, "lv", WorkflowEventTypes.TranslationCompleted);
@@ -198,6 +205,58 @@ public class ToolboxTalksControllerWorkflowStateTests : IntegrationTestBase
         lvState.State.Should().Be(TranslationWorkflowState.AIGenerated);
         lvState.LastValidationOutcome.Should().Be(ValidationOutcome.Pass);
         lvState.LastValidationRunId.Should().Be(lvRunId);
+    }
+
+    // B1 — Talk with TargetLanguageCodes ["ru","af"], only "ru" has TranslationStarted (in-progress).
+    //       Both languages must appear: "ru" = Translating, "af" = Initial.
+    //       No ToolboxTalkTranslation rows exist — verifies enumeration uses TargetLanguageCodes.
+    [Fact]
+    public async Task GetTranslationsWorkflowState_ReturnsAllTargetLanguages_DuringInProgressTranslation()
+    {
+        var talkId = await CreateTalkAsync(targetLanguageCodes: ["ru", "af"]);
+        await SeedEventAsync(talkId, "ru", WorkflowEventTypes.TranslationStarted);
+        // "af" — no events, no translation row
+
+        var response = await AdminClient.GetAsync(
+            $"/api/toolbox-talks/{talkId}/translations/workflow-state");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var result = await response.Content.ReadFromJsonAsync<List<WorkflowStateResponse>>();
+        result.Should().NotBeNull();
+        result!.Should().HaveCount(2);
+
+        var ruState = result!.Single(s => s.LanguageCode == "ru");
+        ruState.State.Should().Be(TranslationWorkflowState.Translating);
+        ruState.LastEventType.Should().Be(WorkflowEventTypes.TranslationStarted);
+        ruState.TalkId.Should().Be(talkId);
+
+        var afState = result!.Single(s => s.LanguageCode == "af");
+        afState.State.Should().Be(TranslationWorkflowState.Initial);
+        afState.LastEventType.Should().BeNull();
+        afState.TalkId.Should().Be(talkId);
+    }
+
+    // B2 — Talk with TargetLanguageCodes ["ru"], no events, no translation rows.
+    //       Endpoint must return 1 entry (not 0) — enumerates by targets, not completed translations.
+    [Fact]
+    public async Task GetTranslationsWorkflowState_ReturnsLanguagesFromTargets_NotFromCompletedTranslations()
+    {
+        var talkId = await CreateTalkAsync(targetLanguageCodes: ["ru"]);
+        // no events, no ToolboxTalkTranslation rows
+
+        var response = await AdminClient.GetAsync(
+            $"/api/toolbox-talks/{talkId}/translations/workflow-state");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var result = await response.Content.ReadFromJsonAsync<List<WorkflowStateResponse>>();
+        result.Should().NotBeNull();
+        result!.Should().HaveCount(1);
+
+        var ruState = result!.Single(s => s.LanguageCode == "ru");
+        ruState.State.Should().Be(TranslationWorkflowState.Initial);
+        ruState.TalkId.Should().Be(talkId);
     }
 
     // 4 — No auth → 401

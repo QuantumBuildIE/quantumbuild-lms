@@ -41,6 +41,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Workflows;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
 using FileHashType = QuantumBuild.Modules.ToolboxTalks.Application.Services.FileHashType;
 using ISlideshowGenerationService = QuantumBuild.Modules.ToolboxTalks.Application.Services.ISlideshowGenerationService;
 
@@ -1570,7 +1571,7 @@ public class ToolboxTalksController : ControllerBase
     /// </summary>
     /// <param name="id">Toolbox talk ID</param>
     /// <param name="ct">Cancellation token</param>
-    /// <returns>List of workflow states, one per language that has a translation row</returns>
+    /// <returns>List of workflow states, one per target language code</returns>
     [HttpGet("{id:guid}/translations/workflow-state")]
     [ProducesResponseType(typeof(List<TranslationWorkflowStateDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -1590,10 +1591,32 @@ public class ToolboxTalksController : ControllerBase
                 return NotFound(new { error = "Learning not found" });
             }
 
-            var languageCodes = toolboxTalk.Translations?
-                .Select(t => t.LanguageCode)
+            List<string> languageCodes;
+            if (string.IsNullOrWhiteSpace(toolboxTalk.TargetLanguageCodes))
+            {
+                languageCodes = new List<string>();
+            }
+            else
+            {
+                try
+                {
+                    languageCodes = JsonSerializer.Deserialize<List<string>>(
+                        toolboxTalk.TargetLanguageCodes)
+                        ?? new List<string>();
+                }
+                catch (JsonException)
+                {
+                    _logger.LogWarning(
+                        "Failed to deserialize TargetLanguageCodes for talk {TalkId}",
+                        id);
+                    languageCodes = new List<string>();
+                }
+            }
+
+            languageCodes = languageCodes
+                .Where(l => !string.IsNullOrWhiteSpace(l))
                 .Distinct()
-                .ToList() ?? new List<string>();
+                .ToList();
 
             var states = new List<TranslationWorkflowStateDto>();
             foreach (var lang in languageCodes)
