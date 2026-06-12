@@ -86,14 +86,17 @@ public sealed class TranslationWorkflowService(
                      && t.LanguageCode == languageCode)
             .FirstOrDefaultAsync(ct);
 
+        // Include runs in any status (Pending, Running, Completed, Failed) so that
+        // LastValidationRunId is populated for in-progress runs, not only after completion.
+        // Order by StartedAt first (set when the job begins executing), falling back to
+        // CreatedAt for Pending runs whose StartedAt is still null.
         var lastValidationRun = await context.TranslationValidationRuns
             .IgnoreQueryFilters()
             .Where(r => !r.IsDeleted
                      && r.TenantId == tenantId
                      && r.ToolboxTalkId == talkId
-                     && r.LanguageCode == languageCode
-                     && r.Status == ValidationRunStatus.Completed)
-            .OrderByDescending(r => r.CompletedAt)
+                     && r.LanguageCode == languageCode)
+            .OrderByDescending(r => r.StartedAt ?? r.CreatedAt)
             .FirstOrDefaultAsync(ct);
 
         var state = lastEvent is null
@@ -112,7 +115,9 @@ public sealed class TranslationWorkflowService(
             TranslatedTitle = translation?.TranslatedTitle,
             TranslatedAt = translation?.TranslatedAt,
             NeedsRevalidation = translation?.NeedsRevalidation ?? false,
-            LastValidationOutcome = lastValidationRun?.OverallOutcome,
+            LastValidationOutcome = lastValidationRun?.Status == ValidationRunStatus.Completed
+                ? lastValidationRun.OverallOutcome
+                : null,
             LastValidationRunId = lastValidationRun?.Id,
             FlaggedWordCount = flaggedWordCount
         };

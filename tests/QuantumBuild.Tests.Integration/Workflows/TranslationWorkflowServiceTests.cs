@@ -1487,6 +1487,115 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
             "the Guid.Empty TranslationCompleted must be excluded by the explicit TenantId predicate");
     }
 
+    // ── 50-51 — LastValidationRunId populated for in-progress runs ───────────
+
+    // 50 — GetState returns LastValidationRunId when a run is in Running status (not yet complete)
+    [Fact]
+    public async Task GetState_ReturnsLastValidationRunId_DuringRunningState()
+    {
+        const string lang = "vi";
+
+        // Pre-condition: Translating state
+        await SeedEventAsync(TalkId, lang, WorkflowEventTypes.TranslationStarted);
+
+        // Create a validation run that is Running (job has started but not finished)
+        var db = GetDbContext();
+        var runId = Guid.NewGuid();
+        db.Set<TranslationValidationRun>().Add(new TranslationValidationRun
+        {
+            Id = runId,
+            ToolboxTalkId = TalkId,
+            LanguageCode = lang,
+            Status = ValidationRunStatus.Running,
+            PassThreshold = 75,
+            SourceLanguage = "en",
+            StartedAt = DateTime.UtcNow,
+            CreatedAt = DateTime.UtcNow,
+            CreatedBy = "test"
+        });
+        await db.SaveChangesAsync();
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var state = await service.GetState(TalkId, lang);
+
+        state.Should().NotBeNull();
+        state.State.Should().Be(TranslationWorkflowState.Translating);
+        state.LastValidationRunId.Should().Be(runId, "in-progress run must be returned regardless of completion status");
+        state.LastValidationOutcome.Should().BeNull("outcome is undefined until the run completes");
+    }
+
+    // 51 — GetState returns the most-recent run when multiple runs exist in mixed statuses
+    [Fact]
+    public async Task GetState_LastValidationRunId_ReturnsLatestRunWhenMultipleExist()
+    {
+        const string lang = "mn";
+
+        var db = GetDbContext();
+
+        // Run A: Failed, earliest StartedAt
+        var runAId = Guid.NewGuid();
+        var startedA = DateTime.UtcNow.AddMinutes(-30);
+        db.Set<TranslationValidationRun>().Add(new TranslationValidationRun
+        {
+            Id = runAId,
+            ToolboxTalkId = TalkId,
+            LanguageCode = lang,
+            Status = ValidationRunStatus.Failed,
+            PassThreshold = 75,
+            SourceLanguage = "en",
+            StartedAt = startedA,
+            CreatedAt = startedA,
+            CreatedBy = "test"
+        });
+
+        // Run B: Completed, StartedAt later than A
+        var runBId = Guid.NewGuid();
+        var startedB = DateTime.UtcNow.AddMinutes(-20);
+        db.Set<TranslationValidationRun>().Add(new TranslationValidationRun
+        {
+            Id = runBId,
+            ToolboxTalkId = TalkId,
+            LanguageCode = lang,
+            Status = ValidationRunStatus.Completed,
+            OverallOutcome = ValidationOutcome.Pass,
+            PassThreshold = 75,
+            SourceLanguage = "en",
+            StartedAt = startedB,
+            CompletedAt = startedB.AddMinutes(5),
+            CreatedAt = startedB,
+            CreatedBy = "test"
+        });
+
+        // Run C: Running, StartedAt is latest
+        var runCId = Guid.NewGuid();
+        var startedC = DateTime.UtcNow.AddMinutes(-5);
+        db.Set<TranslationValidationRun>().Add(new TranslationValidationRun
+        {
+            Id = runCId,
+            ToolboxTalkId = TalkId,
+            LanguageCode = lang,
+            Status = ValidationRunStatus.Running,
+            PassThreshold = 75,
+            SourceLanguage = "en",
+            StartedAt = startedC,
+            CreatedAt = startedC,
+            CreatedBy = "test"
+        });
+
+        await db.SaveChangesAsync();
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var state = await service.GetState(TalkId, lang);
+
+        state.Should().NotBeNull();
+        state.LastValidationRunId.Should().Be(runCId, "Run C has the latest StartedAt and must be returned");
+        state.LastValidationOutcome.Should().BeNull("Run C is Running, not Completed — outcome is undefined");
+    }
+
     // ── Local helper type for asserting TranslatedSections content ────────────
 
     private sealed class TranslatedSectionSnapshot
