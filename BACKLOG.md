@@ -720,6 +720,19 @@ Removed from Employee:
 - **Status:** Open
 - **Description:** An AI-powered help assistant for admins — "how do I create a course", "show me employees in site X" — embedded in the product. Forward-looking.
 
+#### 5.10 SignalR client timeout defaults missing in four hooks
+- **Priority:** P1
+- **Origin:** `[Engineering]`
+- **Status:** Open
+- **Description:** `use-subtitle-hub.ts`, `use-corpus-run-hub.ts`, `use-subtitle-processing.ts`, and `use-lesson-parser-hub.ts` all build `HubConnection` instances without setting `serverTimeoutInMilliseconds` / `keepAliveIntervalInMilliseconds`. Exposed to the same Railway proxy idle-timeout drop (1006 close) fixed in the validation hub (chunk 5.4-signalr-timeout-fix). Fix is a two-line patch per hook (`serverTimeoutInMilliseconds = 120_000`, `keepAliveIntervalInMilliseconds = 10_000` after `.build()`). Recommend a single dedicated chunk covering all four.
+
+#### 5.11 First-language row state lag in Step 5 Translate under Start All
+- **Priority:** P1
+- **Origin:** `[Internal-QA]`
+- **Status:** Open (surfaced 2026-06-12)
+- **Description:** After the 5.4 SignalR timeout fix landed, smoke surfaced that the first language started via Start All (RU in the 2026-06-12 test case) keeps "Start" button state through its own completion and only flips to "Validated" once the other languages also complete. WebSocket survives the full job duration (51.73s for a 50s job per Network tab), so `ValidationComplete` is received client-side while the connection is open — the bug is downstream of event receipt, not the same shape as 5.4. Suspected: cache-invalidation or query-key mismatch in the `LanguageItem` row component, OR a subscription-timing artifact specific to the first language under the 1000ms stagger added in 5.5-translate-start-all. Recon needed: identify which query the row reads from vs. which cache key the validation hub event handler updates, and check whether the `WorkflowSubscriber` for the first `runId` mounts before or after that runId's first event fires.
+- **Reference:** `docs/phase-5/reports/5.4-signalr-timeout-fix.md` smoke evidence section.
+
 ---
 
 # 6. Security Notes (Product Decisions)

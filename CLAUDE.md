@@ -1418,7 +1418,6 @@ Archived notes 1-89 are in CLAUDE-archive.md
 - Translation Quality Phase 2 — Safety term registry maintenance UI
 - **MailerSendEmailProvider 429 handling**. Currently logs and silently drops HTTP 429 responses with no retry/backoff. A dropped invitation email is marked unsent and must be resent manually. Bulk employee import is the first feature with volume to realistically hit MailerSend's 10 req/sec API throughput limit. Add retry-after backoff. (Promoted from Low.)
 - **R2 orphan file cleanup nightly job**. After the Development DB wipe, R2 still holds every file referenced by deleted tenants. A sweeper job should periodically identify R2 prefixes whose tenant no longer exists in the DB and remove them.
-- **SignalR client timeout defaults missing in four hooks** — `use-subtitle-hub.ts`, `use-corpus-run-hub.ts`, `use-subtitle-processing.ts`, and `use-lesson-parser-hub.ts` all build `HubConnection` instances without setting `serverTimeoutInMilliseconds` / `keepAliveIntervalInMilliseconds`. They are exposed to the same Railway proxy idle-timeout drop (1006 close) fixed in the validation hub (chunk 5.4-signalr-timeout-fix). Fix is a two-line patch per hook (`serverTimeoutInMilliseconds = 120_000`, `keepAliveIntervalInMilliseconds = 10_000` after `.build()`). Recommend a single dedicated chunk covering all four.
 - Expand Content Creation E2E Tests
 - YouTube Caption Integration
 - Two-Factor Authentication (2FA)
