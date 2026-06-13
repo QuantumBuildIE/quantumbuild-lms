@@ -1,6 +1,6 @@
 # CertifiedIQ — Backlog (Source of Truth)
 
-**Last updated:** 3 June 2026
+**Last updated:** 13 June 2026
 **Purpose:** Comprehensive record of every known item — bug, feature, refactor, product decision — across the CertifiedIQ LMS. This is the long reference. For the active prioritised list, see `SPRINT.md`.
 
 ## Conventions
@@ -76,7 +76,7 @@ Source: `CertifiedIQ_Translator_UAT_Brief_Ryans_Bakery_v3.pdf` (27 May 2026). Re
 #### 1.1.6 "Continue" wedged inactive after early Next on Input step
 - **Priority:** P1
 - **Origin:** `[UAT]`
-- **Status:** Open
+- **Status:** ✅ Done (4 Jun 2026) — Continue button unwedged: language presence check added to `canContinue`, `videoRightsConfirmed` persisted across InputConfigStep remount.
 - **Description:** Click Next before choosing target languages → Continue stays disabled even after languages filled. Only a hard refresh recovers it.
 - **Cause:** `canContinue` doesn't require `targetLanguageCodes.length > 0`. `createSession.mutateAsync` runs without languages; mutation's pending state + missing languages combo wedges button.
 - **Files:** `InputConfigStep.tsx:263-271, 273-340, 922-930`
@@ -86,7 +86,7 @@ Source: `CertifiedIQ_Translator_UAT_Brief_Ryans_Bakery_v3.pdf` (27 May 2026). Re
 #### 1.1.7 Section content not editable after parse
 - **Priority:** P1
 - **Origin:** `[UAT]`
-- **Status:** Open
+- **Status:** ✅ Done (4 Jun 2026) — Inline section body editor shipped at parse step; backend allowlist widened to Parsed/QuizGenerated/Validated with cascade-reset of downstream artefacts on edit.
 - **Description:** Sections can be renamed and reordered, but body is read-only. To fix wording the user must delete and start over.
 - **Cause:** Body rendered via `dangerouslySetInnerHTML`. `onChange` only fires for title/delete/reorder.
 - **Files:** `SectionList.tsx:289-306, 320-328, 41`
@@ -96,7 +96,7 @@ Source: `CertifiedIQ_Translator_UAT_Brief_Ryans_Bakery_v3.pdf` (27 May 2026). Re
 #### 1.1.8 Back-nav from Parse loses deletions, forces full re-parse
 - **Priority:** P1
 - **Origin:** `[UAT]`
-- **Status:** Open
+- **Status:** ✅ Done (4 Jun 2026) — Parse-step edits preserved across back-nav via sessionSourceSnapshot pattern; InputConfig return only clears parse state when source content actually changed.
 - **Description:** Delete section → Back → return → re-parse forced including the wait. Quiz settings, by contrast, preserved.
 - **Cause:** `hydrateFromSession()` overwrites client `parsedSections` with stale backend `parsedSectionsJson`. InputConfig step explicitly clears `parsedSections: []` on return Continue ("reset to Draft for re-parsing").
 - **Files:** `ParseStep.tsx:131-136, 182-202`, `InputConfigStep.tsx:303-313`
@@ -106,7 +106,7 @@ Source: `CertifiedIQ_Translator_UAT_Brief_Ryans_Bakery_v3.pdf` (27 May 2026). Re
 #### 1.1.9 Preview as Employee — no slideshow after navigating back and forth
 - **Priority:** P1
 - **Origin:** `[UAT]`
-- **Status:** Open
+- **Status:** ✅ Done (4 Jun 2026) — PreviewModal renders a pending-state placeholder when `talk.hasSlideshow` is true but slideshow data is not yet generated.
 - **Description:** Preview renders without slideshow card while generation still in flight. Sections present.
 - **Cause:** `PreviewModal` only renders slideshow card if `slideshowHtmlData?.html` truthy OR image-based slides present. Both empty during async generation.
 - **Files:** `PreviewModal.tsx:69-73, 160-197`
@@ -132,7 +132,7 @@ Source: `CertifiedIQ_Translator_UAT_Brief_Ryans_Bakery_v3.pdf` (27 May 2026). Re
 #### 1.1.12 Orange "Review (n)" badge reads as error when it isn't
 - **Priority:** P2
 - **Origin:** `[UAT]`
-- **Status:** Open
+- **Status:** ✅ Done (3 Jun 2026) — Badge tint made conditional as a side effect of the 1.1.1 fix: slate when score ≥ threshold, amber at-threshold, red below.
 - **Description:** Orange tint + filled dot looks like a problem to fix, not a neutral counter.
 - **Cause:** Review badge unconditionally amber when `statusCounts.review > 0`.
 - **Files:** `ValidationProgressPanel.tsx:128-135`
@@ -501,7 +501,7 @@ Removed from Employee:
 #### 3.1 Unify user creation on throwaway-password + invitation-email flow
 - **Priority:** P1
 - **Origin:** `[Engineering]` `[Production-incident]`
-- **Status:** Open
+- **Status:** ✅ Done (5 Jun 2026) — Three user-creation paths unified on bulk-import pattern; password fields removed from UI user-create form; all paths now issue throwaway password + invitation email. Commit `bb2709e` → merged to main via `5d12808`.
 - **Description:** Currently three paths create users with inconsistent behaviour:
   - **UI user-create** (`POST /api/users`): admin sets password directly; until this session, never sent any email. Now sends a "account created" notification email but still admin-sets-password.
   - **Tenant-create**: Contact Name + Email becomes the Admin user, `EmailConfirmed=true`. Inconsistent with how regular users are created.
@@ -563,11 +563,23 @@ Removed from Employee:
 - **Status:** Open
 - **Description:** `UserService` logs "Sent account creation email" even when MailerSend returned 422 (trial limit). The success log line shouldn't fire if the provider call failed. Caused real-world confusion this session — logs showed "Sent" while delivery was failing.
 
-#### **3.11 (new)** — Tenant creation: 400 "already exists" returned on first submit. Submitting the Create Tenant form once produces an HTTP 400 with "A tenant with this name already exists", but the tenant row is actually created. Possible double-submit (form fires POST twice; first creates, second hits uniqueness check) or misleading error from post-commit exception during admin-user creation. Predates 3.1. Repro: submit Create Tenant form with a fresh unique name, observe 400 in browser network tab, query DB to confirm row exists.
+#### **3.11 (new)** — Tenant creation: 400 "already exists" returned on first submit
+- **Priority:** P1
+- **Origin:** `[Internal-QA]`
+- **Status:** Open
+- **Description:** Submitting the Create Tenant form once produces an HTTP 400 with "A tenant with this name already exists", but the tenant row is actually created. Possible double-submit (form fires POST twice; first creates, second hits uniqueness check) or misleading error from post-commit exception during admin-user creation. Predates 3.1. Repro: submit Create Tenant form with a fresh unique name, observe 400 in browser network tab, query DB to confirm row exists.
 
-#### **3.12 (new)** — New user activation timing question. New users are created with `IsActive = true` despite not being able to log in until they complete the invitation flow (set password). Product question: should `IsActive` reflect "account fully set up" or "admin has approved this account"? Needs explicit decision.
+#### **3.12 (new)** — New user activation timing question
+- **Priority:** PD (Product Decision Required)
+- **Origin:** `[Internal-QA]`
+- **Status:** Open
+- **Description:** New users are created with `IsActive = true` despite not being able to log in until they complete the invitation flow (set password). Product question: should `IsActive` reflect "account fully set up" or "admin has approved this account"? Needs explicit decision.
 
-#### **3.13 (new)** — Testing discipline: admin should be tested in a separate browser profile from end-user verification flows. Same-origin localStorage means token state from a user-login can clobber an admin's token state silently. Caused a 403 cascade during 3.1 verification on 5 June. Documentation/discipline note rather than code change.
+#### **3.13 (new)** — Testing discipline: use separate browser profiles for admin and end-user flows
+- **Priority:** P3
+- **Origin:** `[Engineering]`
+- **Status:** Open
+- **Description:** Admin should be tested in a separate browser profile from end-user verification flows. Same-origin localStorage means token state from a user-login can clobber an admin's token state silently. Caused a 403 cascade during 3.1 verification on 5 June. Documentation/discipline note rather than code change — not operationalized as a hook or checklist yet.
 
 ---
 
@@ -598,7 +610,7 @@ Removed from Employee:
 #### 5.1 Tenant-filter sweep audit
 - **Priority:** P1
 - **Origin:** `[Production-incident]` `[Engineering]`
-- **Status:** Open
+- **Status:** ✅ Done (3 Jun 2026) — Forensic audit completed: 6 anonymous endpoints + 18 Hangfire jobs + ~120 queries inspected; 2 issues found (AuthService tenant-filter bypass, ContentExtractionService interface-enqueue) and fixed.
 - **Description:** Three production bugs from the same root cause have surfaced (bulk import, subtitle processing job, subtitle content fetch from QR). All silent — query returns nothing because `ICurrentUserService.TenantId` returns `Guid.Empty` in Hangfire jobs and `[AllowAnonymous]` endpoints. Each instance found by user-observed symptom, not by testing. There are very likely more.
 - **Fix direction:** Systematic audit: every query against a tenant-filtered entity that runs in a Hangfire job OR an unauthenticated endpoint must either use `IgnoreQueryFilters()` with explicit predicates, OR take an explicit `bypassTenantFilter` parameter. Grep all `[AllowAnonymous]` controllers and all Hangfire job classes; cross-reference every DB query inside them.
 - **Closes:** Prevents the fourth instance.
@@ -606,7 +618,7 @@ Removed from Employee:
 #### 5.2 Migration creation process & Designer.cs guard
 - **Priority:** P1 (escalated from P2 — 2 Jun 2026)
 - **Origin:** `[Production-incident]` `[Engineering]`
-- **Status:** Open
+- **Status:** ✅ Done (3 Jun 2026) — Build-time guard implemented: two `[Fact]` tests in `MigrationStructureTests.cs` verify every migration has a matching Designer.cs with a valid `[Migration]` attribute; CLAUDE.md Note 28 added enforcing CLI-only migration creation.
 - **Description:** **Four documented instances** of missing Designer.cs files causing silent migration skips this session alone (one production bug `AddGlossaryCorrectionsToTranslationValidationResult`, plus three drift cases discovered while investigating, plus one new migration `AddAudienceRoleToContentCreationSession` that broke Development on push).
   Root cause confirmed: migrations have been routinely **hand-written** rather than generated via `dotnet ef migrations add`. The CLI generates both the `.cs` AND `.Designer.cs` files together; hand-writing the `.cs` alone results in EF silently skipping the migration on every startup because the `[Migration]` attribute lives on the Designer.cs partial class declaration.
 - **Fix direction (two parts):**
@@ -617,7 +629,7 @@ Removed from Employee:
 #### 5.3 Migration forensic audit — find any remaining missing Designer.cs files
 - **Priority:** P2
 - **Origin:** `[Engineering]`
-- **Status:** Open (new — 2 Jun 2026)
+- **Status:** ✅ Done (3 Jun 2026) — All 90 migrations confirmed structurally sound; 5 synthetic-timestamp migrations identified but functional; no additional silent-skip risks found.
 - **Description:** Given the discovery that the codebase routinely hand-writes migrations, there may be other Designer.cs files missing besides the four already found and fixed. Some may have happened to work for unrelated reasons (`[Migration]` attribute on the wrong file, applied long ago with history intact, etc) but represent latent drift.
 - **Fix direction:** One-pass forensic scan of `src/Core/QuantumBuild.Core.Infrastructure/Migrations/` reporting:
   - Every migration `.cs` without a matching `.Designer.cs`
@@ -733,6 +745,12 @@ Removed from Employee:
 - **Description:** After the 5.4 SignalR timeout fix landed, smoke surfaced that the first language started via Start All (RU in the 2026-06-12 test case) keeps "Start" button state through its own completion and only flips to "Validated" once the other languages also complete. WebSocket survives the full job duration (51.73s for a 50s job per Network tab), so `ValidationComplete` is received client-side while the connection is open — the bug is downstream of event receipt, not the same shape as 5.4. Suspected: cache-invalidation or query-key mismatch in the `LanguageItem` row component, OR a subscription-timing artifact specific to the first language under the 1000ms stagger added in 5.5-translate-start-all. Recon needed: identify which query the row reads from vs. which cache key the validation hub event handler updates, and check whether the `WorkflowSubscriber` for the first `runId` mounts before or after that runId's first event fires.
 - **Reference:** `docs/phase-5/reports/5.4-signalr-timeout-fix.md` smoke evidence section.
 
+#### 5.12 SPRINT.md stale — needs Phase 5 state rewrite
+- **Priority:** P2
+- **Origin:** `[Engineering]`
+- **Status:** Open
+- **Description:** SPRINT.md last updated 3 June 2026 (10 days stale as of 2026-06-13). Currently references UAT P1s 1.1.6–1.1.9 as future work — all four are now ✅ Done as of 4 June. The "Next" section lists UAT P2s and the rich-text editor, which doesn't reflect the current state of Phase 5 (5.4 just landed, 5.5 Publish recon next). Needs full rewrite covering: completed Phase 5 work to date, active chunk (5.5 Publish), known BACKLOG-deferred items relevant to current phase. Surfaced by 2026-06-13 BACKLOG sweep recon. Out of scope for the sweep itself.
+
 ---
 
 # 6. Security Notes (Product Decisions)
@@ -754,7 +772,7 @@ These are not backlog items — they're explicit product decisions with known tr
 
 ---
 
-# 7. Design review: Auditor audience role on ContentCreationSession.
+# 8. Design review: Auditor audience role on ContentCreationSession.
 
 Added during Ryan's UAT review as an AudienceRole value alongside Operator and Supervisor on quiz generation. Implementation generates different questions per audience string.
 
