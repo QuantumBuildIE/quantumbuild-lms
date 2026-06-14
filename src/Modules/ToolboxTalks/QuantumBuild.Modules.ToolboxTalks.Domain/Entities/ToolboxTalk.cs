@@ -77,6 +77,11 @@ public class ToolboxTalk : TenantEntity
     public ToolboxTalkStatus Status { get; set; } = ToolboxTalkStatus.Draft;
 
     /// <summary>
+    /// When this talk was published (set by the publish endpoint).
+    /// </summary>
+    public DateTime? PublishedAt { get; set; }
+
+    /// <summary>
     /// URL to the PDF document (if any)
     /// </summary>
     public string? PdfUrl { get; set; }

@@ -21,6 +21,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalk;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.GenerateToolboxTalkQuiz;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalkQuestions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalkQuizSettings;
+using QuantumBuild.Modules.ToolboxTalks.Application.Commands.PublishToolboxTalk;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalkSettings;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Reports;
@@ -640,6 +641,40 @@ public class ToolboxTalksController : ControllerBase
                 return NotFound(new { error = result.Errors.FirstOrDefault() });
             return BadRequest(new { error = result.Errors.FirstOrDefault() });
         }
+
+        return Ok(result.Data);
+    }
+
+    /// <summary>
+    /// Publish a wizard-drafted learning by talkId (new wizard Step 7).
+    /// Preconditions: talk exists, is not already published, has at least one section,
+    /// and (if target languages are declared) at least one language has a completed validation run.
+    /// Enqueues RequirementMappingJob after a successful status flip.
+    /// </summary>
+    [HttpPost("{talkId:guid}/publish")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(typeof(PublishTalkResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> PublishByTalkId(Guid talkId, CancellationToken ct)
+    {
+        var tenantId = _currentUserService.TenantId;
+        var command = new PublishToolboxTalkCommand(TalkId: talkId, TenantId: tenantId);
+        var result = await _mediator.Send(command, ct);
+
+        if (!result.Success)
+        {
+            if (result.Errors.FirstOrDefault()?.Contains("not found", StringComparison.OrdinalIgnoreCase) == true)
+                return NotFound(new { error = result.Errors.FirstOrDefault() });
+            if (result.ErrorCode == FailureCode.WorkflowInvalidState)
+                return Conflict(new { error = result.Errors.FirstOrDefault() });
+            return BadRequest(new { error = result.Errors.FirstOrDefault() });
+        }
+
+        // Fire-and-forget: enqueue AI requirement mapping (per CLAUDE.md Note 21 — concrete class)
+        BackgroundJob.Enqueue<RequirementMappingJob>(job =>
+            job.MapRequirementsAsync(tenantId, talkId, null, CancellationToken.None));
 
         return Ok(result.Data);
     }

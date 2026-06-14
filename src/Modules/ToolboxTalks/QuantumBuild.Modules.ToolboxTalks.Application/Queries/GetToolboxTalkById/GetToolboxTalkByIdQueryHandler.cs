@@ -133,6 +133,7 @@ public class GetToolboxTalkByIdQueryHandler : IRequestHandler<GetToolboxTalkById
             } : null,
             CreatedAt = talk.CreatedAt,
             UpdatedAt = talk.UpdatedAt,
+            PublishedAt = talk.PublishedAt,
             LastEditedStep = talk.LastEditedStep,
 
             // Learning wizard fields
