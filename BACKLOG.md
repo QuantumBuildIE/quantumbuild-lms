@@ -1157,6 +1157,73 @@ but no data corruption, no workflow blocker.
 
 ---
 
+## 20. Per-section accept/reject actions missing on Validate step [PRIORITY]
+
+**Priority:** P1
+**Origin:** [Internal-QA]
+**Status:** Open — pending product decision
+**Surfaced:** 2026-06-14, during wizard-skip-fix smoke (Scenario C).
+
+The new wizard's Validate step ports the per-section validation
+outcome display from the old wizard — scores, back-translations,
+consensus calculations, safety threshold, all visible per section.
+But the action UI (accept/reject decisions per section that would
+resolve a Review-state outcome) is not present. The user can see
+that a section needs review, can read the evidence, but has no
+path to act on it within the wizard.
+
+Old wizard reference: `create-wizard/steps/ValidateStep.tsx:186` —
+`canContinue = allSectionsDecided || session?.status === 'Validated'`.
+The old wizard required per-section decisions before Continue. The
+new wizard's Step 7 reachability requires only "at least one
+completed validation run" regardless of per-section outcomes,
+which means after today's wiring fix, users can reach Publish and
+ship a talk while sections remain in unresolved Review state.
+
+This is feature parity loss with a real quality implication — the
+old workflow's strictness was the mechanism by which a reviewer
+explicitly attested to each Review-state outcome.
+
+### Product decision required before implementation
+
+Three positions are defensible; the chosen position determines
+the chunk's shape.
+
+- **Strict** — Each Review-state section must be explicitly
+  accepted or rejected before Step 7 becomes reachable. Matches
+  old wizard behavior. Largest chunk: per-section action UI,
+  decision persistence (likely a new field on
+  `TranslationValidationResult` or a separate decisions entity),
+  Step 6 → Step 7 gate logic on both frontend and backend.
+
+- **Permissive** — Review-state is informational. Users may
+  publish past it. The current new-wizard behavior since today's
+  wiring fix. Smallest chunk: maybe a UX message acknowledging
+  the state, otherwise close as "intentional new behavior."
+
+- **Strict-with-override** — A bulk acknowledgment ("I have
+  reviewed these issues, publishing anyway") gates Step 7,
+  without per-section decisions. Medium chunk: single
+  acknowledgment widget, simpler gate logic, no per-section
+  data model changes.
+
+### Reference
+
+Smoke screenshot 2026-06-14: section "Content Recognition and
+Handling" with Score 81 / Review outcome, full back-translation
+evidence rendered, A vs Original 80, B vs Original 76, A+B
+agreement 96, consensus 81 (Marginal), 3/3 rounds, Safety
+threshold 85, critical term "PPE" flagged. No decision UI exposed
+to act on this state.
+
+### Next step
+
+Make the Strict / Permissive / Strict-with-override decision.
+Once decided, status updates to Open with chosen direction
+documented, and implementation chunk gets scoped from there.
+
+---
+
 # ==================================================================
 # 7. Recently Closed
 # ==================================================================
