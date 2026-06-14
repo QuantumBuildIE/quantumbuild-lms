@@ -6,6 +6,7 @@ import { ErrorState } from '@/features/toolbox-talks/components/learning-wizard/
 import { SettingsStep } from '@/features/toolbox-talks/components/learning-wizard/steps/SettingsStep';
 import { useTalk } from '@/features/toolbox-talks/components/learning-wizard/hooks/useTalk';
 import { useStepNavigation } from '@/features/toolbox-talks/components/learning-wizard/hooks/useStepNavigation';
+import { useValidationRuns } from '@/lib/api/toolbox-talks/use-content-creation';
 import { getDraftsUrl } from '@/features/toolbox-talks/components/learning-wizard/lib/urlState';
 
 export default function LearningWizardSettingsPage() {
@@ -14,8 +15,9 @@ export default function LearningWizardSettingsPage() {
   const router = useRouter();
 
   const { talk, isError, error, refetch } = useTalk(talkId);
+  const { data: validationRuns } = useValidationRuns(talkId);
   const { reachableSteps, canGoBack, goBack, goNext, goToStep } =
-    useStepNavigation({ talkId, currentStep: 4, talk: talk ?? null });
+    useStepNavigation({ talkId, currentStep: 4, talk: talk ?? null, validationRuns });
 
   if (isError)
     return (

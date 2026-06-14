@@ -1120,6 +1120,43 @@ Surfaced 2026-06-14 during Phase 5.5b implementation (noted in
 
 ---
 
+## 19. Learning list page shows "Inactive" for draft talks instead of "Draft"
+
+**Priority:** P2
+**Origin:** [Internal-QA]
+**Status:** Open
+**Surfaced:** 2026-06-14, during 5.5b post-deploy smoke (incidental
+observation, not part of any smoke scenario).
+
+The learning list page (admin/toolbox-talks/learnings or similar)
+renders an "Active/Inactive" column for every talk regardless of
+lifecycle status. Talks in `Draft` status (created via the new
+wizard but not yet published) display as "Inactive", which is
+misleading — a draft isn't an inactive published talk, it's a
+work-in-progress that doesn't exist as an assignable artifact yet.
+
+Two distinct concepts are conflated:
+- Lifecycle status (Draft, Published) — on the talk entity
+- Active/Inactive — visibility/assignability concept that only
+  meaningfully applies to published talks
+
+Suggested fix direction: when `Status == Draft`, the column renders
+"Draft"; otherwise it renders the existing Active/Inactive value.
+Do not universally rename "Inactive" to "Draft" — that would break
+display for legitimately deactivated published talks.
+
+Adjacent questions worth checking during recon:
+- What does the "Actions" menu on a draft row currently expose? If
+  it offers Activate/Deactivate, those are nonsensical for drafts
+  and may be a coupled bug.
+- Are P2 status filters on this page (if any) doing the right thing
+  for drafts?
+
+Not blocking any current work. Suggested P2 — visible UX confusion
+but no data corruption, no workflow blocker.
+
+---
+
 # ==================================================================
 # 7. Recently Closed
 # ==================================================================

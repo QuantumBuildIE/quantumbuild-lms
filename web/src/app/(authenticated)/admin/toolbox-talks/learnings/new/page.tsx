@@ -4,14 +4,17 @@ import { useRouter } from 'next/navigation';
 import { WizardLayout } from '@/features/toolbox-talks/components/learning-wizard/components/WizardLayout';
 import { InputConfigStep } from '@/features/toolbox-talks/components/learning-wizard/steps/InputConfigStep';
 import { useStepNavigation } from '@/features/toolbox-talks/components/learning-wizard/hooks/useStepNavigation';
+import { useValidationRuns } from '@/lib/api/toolbox-talks/use-content-creation';
 import { getDraftsUrl } from '@/features/toolbox-talks/components/learning-wizard/lib/urlState';
 
 export default function LearningWizardNewPage() {
   const router = useRouter();
+  const { data: validationRuns } = useValidationRuns(null);
   const { reachableSteps, goToStep } = useStepNavigation({
     talkId: null,
     currentStep: 1,
     talk: null,
+    validationRuns,
   });
 
   return (
