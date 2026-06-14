@@ -69,15 +69,20 @@ export function isStepReachable(
       // Validate: reachable once sections exist AND target languages are declared
       return talk.sections.length > 0 && parseTargetCodes(talk.targetLanguageCodes ?? null).length > 0;
     case 7: {
-      // Publish: sections must exist, talk must not be already published
+      // Sections required
       if (talk.sections.length === 0) return false;
+      // Already published — no re-publish
       if (talk.status === 'Published') return false;
+
       const codes = parseTargetCodes(talk.targetLanguageCodes ?? null);
-      // No target languages — no translation gate
+
+      // No target languages declared — English-only path, no translation gate
       if (codes.length === 0) return true;
-      // Target languages declared — require at least one completed validation run
-      if (!validationRuns) return false;
-      return validationRuns.some((r) => r.status === 'Completed');
+
+      // Target languages declared — explicit handling of validation runs state
+      const runs = validationRuns ?? [];
+      if (runs.length === 0) return false; // none exist (not fetched yet, or no runs created)
+      return runs.some((r) => r.status === 'Completed');
     }
     default:
       return false;

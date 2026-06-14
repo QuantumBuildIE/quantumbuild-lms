@@ -1342,4 +1342,31 @@ Note: BACKLOG §11 ("Cancel external review — end-to-end") is now stale — th
 
 ---
 
+## 22. Unit tests for Step 7 reachability rule (depends on §17)
+
+**Priority:** P2 — Engineering  
+**Status:** Open — blocked on §17 (frontend test framework not installed)  
+**Surfaced:** 2026-06-14 during structural robustness refactor of `stepOrder.ts`.
+
+The Step 7 reachability rule in
+`web/src/features/toolbox-talks/components/learning-wizard/lib/stepOrder.ts`
+has four meaningful behavioral states, now made explicit by the 2026-06-14
+structural refactor:
+
+1. `talk.sections.length === 0` → `false`
+2. `talk.status === 'Published'` → `false`
+3. Sections exist, no target languages declared (English-only path) → `true`
+4. Sections exist, target languages declared, no completed validation runs → `false`
+5. Sections exist, target languages declared, at least one run with `status === 'Completed'` → `true`
+
+After §17 is closed (vitest + @testing-library/react installed), add unit
+tests covering each state in:
+`web/src/features/toolbox-talks/components/learning-wizard/lib/__tests__/stepOrder.test.ts`
+
+Also cover the defensive default: passing `validationRuns = undefined` with
+target languages declared must behave identically to passing `[]` (both
+return `false` — the `?? []` guard is the enforcement point).
+
+---
+
 *End of BACKLOG.md. For active prioritised work, see `SPRINT.md`.*

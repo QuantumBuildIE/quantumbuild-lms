@@ -13,8 +13,8 @@ interface UseStepNavigationOptions {
   talkId: string | null;
   currentStep: number;
   talk: ToolboxTalk | null;
-  /** Passed to isStepReachable for step 7 gate — required when target languages are declared */
-  validationRuns?: ValidationRunSummary[] | null;
+  /** Passed to isStepReachable for step 7 gate. Property is required; value may be undefined during loading. */
+  validationRuns: ValidationRunSummary[] | null | undefined;
 }
 
 export function useUpdateTalkStep(talkId: string | null) {
