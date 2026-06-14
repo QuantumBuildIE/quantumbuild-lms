@@ -30,10 +30,6 @@ public class InitialiseToolboxTalkCommandValidator : AbstractValidator<Initialis
             .When(x => !string.IsNullOrEmpty(x.Description))
             .WithMessage("Description must not exceed 2000 characters.");
 
-        RuleFor(x => x.TargetLanguageCodes)
-            .NotEmpty()
-            .WithMessage("At least one target language is required.");
-
         // Text mode: either SourceText or SourceFileUrl must be present
         RuleFor(x => x.SourceText)
             .NotEmpty()

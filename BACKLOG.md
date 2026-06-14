@@ -754,13 +754,13 @@ Removed from Employee:
 #### 5.13 English-only learning creation blocked — Step 1 rejects empty target languages (§22)
 - **Priority:** P1
 - **Origin:** `[Internal-QA]`
-- **Status:** Open (surfaced 2026-06-14, 5.5b smoke)
+- **Status:** ✅ Done (2026-06-14) — joint chunk with §23; removed backend `.NotEmpty()` rule, relaxed frontend `.min(1)`, added `targetLanguageCodes.length > 0` gate to steps 5/6 reachability and `isStepSkipped`, fixed settings page `router.push(getStepUrl(talkId, 5))` bypass. Report: `docs/phase-5/reports/wizard-skip-regression-fix.md`.
 - **Description:** The new wizard's Step 1 (Input & Config) rejects submissions where `targetLanguageCodes` is empty, blocking English-only learning creation. Additionally Steps 5 (Translate) and 6 (Validate) do not skip when no target languages are configured — they remain reachable even when there is nothing to translate or validate. Root cause: the backend `InitialiseToolboxTalkCommandValidator` enforces "At least one target language is required"; the frontend `stepOrder.ts` reachability rules for steps 5 and 6 gate on `talk.sections.length > 0` rather than on `targetLanguageCodes.length > 0`. Fix direction: (1) Remove the target-language validator rule. (2) Update step 5 and 6 reachability rules to return false when `targetLanguageCodes` is empty. (3) Confirm Continue-button navigation skips unreachable steps correctly. Recon: `docs/phase-5/reports/wizard-skip-regression-recon.md`.
 
 #### 5.14 Quiz-skipped declared but Continue lands on Quiz step (§23)
 - **Priority:** P1
 - **Origin:** `[Internal-QA]`
-- **Status:** Open (surfaced 2026-06-14, 5.5b smoke)
+- **Status:** ✅ Done (2026-06-14) — root cause shared with §22; `goNext()` in `useStepNavigation.ts` now uses `findNextReachableStep()` instead of `currentStep + 1`. Report: `docs/phase-5/reports/wizard-skip-regression-fix.md`.
 - **Description:** When "include quiz" is deselected at Step 1, the wizard's step indicator correctly renders "3 Quiz — Skipped" on the Parse step, but clicking Continue on Step 2 (Parse) navigates to Step 3 (Quiz) instead of jumping past it to Step 4 (Settings). The display logic and the navigation logic are inconsistent — `isStepReachable` and the Continue-button next-step computation appear to use different signals. Root cause hypothesis: the step indicator reads from `isStepReachable(3, talk)` which correctly reflects the quiz-disabled flag; the Continue navigation calls `goToStep(currentStep + 1)` (integer increment) rather than `findNextReachable(currentStep)`. Fix direction: Make Continue use the same reachability logic the step indicator uses. If §22 and §23 share the same navigation root cause, a single fix chunk closes both. Recon: `docs/phase-5/reports/wizard-skip-regression-recon.md`.
 
 ---

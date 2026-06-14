@@ -25,7 +25,7 @@ export const inputConfigSchema = z
     // Languages
     targetLanguageCodes: z
       .array(z.string())
-      .min(1, 'At least one target language is required'),
+      .min(0),
 
     // Quiz / settings
     passThreshold: z

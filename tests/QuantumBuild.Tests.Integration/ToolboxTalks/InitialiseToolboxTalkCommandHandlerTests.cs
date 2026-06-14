@@ -208,14 +208,15 @@ public class InitialiseToolboxTalkCommandHandlerTests : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    // 7 — Empty TargetLanguageCodes → 400
+    // 7 — Empty TargetLanguageCodes (English-only) → 201
+    // Empty target languages is now valid — allows English-only learnings that skip Translate/Validate steps.
     [Fact]
-    public async Task EmptyTargetLanguageCodes_Returns400()
+    public async Task EmptyTargetLanguageCodes_Returns201()
     {
         var request = MinimalRequest(UniqueTitle(), langs: Array.Empty<string>());
         var response = await AdminClient.PostAsJsonAsync("/api/toolbox-talks/initialise", request);
 
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
     }
 
     // 8 — Missing SourceText in Text mode (no file URL) → 400

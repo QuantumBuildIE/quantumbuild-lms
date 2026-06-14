@@ -4,7 +4,7 @@ import { useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { updateLastEditedStep } from '@/lib/api/toolbox-talks/toolbox-talks';
-import { isStepReachable, isStepSkipped, WIZARD_STEPS, TOTAL_STEPS } from '../lib/stepOrder';
+import { isStepReachable, isStepSkipped, findNextReachableStep, WIZARD_STEPS, TOTAL_STEPS } from '../lib/stepOrder';
 import { getStepUrl } from '../lib/urlState';
 import type { ToolboxTalk } from '@/types/toolbox-talks';
 import type { ValidationRunSummary } from '@/types/content-creation';
@@ -48,14 +48,13 @@ export function useStepNavigation({ talkId, currentStep, talk, validationRuns }:
   }, [currentStep, talkId, router]);
 
   const goNext = useCallback(async () => {
-    const nextStep = currentStep + 1;
-    if (nextStep > TOTAL_STEPS) return;
-    // Persist progress before navigating forward
+    const next = findNextReachableStep(currentStep, talk, validationRuns);
+    if (next === null) return;
     if (talkId) {
-      await updateStep.mutateAsync(nextStep);
+      await updateStep.mutateAsync(next);
     }
-    router.push(getStepUrl(talkId, nextStep));
-  }, [currentStep, talkId, updateStep, router]);
+    router.push(getStepUrl(talkId, next));
+  }, [currentStep, talk, validationRuns, talkId, updateStep, router]);
 
   const goToStep = useCallback(async (step: number) => {
     if (!isStepReachable(step, talk, validationRuns)) return;

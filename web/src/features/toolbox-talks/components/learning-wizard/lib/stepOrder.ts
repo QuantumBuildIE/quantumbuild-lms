@@ -63,11 +63,11 @@ export function isStepReachable(
       // Settings: reachable once talk has sections
       return talk.sections.length > 0;
     case 5:
-      // Translate: reachable once sections exist
-      return talk.sections.length > 0;
+      // Translate: reachable once sections exist AND target languages are declared
+      return talk.sections.length > 0 && parseTargetCodes(talk.targetLanguageCodes ?? null).length > 0;
     case 6:
-      // Validate: reachable once sections exist (translation may still be running)
-      return talk.sections.length > 0;
+      // Validate: reachable once sections exist AND target languages are declared
+      return talk.sections.length > 0 && parseTargetCodes(talk.targetLanguageCodes ?? null).length > 0;
     case 7: {
       // Publish: sections must exist, talk must not be already published
       if (talk.sections.length === 0) return false;
@@ -92,7 +92,25 @@ export function isStepReachable(
 export function isStepSkipped(step: number, talk: ToolboxTalk | null): boolean {
   if (!talk) return false;
   if (step === 3) return talk.sections.length > 0 && !talk.requiresQuiz;
+  if (step === 5 || step === 6) {
+    return talk.sections.length > 0 && parseTargetCodes(talk.targetLanguageCodes ?? null).length === 0;
+  }
   return false;
+}
+
+/**
+ * Walks forward from currentStep + 1 and returns the first step where isStepReachable is true.
+ * Returns null if no forward step is reachable (i.e. already at or past the last step).
+ */
+export function findNextReachableStep(
+  currentStep: number,
+  talk: ToolboxTalk | null,
+  validationRuns?: ValidationRunSummary[] | null,
+): number | null {
+  for (let s = currentStep + 1; s <= TOTAL_STEPS; s++) {
+    if (isStepReachable(s, talk, validationRuns)) return s;
+  }
+  return null;
 }
 
 export function firstReachableStep(talk: ToolboxTalk | null): number {
