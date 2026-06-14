@@ -1,4 +1,5 @@
 import type { ToolboxTalk } from '@/types/toolbox-talks';
+import type { ValidationRunSummary } from '@/types/content-creation';
 
 // ============================================
 // Step definitions
@@ -31,7 +32,19 @@ export function getStepDef(step: number): WizardStepDef | undefined {
 // Real logic for steps 5-7 lands in 5.4/5.5 when workflow state is wired.
 // ============================================
 
-export function isStepReachable(step: number, talk: ToolboxTalk | null): boolean {
+function parseTargetCodes(json: string | null): string[] {
+  if (!json) return [];
+  try {
+    const parsed = JSON.parse(json);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch { return []; }
+}
+
+export function isStepReachable(
+  step: number,
+  talk: ToolboxTalk | null,
+  validationRuns?: ValidationRunSummary[] | null
+): boolean {
   // Step 1 is the pre-talk step — reachable only for new talks (no talk yet)
   if (step === 1) return true;
 
@@ -55,9 +68,17 @@ export function isStepReachable(step: number, talk: ToolboxTalk | null): boolean
     case 6:
       // Validate: reachable once sections exist (translation may still be running)
       return talk.sections.length > 0;
-    case 7:
-      // Publish: placeholder — 5.5 owns the real rule
-      return false;
+    case 7: {
+      // Publish: sections must exist, talk must not be already published
+      if (talk.sections.length === 0) return false;
+      if (talk.status === 'Published') return false;
+      const codes = parseTargetCodes(talk.targetLanguageCodes ?? null);
+      // No target languages — no translation gate
+      if (codes.length === 0) return true;
+      // Target languages declared — require at least one completed validation run
+      if (!validationRuns) return false;
+      return validationRuns.some((r) => r.status === 'Completed');
+    }
     default:
       return false;
   }

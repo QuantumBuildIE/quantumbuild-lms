@@ -131,6 +131,7 @@ export interface ToolboxTalk {
   completionStats: ToolboxTalkCompletionStats | null;
   createdAt: string;
   updatedAt: string | null;
+  publishedAt: string | null;
   // Learning wizard
   lastEditedStep: number | null;
   inputMode: InputMode;

@@ -1062,6 +1062,52 @@ target step on tenant-aware redirects when the proper fix lands.
 
 ---
 
+## 17. Frontend test framework not installed
+
+No jest/vitest/@testing-library/react in package.json. The Phase
+5.5b prompt specified unit tests for `isStepReachable` step 7
+cases (5 scenarios: zero sections, sections + no target languages,
+sections + target languages + no completed runs, sections + target
+languages + one completed run, already published). These were
+deferred because there is nothing to run them in.
+
+Fix direction: install vitest + @testing-library/react + @vitejs/plugin-react
+as dev dependencies; configure vitest.config.ts with the Next.js
+alias set; add the five test cases in
+`web/src/features/toolbox-talks/components/learning-wizard/lib/__tests__/stepOrder.test.ts`.
+
+The five cases to cover:
+1. `sections.length === 0` → false
+2. `sections.length > 0`, no target languages → true
+3. `sections.length > 0`, target languages set, no completed runs → false
+4. `sections.length > 0`, target languages set, one completed run → true
+5. `talk.status === 'Published'` → false
+
+Surfaced 2026-06-14 during Phase 5.5b implementation.
+
+---
+
+## 18. Post-publish translation editing gap — AwaitingThirdParty languages
+
+After a talk is published, languages that are `state === 'AwaitingThirdParty'`
+have no UI to cancel the external review and re-translate.
+
+The backend escape hatch exists (InvitationStatus.Revoked is defined,
+BACKLOG item 11 tracks the full Cancel External Review flow). The
+publish step surface the warning banner (amber, non-blocking) per
+5.5b spec but cannot provide a cancel action because the backend
+endpoint does not yet exist.
+
+Fix direction: implement BACKLOG item 11 (Cancel External Review
+end-to-end) then wire a "Cancel review" button in the external
+review warning banner so users can act on it from the publish
+step or the talk edit page.
+
+Surfaced 2026-06-14 during Phase 5.5b implementation (noted in
+5.5a gap-check as a known limitation).
+
+---
+
 # ==================================================================
 # 7. Recently Closed
 # ==================================================================
@@ -1225,6 +1271,25 @@ refresher configuration from Step 4.
    `UpdateToolboxTalkSettingsCommandHandler` (keeping old field in sync), or
 2. Remove `Frequency` from the old edit form and fully migrate to the new
    model — a larger cross-cutting change.
+
+---
+
+## 21. Post-publish translation management UI — AwaitingThirdParty languages (Medium)
+
+**Surfaced by:** 5.5a gap-check, 2026-06-14.
+
+When a talk is published while one or more translations are in `AwaitingThirdParty` state (external review in flight), no UI path exists to manage those translations post-publication.
+
+**Backend is complete:** The cancel-external-review endpoint (`POST /api/toolbox-talks/{id}/translations/{languageCode}/cancel-external-review`) exists and works — it reverts `AwaitingThirdParty` → `ReviewerAccepted`. After cancellation, `POST /{id}/translations/generate` proceeds normally. The `PublishToolboxTalkCommandHandler` imposes no lock on translations.
+
+Note: BACKLOG §11 ("Cancel external review — end-to-end") is now stale — the backend was built in a later phase. Update or close that entry.
+
+**Gap:** The talk detail page (being built in 5.5b) does not surface a "Cancel external review" or "Re-translate" action for languages in `AwaitingThirdParty` state on a published talk. Admins who publish and later want to replace or fix an in-flight external review have no UI path.
+
+**Fix direction (when in scope):**
+- On the per-language panel of the talk detail/edit page, show a "Cancel external review" button when `workflowState === 'AwaitingThirdParty'`
+- On success, transition the language chip to `ReviewerAccepted` and expose a "Re-translate" button
+- No new backend endpoints needed
 
 ---
 

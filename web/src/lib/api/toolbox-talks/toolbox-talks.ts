@@ -108,6 +108,17 @@ export async function deleteToolboxTalk(id: string): Promise<void> {
   await apiClient.delete(`/toolbox-talks/${id}`);
 }
 
+export interface PublishTalkResult {
+  talkId: string;
+  status: string;
+  publishedAt: string;
+}
+
+export async function publishTalk(talkId: string): Promise<PublishTalkResult> {
+  const response = await apiClient.post<PublishTalkResult>(`/toolbox-talks/${talkId}/publish`);
+  return response.data;
+}
+
 // ============================================
 // Learning Wizard — Step 2 (Parse)
 // ============================================

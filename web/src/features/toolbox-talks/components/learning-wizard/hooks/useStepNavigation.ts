@@ -7,11 +7,14 @@ import { updateLastEditedStep } from '@/lib/api/toolbox-talks/toolbox-talks';
 import { isStepReachable, isStepSkipped, WIZARD_STEPS, TOTAL_STEPS } from '../lib/stepOrder';
 import { getStepUrl } from '../lib/urlState';
 import type { ToolboxTalk } from '@/types/toolbox-talks';
+import type { ValidationRunSummary } from '@/types/content-creation';
 
 interface UseStepNavigationOptions {
   talkId: string | null;
   currentStep: number;
   talk: ToolboxTalk | null;
+  /** Passed to isStepReachable for step 7 gate — required when target languages are declared */
+  validationRuns?: ValidationRunSummary[] | null;
 }
 
 export function useUpdateTalkStep(talkId: string | null) {
@@ -31,7 +34,7 @@ export function useUpdateTalkStep(talkId: string | null) {
   });
 }
 
-export function useStepNavigation({ talkId, currentStep, talk }: UseStepNavigationOptions) {
+export function useStepNavigation({ talkId, currentStep, talk, validationRuns }: UseStepNavigationOptions) {
   const router = useRouter();
   const updateStep = useUpdateTalkStep(talkId);
 
@@ -55,16 +58,16 @@ export function useStepNavigation({ talkId, currentStep, talk }: UseStepNavigati
   }, [currentStep, talkId, updateStep, router]);
 
   const goToStep = useCallback(async (step: number) => {
-    if (!isStepReachable(step, talk)) return;
+    if (!isStepReachable(step, talk, validationRuns)) return;
     if (step > currentStep && talkId) {
       await updateStep.mutateAsync(step);
     }
     router.push(getStepUrl(talkId, step));
-  }, [talk, currentStep, talkId, updateStep, router]);
+  }, [talk, validationRuns, currentStep, talkId, updateStep, router]);
 
   const reachableSteps = WIZARD_STEPS.map((s) => ({
     ...s,
-    reachable: isStepReachable(s.number, talk),
+    reachable: isStepReachable(s.number, talk, validationRuns),
     skipped: isStepSkipped(s.number, talk),
   }));
 
