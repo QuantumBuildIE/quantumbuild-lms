@@ -190,6 +190,18 @@ public class TranslationValidationJob
 
                     results.Add(result);
 
+                    // Auto-accept Pass sections when no user decision has been recorded yet.
+                    // Preserves existing decisions on re-validation (ReviewerDecision is only
+                    // Pending on initial creation; user-set decisions are untouched by the service).
+                    if (result.Outcome == ValidationOutcome.Pass
+                        && result.ReviewerDecision == Domain.Enums.ReviewerDecision.Pending)
+                    {
+                        result.ReviewerDecision = Domain.Enums.ReviewerDecision.Accepted;
+                        result.DecisionAt = DateTime.UtcNow;
+                        result.DecisionBy = "System";
+                        await _dbContext.SaveChangesAsync(cancellationToken);
+                    }
+
                     // Phase 2a: emit a TranslationFlag for every section that scored below threshold
                     if (result.Outcome is ValidationOutcome.Review or ValidationOutcome.Fail
                         && run.ToolboxTalkId.HasValue)

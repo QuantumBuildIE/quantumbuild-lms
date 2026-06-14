@@ -23,4 +23,9 @@ public record ValidationRunListDto
     public DateTime? StartedAt { get; init; }
     public DateTime? CompletedAt { get; init; }
     public DateTime CreatedAt { get; init; }
+    /// <summary>
+    /// True when this completed run has one or more non-Pass sections with ReviewerDecision = Pending.
+    /// Always false for non-Completed runs. Used by the wizard's Step 7 publish gate.
+    /// </summary>
+    public bool HasPendingDecisions { get; init; }
 }

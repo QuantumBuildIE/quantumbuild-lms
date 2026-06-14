@@ -754,13 +754,13 @@ Removed from Employee:
 #### 5.13 English-only learning creation blocked — Step 1 rejects empty target languages (§22)
 - **Priority:** P1
 - **Origin:** `[Internal-QA]`
-- **Status:** ✅ Done (2026-06-14) — joint chunk with §23; removed backend `.NotEmpty()` rule, relaxed frontend `.min(1)`, added `targetLanguageCodes.length > 0` gate to steps 5/6 reachability and `isStepSkipped`, fixed settings page `router.push(getStepUrl(talkId, 5))` bypass. Report: `docs/phase-5/reports/wizard-skip-regression-fix.md`.
+- **Status:** ✅ Done — 2026-06-14 — fixed in wizard-skip-regression chunk; smoke verified post-deploy (see `docs/phase-5/reports/wizard-skip-regression-fix.md` Scenarios A and B).
 - **Description:** The new wizard's Step 1 (Input & Config) rejects submissions where `targetLanguageCodes` is empty, blocking English-only learning creation. Additionally Steps 5 (Translate) and 6 (Validate) do not skip when no target languages are configured — they remain reachable even when there is nothing to translate or validate. Root cause: the backend `InitialiseToolboxTalkCommandValidator` enforces "At least one target language is required"; the frontend `stepOrder.ts` reachability rules for steps 5 and 6 gate on `talk.sections.length > 0` rather than on `targetLanguageCodes.length > 0`. Fix direction: (1) Remove the target-language validator rule. (2) Update step 5 and 6 reachability rules to return false when `targetLanguageCodes` is empty. (3) Confirm Continue-button navigation skips unreachable steps correctly. Recon: `docs/phase-5/reports/wizard-skip-regression-recon.md`.
 
 #### 5.14 Quiz-skipped declared but Continue lands on Quiz step (§23)
 - **Priority:** P1
 - **Origin:** `[Internal-QA]`
-- **Status:** ✅ Done (2026-06-14) — root cause shared with §22; `goNext()` in `useStepNavigation.ts` now uses `findNextReachableStep()` instead of `currentStep + 1`. Report: `docs/phase-5/reports/wizard-skip-regression-fix.md`.
+- **Status:** ✅ Done — 2026-06-14 — fixed in wizard-skip-regression chunk; smoke verified post-deploy (see `docs/phase-5/reports/wizard-skip-regression-fix.md` Scenarios A and B).
 - **Description:** When "include quiz" is deselected at Step 1, the wizard's step indicator correctly renders "3 Quiz — Skipped" on the Parse step, but clicking Continue on Step 2 (Parse) navigates to Step 3 (Quiz) instead of jumping past it to Step 4 (Settings). The display logic and the navigation logic are inconsistent — `isStepReachable` and the Continue-button next-step computation appear to use different signals. Root cause hypothesis: the step indicator reads from `isStepReachable(3, talk)` which correctly reflects the quiz-disabled flag; the Continue navigation calls `goToStep(currentStep + 1)` (integer increment) rather than `findNextReachable(currentStep)`. Fix direction: Make Continue use the same reachability logic the step indicator uses. If §22 and §23 share the same navigation root cause, a single fix chunk closes both. Recon: `docs/phase-5/reports/wizard-skip-regression-recon.md`.
 
 ---
@@ -1161,7 +1161,7 @@ but no data corruption, no workflow blocker.
 
 **Priority:** P1
 **Origin:** [Internal-QA]
-**Status:** Open — pending product decision
+**Status:** Superseded by §23 (Reviewer-action UI missing on Validate step, consolidated), 2026-06-14.
 **Surfaced:** 2026-06-14, during wizard-skip-fix smoke (Scenario C).
 
 The new wizard's Validate step ports the per-section validation
@@ -1433,6 +1433,47 @@ tests covering each state in:
 Also cover the defensive default: passing `validationRuns = undefined` with
 target languages declared must behave identically to passing `[]` (both
 return `false` — the `?? []` guard is the enforcement point).
+
+---
+
+## 23. Reviewer-action UI missing on Validate step (consolidated)
+
+**Priority:** P1
+**Origin:** [Internal-QA]
+**Status:** Open — pending product decision
+**Surfaced:** 2026-06-14, during wizard-skip-fix smoke (Scenario C) and 5.5b smoke Scenario 3 setup.
+**Supersedes:** §20 (Per-section accept/reject UI gap, 2026-06-14).
+**Related:** §21 (Post-publish translation management UI — AwaitingThirdParty languages, talk detail page).
+
+The new wizard's Validate step (and its detail pages) ports the full display of validation outcomes — scores, back-translations, consensus calculations, safety threshold, critical terms, regulatory scoring panel — but ports none of the reviewer-action UI from the old wizard. The user can read everything; they can act on nothing.
+
+Three actions are documented as missing in the validate-step UI:
+
+1. **Initiate external review.** No UI to send a Validated/Verified translation to a third-party reviewer. Backend endpoint exists: `POST /api/toolbox-talks/{id}/translations/{lang}/initiate-external-review`. Surfaced 2026-06-14 while attempting smoke Scenario 3 — could not drive the talk into AwaitingThirdParty state through the wizard.
+
+2. **Accept/reject per section.** No UI to resolve a Review-state section outcome. Surfaced 2026-06-14 during Scenario C smoke. Old wizard reference: `create-wizard/steps/ValidateStep.tsx:186` gates continuation on `allSectionsDecided`.
+
+3. **Accept translation as final.** No UI for the `POST .../translations/{lang}/accept` endpoint that transitions ThirdPartyReviewed → Accepted. Related to action 1 above.
+
+A fourth action — cancel external review for languages already in AwaitingThirdParty — is tracked separately as §21 (talk detail page, post-publish path). Same root cause: backend endpoint exists, no UI exposes it.
+
+### Product decisions required before implementation
+
+These actions need product positions before scoping. Some positions interact — e.g., if external review is genuinely optional/vestigial, action 1 staying missing is fine; if it's a real workflow, all three are required.
+
+- **Per-section review resolution** (action 2): Strict (must resolve all Review-state before publish), Permissive (informational, can publish past), or Strict-with-override (single ack covers all).
+- **External review workflow** (actions 1 and 3): if the workflow is meant to be used, both need UI. If it's Phase 4 work that hasn't shipped yet, both can stay missing for now, with a small notice or placeholder added so users know it's unavailable rather than broken.
+
+### Implementation scope (depends on decisions)
+
+- If reviewer actions are intended as workflow features: substantial chunk — per-section action buttons, decision persistence (likely new fields on TranslationValidationResult or a separate decisions entity), external-review initiate/accept UI on the validate detail page, plus the cancel UI from §21. Estimated 3-4 days.
+- If Permissive on action 2 and external review is Phase 4 work: small chunk — placeholder notices, close the rest as "intentional behavior for now." Estimated half a day.
+
+### Reference
+
+Screenshots 2026-06-14: validation run detail page for "Validation Run — NL" with full read-side detail (Run Details panel, Score 89%, section L01 with Review outcome and full back-translation evidence, L02 with Pass outcome and Verified consensus, Regulatory Score panel). No actions other than regulatory-scoring buttons. No path to initiate external review or to resolve section review state.
+
+5.5b smoke Scenario 3 (AwaitingThirdParty warning banner runtime smoke) is blocked on this entry — Scenario 3 cannot be driven through the UI until the initiate-external-review action exists. Banner code itself is verified at `PublishStep.tsx:434-446` (correct copy, correct pluralization, includes language-list interpolation).
 
 ---
 

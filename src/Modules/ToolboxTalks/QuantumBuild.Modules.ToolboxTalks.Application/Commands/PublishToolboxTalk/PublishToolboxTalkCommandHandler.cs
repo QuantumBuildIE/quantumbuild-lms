@@ -52,6 +52,27 @@ public class PublishToolboxTalkCommandHandler
                 return Result.Fail<PublishTalkResult>(
                     "At least one translation must have a completed validation run before publishing.",
                     FailureCode.WorkflowInvalidState);
+
+            // Strict review gate: all non-Pass sections across completed runs must have
+            // a reviewer decision. Pass sections are auto-accepted by the validation job.
+            var hasPendingNonPassDecisions = await (
+                from run in _dbContext.TranslationValidationRuns
+                join result in _dbContext.TranslationValidationResults
+                    on run.Id equals result.ValidationRunId
+                where run.ToolboxTalkId == request.TalkId
+                    && run.TenantId == request.TenantId
+                    && run.Status == ValidationRunStatus.Completed
+                    && !run.IsDeleted
+                    && !result.IsDeleted
+                    && result.Outcome != ValidationOutcome.Pass
+                    && result.ReviewerDecision == ReviewerDecision.Pending
+                select 1
+            ).AnyAsync(ct);
+
+            if (hasPendingNonPassDecisions)
+                return Result.Fail<PublishTalkResult>(
+                    "All review and fail sections require a reviewer decision before publishing.",
+                    FailureCode.WorkflowInvalidState);
         }
 
         var publishedAt = DateTime.UtcNow;

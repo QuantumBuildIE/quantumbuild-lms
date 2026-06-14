@@ -23,6 +23,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.ContentCreation
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Pdf;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Storage;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Subtitles;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Validation;
 using QuantumBuild.Tests.Common.TestTenant;
 using QuantumBuild.Tests.Integration.Setup.Fakes;
 using Respawn;
@@ -225,6 +226,12 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
             services.AddSingleton<IContentParserService>(FakeContentParserService);
             services.RemoveAll<IPdfExtractionService>();
             services.AddSingleton<IPdfExtractionService>(FakePdfExtractionService);
+
+            // Replace real translation validation service to avoid external API calls
+            // (Claude Haiku, DeepL, Gemini). The fake returns deterministic Pass results
+            // and preserves existing reviewer decisions exactly as the real service does.
+            services.RemoveAll<ITranslationValidationService>();
+            services.AddScoped<ITranslationValidationService, FakeTranslationValidationService>();
         });
 
         builder.UseEnvironment("Testing");

@@ -158,7 +158,11 @@ public class TranslationValidationController : ControllerBase
                     AuditReportUrl = r.AuditReportUrl,
                     StartedAt = r.StartedAt,
                     CompletedAt = r.CompletedAt,
-                    CreatedAt = r.CreatedAt
+                    CreatedAt = r.CreatedAt,
+                    HasPendingDecisions = r.Status == ValidationRunStatus.Completed
+                        && r.Results.Any(res => !res.IsDeleted
+                            && res.Outcome != ValidationOutcome.Pass
+                            && res.ReviewerDecision == ReviewerDecision.Pending),
                 });
 
             var result = await PaginatedList<ValidationRunListDto>.CreateAsync(

@@ -4,6 +4,7 @@ using QuantumBuild.Core.Infrastructure.Data;
 using QuantumBuild.Core.Infrastructure.Identity;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
+using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 using System.Text.Json.Serialization;
 
 namespace QuantumBuild.Tests.Integration.ToolboxTalks;
@@ -124,6 +125,64 @@ public class PublishToolboxTalkTests : IntegrationTestBase
         };
         db.Set<TranslationValidationRun>().Add(run);
         await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Seeds a completed run with one result having the given outcome and decision.
+    /// Returns the run ID.
+    /// </summary>
+    private async Task<Guid> SeedRunWithResultAsync(
+        Guid talkId,
+        ValidationOutcome outcome,
+        ReviewerDecision decision,
+        string languageCode = "fr")
+    {
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        var runId = Guid.NewGuid();
+        var run = new TranslationValidationRun
+        {
+            Id = runId,
+            TenantId = TestTenantConstants.TenantId,
+            ToolboxTalkId = talkId,
+            LanguageCode = languageCode,
+            SectorKey = "construction",
+            Status = ValidationRunStatus.Completed,
+            PassThreshold = 75,
+            TotalSections = 1,
+            PassedSections = outcome == ValidationOutcome.Pass ? 1 : 0,
+            ReviewSections = outcome == ValidationOutcome.Review ? 1 : 0,
+            FailedSections = outcome == ValidationOutcome.Fail ? 1 : 0,
+            OverallScore = outcome == ValidationOutcome.Pass ? 90 : 60,
+            OverallOutcome = outcome,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        db.Set<TranslationValidationRun>().Add(run);
+
+        var result = new TranslationValidationResult
+        {
+            Id = Guid.NewGuid(),
+            ValidationRunId = runId,
+            SectionIndex = 0,
+            SectionTitle = "Test Section",
+            OriginalText = "Safety content.",
+            TranslatedText = "Contenu de sécurité.",
+            FinalScore = outcome == ValidationOutcome.Pass ? 90 : 60,
+            Outcome = outcome,
+            EngineOutcome = outcome,
+            ReviewerDecision = decision,
+            DecisionAt = decision != ReviewerDecision.Pending ? DateTime.UtcNow : null,
+            DecisionBy = decision != ReviewerDecision.Pending ? "System" : null,
+            EffectiveThreshold = 75,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        db.Set<TranslationValidationResult>().Add(result);
+
+        await db.SaveChangesAsync();
+        return runId;
     }
 
     // ── tests ─────────────────────────────────────────────────────────────────
@@ -277,5 +336,164 @@ public class PublishToolboxTalkTests : IntegrationTestBase
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    // ── Strict review gate (added for §23) ───────────────────────────────────
+
+    // 9 — Review-outcome section with Pending decision → 409 (strict gate blocks publish)
+    [Fact]
+    public async Task PublishByTalkId_ReviewSectionWithPendingDecision_Returns409()
+    {
+        // Arrange — talk with a completed run containing an un-decided Review section
+        var talkId = await CreateTalkWithSectionsAsync();
+        await SetTargetLanguagesAsync(talkId, "fr");
+        await SeedRunWithResultAsync(talkId, ValidationOutcome.Review, ReviewerDecision.Pending);
+
+        // Act
+        var response = await AdminClient.PostAsJsonAsync(
+            $"/api/toolbox-talks/{talkId}/publish", new { });
+
+        // Assert — strict gate rejects before publish
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+    }
+
+    // 10 — Review-outcome section with Accepted decision → 200 (gate passes)
+    [Fact]
+    public async Task PublishByTalkId_ReviewSectionWithAcceptedDecision_Returns200()
+    {
+        // Arrange — talk with a completed run containing a decided Review section
+        var talkId = await CreateTalkWithSectionsAsync();
+        await SetTargetLanguagesAsync(talkId, "fr");
+        await SeedRunWithResultAsync(talkId, ValidationOutcome.Review, ReviewerDecision.Accepted);
+
+        // Act
+        var response = await AdminClient.PostAsJsonAsync(
+            $"/api/toolbox-talks/{talkId}/publish", new { });
+
+        // Assert — gate is satisfied; publish succeeds
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var result = await response.Content.ReadFromJsonAsync<PublishTalkResult>();
+        result!.Status.Should().Be("Published");
+    }
+
+    // 11 — Pass section with auto-accepted (System) decision → 200 (gate passes)
+    [Fact]
+    public async Task PublishByTalkId_PassSectionWithSystemDecision_Returns200()
+    {
+        // Arrange — simulates the auto-accept path: Pass section, Accepted by "System"
+        var talkId = await CreateTalkWithSectionsAsync();
+        await SetTargetLanguagesAsync(talkId, "fr");
+        await SeedRunWithResultAsync(talkId, ValidationOutcome.Pass, ReviewerDecision.Accepted);
+
+        // Act
+        var response = await AdminClient.PostAsJsonAsync(
+            $"/api/toolbox-talks/{talkId}/publish", new { });
+
+        // Assert — Pass sections are always accepted; publish succeeds
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    // 12 — Re-validation preserves user decision when outcome changes to Pass
+    //
+    // Scenario: a section started as Review with ReviewerDecision = Edited.
+    // The job re-runs on that section (e.g. after an edit). The fake service returns
+    // Outcome = Pass. The auto-accept guard (lines 196-203 of TranslationValidationJob)
+    // must NOT fire because ReviewerDecision != Pending.
+    [Fact]
+    public async Task ReValidation_PreservesUserDecisionWhenOutcomeChangesToPass()
+    {
+        // Arrange — create a talk with one section
+        var talkId = await CreateTalkWithSectionsAsync();
+        await SetTargetLanguagesAsync(talkId, "fr");
+
+        // Get the section ID so we can build a matching translation JSON
+        using var setupScope = Factory.Services.CreateScope();
+        var setupDb = setupScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var section = await setupDb.Set<ToolboxTalkSection>().IgnoreQueryFilters()
+            .FirstOrDefaultAsync(s => s.ToolboxTalkId == talkId && !s.IsDeleted);
+        section.Should().NotBeNull("talk must have at least one section");
+
+        // Seed a translation so LoadSectionsAsync doesn't fall through to the translation API
+        var translationJson = $"[{{\"SectionId\":\"{section!.Id}\",\"Title\":\"Titre sécurité\",\"Content\":\"<p>Contenu sécurité.</p>\"}}]";
+        setupDb.Set<ToolboxTalkTranslation>().Add(new ToolboxTalkTranslation
+        {
+            Id = Guid.NewGuid(),
+            TenantId = TestTenantConstants.TenantId,
+            ToolboxTalkId = talkId,
+            LanguageCode = "fr",
+            TranslatedSections = translationJson,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        });
+        await setupDb.SaveChangesAsync();
+
+        // Seed a completed run with a Review-outcome section the reviewer already Edited
+        var runId = Guid.NewGuid();
+        var originalDecisionAt = DateTime.UtcNow.AddHours(-1);
+        const string originalDecisionBy = "test-reviewer";
+        const string originalEditedTranslation = "Contenu édité par le réviseur.";
+
+        setupDb.Set<TranslationValidationRun>().Add(new TranslationValidationRun
+        {
+            Id = runId,
+            TenantId = TestTenantConstants.TenantId,
+            ToolboxTalkId = talkId,
+            LanguageCode = "fr",
+            SectorKey = "construction",
+            Status = ValidationRunStatus.Completed,
+            PassThreshold = 75,
+            TotalSections = 1,
+            PassedSections = 0,
+            ReviewSections = 1,
+            FailedSections = 0,
+            OverallScore = 60,
+            OverallOutcome = ValidationOutcome.Review,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        });
+        setupDb.Set<TranslationValidationResult>().Add(new TranslationValidationResult
+        {
+            Id = Guid.NewGuid(),
+            ValidationRunId = runId,
+            SectionIndex = 0,
+            SectionTitle = "Section 1",
+            OriginalText = "Safety content.",
+            TranslatedText = "Contenu de sécurité.",
+            FinalScore = 60,
+            Outcome = ValidationOutcome.Review,
+            EngineOutcome = ValidationOutcome.Review,
+            ReviewerDecision = ReviewerDecision.Edited,
+            EditedTranslation = originalEditedTranslation,
+            DecisionAt = originalDecisionAt,
+            DecisionBy = originalDecisionBy,
+            EffectiveThreshold = 75,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        });
+        await setupDb.SaveChangesAsync();
+
+        // Act — invoke the job directly for section 0 only.
+        // FakeTranslationValidationService returns Outcome = Pass.
+        using var jobScope = Factory.Services.CreateScope();
+        var job = jobScope.ServiceProvider.GetRequiredService<TranslationValidationJob>();
+        await job.ExecuteAsync(runId, TestTenantConstants.TenantId, new[] { 0 });
+
+        // Assert — outcome changed to Pass, but user decision was NOT overwritten
+        using var assertScope = Factory.Services.CreateScope();
+        var assertDb = assertScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var result = await assertDb.Set<TranslationValidationResult>().IgnoreQueryFilters()
+            .FirstOrDefaultAsync(r => r.ValidationRunId == runId && r.SectionIndex == 0);
+
+        result.Should().NotBeNull();
+        result!.Outcome.Should().Be(ValidationOutcome.Pass,
+            "fake service returned Pass for the re-validated section");
+        result.ReviewerDecision.Should().Be(ReviewerDecision.Edited,
+            "auto-accept guard only fires when ReviewerDecision == Pending; Edited must be preserved");
+        result.DecisionAt.Should().BeCloseTo(originalDecisionAt, precision: TimeSpan.FromSeconds(5),
+            "DecisionAt must not be updated — this was the human reviewer's decision time");
+        result.DecisionBy.Should().Be(originalDecisionBy,
+            "DecisionBy must remain the human reviewer's name, not overwritten with 'System'");
+        result.EditedTranslation.Should().Be(originalEditedTranslation,
+            "EditedTranslation must not be cleared by the re-validation job");
     }
 }

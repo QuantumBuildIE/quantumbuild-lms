@@ -82,7 +82,13 @@ export function isStepReachable(
       // Target languages declared — explicit handling of validation runs state
       const runs = validationRuns ?? [];
       if (runs.length === 0) return false; // none exist (not fetched yet, or no runs created)
-      return runs.some((r) => r.status === 'Completed');
+
+      const completedRuns = runs.filter((r) => r.status === 'Completed');
+      if (completedRuns.length === 0) return false;
+
+      // Strict review gate: every completed run must have no pending non-Pass decisions.
+      // Pass sections are auto-accepted by the backend on validation completion.
+      return !completedRuns.some((r) => r.hasPendingDecisions);
     }
     default:
       return false;

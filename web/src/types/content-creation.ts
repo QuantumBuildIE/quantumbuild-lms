@@ -156,6 +156,8 @@ export interface ValidationRunSummary {
   startedAt: string | null;
   completedAt: string | null;
   createdAt: string;
+  /** True when this completed run has non-Pass sections awaiting a reviewer decision. */
+  hasPendingDecisions: boolean;
 }
 
 export interface ValidationRunDetail {

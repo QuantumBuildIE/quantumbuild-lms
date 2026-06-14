@@ -128,3 +128,71 @@ Scenario A from this chunk is equivalent to 5.5b smoke Scenario 1 — 5.5b smoke
 - **5.14** closed — see section 3 of BACKLOG.md
 - **Integration test** `EmptyTargetLanguageCodes_Returns201` updated — out-of-scope disclosure in §3 above
 - No new BACKLOG items introduced by this chunk
+
+---
+
+## Post-deploy smoke evidence (2026-06-14)
+
+**Environment:** Railway transval (production deploy)
+**Browser:** Chrome (smoke session)
+
+### Scenario A — English-only end-to-end
+
+**What this verifies:** Creating an English-only learning, walking through Settings, and verifying the wizard skips Translate and Validate to land on Publish.
+
+**Steps and observations:**
+1. Created draft talk with source language, no target languages. Step 1 form accepted the submission; no "at least one target language is required" error.
+2. Parsed content (2 sections), continued through Quiz and Settings.
+3. Clicked Continue on Settings → wizard navigated directly to Step 7 Publish.
+4. Step indicator showed Steps 5 (Translate) and 6 (Validate) as "— Skipped".
+5. Publish → success, navigated to talk detail page.
+
+**Key observation:** Settings → Publish skip works end-to-end. Steps 5 and 6 are not visited.
+
+**Verdict:** ✅ Pass
+
+### Scenario B — Quiz-disabled end-to-end
+
+**What this verifies:** When "include quiz" is deselected, the wizard skips Quiz (Step 3) on Continue from Parse.
+
+**Steps and observations:**
+1. Created draft talk with source + at least one target language, "include quiz" deselected on Step 1.
+2. Parsed content; step indicator showed Step 3 as "Quiz — Skipped".
+3. Clicked Continue on Parse → wizard navigated to Step 4 Settings (not Step 3 Quiz).
+4. Continued through remaining steps; reached Publish without ever stopping on Quiz.
+
+**Key observation:** Parse → Settings skip works; Quiz step is not visited.
+
+**Verdict:** ✅ Pass
+
+### Scenario C — Multi-language + quiz regression guard
+
+**What this verifies:** The wizard does not over-skip on the happy path; every step in a multi-language + quiz flow remains reachable. Also verifies the validate-page wiring fix (Continue button enabled at Step 6 once at least one validation run completes).
+
+**Steps and observations:**
+1. Created draft talk with source + three target languages (RU, AF, French) + quiz enabled.
+2. Walked through every step in order: Parse → Quiz → Settings → Translate → Validate.
+3. Translations completed across all three languages.
+4. Validation runs completed; outcomes varied (Pass, Review).
+5. On Step 6 Validate, Continue button was enabled.
+6. Continue on Step 6 → navigated to Step 7 Publish.
+7. Publish succeeded.
+
+**Key observation:** Continue enabled at Step 6 despite Review-state outcomes (the previously-broken case). Validate-page wiring fix verified working. No step is over-skipped.
+
+**Verdict:** ✅ Pass
+
+**Observations (not blockers):** Validate step's detail pages render full read-side information (scores, back-translations, consensus calculations, regulatory scoring panel) but expose no reviewer-action UI for per-section accept/reject or initiate-external-review. Logged as consolidated BACKLOG entry §23 (see BACKLOG.md).
+
+### Summary
+
+| Scenario | Verifies | Verdict |
+|---|---|---|
+| A | English-only skip path (Settings → Publish, skipping 5 and 6) | ✅ |
+| B | Quiz-disabled skip path (Parse → Settings, skipping 3) | ✅ |
+| C | Multi-language + quiz regression guard; validate-page wiring | ✅ |
+
+**Overall:** All three scenarios pass. Validate-page wiring bug verified closed via Scenario C.
+
+**BACKLOG entries closed by passing smoke:** §5.13 (English-only blocked), §5.14 (quiz skip not honored).
+**BACKLOG entries surfaced during smoke:** Consolidated reviewer-action UI entry §23 (see BACKLOG.md).
