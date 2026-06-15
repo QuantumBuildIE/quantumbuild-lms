@@ -760,8 +760,7 @@ Removed from Employee:
 #### 5.17 First-language row state lag in Step 5 Translate under Start All
 - **Priority:** P1
 - **Origin:** `[Internal-QA]`
-- **Status:** Open (surfaced 2026-06-12)
-- **Description:** After the 5.4 SignalR timeout fix landed, smoke surfaced that the first language started via Start All (RU in the 2026-06-12 test case) keeps "Start" button state through its own completion and only flips to "Validated" once the other languages also complete. WebSocket survives the full job duration (51.73s for a 50s job per Network tab), so `ValidationComplete` is received client-side while the connection is open — the bug is downstream of event receipt, not the same shape as 5.4. Suspected: cache-invalidation or query-key mismatch in the `LanguageItem` row component, OR a subscription-timing artifact specific to the first language under the 1000ms stagger added in 5.5-translate-start-all. Recon needed: identify which query the row reads from vs. which cache key the validation hub event handler updates, and check whether the `WorkflowSubscriber` for the first `runId` mounts before or after that runId's first event fires.
+- **Status:** ✅ Done — 2026-06-15 — fixed in §5.17 chunk. `TranslationValidationJob` now calls `StartValidation` immediately after Phase A (TotalSections save), before Phase B (section validation loop), keeping the language in `Validating` state (which is in `ACTIVE_STATES`) for Phase B's duration. `WorkflowSubscriber` stays mounted; `ValidationComplete` events are received and trigger correct UI refetch. Root-cause recon in `docs/phase-5/reports/5.17-row-state-lag-recon.md`. Smoke verification needed post-deploy.
 - **Reference:** `docs/phase-5/reports/5.4-signalr-timeout-fix.md` smoke evidence section.
 
 #### 5.18 Frontend test framework not installed
@@ -1121,46 +1120,7 @@ the translation pipeline.
 
 ## 10. ValidationStarted → Initial state mapping gap (deferred from Phase 3b.1.2)
 
-The `EventTypeToState` mapping in `TranslationWorkflowService` does
-not handle `WorkflowEventTypes.ValidationStarted` — it falls through
-to the default `Initial` state. Phase 3b.1.2 addressed the symmetric
-`TranslationStarted → Initial` gap by adding a `Translating` state
-and updating Phase 3a guards. The validation-side equivalent
-(`Validating` state) was deferred.
-
-**Affected sites:**
-- `TranslationWorkflowService.EventTypeToState` — no case for
-  `ValidationStarted`
-- The Phase 3a guard on `StartValidation` correctly rejects from
-  the current `Initial` fallthrough (since it requires `AIGenerated`),
-  so the gap does not silently break anything today. But it does
-  mean `GetState` reports `Initial` mid-validation, which is misleading.
-
-**Why deferred from Phase 3b:**
-- Phase 3 is the edit-page integration; validation flow integration
-  is a different surface and was addressed in Phase 2.
-- Validation completion happens through `TranslationValidationJob`,
-  not via a `RecordValidationCompleted` method on the workflow
-  service. Closing this gap properly requires either:
-    a) Adding a `RecordValidationCompleted` method that the job calls.
-    b) Having the job write `ValidationCompleted` events directly
-       (consistency with how it works today, but bypasses the
-       workflow service's guard logic).
-- Either approach is wider than Phase 3 should fold in.
-
-**Work required:**
-1. Decide between approach (a) or (b) above.
-2. Add `Validating` to the `TranslationWorkflowState` enum.
-3. Map `ValidationStarted → Validating` in `EventTypeToState`.
-4. If approach (a): add `RecordValidationCompleted` to
-   `ITranslationWorkflowService`, implement with idempotency, wire
-   `TranslationValidationJob` to call it at the right point.
-5. If approach (b): document the bypass explicitly in the service's
-   XML comments.
-6. Update Phase 3a guards that reference `AIGenerated` (e.g.,
-   `StartValidation`) to consider whether `Validating` is also a
-   legal source state.
-7. Add integration tests for the new state and any new method.
+**Status:** ✅ Done — 2026-06-15 — silently closed by earlier work that added `Validating` to `TranslationWorkflowState` and mapped `ValidationStarted → Validating` in `EventTypeToState`. The `StartValidation` method and `RecordValidationCompleted` method on `ITranslationWorkflowService` were added at the same time (approach (a) chosen). Now exercised in production code by the §5.17 fix — `TranslationValidationJob.ExecuteAsync` calls `StartValidation` before Phase B begins and `RecordValidationCompleted` at Phase B end. The full lifecycle (`Translating → AIGenerated → Validating → Validated`) is now observably written end-to-end for new-wizard runs.
 
 **Surfaced:** 2026-06-08, during Phase 3b.1.2 recon.
 

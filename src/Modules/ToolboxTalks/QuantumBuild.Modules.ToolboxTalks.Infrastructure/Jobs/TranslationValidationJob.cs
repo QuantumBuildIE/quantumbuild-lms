@@ -155,6 +155,26 @@ public class TranslationValidationJob
             run.TotalSections = sections.Count;
             await _dbContext.SaveChangesAsync(cancellationToken);
 
+            // Advance to Validating before Phase B begins so WorkflowSubscriber stays mounted
+            // for the duration of back-translation. Without this, state stays AIGenerated
+            // (not in ACTIVE_STATES) and a refetch triggered by another language completing
+            // will unmount the subscriber mid-job, causing it to miss the ValidationComplete
+            // event (§5.17 fix). Guard: new-wizard talk-scoped runs only — old-wizard runs
+            // stay in Translating throughout and must not receive a second StartValidation call.
+            if (run.ToolboxTalkId.HasValue && run.IsNewWizard)
+            {
+                var startValidationResult = await _workflowService.StartValidation(
+                    run.ToolboxTalkId.Value,
+                    run.LanguageCode,
+                    explicitTenantId: tenantId,
+                    ct: cancellationToken);
+
+                if (!startValidationResult.Success)
+                    _logger.LogWarning(
+                        "StartValidation returned failure for talk {TalkId}, lang {Lang}: {Error}",
+                        run.ToolboxTalkId, run.LanguageCode, startValidationResult.Errors.FirstOrDefault());
+            }
+
             // Pre-flight scan — non-blocking, never fails the job
             await RunPreFlightScanAsync(run, sections, cancellationToken);
 
