@@ -819,7 +819,7 @@ return `false` — the `?? []` guard is the enforcement point).
 
 - **Priority:** P2
 - **Origin:** `[Engineering]`
-- **Status:** Partially closed — SuperUser slice closed by §5.22 fix (2026-06-15)
+- **Status:** ✅ Done — 2026-06-15 — Closed by §5.22 (SuperUser slice) and recon (regular-admin slice was a phantom). The Phase 5.3b smoke observation was SuperUser-only; the §5.22 fix (removing the TenantQueryInvalidator hydration redirect) eliminated the cause. Regular admins were never affected — the `(authenticated)/layout.tsx:30-36` spinner-gate prevents downstream layouts from mounting during auth hydration, so no stale-state redirect could fire. SU + All Tenants mode (`activeTenantId === null`) bouncing to `/admin/tenants` is by-design per `admin/layout.tsx:52-58`. Recon: `docs/phase-5/reports/5.20-refresh-amendment-recon.md`.
 - **Surfaced:** 2026-06-11 during Phase 5.3b smoke.
 
 Phase 5.3b smoke (2026-06-11) confirmed the side effect: refresh
