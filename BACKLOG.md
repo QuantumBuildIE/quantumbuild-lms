@@ -1161,7 +1161,7 @@ but no data corruption, no workflow blocker.
 
 **Priority:** P1
 **Origin:** [Internal-QA]
-**Status:** Superseded by §23 (Reviewer-action UI missing on Validate step, consolidated), 2026-06-14.
+**Status:** ✅ Done — 2026-06-15 — Strict review workflow ported from old wizard with backend enforcement, auto-accept Pass, and no-bypass design. Cache invalidation fix shipped as follow-up. Smoke verified post-deploy (see `docs/phase-5/reports/strict-review-workflow-port.md` Scenarios 1, 2, 3).
 **Surfaced:** 2026-06-14, during wizard-skip-fix smoke (Scenario C).
 
 The new wizard's Validate step ports the per-section validation

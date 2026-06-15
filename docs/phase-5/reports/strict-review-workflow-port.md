@@ -87,3 +87,76 @@ All previously-passing tests — including tests 9, 10, 11 (strict-review gate: 
 Notable non-fatal warnings observed in the new test run:
 - `PreFlightScanService.CallClaudeAsync` throws (no Claude API key in test environment) — caught by `RunPreFlightScanAsync` try-catch, job continues
 - `RecordValidationCompleted` returns failure (workflow state is `Initial`, not `Validating`) — logged as warning, job continues
+
+---
+
+## Post-deploy smoke evidence (2026-06-15)
+
+**Environment:** Railway transval (production deploy)
+**Browser:** Chrome (smoke session)
+
+### Scenario 1 — Auto-accept Pass end-to-end
+
+**What this verifies:** When validation produces all-Pass outcomes, sections auto-accept and Continue enables without any user action.
+
+**Steps and observations:**
+1. Created draft talk with source + one target language (Russian), simple content.
+2. Translation and validation completed.
+3. Step 6 Validate: both sections showed Pass outcome with "Accepted" badges automatically — no user action taken.
+4. Summary bar: "2 passed · 0 for review · 0 failed · Ready to publish".
+5. Continue enabled; clicked through to Publish; publish succeeded.
+
+**Key observation:** Auto-accept Pass logic at `TranslationValidationJob.cs:196-203` working as designed. Pass-outcome sections receive `ReviewerDecision = Accepted` with `DecisionBy = "System"` on validation completion.
+
+**Verdict:** ✅ Pass
+
+### Scenario 2 — Strict gate enforces with user resolution
+
+**What this verifies:** When validation produces Review-state sections, Continue is blocked until each section is decided. Accept actions work.
+
+**Setup:** Single target language, content engineered to produce at least one Review outcome.
+
+**Steps and observations:**
+1. Created draft talk with source + one target language (Russian).
+2. Used Safety Protocol content (confined spaces + chemical spill response).
+3. Validation produced 1 Pass, 1 Review outcome.
+4. At Step 6: Review section had no decision badge; Pass section had Accepted badge; Continue was disabled. ✅ Gate enforcing correctly.
+5. Clicked Accept on Review section. Badge changed to "Accepted".
+6. **Bug surfaced:** Continue remained disabled despite all sections now Accepted. Summary bar showed correct counts ("1 passed · 1 for review · 0 failed") but gate failed.
+7. Root cause traced via DevTools Network tab: section decision mutations refetched the run detail query but did not invalidate the `validationRuns` list query that feeds the navigation gate via the `hasPendingDecisions` derived field.
+8. Fix applied (see follow-up commit): `useSectionDecision` and `useSessionSectionDecision` now invalidate `contentCreationKeys.validationRuns(talkId)` on success.
+9. Re-tested after fix deploy: Accept enabled Continue immediately, no page refresh required.
+
+**Key observation:** Strict gate correctly blocks until all non-Pass sections have decisions. Fix to mutation cache invalidation was load-bearing for the gate to function in practice.
+
+**Verdict:** ✅ Pass (after follow-up fix)
+
+### Scenario 3 — Tab strip multi-language
+
+**What this verifies:** Switching languages via tabs changes which sections render; amber dots on tabs correctly indicate which languages have pending decisions.
+
+**Steps and observations:**
+1. Created draft talk with source + three target languages (RU, AF, French).
+2. Used Equipment Maintenance content (3 sections).
+3. After all validation runs completed, Step 6 rendered tab strip with three language buttons.
+4. RU tab showed amber dot (1 Pass, 2 Review for that language). AF and French tabs showed no dots (all Pass auto-accepted for those languages).
+5. Switching tabs correctly updated the section list shown below.
+6. Accepted both Review-state sections on RU tab. Amber dot disappeared once all RU sections decided.
+7. Summary bar reflected aggregate state across all languages correctly.
+8. Continue enabled once all languages clean across all tabs; Publish succeeded.
+
+**Key observation:** Tab strip with per-language pending indicators works. The cache invalidation fix from Scenario 2 also propagates to the tab strip's amber dot computation, since both read from the same `validationRuns` list query.
+
+**Verdict:** ✅ Pass
+
+### Summary
+
+| Scenario | Verifies | Verdict |
+|---|---|---|
+| 1 | Auto-accept Pass end-to-end | ✅ |
+| 2 | Strict gate enforces with user resolution | ✅ (after cache invalidation fix) |
+| 3 | Tab strip with amber dots clearing on resolution | ✅ |
+
+**Bug found and fixed during smoke:** Section decision mutations did not invalidate the `validationRuns` list query. Caused Continue button and amber dots to stay stale until manual page reload. One-file fix (six lines) applied and verified.
+
+**BACKLOG §23 closed by passing smoke.**
