@@ -248,6 +248,9 @@ export function useSectionDecision() {
       queryClient.invalidateQueries({
         queryKey: contentCreationKeys.validationRun(talkId, runId),
       });
+      queryClient.invalidateQueries({
+        queryKey: contentCreationKeys.validationRuns(talkId),
+      });
     },
   });
 }
@@ -455,6 +458,9 @@ export function useSessionSectionDecision() {
     onSuccess: (_, { talkId, runId }) => {
       queryClient.invalidateQueries({
         queryKey: contentCreationKeys.validationRun(talkId, runId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: contentCreationKeys.validationRuns(talkId),
       });
     },
   });
