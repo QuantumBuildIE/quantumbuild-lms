@@ -1,6 +1,6 @@
 # CertifiedIQ — Backlog (Source of Truth)
 
-**Last updated:** 13 June 2026
+**Last updated:** 15 June 2026
 **Purpose:** Comprehensive record of every known item — bug, feature, refactor, product decision — across the CertifiedIQ LMS. This is the long reference. For the active prioritised list, see `SPRINT.md`.
 
 ## Conventions
@@ -330,6 +330,25 @@ Source: `CertifiedIQ_Translator_UAT_Brief_Ryans_Bakery_v3.pdf` (27 May 2026). Re
   - Backend: extend `WorkflowEventDto` with `TriggeredByUserName` (nullable string), populated in the `GetHistory` implementation via a join to the user table on `TriggeredByUserId`. For System events the field stays null.
   - Frontend: update the modal's triggered-by line to "by {userName}" when present, falling back to "by User" when the type is User but the name is missing (defensive).
 - **Estimate:** Half a day, mostly backend.
+
+#### 1.2.15 Design review: Auditor audience role on ContentCreationSession
+- **Priority:** PD (Product Decision Required)
+- **Origin:** `[Internal-QA]`
+- **Status:** Open — design review required before further AudienceRole development
+
+Added during Ryan's UAT review as an AudienceRole value alongside Operator and Supervisor on quiz generation. Implementation generates different questions per audience string.
+
+Problem: Auditor is not an identity role in the system (production has SuperUser/Admin/Supervisor/Operator). There is no mechanism to assign a quiz to an Auditor user because no such user can exist. The "generate questions for Auditor audience" code path has no consumer — the questions cannot be taken.
+
+Two separable intents are conflated in the current design:
+(a) Learner-facing quiz tone varies by identity role (Operator vs Supervisor — both are real users who take quizzes).
+(b) Auditor-facing demonstration content — showing an external auditor "this is the kind of question we can generate" as evidence of training rigour, not as a quiz to be taken.
+
+These are different features with different storage, different UI, and different access patterns. Forcing them into a single AudienceRole string was a misread of the UAT feedback.
+
+Action: design review before more code is built on top of AudienceRole. Decide whether (a) and (b) are both in scope, drop the other, or rescope. Until then, no new features should branch on AudienceRole == "Auditor".
+
+Related: see `ContentCreationSession.cs` (AudienceRole property), `QuizGenerationPrompts.cs` (audience text variations), any frontend dropdown surfacing AudienceRole.
 
 ---
 
@@ -763,6 +782,28 @@ Removed from Employee:
 - **Status:** ✅ Done — 2026-06-14 — fixed in wizard-skip-regression chunk; smoke verified post-deploy (see `docs/phase-5/reports/wizard-skip-regression-fix.md` Scenarios A and B).
 - **Description:** When "include quiz" is deselected at Step 1, the wizard's step indicator correctly renders "3 Quiz — Skipped" on the Parse step, but clicking Continue on Step 2 (Parse) navigates to Step 3 (Quiz) instead of jumping past it to Step 4 (Settings). The display logic and the navigation logic are inconsistent — `isStepReachable` and the Continue-button next-step computation appear to use different signals. Root cause hypothesis: the step indicator reads from `isStepReachable(3, talk)` which correctly reflects the quiz-disabled flag; the Continue navigation calls `goToStep(currentStep + 1)` (integer increment) rather than `findNextReachable(currentStep)`. Fix direction: Make Continue use the same reachability logic the step indicator uses. If §22 and §23 share the same navigation root cause, a single fix chunk closes both. Recon: `docs/phase-5/reports/wizard-skip-regression-recon.md`.
 
+#### 5.15 Integration test suite — comprehensive review post-Phase 5
+- **Priority:** P2
+- **Origin:** `[Engineering]`
+- **Status:** Open — deferred to post-Phase 5
+
+The deprecated test user cleanup that the previous version of this entry scoped was completed in two commits before Phase 5.2:
+
+- `<insert hash 1>` — test(cleanup): remove deprecated test users and migrate to Operator
+- `<insert hash 2>` — test(cleanup): delete misleading and orphaned tests
+
+End state: 397 integration tests passing, zero role-not-found warnings, deprecated `TestUserType` values / `IntegrationTestBase` client properties / `TestTenantConstants` entries / orphaned playwright fixtures all removed. Three misleading tests (`AllAuthenticatedUsers_CanAccessEmployeesList`, `OnlyManagePermission_CanModifyEmployees`, `AllUsersInTenant_SeesSameEmployeeList`) deleted rather than rewritten.
+
+The remaining drift in the test suite is deferred to a dedicated post-Phase-5 review task. The test suite is too important to be repaired piecemeal between Phase 5 feature chunks. Phase 5 will not add tests to it beyond what strictly verifies non-obvious new behaviour (per `PHASE_5_STANDARDS` §11). The comprehensive review happens once Phase 5 closes and gets the time and attention it warrants.
+
+Scope when picked up:
+- Per-test triage of every integration test: still meaningful as written, misleading and rewriteable, or delete as obsolete
+- Playwright fixture audit (which fixtures are still active, which describe blocks should be unskipped or deleted)
+- Frontend test coverage decision: extend, leave sparse, or deliberately scope out
+- The seeder/JWT reconciliation (§12)
+- The `login.spec.ts` skipped block (3 tests remain in `test.describe.skip` after the pre-Phase-5 cleanup; review whether to delete the block or rewrite the tests)
+- E2E suite breadth — what's covered, what's missing, what's stale
+
 ---
 
 # 6. Security Notes (Product Decisions)
@@ -781,69 +822,6 @@ These are not backlog items — they're explicit product decisions with known tr
 - **Decision:** When Asset Management (2.2.1) ships, asset PINs will use the same plaintext storage model as employee PINs.
 - **Trade-off:** Same as 6.1 — recoverable from DB access. Slightly different risk profile because asset PINs are often deliberately the tenant's own internal IDs (e.g. `DIG-042`) which are not secret.
 - **Revisit:** Alongside 6.1 if/when the PIN storage model is reviewed.
-
----
-
-# 8. Design review: Auditor audience role on ContentCreationSession.
-
-Added during Ryan's UAT review as an AudienceRole value alongside Operator and Supervisor on quiz generation. Implementation generates different questions per audience string.
-
-Problem: Auditor is not an identity role in the system (production has SuperUser/Admin/Supervisor/Operator). There is no mechanism to assign a quiz to an Auditor user because no such user can exist.
-The "generate questions for Auditor audience" code path has no consumer — the questions cannot be taken.
-
-Two separable intents are conflated in the current design:
-(a) Learner-facing quiz tone varies by identity role (Operator vs Supervisor — both are real users who take quizzes).
-(b) Auditor-facing demonstration content — showing an external auditor "this is the kind of question we can generate" as evidence of training rigour, not as a quiz to be taken.
-
-These are different features with different storage, different UI, and different access patterns. Forcing them into a single AudienceRole string was a misread of the UAT feedback.
-
-Action: design review before more code is built on top of AudienceRole. Decide whether (a) and (b) are both in scope, drop the other, or rescope. Until then, no new features should branch on AudienceRole == "Auditor".
-
-Related: see ContentCreationSession.cs (AudienceRole property), QuizGenerationPrompts.cs (audience text variations), any frontend dropdown surfacing AudienceRole.
-
----
-
-## 8. Integration test suite — comprehensive review post-Phase 5
-
-The deprecated test user cleanup that the previous version of this
-entry scoped was completed in two commits before Phase 5.2:
-
-- `<insert hash 1>` — test(cleanup): remove deprecated test users
-  and migrate to Operator
-- `<insert hash 2>` — test(cleanup): delete misleading and orphaned
-  tests
-
-End state: 397 integration tests passing, zero role-not-found
-warnings, deprecated `TestUserType` values / `IntegrationTestBase`
-client properties / `TestTenantConstants` entries / orphaned
-playwright fixtures all removed. Three misleading tests
-(`AllAuthenticatedUsers_CanAccessEmployeesList`,
-`OnlyManagePermission_CanModifyEmployees`,
-`AllUsersInTenant_SeesSameEmployeeList`) deleted rather than
-rewritten.
-
-The remaining drift in the test suite is deferred to a dedicated
-post-Phase-5 review task. The test suite is too important to be
-repaired piecemeal between Phase 5 feature chunks. Phase 5 will
-not add tests to it beyond what strictly verifies non-obvious new
-behaviour (per `PHASE_5_STANDARDS` §11). The comprehensive review
-happens once Phase 5 closes and gets the time and attention it
-warrants.
-
-Scope when picked up:
-
-- Per-test triage of every integration test: still meaningful as
-  written, misleading and rewriteable, or delete as obsolete
-- Playwright fixture audit (which fixtures are still active,
-  which describe blocks should be unskipped or deleted)
-- Frontend test coverage decision: extend, leave sparse, or
-  deliberately scope out
-- The seeder/JWT reconciliation (§12)
-- The `login.spec.ts` skipped block (3 tests remain in
-  `test.describe.skip` after the pre-Phase-5 cleanup; review
-  whether to delete the block or rewrite the tests)
-- E2E suite breadth — what's covered, what's missing, what's
-  stale
 
 ---
 
@@ -947,11 +925,9 @@ and updating Phase 3a guards. The validation-side equivalent
 
 ## 11. Cancel external review — end-to-end
 
-No backend implementation exists for cancelling an external review
-invitation. The `InvitationStatus.Revoked` value is defined in the
-enum but is never written by any code path. There is no service
-method, no controller endpoint, no state transition out of
-`AwaitingThirdParty` via cancellation.
+**Update (2026-06-15):** The backend implementation now exists — `POST /api/toolbox-talks/{id}/translations/{languageCode}/cancel-external-review` is implemented and working (confirmed in §21 / 5.5a gap-check). The `InvitationStatus.Revoked` path is wired. The frontend UI to trigger cancellation has not been built; the remaining gap is a "Cancel external review" button on the per-language panel of the talk detail/edit page.
+
+The original scope of Phase 4 work described below is partially superseded. The backend items are complete; only the frontend trigger remains.
 
 Phase 4 must build, end-to-end:
 - `CancelExternalReview` service method on `ITranslationWorkflowService`
@@ -979,7 +955,7 @@ These two paths can silently produce different user representations
 for the same email. A test that authenticates via JWT-forge sees
 hardcoded permission claims; the same user looked up via the
 Identity-backed path sees whatever roles the seeder actually
-assigned (or, historically, none — see §8 history).
+assigned (or, historically, none — see §5.15 history).
 
 This was masked during the pre-Phase-5 cleanup because all the
 affected deprecated-role users have been removed. The divergence
@@ -999,7 +975,7 @@ Fix direction:
 
 Surfaced during the pre-Phase-5 test suite cleanup recon
 (2026-06-10). Deferred to the post-Phase-5 comprehensive test
-review (§8) because fixing it well requires touching test
+review (§5.15) because fixing it well requires touching test
 infrastructure that the review will be reshaping anyway.
 
 ---
@@ -1224,8 +1200,153 @@ documented, and implementation chunk gets scoped from there.
 
 ---
 
+## 29. Edit workflow design for new-wizard talks (P0 — design required)
+
+**Priority:** P0 — design required before any post-Phase-5 work that depends on edit behavior.
+**Origin:** [Internal-QA]
+**Status:** Open — design recon needed.
+**Surfaced:** 2026-06-15 stocktaking discussion.
+
+The new wizard rebuilds talk creation around a stable talk row with independent steps. Editing a published or in-progress new-wizard talk has not been designed.
+
+Old wizard's edit model lived in ContentCreationSession with cascade-resets between session states. That model doesn't fit the new architecture. The new architecture's design didn't characterize what editing looks like — it covered creation only.
+
+Open questions, all blocking design:
+1. UI surface — does edit reuse the wizard at the appropriate step, or live on the talk detail page with its own UI?
+2. Source content edits — what cascades? Translation `NeedsRevalidation` infrastructure exists; is it triggered by new-wizard edit surfaces?
+3. Translation edits post-publish — where does the validate-step accept/edit/retry UI surface for already-published talks?
+4. Quiz cascade — old wizard cascade-reset quiz on source edit; new wizard's relationship unclear.
+5. Reviewer decisions post-publish — revisitable, or publish-terminal?
+6. Adding new target languages post-publish — supported, and if so by what UI?
+7. Removing a target language post-publish — supported?
+8. What "Edit" means for an in-progress draft (talk row exists, validation not started) versus a published talk.
+
+The recon's output is a design document. The implementation chunks fall out of the design.
+
+This entry blocks Phase 5.6 (cutover toggle) in spirit if not in mechanism — toggling tenants to the new wizard means new-wizard talks become the supported case, and "users can't edit their published talks" is not a defensible position.
+
+---
+
+## 30. External review user journey not characterized (P1)
+
+**Priority:** P1
+**Origin:** [Internal-QA]
+**Status:** Open — investigation needed.
+**Surfaced:** 2026-06-15 stocktaking discussion.
+
+Backend infrastructure for external (third-party) review exists and is tested:
+- POST .../translations/{lang}/initiate-external-review (transitions Validated/ReviewerAccepted → AwaitingThirdParty)
+- POST .../translations/{lang}/cancel-external-review (reverts)
+- ExternalReviewController handles reviewer-token submissions
+- New wizard's Publish step renders AwaitingThirdParty warning banner
+
+But during 2026-06-15 smoke of the new wizard, no UI path to initiate external review was found.
+
+Open investigation:
+- Does the talk detail page (TranslationWorkflowPanel) expose initiate-external-review? Per yesterday's strict-review recon, this is where the action was expected to live. Confirm or refute.
+- If UI exists on talk detail page, is it discoverable from the new wizard's flow? Currently the wizard's Publish step navigates to the talk detail page on success, but does the user know external review lives there?
+- If UI doesn't exist anywhere, this is a feature parity gap with whatever workflow the backend was built for.
+
+Once investigation completes, this entry either closes (UI exists and is reachable) or becomes a sized implementation chunk (build the UI surface).
+
+Related: §23 (Strict review workflow port, now closed) explicitly punted external review actions to a separate effort. This is that effort.
+
+Investigation 2026-06-15: UI exists on the talk detail page via TranslationWorkflowPanel.tsx. Backend, API client function, and React hook are all in place. The gap is journey/discoverability, not missing UI. A user who creates a talk through the new wizard reaches the Publish step and then the talk detail page on publish success — but the new wizard makes no reference to external review as an option. The user has to know external review exists and find their way to the panel. Narrows the entry from "build the UI" to "make external review discoverable from the new wizard's flow."
+
+---
+
+## 31. Translation completion notification gap (P1)
+
+**Priority:** P1
+**Origin:** `[Internal-QA]`
+**Status:** Open — investigation completed; design confirmed missing.
+**Surfaced:** 2026-06-15 stocktaking discussion.
+
+Phase 5 standards committed to "translations run in the background." The implementation records translation completion via `ITranslationWorkflowService.RecordTranslationCompleted` (called from `GenerateContentTranslationsCommandHandler.cs:167`) and validation completion via `RecordValidationCompleted` (called from `TranslationValidationJob.cs:362`). Both maintain the internal workflow state machine.
+
+**Confirmed gap (investigation 2026-06-15):** No notification path — email, in-app, or otherwise — is invoked on either event. Confirmed by grep across `src/`: zero hits for translation-completion-tied notification patterns.
+
+This means:
+- User on the wizard's Translate step receives live SignalR updates: works.
+- User who navigated away (other admin page, dashboard) is not notified.
+- User who closed the browser is not notified.
+- User who started a long-running multi-language translation has no way to know when it finishes without polling the system manually.
+
+For typical translation runs (5-30 minutes for multi-language with validation), this is a significant workflow friction.
+
+### Design needed
+
+- In-app notification surface: notification center? Toast on next page load? Badge on the talk in the list? Combination?
+- Out-of-band email: triggered on translation completion? Validation completion? Both? Per-language or once-all-complete?
+- Per-tenant or per-user notification preferences?
+- Failure notifications too — if a translation fails, the user should also be notified.
+
+### Implementation shape (estimated)
+
+- Backend hook: `RecordTranslationCompleted` and `RecordValidationCompleted` (and presumably failure paths) get a notification dispatch added.
+- Notification dispatcher: routes to email + in-app channels per user/tenant preference.
+- Email templates: translation completion, validation completion, failures.
+- In-app UI: notification center or badge surface (depends on whether one already exists or needs building).
+- Tenant settings: notification preferences.
+
+Likely 3-5 day chunk if a notification framework needs building from scratch; 1-2 days if MailerSend + existing infrastructure is enough.
+
+### Related
+
+- `MailerSendEmailProvider` (§5.6 — 429 handling) is the email infrastructure. Notifications would use it.
+- §1.3.5 (Long-running job UX — fire-and-notify pattern) is the broader version of this — it covers bulk import, content generation, validation, corpus runs. This entry is the translation-specific instance of the same gap.
+
+---
+
+## 24. Edit workflow for new-wizard talks (P0 — design specified, implementation chunks to scope)
+
+**Priority:** P0
+**Origin:** [Internal-QA]
+**Status:** Open — design rules locked 2026-06-15; sub-tasks to scope as separate chunks.
+**Surfaced:** 2026-06-15 stocktaking discussion.
+
+### Design rules (locked)
+
+1. **Edit UI lives on the talk detail page.** Not in the wizard. Uses new UI elements. Calls into wizard backend (commands, services) where applicable.
+2. **Source content edit cascades to translations.** All translations of the edited section across all languages are marked `NeedsRevalidation`. User is prompted to re-translate.
+3. **Quiz element edit cascades to translations.** Same as source content: re-translate the edited element across all languages.
+4. **Reviewer-accepted translations are terminal unless source is edited.** When source is edited, translations become invalidated and re-translation is required.
+5. **Adding new target languages post-publish is supported.** Source unchanged: translate the single new language only. Source changed: same flow as full re-translation.
+6. **Removing target languages post-publish:** TBD — design rule not yet stated.
+7. **Post-publish translation edits go through the validate-step accept-edit-retry UI** (the §23-ported component), accessible from the talk detail page. Creates a fresh validation run; same reviewer-decision flow as during initial creation.
+8. **Publishing with stale translations:** TBD — blocked, warned, or allowed? Suggested: warned with non-blocking banner (same shape as AwaitingThirdParty), since users may intentionally publish source-only updates before retranslation.
+
+### Open design sub-questions
+
+- Rule 6: removal of target languages — UI exists or doesn't?
+- Rule 8: stale translation publish gate — block, warn, or allow?
+- Recovery flow when re-translation fails mid-process post-publish (in-flight failure on a published talk).
+- Concurrency: what if a third-party review is in flight (AwaitingThirdParty) when source edit happens? Cancel the review automatically? Block the edit? Warn?
+- Audit trail: edits to published talks — what gets logged, where, who sees it?
+
+### Implementation shape (estimated)
+
+Substantial work, decomposable into chunks:
+
+- **Chunk 1:** Talk detail page edit UI — section content editing surface, dirty-state, save-and-cascade flow.
+- **Chunk 2:** Translation re-run UI — surface the wizard's translation step UI on the talk detail page, scoped to specific languages.
+- **Chunk 3:** Validate step UI on talk detail page — same component as wizard, reachable post-publish.
+- **Chunk 4:** Quiz editing UI — element edit with cascade to translations.
+- **Chunk 5:** Add new language post-publish flow.
+- **Chunk 6:** Stale translation handling (banner, gate policy from rule 8).
+
+Each chunk is recon-first.
+
+### Why P0
+
+Without edit, the new wizard is creation-only. Tenants toggled to the new wizard (Phase 5.6) lose the ability to fix published mistakes — including ones the system itself produces (a translation that reviewers later flag as wrong, a typo discovered post-publish). That's not a defensible release state.
+
+Phase 5.6 (cutover toggle) should not enable any tenant for production rollout until at least the highest-priority sub-chunks of this work are shipped. Recommended minimum before any rollout: chunks 1, 2, 3, and 8.
+
+---
+
 # ==================================================================
-# 7. Recently Closed
+# Recently Closed
 # ==================================================================
 
 Kept here for trail; prune periodically.
@@ -1288,7 +1409,7 @@ Kept here for trail; prune periodically.
 
 ---
 
-## 18. TenantQueryInvalidator parent-path redirect doesn't know which paths are routable
+## 26. TenantQueryInvalidator parent-path redirect doesn't know which paths are routable
 
 web/src/lib/providers.tsx — TenantQueryInvalidator strips the
 UUID segment from the URL on tenant change and uses
@@ -1334,7 +1455,7 @@ cross-cutting cleanup.
 
 ---
 
-## 19. Wizard Step 4 Settings — tenant defaults (deferred from Phase 5.3d)
+## 27. Wizard Step 4 Settings — tenant defaults (deferred from Phase 5.3d)
 
 **Priority:** P3 — Low  
 **Source:** Phase 5.3d spec item I1  
@@ -1362,7 +1483,7 @@ provides the tenant defaults.
 
 ---
 
-## 20. ToolboxTalk.Frequency vs RequiresRefresher/RefresherIntervalMonths conflict (Phase 5.3d)
+## 28. ToolboxTalk.Frequency vs RequiresRefresher/RefresherIntervalMonths conflict (Phase 5.3d)
 
 **Priority:** P3 — Low  
 **Source:** Phase 5.3d spec item I2  
@@ -1398,7 +1519,7 @@ When a talk is published while one or more translations are in `AwaitingThirdPar
 
 **Backend is complete:** The cancel-external-review endpoint (`POST /api/toolbox-talks/{id}/translations/{languageCode}/cancel-external-review`) exists and works — it reverts `AwaitingThirdParty` → `ReviewerAccepted`. After cancellation, `POST /{id}/translations/generate` proceeds normally. The `PublishToolboxTalkCommandHandler` imposes no lock on translations.
 
-Note: BACKLOG §11 ("Cancel external review — end-to-end") is now stale — the backend was built in a later phase. Update or close that entry.
+Note: BACKLOG §11 ("Cancel external review — end-to-end") has been updated — the backend is confirmed complete as of 2026-06-15.
 
 **Gap:** The talk detail page (being built in 5.5b) does not surface a "Cancel external review" or "Re-translate" action for languages in `AwaitingThirdParty` state on a published talk. Admins who publish and later want to replace or fix an in-flight external review have no UI path.
 
@@ -1440,7 +1561,7 @@ return `false` — the `?? []` guard is the enforcement point).
 
 **Priority:** P1
 **Origin:** [Internal-QA]
-**Status:** Open — pending product decision
+**Status:** ✅ Done — 2026-06-15 — Strict review workflow ported with backend enforcement, auto-accept Pass, no-bypass design. Cache invalidation follow-up fix shipped 2026-06-15. Smoke verified across Scenarios 1, 2, 3 (see `docs/phase-5/reports/strict-review-workflow-port.md`).
 **Surfaced:** 2026-06-14, during wizard-skip-fix smoke (Scenario C) and 5.5b smoke Scenario 3 setup.
 **Supersedes:** §20 (Per-section accept/reject UI gap, 2026-06-14).
 **Related:** §21 (Post-publish translation management UI — AwaitingThirdParty languages, talk detail page).
