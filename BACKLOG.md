@@ -751,26 +751,232 @@ Removed from Employee:
 - **Status:** Open
 - **Description:** An AI-powered help assistant for admins — "how do I create a course", "show me employees in site X" — embedded in the product. Forward-looking.
 
-#### 5.10 SignalR client timeout defaults missing in four hooks
+#### 5.16 SignalR client timeout defaults missing in four hooks
 - **Priority:** P1
 - **Origin:** `[Engineering]`
 - **Status:** Open
 - **Description:** `use-subtitle-hub.ts`, `use-corpus-run-hub.ts`, `use-subtitle-processing.ts`, and `use-lesson-parser-hub.ts` all build `HubConnection` instances without setting `serverTimeoutInMilliseconds` / `keepAliveIntervalInMilliseconds`. Exposed to the same Railway proxy idle-timeout drop (1006 close) fixed in the validation hub (chunk 5.4-signalr-timeout-fix). Fix is a two-line patch per hook (`serverTimeoutInMilliseconds = 120_000`, `keepAliveIntervalInMilliseconds = 10_000` after `.build()`). Recommend a single dedicated chunk covering all four.
 
-#### 5.11 First-language row state lag in Step 5 Translate under Start All
+#### 5.17 First-language row state lag in Step 5 Translate under Start All
 - **Priority:** P1
 - **Origin:** `[Internal-QA]`
 - **Status:** Open (surfaced 2026-06-12)
 - **Description:** After the 5.4 SignalR timeout fix landed, smoke surfaced that the first language started via Start All (RU in the 2026-06-12 test case) keeps "Start" button state through its own completion and only flips to "Validated" once the other languages also complete. WebSocket survives the full job duration (51.73s for a 50s job per Network tab), so `ValidationComplete` is received client-side while the connection is open — the bug is downstream of event receipt, not the same shape as 5.4. Suspected: cache-invalidation or query-key mismatch in the `LanguageItem` row component, OR a subscription-timing artifact specific to the first language under the 1000ms stagger added in 5.5-translate-start-all. Recon needed: identify which query the row reads from vs. which cache key the validation hub event handler updates, and check whether the `WorkflowSubscriber` for the first `runId` mounts before or after that runId's first event fires.
 - **Reference:** `docs/phase-5/reports/5.4-signalr-timeout-fix.md` smoke evidence section.
 
-#### 5.12 SPRINT.md stale — needs Phase 5 state rewrite
+#### 5.18 Frontend test framework not installed
+
+- **Priority:** P1
+- **Origin:** `[Engineering]`
+- **Status:** Open
+- **Surfaced:** 2026-06-14 during Phase 5.5b implementation.
+
+No jest/vitest/@testing-library/react in package.json. The Phase
+5.5b prompt specified unit tests for `isStepReachable` step 7
+cases (5 scenarios: zero sections, sections + no target languages,
+sections + target languages + no completed runs, sections + target
+languages + one completed run, already published). These were
+deferred because there is nothing to run them in.
+
+Fix direction: install vitest + @testing-library/react + @vitejs/plugin-react
+as dev dependencies; configure vitest.config.ts with the Next.js
+alias set; add the five test cases in
+`web/src/features/toolbox-talks/components/learning-wizard/lib/__tests__/stepOrder.test.ts`.
+
+The five cases to cover:
+1. `sections.length === 0` → false
+2. `sections.length > 0`, no target languages → true
+3. `sections.length > 0`, target languages set, no completed runs → false
+4. `sections.length > 0`, target languages set, one completed run → true
+5. `talk.status === 'Published'` → false
+
+#### 5.19 Unit tests for Step 7 reachability rule (depends on §5.18)
+
+- **Priority:** P2
+- **Origin:** `[Engineering]`
+- **Status:** Open — blocked on §5.18 (frontend test framework not installed)
+- **Surfaced:** 2026-06-14 during structural robustness refactor of `stepOrder.ts`.
+
+The Step 7 reachability rule in
+`web/src/features/toolbox-talks/components/learning-wizard/lib/stepOrder.ts`
+has four meaningful behavioral states, now made explicit by the 2026-06-14
+structural refactor:
+
+1. `talk.sections.length === 0` → `false`
+2. `talk.status === 'Published'` → `false`
+3. Sections exist, no target languages declared (English-only path) → `true`
+4. Sections exist, target languages declared, no completed validation runs → `false`
+5. Sections exist, target languages declared, at least one run with `status === 'Completed'` → `true`
+
+After §5.18 is closed (vitest + @testing-library/react installed), add unit
+tests covering each state in:
+`web/src/features/toolbox-talks/components/learning-wizard/lib/__tests__/stepOrder.test.ts`
+
+Also cover the defensive default: passing `validationRuns = undefined` with
+target languages declared must behave identically to passing `[]` (both
+return `false` — the `?? []` guard is the enforcement point).
+
+#### 5.20 Refresh Amendment
+
+- **Priority:** P2
+- **Origin:** `[Engineering]`
+- **Status:** Open
+- **Surfaced:** 2026-06-11 during Phase 5.3b smoke.
+
+Phase 5.3b smoke (2026-06-11) confirmed the side effect: refresh
+on any /learnings/{talkId}/{step} route lands on /drafts rather
+than the step the user was on. Functional (user clicks Resume to
+return) but not refresh-recovery as PHASE_5_STANDARDS §5.4
+prescribes. Resolution scope expanded to include preserving the
+target step on tenant-aware redirects when the proper fix lands.
+
+#### 5.21 Learning wizard page header inherits wrong context
+
+- **Priority:** P3
+- **Origin:** `[Engineering]`
+- **Status:** Open
+- **Surfaced:** 2026-06-10 during 5.2 smoke.
+
+The new learning-wizard routes
+(/admin/toolbox-talks/learnings/...) render with the page header
+"Administration / Manage employees and users" — inherited from a
+parent layout that thinks the page is in the employees subsection.
+
+Affects all 8 new routes scaffolded in Phase 5.2.
+
+Fix direction: either the routes need their own layout override
+that sets the correct page header, or the shared admin layout
+needs to derive its header from the active route segment rather
+than from a default. Look at how the existing toolbox-talks
+pages (talks/, courses/, schedules/) handle this — they don't
+show the "Manage employees" header, so the pattern exists.
+
+Also: breadcrumbs render as "Administration / Learnings" with
+no leaf segment ("Drafts", "New", etc.). Worth adding.
+
+#### 5.22 TenantQueryInvalidator parent-path redirect doesn't know which paths are routable
+
+- **Priority:** P2
+- **Origin:** `[Engineering]`
+- **Status:** Open
+- **Surfaced:** 2026-06-11 during Phase 5.3b smoke testing.
+
+web/src/lib/providers.tsx — TenantQueryInvalidator strips the
+UUID segment from the URL on tenant change and uses
+router.replace() with the resulting parent path. The logic
+doesn't validate that a page.tsx exists at the target — it
+just assumes "parent of any UUID route is itself a valid
+page."
+
+This held for existing admin detail pages (talks/{id},
+courses/{id}, etc.) because their parent paths happen to
+have list pages. Phase 5's learning-wizard routes broke
+the assumption: /learnings/{talkId}/quiz has no
+/learnings/ landing page, so the redirect hit 404.
+
+Phase 5.3b smoke fix added a /learnings/ index page that
+redirects to drafts, resolving the 404 for the wizard's
+routes. The underlying logic in TenantQueryInvalidator is
+still fragile — any future route tree that adds UUID
+segments without a parent landing page will hit the same
+bug.
+
+Fix direction:
+  - Either: have TenantQueryInvalidator redirect to a
+    known-safe fallback (e.g. tenant dashboard) when the
+    parent path can't be confirmed routable.
+  - Or: add a manifest of valid parent paths and check
+    against it before redirecting.
+  - Or: stop stripping UUID segments altogether and just
+    invalidate React Query — the redirect was a defensive
+    guard against showing stale tenant data, but query
+    invalidation alone may be sufficient.
+
+Only reproducible on accounts that transition activeTenantId
+from null to non-null (SuperUser with stored tenant ID).
+Regular admins don't trigger it. Deferred — the index-page fix
+in Phase 5.3b unblocks the new wizard's routes; the structural
+fix can wait for a cross-cutting cleanup.
+
+#### 5.23 Wizard Step 4 Settings — tenant defaults (deferred from Phase 5.3d)
+
+- **Priority:** P3
+- **Origin:** `[Engineering]`
+- **Status:** Deferred — not in scope for 5.3d
+- **Source:** Phase 5.3d spec item I1
+
+When an admin creates a learning, the Settings step (Step 4) defaults
+`minimumVideoWatchPercent`, `autoAssignDueDays`, `generateCertificate`,
+`refresherFrequency`, and `isActive` from hardcoded values:
+- `minimumVideoWatchPercent = 90`
+- `autoAssignDueDays = 14`
+- `generateCertificate = true`
+- `refresherFrequency = "Once"`
+- `isActive = true`
+
+These should instead be read from `ToolboxTalkSettings` (tenant-level
+defaults configured in the module settings page) so the wizard inherits
+whatever the tenant has configured.
+
+**How to apply:** When initialising the SettingsStep form (`useEffect`
+populating from server talk), also fetch `ToolboxTalkSettings` for the
+tenant and use those as the default values for fields that haven't been
+previously saved (i.e. `talk.lastEditedStep < 4`). The `useTalk` hook
+already provides the talk; a parallel `useToolboxTalkSettings` hook
+provides the tenant defaults.
+
+#### 5.24 ToolboxTalk.Frequency vs RequiresRefresher/RefresherIntervalMonths conflict (Phase 5.3d)
+
+- **Priority:** P2
+- **Origin:** `[Engineering]`
+- **Status:** Deferred — not in scope for 5.3d
+- **Source:** Phase 5.3d spec item I2
+
+`ToolboxTalk` has two overlapping mechanisms for refresher scheduling:
+- **Legacy:** `Frequency` column (enum: Once/Weekly/Monthly/Annually) used
+  by the old wizard and `ToolboxTalkSchedule`
+- **New wizard:** `RequiresRefresher` + `RefresherIntervalMonths` (Phase 5.3d)
+
+The `UpdateToolboxTalkSettingsCommandHandler` writes to
+`RequiresRefresher`/`RefresherIntervalMonths` and leaves `Frequency`
+unchanged. The `Frequency` value is still read by the old wizard's edit
+form and some schedule processing jobs.
+
+**Risk:** An admin who edits a new-wizard talk via the old edit form may
+see a stale `Frequency` value and accidentally re-set it, overwriting the
+refresher configuration from Step 4.
+
+**Fix direction:** Either:
+1. Mirror the `RefresherFrequency → Frequency` translation in
+   `UpdateToolboxTalkSettingsCommandHandler` (keeping old field in sync), or
+2. Remove `Frequency` from the old edit form and fully migrate to the new
+   model — a larger cross-cutting change.
+
+#### 5.25 Mobile audit at Phase 5 closure
+
+- **Priority:** P1
+- **Origin:** `[Engineering]`
+- **Status:** Open
+- **Surfaced:** 2026-06-10 during 5.2 smoke.
+
+PHASE_5_STANDARDS §10 requires the wizard to be seamless on mobile.
+Verifying after every chunk is overkill; doing it never is wrong.
+A dedicated mobile pass at Phase 5 closure (or sooner if something
+obviously breaks earlier) covers:
+
+- 375px / 768px / 1280px verification of every step + drafts list
+- Touch target sizes
+- Drag-to-reorder works with touch (per §10.2 + BACKLOG §1.3.3)
+- Modal full-screen vs centred behaviour
+- No horizontal scroll at any width ≥ 320px
+
+#### 5.26 SPRINT.md stale — needs Phase 5 state rewrite
 - **Priority:** P2
 - **Origin:** `[Engineering]`
 - **Status:** Open
 - **Description:** SPRINT.md last updated 3 June 2026 (10 days stale as of 2026-06-13). Currently references UAT P1s 1.1.6–1.1.9 as future work — all four are now ✅ Done as of 4 June. The "Next" section lists UAT P2s and the rich-text editor, which doesn't reflect the current state of Phase 5 (5.4 just landed, 5.5 Publish recon next). Needs full rewrite covering: completed Phase 5 work to date, active chunk (5.5 Publish), known BACKLOG-deferred items relevant to current phase. Surfaced by 2026-06-13 BACKLOG sweep recon. Out of scope for the sweep itself.
 
-#### 5.13 English-only learning creation blocked — Step 1 rejects empty target languages (§22)
+#### 5.13 English-only learning creation blocked — Step 1 rejects empty target languages (§5.19)
 - **Priority:** P1
 - **Origin:** `[Internal-QA]`
 - **Status:** ✅ Done — 2026-06-14 — fixed in wizard-skip-regression chunk; smoke verified post-deploy (see `docs/phase-5/reports/wizard-skip-regression-fix.md` Scenarios A and B).
@@ -780,7 +986,7 @@ Removed from Employee:
 - **Priority:** P1
 - **Origin:** `[Internal-QA]`
 - **Status:** ✅ Done — 2026-06-14 — fixed in wizard-skip-regression chunk; smoke verified post-deploy (see `docs/phase-5/reports/wizard-skip-regression-fix.md` Scenarios A and B).
-- **Description:** When "include quiz" is deselected at Step 1, the wizard's step indicator correctly renders "3 Quiz — Skipped" on the Parse step, but clicking Continue on Step 2 (Parse) navigates to Step 3 (Quiz) instead of jumping past it to Step 4 (Settings). The display logic and the navigation logic are inconsistent — `isStepReachable` and the Continue-button next-step computation appear to use different signals. Root cause hypothesis: the step indicator reads from `isStepReachable(3, talk)` which correctly reflects the quiz-disabled flag; the Continue navigation calls `goToStep(currentStep + 1)` (integer increment) rather than `findNextReachable(currentStep)`. Fix direction: Make Continue use the same reachability logic the step indicator uses. If §22 and §23 share the same navigation root cause, a single fix chunk closes both. Recon: `docs/phase-5/reports/wizard-skip-regression-recon.md`.
+- **Description:** When "include quiz" is deselected at Step 1, the wizard's step indicator correctly renders "3 Quiz — Skipped" on the Parse step, but clicking Continue on Step 2 (Parse) navigates to Step 3 (Quiz) instead of jumping past it to Step 4 (Settings). The display logic and the navigation logic are inconsistent — `isStepReachable` and the Continue-button next-step computation appear to use different signals. Root cause hypothesis: the step indicator reads from `isStepReachable(3, talk)` which correctly reflects the quiz-disabled flag; the Continue navigation calls `goToStep(currentStep + 1)` (integer increment) rather than `findNextReachable(currentStep)`. Fix direction: Make Continue use the same reachability logic the step indicator uses. If §5.13 and §5.14 share the same navigation root cause, a single fix chunk closes both. Recon: `docs/phase-5/reports/wizard-skip-regression-recon.md`.
 
 #### 5.15 Integration test suite — comprehensive review post-Phase 5
 - **Priority:** P2
@@ -803,6 +1009,43 @@ Scope when picked up:
 - The seeder/JWT reconciliation (§12)
 - The `login.spec.ts` skipped block (3 tests remain in `test.describe.skip` after the pre-Phase-5 cleanup; review whether to delete the block or rewrite the tests)
 - E2E suite breadth — what's covered, what's missing, what's stale
+
+#### 5.27 Phase 5.6 cutover toggle — parallel-period mechanism
+
+- **Priority:** P1
+- **Origin:** `[Engineering]` `[Boss]`
+- **Status:** Open — gated on §5.24 (Frequency conflict) and §24 (Edit workflow design) at minimum.
+- **Surfaced:** 2026-06-15 stocktaking discussion (renumbering 2026-06-15).
+
+The original Phase 5.6 was framed as "move the Create New button to the new wizard." The 2026-06-15 stocktaking refined this to: a toggle that lets old and new wizards run in parallel, with the user's preferred wizard chosen per-tenant (and per-URL for testing), until business sign-off triggers manual cutover.
+
+### Design decisions (locked 2026-06-15)
+
+1. **Toggle level:** tenant-level toggle plus URL parameter for testing.
+2. **In-flight drafts:** stay with the wizard that created them. Two separate data paths.
+3. **Toggle removal:** manual decision, no automatic threshold.
+
+### Adjacent dependencies before any tenant is toggled to new-as-default
+
+- **§24** (Edit workflow design): without edit, new-wizard talks are creation-only. Not a defensible production state.
+- **§5.24** (Frequency conflict): risk that admin edits a new-wizard talk via the old edit form and overwrites Step 4 refresher config.
+- **§5.20** (Refresh Amendment): standards violation on new wizard's refresh behavior.
+
+These three at minimum should be resolved before any production tenant is toggled to "new" position. Toggle infrastructure itself can ship before these are resolved (default position is "old").
+
+### Implementation scope
+
+Recon-first. Likely chunks:
+- Tenant-level toggle (entity + settings UI).
+- URL parameter handling for testing.
+- "Create New" button router — read toggle, navigate to appropriate wizard entry.
+- Drafts list display — distinguish old-wizard drafts from new-wizard drafts.
+- Documentation / migration notes for users.
+
+### Out of scope for this chunk
+
+- Migration of in-flight drafts between wizard models (rule 2 says they stay).
+- Removal of old wizard code paths (separate chunk after toggle is removed).
 
 ---
 
@@ -980,47 +1223,6 @@ infrastructure that the review will be reshaping anyway.
 
 ---
 
-## 13. Mobile audit at Phase 5 closure
-
-PHASE_5_STANDARDS §10 requires the wizard to be seamless on mobile.
-Verifying after every chunk is overkill; doing it never is wrong.
-A dedicated mobile pass at Phase 5 closure (or sooner if something
-obviously breaks earlier) covers:
-
-- 375px / 768px / 1280px verification of every step + drafts list
-- Touch target sizes
-- Drag-to-reorder works with touch (per §10.2 + BACKLOG §1.3.3)
-- Modal full-screen vs centred behaviour
-- No horizontal scroll at any width ≥ 320px
-
-Surfaced 2026-06-10 during 5.2 smoke.
-
----
-
-## 14. Learning wizard page header inherits wrong context
-
-The new learning-wizard routes
-(/admin/toolbox-talks/learnings/...) render with the page header
-"Administration / Manage employees and users" — inherited from a
-parent layout that thinks the page is in the employees subsection.
-
-Affects all 8 new routes scaffolded in Phase 5.2.
-
-Fix direction: either the routes need their own layout override
-that sets the correct page header, or the shared admin layout
-needs to derive its header from the active route segment rather
-than from a default. Look at how the existing toolbox-talks
-pages (talks/, courses/, schedules/) handle this — they don't
-show the "Manage employees" header, so the pattern exists.
-
-Also: breadcrumbs render as "Administration / Learnings" with
-no leaf segment ("Drafts", "New", etc.). Worth adding.
-
-Surfaced 2026-06-10 during 5.2 smoke. Fold into 5.3's framing
-as a polish item rather than a dedicated chunk.
-
----
-
 ## 15. InputMode column added in wrong migration
 
 The InputMode column on ToolboxTalk was added in
@@ -1036,42 +1238,6 @@ Surfaced 2026-06-11 during Phase 5.3b implementation review.
 Deferred because the fix would require rewriting pushed migration
 history. Acceptable to live with; flagged so future schema reviews
 don't waste time wondering.
-
----
-
-## 16. Refresh Amendment
-
-Phase 5.3b smoke (2026-06-11) confirmed the side effect: refresh
-on any /learnings/{talkId}/{step} route lands on /drafts rather
-than the step the user was on. Functional (user clicks Resume to
-return) but not refresh-recovery as PHASE_5_STANDARDS §5.4
-prescribes. Resolution scope expanded to include preserving the
-target step on tenant-aware redirects when the proper fix lands.
-
----
-
-## 17. Frontend test framework not installed
-
-No jest/vitest/@testing-library/react in package.json. The Phase
-5.5b prompt specified unit tests for `isStepReachable` step 7
-cases (5 scenarios: zero sections, sections + no target languages,
-sections + target languages + no completed runs, sections + target
-languages + one completed run, already published). These were
-deferred because there is nothing to run them in.
-
-Fix direction: install vitest + @testing-library/react + @vitejs/plugin-react
-as dev dependencies; configure vitest.config.ts with the Next.js
-alias set; add the five test cases in
-`web/src/features/toolbox-talks/components/learning-wizard/lib/__tests__/stepOrder.test.ts`.
-
-The five cases to cover:
-1. `sections.length === 0` → false
-2. `sections.length > 0`, no target languages → true
-3. `sections.length > 0`, target languages set, no completed runs → false
-4. `sections.length > 0`, target languages set, one completed run → true
-5. `talk.status === 'Published'` → false
-
-Surfaced 2026-06-14 during Phase 5.5b implementation.
 
 ---
 
@@ -1200,33 +1366,6 @@ documented, and implementation chunk gets scoped from there.
 
 ---
 
-## 29. Edit workflow design for new-wizard talks (P0 — design required)
-
-**Priority:** P0 — design required before any post-Phase-5 work that depends on edit behavior.
-**Origin:** [Internal-QA]
-**Status:** Open — design recon needed.
-**Surfaced:** 2026-06-15 stocktaking discussion.
-
-The new wizard rebuilds talk creation around a stable talk row with independent steps. Editing a published or in-progress new-wizard talk has not been designed.
-
-Old wizard's edit model lived in ContentCreationSession with cascade-resets between session states. That model doesn't fit the new architecture. The new architecture's design didn't characterize what editing looks like — it covered creation only.
-
-Open questions, all blocking design:
-1. UI surface — does edit reuse the wizard at the appropriate step, or live on the talk detail page with its own UI?
-2. Source content edits — what cascades? Translation `NeedsRevalidation` infrastructure exists; is it triggered by new-wizard edit surfaces?
-3. Translation edits post-publish — where does the validate-step accept/edit/retry UI surface for already-published talks?
-4. Quiz cascade — old wizard cascade-reset quiz on source edit; new wizard's relationship unclear.
-5. Reviewer decisions post-publish — revisitable, or publish-terminal?
-6. Adding new target languages post-publish — supported, and if so by what UI?
-7. Removing a target language post-publish — supported?
-8. What "Edit" means for an in-progress draft (talk row exists, validation not started) versus a published talk.
-
-The recon's output is a design document. The implementation chunks fall out of the design.
-
-This entry blocks Phase 5.6 (cutover toggle) in spirit if not in mechanism — toggling tenants to the new wizard means new-wizard talks become the supported case, and "users can't edit their published talks" is not a defensible position.
-
----
-
 ## 30. External review user journey not characterized (P1)
 
 **Priority:** P1
@@ -1305,6 +1444,8 @@ Likely 3-5 day chunk if a notification framework needs building from scratch; 1-
 **Status:** Open — design rules locked 2026-06-15; sub-tasks to scope as separate chunks.
 **Surfaced:** 2026-06-15 stocktaking discussion.
 
+**Note:** Earlier draft of this entry (previously §29) merged into this entry on 2026-06-15 — the locked design rules subsume the open-questions framing of the earlier draft.
+
 ### Design rules (locked)
 
 1. **Edit UI lives on the talk detail page.** Not in the wizard. Uses new UI elements. Calls into wizard backend (commands, services) where applicable.
@@ -1323,6 +1464,7 @@ Likely 3-5 day chunk if a notification framework needs building from scratch; 1-
 - Recovery flow when re-translation fails mid-process post-publish (in-flight failure on a published talk).
 - Concurrency: what if a third-party review is in flight (AwaitingThirdParty) when source edit happens? Cancel the review automatically? Block the edit? Warn?
 - Audit trail: edits to published talks — what gets logged, where, who sees it?
+- In-progress draft vs published talk: what does "Edit" mean differently for a talk row that exists and has had no validation started (draft mode post-Step 4, pre-Publish) versus one that has been published? Determines whether the edit UI surfaces any "resume wizard" affordances for drafts.
 
 ### Implementation shape (estimated)
 
@@ -1407,110 +1549,6 @@ Kept here for trail; prune periodically.
 
 ---
 
----
-
-## 26. TenantQueryInvalidator parent-path redirect doesn't know which paths are routable
-
-web/src/lib/providers.tsx — TenantQueryInvalidator strips the
-UUID segment from the URL on tenant change and uses
-router.replace() with the resulting parent path. The logic
-doesn't validate that a page.tsx exists at the target — it
-just assumes "parent of any UUID route is itself a valid
-page."
-
-This held for existing admin detail pages (talks/{id},
-courses/{id}, etc.) because their parent paths happen to
-have list pages. Phase 5's learning-wizard routes broke
-the assumption: /learnings/{talkId}/quiz has no
-/learnings/ landing page, so the redirect hit 404.
-
-Phase 5.3b smoke fix added a /learnings/ index page that
-redirects to drafts, resolving the 404 for the wizard's
-routes. The underlying logic in TenantQueryInvalidator is
-still fragile — any future route tree that adds UUID
-segments without a parent landing page will hit the same
-bug.
-
-Fix direction:
-  - Either: have TenantQueryInvalidator redirect to a
-    known-safe fallback (e.g. tenant dashboard) when the
-    parent path can't be confirmed routable.
-  - Or: add a manifest of valid parent paths and check
-    against it before redirecting.
-  - Or: stop stripping UUID segments altogether and just
-    invalidate React Query — the redirect was a defensive
-    guard against showing stale tenant data, but query
-    invalidation alone may be sufficient.
-
-Only reproducible on accounts that transition activeTenantId
-from null to non-null (SuperUser with stored tenant ID).
-Regular admins don't trigger it.
-
-Surfaced 2026-06-11 during Phase 5.3b smoke testing.
-Deferred — the index-page fix in Phase 5.3b unblocks the
-new wizard's routes; the structural fix can wait for a
-cross-cutting cleanup.
-
----
-
----
-
-## 27. Wizard Step 4 Settings — tenant defaults (deferred from Phase 5.3d)
-
-**Priority:** P3 — Low  
-**Source:** Phase 5.3d spec item I1  
-**Status:** Deferred — not in scope for 5.3d
-
-When an admin creates a learning, the Settings step (Step 4) defaults
-`minimumVideoWatchPercent`, `autoAssignDueDays`, `generateCertificate`,
-`refresherFrequency`, and `isActive` from hardcoded values:
-- `minimumVideoWatchPercent = 90`
-- `autoAssignDueDays = 14`
-- `generateCertificate = true`
-- `refresherFrequency = "Once"`
-- `isActive = true`
-
-These should instead be read from `ToolboxTalkSettings` (tenant-level
-defaults configured in the module settings page) so the wizard inherits
-whatever the tenant has configured.
-
-**How to apply:** When initialising the SettingsStep form (`useEffect`
-populating from server talk), also fetch `ToolboxTalkSettings` for the
-tenant and use those as the default values for fields that haven't been
-previously saved (i.e. `talk.lastEditedStep < 4`). The `useTalk` hook
-already provides the talk; a parallel `useToolboxTalkSettings` hook
-provides the tenant defaults.
-
----
-
-## 28. ToolboxTalk.Frequency vs RequiresRefresher/RefresherIntervalMonths conflict (Phase 5.3d)
-
-**Priority:** P3 — Low  
-**Source:** Phase 5.3d spec item I2  
-**Status:** Deferred — not in scope for 5.3d
-
-`ToolboxTalk` has two overlapping mechanisms for refresher scheduling:
-- **Legacy:** `Frequency` column (enum: Once/Weekly/Monthly/Annually) used
-  by the old wizard and `ToolboxTalkSchedule`
-- **New wizard:** `RequiresRefresher` + `RefresherIntervalMonths` (Phase 5.3d)
-
-The `UpdateToolboxTalkSettingsCommandHandler` writes to
-`RequiresRefresher`/`RefresherIntervalMonths` and leaves `Frequency`
-unchanged. The `Frequency` value is still read by the old wizard's edit
-form and some schedule processing jobs.
-
-**Risk:** An admin who edits a new-wizard talk via the old edit form may
-see a stale `Frequency` value and accidentally re-set it, overwriting the
-refresher configuration from Step 4.
-
-**Fix direction:** Either:
-1. Mirror the `RefresherFrequency → Frequency` translation in
-   `UpdateToolboxTalkSettingsCommandHandler` (keeping old field in sync), or
-2. Remove `Frequency` from the old edit form and fully migrate to the new
-   model — a larger cross-cutting change.
-
----
-
 ## 21. Post-publish translation management UI — AwaitingThirdParty languages (Medium)
 
 **Surfaced by:** 5.5a gap-check, 2026-06-14.
@@ -1527,33 +1565,6 @@ Note: BACKLOG §11 ("Cancel external review — end-to-end") has been updated �
 - On the per-language panel of the talk detail/edit page, show a "Cancel external review" button when `workflowState === 'AwaitingThirdParty'`
 - On success, transition the language chip to `ReviewerAccepted` and expose a "Re-translate" button
 - No new backend endpoints needed
-
----
-
-## 22. Unit tests for Step 7 reachability rule (depends on §17)
-
-**Priority:** P2 — Engineering  
-**Status:** Open — blocked on §17 (frontend test framework not installed)  
-**Surfaced:** 2026-06-14 during structural robustness refactor of `stepOrder.ts`.
-
-The Step 7 reachability rule in
-`web/src/features/toolbox-talks/components/learning-wizard/lib/stepOrder.ts`
-has four meaningful behavioral states, now made explicit by the 2026-06-14
-structural refactor:
-
-1. `talk.sections.length === 0` → `false`
-2. `talk.status === 'Published'` → `false`
-3. Sections exist, no target languages declared (English-only path) → `true`
-4. Sections exist, target languages declared, no completed validation runs → `false`
-5. Sections exist, target languages declared, at least one run with `status === 'Completed'` → `true`
-
-After §17 is closed (vitest + @testing-library/react installed), add unit
-tests covering each state in:
-`web/src/features/toolbox-talks/components/learning-wizard/lib/__tests__/stepOrder.test.ts`
-
-Also cover the defensive default: passing `validationRuns = undefined` with
-target languages declared must behave identically to passing `[]` (both
-return `false` — the `?? []` guard is the enforcement point).
 
 ---
 
