@@ -6,6 +6,19 @@ import Link from "next/link";
 import { useAuth, useHasAnyPermission } from "@/lib/auth/use-auth";
 import { cn } from "@/lib/utils";
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const leafLabels: Record<string, string> = {
+  drafts: "Drafts",
+  new: "New Learning",
+  parse: "Parse",
+  quiz: "Quiz",
+  settings: "Settings",
+  translate: "Translate",
+  validate: "Validate",
+  publish: "Publish",
+};
+
 const adminToolboxTalksNavItems = [
   { href: "/admin/toolbox-talks", label: "Overview", exact: true },
   { href: "/admin/toolbox-talks/talks", label: "Learnings" },
@@ -75,6 +88,17 @@ export default function AdminToolboxTalksLayout({
     return pathname.startsWith(href);
   };
 
+  const leaf = (() => {
+    const segments = pathname.split('/');
+    const learningsIdx = segments.indexOf('learnings');
+    if (learningsIdx < 0) return null;
+    const next = segments[learningsIdx + 1];
+    const candidate = next && UUID_REGEX.test(next)
+      ? segments[learningsIdx + 2]
+      : next;
+    return candidate ? (leafLabels[candidate] ?? null) : null;
+  })();
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -82,7 +106,19 @@ export default function AdminToolboxTalksLayout({
           Administration
         </Link>
         <span>/</span>
-        <span className="text-foreground">Learnings</span>
+        {leaf ? (
+          <Link href="/admin/toolbox-talks/learnings/drafts" className="hover:text-foreground">
+            Learnings
+          </Link>
+        ) : (
+          <span className="text-foreground">Learnings</span>
+        )}
+        {leaf && (
+          <>
+            <span>/</span>
+            <span className="text-foreground">{leaf}</span>
+          </>
+        )}
       </div>
 
       <nav className="border-b bg-background">
