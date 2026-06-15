@@ -819,15 +819,28 @@ return `false` — the `?? []` guard is the enforcement point).
 
 - **Priority:** P2
 - **Origin:** `[Engineering]`
-- **Status:** Open
+- **Status:** Partially closed — SuperUser slice closed by §5.22 fix (2026-06-15)
 - **Surfaced:** 2026-06-11 during Phase 5.3b smoke.
 
 Phase 5.3b smoke (2026-06-11) confirmed the side effect: refresh
 on any /learnings/{talkId}/{step} route lands on /drafts rather
 than the step the user was on. Functional (user clicks Resume to
 return) but not refresh-recovery as PHASE_5_STANDARDS §5.4
-prescribes. Resolution scope expanded to include preserving the
-target step on tenant-aware redirects when the proper fix lands.
+prescribes.
+
+**SuperUser slice (CLOSED):** The redirect was caused by
+`TenantQueryInvalidator` firing on the `null → storedUUID`
+hydration transition and redirecting to the parent path, which
+then redirected to /drafts. The §5.22 fix (2026-06-15) removed
+the redirect block from `TenantQueryInvalidator` entirely.
+SuperUsers refreshing on any wizard step now stay on that step.
+
+**Regular-admin slice (OPEN):** Regular admins' `activeTenantId`
+is always null and never transitions, so the invalidator was
+never the cause for them. If regular admins experience
+refresh-position loss, the cause lies elsewhere (auth layout
+guards or session restoration). Needs investigation if confirmed
+as a real issue.
 
 #### 5.21 Learning wizard page header inherits wrong context
 
