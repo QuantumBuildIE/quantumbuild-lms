@@ -63,6 +63,27 @@ public class ToolboxTalkSettingsConfiguration : IEntityTypeConfiguration<Toolbox
 
         builder.Property(s => s.ReminderEmailTemplate);
 
+        builder.Property(s => s.DefaultMinimumVideoWatchPercent)
+            .IsRequired()
+            .HasDefaultValue(90);
+
+        builder.Property(s => s.DefaultAutoAssignDueDays)
+            .IsRequired()
+            .HasDefaultValue(14);
+
+        builder.Property(s => s.DefaultGenerateCertificate)
+            .IsRequired()
+            .HasDefaultValue(true);
+
+        builder.Property(s => s.DefaultRefresherFrequency)
+            .IsRequired()
+            .HasMaxLength(20)
+            .HasDefaultValue("Once");
+
+        builder.Property(s => s.DefaultIsActive)
+            .IsRequired()
+            .HasDefaultValue(true);
+
         // Audit fields
         builder.Property(s => s.CreatedAt)
             .IsRequired();

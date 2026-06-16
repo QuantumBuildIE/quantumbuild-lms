@@ -9,6 +9,7 @@ import { PassThresholdSection } from '@/features/toolbox-talks/components/settin
 import { AuditPurposeSection } from '@/features/toolbox-talks/components/settings/audit-purpose-section';
 import { SkipValidationSection } from '@/features/toolbox-talks/components/settings/skip-validation-section';
 import { QrLocationTrainingSection } from '@/features/toolbox-talks/components/settings/qr-location-training-section';
+import { WizardDefaultsSection } from '@/features/toolbox-talks/components/settings/wizard-defaults-section';
 
 const VALID_TABS = ['general', 'notifications', 'quiz', 'validation', 'qr-training'] as const;
 type SettingsTab = typeof VALID_TABS[number];
@@ -58,19 +59,7 @@ export default function AdminToolboxTalksSettingsPage() {
         </TabsList>
 
         <TabsContent value="general" className="space-y-6 pt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>General Settings</CardTitle>
-              <CardDescription>
-                Configure general learnings settings
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Settings configuration coming soon.
-              </p>
-            </CardContent>
-          </Card>
+          <WizardDefaultsSection />
         </TabsContent>
 
         <TabsContent value="notifications" className="space-y-6 pt-4">

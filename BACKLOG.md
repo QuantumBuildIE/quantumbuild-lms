@@ -821,6 +821,44 @@ _Phase 5 — Smoke Test and Handoff:_ 18. Execute smoke test checklist (15 items
 - **Status:** Open
 - **Description:** An AI-powered help assistant for admins — "how do I create a course", "show me employees in site X" — embedded in the product. Forward-looking.
 
+#### 5.13 English-only learning creation blocked — Step 1 rejects empty target languages (§5.19)
+
+- **Priority:** P1
+- **Origin:** `[Internal-QA]`
+- **Status:** ✅ Done — 2026-06-14 — fixed in wizard-skip-regression chunk; smoke verified post-deploy (see `docs/phase-5/reports/wizard-skip-regression-fix.md` Scenarios A and B).
+- **Description:** The new wizard's Step 1 (Input & Config) rejects submissions where `targetLanguageCodes` is empty, blocking English-only learning creation. Additionally Steps 5 (Translate) and 6 (Validate) do not skip when no target languages are configured — they remain reachable even when there is nothing to translate or validate. Root cause: the backend `InitialiseToolboxTalkCommandValidator` enforces "At least one target language is required"; the frontend `stepOrder.ts` reachability rules for steps 5 and 6 gate on `talk.sections.length > 0` rather than on `targetLanguageCodes.length > 0`. Fix direction: (1) Remove the target-language validator rule. (2) Update step 5 and 6 reachability rules to return false when `targetLanguageCodes` is empty. (3) Confirm Continue-button navigation skips unreachable steps correctly. Recon: `docs/phase-5/reports/wizard-skip-regression-recon.md`.
+
+#### 5.14 Quiz-skipped declared but Continue lands on Quiz step (§23)
+
+- **Priority:** P1
+- **Origin:** `[Internal-QA]`
+- **Status:** ✅ Done — 2026-06-14 — fixed in wizard-skip-regression chunk; smoke verified post-deploy (see `docs/phase-5/reports/wizard-skip-regression-fix.md` Scenarios A and B).
+- **Description:** When "include quiz" is deselected at Step 1, the wizard's step indicator correctly renders "3 Quiz — Skipped" on the Parse step, but clicking Continue on Step 2 (Parse) navigates to Step 3 (Quiz) instead of jumping past it to Step 4 (Settings). The display logic and the navigation logic are inconsistent — `isStepReachable` and the Continue-button next-step computation appear to use different signals. Root cause hypothesis: the step indicator reads from `isStepReachable(3, talk)` which correctly reflects the quiz-disabled flag; the Continue navigation calls `goToStep(currentStep + 1)` (integer increment) rather than `findNextReachable(currentStep)`. Fix direction: Make Continue use the same reachability logic the step indicator uses. If §5.13 and §5.14 share the same navigation root cause, a single fix chunk closes both. Recon: `docs/phase-5/reports/wizard-skip-regression-recon.md`.
+
+#### 5.15 Integration test suite — comprehensive review post-Phase 5
+
+- **Priority:** P2
+- **Origin:** `[Engineering]`
+- **Status:** Open — deferred to post-Phase 5
+
+The deprecated test user cleanup that the previous version of this entry scoped was completed in two commits before Phase 5.2:
+
+- `<insert hash 1>` — test(cleanup): remove deprecated test users and migrate to Operator
+- `<insert hash 2>` — test(cleanup): delete misleading and orphaned tests
+
+End state: 397 integration tests passing, zero role-not-found warnings, deprecated `TestUserType` values / `IntegrationTestBase` client properties / `TestTenantConstants` entries / orphaned playwright fixtures all removed. Three misleading tests (`AllAuthenticatedUsers_CanAccessEmployeesList`, `OnlyManagePermission_CanModifyEmployees`, `AllUsersInTenant_SeesSameEmployeeList`) deleted rather than rewritten.
+
+The remaining drift in the test suite is deferred to a dedicated post-Phase-5 review task. The test suite is too important to be repaired piecemeal between Phase 5 feature chunks. Phase 5 will not add tests to it beyond what strictly verifies non-obvious new behaviour (per `PHASE_5_STANDARDS` §11). The comprehensive review happens once Phase 5 closes and gets the time and attention it warrants.
+
+Scope when picked up:
+
+- Per-test triage of every integration test: still meaningful as written, misleading and rewriteable, or delete as obsolete
+- Playwright fixture audit (which fixtures are still active, which describe blocks should be unskipped or deleted)
+- Frontend test coverage decision: extend, leave sparse, or deliberately scope out
+- The seeder/JWT reconciliation (§12)
+- The `login.spec.ts` skipped block (3 tests remain in `test.describe.skip` after the pre-Phase-5 cleanup; review whether to delete the block or rewrite the tests)
+- E2E suite breadth — what's covered, what's missing, what's stale
+
 #### 5.16 SignalR client timeout defaults missing in four hooks
 
 - **Priority:** P1
@@ -989,29 +1027,8 @@ fix can wait for a cross-cutting cleanup.
 
 - **Priority:** P3
 - **Origin:** `[Engineering]`
-- **Status:** Deferred — not in scope for 5.3d
+- **Status:** ✅ Done — 2026-06-16 — Five default fields added to `ToolboxTalkSettings`; tenant-level `UpdateToolboxTalkTenantDefaultsCommand` implemented; General tab in settings admin UI built out with RHF + Zod form; `InitialiseToolboxTalkCommandHandler` now reads tenant defaults at talk creation. Hardcoded `IsActive = false` removed (per §5.23 follow-up recon Q1.4 — `IsActive` is not a learner-visibility gate). `DefaultPassingScore` also wired at creation for consistency. Fix: `docs/phase-5/reports/5.23-step4-tenant-defaults-fix.md`.
 - **Source:** Phase 5.3d spec item I1
-
-When an admin creates a learning, the Settings step (Step 4) defaults
-`minimumVideoWatchPercent`, `autoAssignDueDays`, `generateCertificate`,
-`refresherFrequency`, and `isActive` from hardcoded values:
-
-- `minimumVideoWatchPercent = 90`
-- `autoAssignDueDays = 14`
-- `generateCertificate = true`
-- `refresherFrequency = "Once"`
-- `isActive = true`
-
-These should instead be read from `ToolboxTalkSettings` (tenant-level
-defaults configured in the module settings page) so the wizard inherits
-whatever the tenant has configured.
-
-**How to apply:** When initialising the SettingsStep form (`useEffect`
-populating from server talk), also fetch `ToolboxTalkSettings` for the
-tenant and use those as the default values for fields that haven't been
-previously saved (i.e. `talk.lastEditedStep < 4`). The `useTalk` hook
-already provides the talk; a parallel `useToolboxTalkSettings` hook
-provides the tenant defaults.
 
 #### 5.24 ToolboxTalk.Frequency vs RequiresRefresher/RefresherIntervalMonths conflict (Phase 5.3d)
 
@@ -1066,44 +1083,6 @@ obviously breaks earlier) covers:
 - **Origin:** `[Engineering]`
 - **Status:** Open
 - **Description:** SPRINT.md last updated 3 June 2026 (10 days stale as of 2026-06-13). Currently references UAT P1s 1.1.6–1.1.9 as future work — all four are now ✅ Done as of 4 June. The "Next" section lists UAT P2s and the rich-text editor, which doesn't reflect the current state of Phase 5 (5.4 just landed, 5.5 Publish recon next). Needs full rewrite covering: completed Phase 5 work to date, active chunk (5.5 Publish), known BACKLOG-deferred items relevant to current phase. Surfaced by 2026-06-13 BACKLOG sweep recon. Out of scope for the sweep itself.
-
-#### 5.13 English-only learning creation blocked — Step 1 rejects empty target languages (§5.19)
-
-- **Priority:** P1
-- **Origin:** `[Internal-QA]`
-- **Status:** ✅ Done — 2026-06-14 — fixed in wizard-skip-regression chunk; smoke verified post-deploy (see `docs/phase-5/reports/wizard-skip-regression-fix.md` Scenarios A and B).
-- **Description:** The new wizard's Step 1 (Input & Config) rejects submissions where `targetLanguageCodes` is empty, blocking English-only learning creation. Additionally Steps 5 (Translate) and 6 (Validate) do not skip when no target languages are configured — they remain reachable even when there is nothing to translate or validate. Root cause: the backend `InitialiseToolboxTalkCommandValidator` enforces "At least one target language is required"; the frontend `stepOrder.ts` reachability rules for steps 5 and 6 gate on `talk.sections.length > 0` rather than on `targetLanguageCodes.length > 0`. Fix direction: (1) Remove the target-language validator rule. (2) Update step 5 and 6 reachability rules to return false when `targetLanguageCodes` is empty. (3) Confirm Continue-button navigation skips unreachable steps correctly. Recon: `docs/phase-5/reports/wizard-skip-regression-recon.md`.
-
-#### 5.14 Quiz-skipped declared but Continue lands on Quiz step (§23)
-
-- **Priority:** P1
-- **Origin:** `[Internal-QA]`
-- **Status:** ✅ Done — 2026-06-14 — fixed in wizard-skip-regression chunk; smoke verified post-deploy (see `docs/phase-5/reports/wizard-skip-regression-fix.md` Scenarios A and B).
-- **Description:** When "include quiz" is deselected at Step 1, the wizard's step indicator correctly renders "3 Quiz — Skipped" on the Parse step, but clicking Continue on Step 2 (Parse) navigates to Step 3 (Quiz) instead of jumping past it to Step 4 (Settings). The display logic and the navigation logic are inconsistent — `isStepReachable` and the Continue-button next-step computation appear to use different signals. Root cause hypothesis: the step indicator reads from `isStepReachable(3, talk)` which correctly reflects the quiz-disabled flag; the Continue navigation calls `goToStep(currentStep + 1)` (integer increment) rather than `findNextReachable(currentStep)`. Fix direction: Make Continue use the same reachability logic the step indicator uses. If §5.13 and §5.14 share the same navigation root cause, a single fix chunk closes both. Recon: `docs/phase-5/reports/wizard-skip-regression-recon.md`.
-
-#### 5.15 Integration test suite — comprehensive review post-Phase 5
-
-- **Priority:** P2
-- **Origin:** `[Engineering]`
-- **Status:** Open — deferred to post-Phase 5
-
-The deprecated test user cleanup that the previous version of this entry scoped was completed in two commits before Phase 5.2:
-
-- `<insert hash 1>` — test(cleanup): remove deprecated test users and migrate to Operator
-- `<insert hash 2>` — test(cleanup): delete misleading and orphaned tests
-
-End state: 397 integration tests passing, zero role-not-found warnings, deprecated `TestUserType` values / `IntegrationTestBase` client properties / `TestTenantConstants` entries / orphaned playwright fixtures all removed. Three misleading tests (`AllAuthenticatedUsers_CanAccessEmployeesList`, `OnlyManagePermission_CanModifyEmployees`, `AllUsersInTenant_SeesSameEmployeeList`) deleted rather than rewritten.
-
-The remaining drift in the test suite is deferred to a dedicated post-Phase-5 review task. The test suite is too important to be repaired piecemeal between Phase 5 feature chunks. Phase 5 will not add tests to it beyond what strictly verifies non-obvious new behaviour (per `PHASE_5_STANDARDS` §11). The comprehensive review happens once Phase 5 closes and gets the time and attention it warrants.
-
-Scope when picked up:
-
-- Per-test triage of every integration test: still meaningful as written, misleading and rewriteable, or delete as obsolete
-- Playwright fixture audit (which fixtures are still active, which describe blocks should be unskipped or deleted)
-- Frontend test coverage decision: extend, leave sparse, or deliberately scope out
-- The seeder/JWT reconciliation (§12)
-- The `login.spec.ts` skipped block (3 tests remain in `test.describe.skip` after the pre-Phase-5 cleanup; review whether to delete the block or rewrite the tests)
-- E2E suite breadth — what's covered, what's missing, what's stale
 
 #### 5.27 Phase 5.6 cutover toggle — parallel-period mechanism
 
@@ -1186,6 +1165,44 @@ between them is a future incident shape. Proper fix: refactor `ClaudeSettings`,
 derive from `AIProviderOptions` at bind time rather than being independently
 configured. Also extend `AIProviderOptionsValidator` to cover the operational
 keys until the refactor lands.
+
+#### 5.30 ToolboxTalk.IsActive is functionally decorative
+
+- **Priority:** P3
+- **Origin:** `[Engineering]`
+- **Status:** Open
+- **Surfaced:** 2026-06-16 during §5.23 follow-up recon.
+
+`ToolboxTalk.IsActive` does not gate learner visibility. Every employee-facing
+query (`GetMyToolboxTalksQueryHandler`, `GetMyToolboxTalkByIdQueryHandler`,
+the `/pending`, `/in-progress`, `/overdue`, `/completed` status endpoints)
+filters only on the presence of a `ScheduledTalk` assignment record;
+`IsActive` and `Status` are ignored. The schedule-processing job
+(`ProcessToolboxTalkSchedulesJob`) and assignment-creation handler
+(`ProcessToolboxTalkScheduleCommandHandler`) likewise do not check
+`IsActive` or `Status` before creating assignments. The field is currently
+used in only two places:
+
+1. `GetToolboxTalkDashboardQueryHandler` counts `activeTalks = talks.Count(t => t.IsActive)` for the admin dashboard's active-talks tile.
+2. `GetToolboxTalksQueryHandler` (admin list) accepts an optional `IsActive` filter — only applied when the admin explicitly filters on it.
+
+Operationally, "deactivating" a published talk via the wizard toggle has
+no effect on already-assigned learners — they continue to see and can
+still complete the talk. To genuinely deactivate a talk, an admin must
+cancel or delete every existing `ScheduledTalk` assignment manually.
+
+This is either a missing feature (deactivation should cascade to
+assignments or block new assignments) or a UI labeling issue (the
+toggle implies more than it does). Product decision needed before
+sizing a fix. Adjacent: §5.23 introduced `DefaultIsActive` as a tenant
+default — a tenant setting it to `true` is safe today precisely because
+the field is decorative.
+
+Files:
+- `src/Modules/ToolboxTalks/.../Queries/GetMyToolboxTalks/GetMyToolboxTalksQueryHandler.cs:23-28`
+- `src/Modules/ToolboxTalks/.../Queries/GetMyToolboxTalkById/GetMyToolboxTalkByIdQueryHandler.cs:29-44`
+- `src/Modules/ToolboxTalks/.../Jobs/ProcessToolboxTalkSchedulesJob.cs:57-63`
+- `src/Modules/ToolboxTalks/.../Queries/GetToolboxTalkDashboard/GetToolboxTalkDashboardQueryHandler.cs:23-30`
 
 ---
 

@@ -37,7 +37,12 @@ public class GetToolboxTalkSettingsQueryHandler : IRequestHandler<GetToolboxTalk
                 EnableVideoDubbing = settings.EnableVideoDubbing,
                 VideoDubbingProvider = settings.VideoDubbingProvider,
                 NotificationEmailTemplate = settings.NotificationEmailTemplate,
-                ReminderEmailTemplate = settings.ReminderEmailTemplate
+                ReminderEmailTemplate = settings.ReminderEmailTemplate,
+                DefaultMinimumVideoWatchPercent = settings.DefaultMinimumVideoWatchPercent,
+                DefaultAutoAssignDueDays = settings.DefaultAutoAssignDueDays,
+                DefaultGenerateCertificate = settings.DefaultGenerateCertificate,
+                DefaultRefresherFrequency = settings.DefaultRefresherFrequency,
+                DefaultIsActive = settings.DefaultIsActive
             };
         }
 
@@ -57,7 +62,12 @@ public class GetToolboxTalkSettingsQueryHandler : IRequestHandler<GetToolboxTalk
             EnableVideoDubbing = false,
             VideoDubbingProvider = null,
             NotificationEmailTemplate = null,
-            ReminderEmailTemplate = null
+            ReminderEmailTemplate = null,
+            DefaultMinimumVideoWatchPercent = 90,
+            DefaultAutoAssignDueDays = 14,
+            DefaultGenerateCertificate = true,
+            DefaultRefresherFrequency = "Once",
+            DefaultIsActive = false
         };
     }
 }

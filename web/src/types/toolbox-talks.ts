@@ -503,6 +503,12 @@ export interface ToolboxTalkSettings {
   videoDubbingProvider: string | null;
   notificationEmailTemplate: string | null;
   reminderEmailTemplate: string | null;
+  // Wizard Step 4 defaults
+  defaultMinimumVideoWatchPercent: number;
+  defaultAutoAssignDueDays: number;
+  defaultGenerateCertificate: boolean;
+  defaultRefresherFrequency: string;
+  defaultIsActive: boolean;
 }
 
 export interface UpdateToolboxTalkSettingsRequest {
@@ -513,6 +519,12 @@ export interface UpdateToolboxTalkSettingsRequest {
   maxQuizAttempts?: number;
   requireSignature?: boolean;
   autoAssignNewEmployees?: boolean;
+  // Wizard Step 4 defaults
+  defaultMinimumVideoWatchPercent?: number;
+  defaultAutoAssignDueDays?: number;
+  defaultGenerateCertificate?: boolean;
+  defaultRefresherFrequency?: string;
+  defaultIsActive?: boolean;
 }
 
 // ============================================

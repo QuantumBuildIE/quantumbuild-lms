@@ -23,6 +23,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalkQu
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalkQuizSettings;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.PublishToolboxTalk;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalkSettings;
+using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalkTenantDefaults;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Reports;
 using QuantumBuild.Modules.ToolboxTalks.Application.Queries.GetSlideshowHtml;
@@ -856,15 +857,20 @@ public class ToolboxTalksController : ControllerBase
     {
         try
         {
-            // TODO: Implement UpdateToolboxTalkSettingsCommand when available
-            // For now, return the current settings as a placeholder
-            var query = new GetToolboxTalkSettingsQuery
-            {
-                TenantId = _currentUserService.TenantId
-            };
+            var command = new UpdateToolboxTalkTenantDefaultsCommand(
+                TenantId: _currentUserService.TenantId,
+                DefaultMinimumVideoWatchPercent: dto.DefaultMinimumVideoWatchPercent,
+                DefaultAutoAssignDueDays: dto.DefaultAutoAssignDueDays,
+                DefaultGenerateCertificate: dto.DefaultGenerateCertificate,
+                DefaultRefresherFrequency: dto.DefaultRefresherFrequency,
+                DefaultIsActive: dto.DefaultIsActive
+            );
 
-            var result = await _mediator.Send(query);
-            return Ok(Result.Ok(result));
+            var result = await _mediator.Send(command);
+            if (!result.Success)
+                return BadRequest(result);
+
+            return Ok(Result.Ok(result.Data));
         }
         catch (Exception ex)
         {
@@ -2331,7 +2337,7 @@ public class ToolboxTalksController : ControllerBase
 }
 
 /// <summary>
-/// DTO for updating toolbox talk settings
+/// DTO for updating toolbox talk tenant-level settings
 /// </summary>
 public record UpdateToolboxTalkSettingsDto
 {
@@ -2342,6 +2348,12 @@ public record UpdateToolboxTalkSettingsDto
     public int MaxQuizAttempts { get; init; } = 3;
     public bool RequireSignature { get; init; } = true;
     public bool AutoAssignNewEmployees { get; init; } = true;
+    // Wizard Step 4 defaults
+    public int DefaultMinimumVideoWatchPercent { get; init; } = 90;
+    public int DefaultAutoAssignDueDays { get; init; } = 14;
+    public bool DefaultGenerateCertificate { get; init; } = true;
+    public string DefaultRefresherFrequency { get; init; } = "Once";
+    public bool DefaultIsActive { get; init; } = true;
 }
 
 /// <summary>

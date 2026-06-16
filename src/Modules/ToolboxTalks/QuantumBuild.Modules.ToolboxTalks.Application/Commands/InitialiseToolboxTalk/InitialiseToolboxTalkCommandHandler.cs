@@ -60,6 +60,22 @@ public class InitialiseToolboxTalkCommandHandler : IRequestHandler<InitialiseToo
             ? request.DocumentRef.Trim()
             : GenerateDocumentRef();
 
+        // Load tenant defaults — null-coalescing fallbacks preserve current behaviour
+        // when no settings row exists for this tenant.
+        var tenantSettings = await _dbContext.ToolboxTalkSettings
+            .Where(s => s.TenantId == request.TenantId && !s.IsDeleted)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        // Map refresher string → RequiresRefresher + RefresherIntervalMonths
+        var refresherFrequency = tenantSettings?.DefaultRefresherFrequency ?? "Once";
+        var (defaultRequiresRefresher, defaultRefresherIntervalMonths) = refresherFrequency switch
+        {
+            "Monthly" => (true, 1),
+            "Quarterly" => (true, 3),
+            "Annually" => (true, 12),
+            _ => (false, 12),
+        };
+
         var talk = new ToolboxTalk
         {
             Id = Guid.NewGuid(),
@@ -99,9 +115,15 @@ public class InitialiseToolboxTalkCommandHandler : IRequestHandler<InitialiseToo
             PreserveSourceWording = request.PreserveSourceWording,
             RequiresQuiz = request.IncludeQuiz,
 
-            // Wizard shell defaults
+            // Wizard shell defaults — sourced from tenant ToolboxTalkSettings
             Status = ToolboxTalkStatus.Draft,
-            IsActive = false,
+            IsActive = tenantSettings?.DefaultIsActive ?? false,
+            GenerateCertificate = tenantSettings?.DefaultGenerateCertificate ?? true,
+            MinimumVideoWatchPercent = tenantSettings?.DefaultMinimumVideoWatchPercent ?? 90,
+            AutoAssignDueDays = tenantSettings?.DefaultAutoAssignDueDays ?? 14,
+            PassingScore = tenantSettings?.DefaultPassingScore ?? 80,
+            RequiresRefresher = defaultRequiresRefresher,
+            RefresherIntervalMonths = defaultRefresherIntervalMonths,
             LastEditedStep = 1,
         };
 

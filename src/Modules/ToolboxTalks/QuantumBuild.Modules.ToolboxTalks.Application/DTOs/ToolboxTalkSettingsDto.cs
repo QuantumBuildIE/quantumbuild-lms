@@ -31,4 +31,11 @@ public record ToolboxTalkSettingsDto
     // Email templates
     public string? NotificationEmailTemplate { get; init; }
     public string? ReminderEmailTemplate { get; init; }
+
+    // Wizard Step 4 defaults
+    public int DefaultMinimumVideoWatchPercent { get; init; }
+    public int DefaultAutoAssignDueDays { get; init; }
+    public bool DefaultGenerateCertificate { get; init; }
+    public string DefaultRefresherFrequency { get; init; } = "Once";
+    public bool DefaultIsActive { get; init; }
 }
