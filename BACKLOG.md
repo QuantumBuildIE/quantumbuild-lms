@@ -1,6 +1,6 @@
 # CertifiedIQ — Backlog (Source of Truth)
 
-**Last updated:** 15 June 2026
+**Last updated:** 17 June 2026
 **Purpose:** Comprehensive record of every known item — bug, feature, refactor, product decision — across the CertifiedIQ LMS. This is the long reference. Active prioritised work is captured directly in this document. A separate sprint file is no longer maintained — see §5.26 for the rationale.
 
 ## Conventions
@@ -29,6 +29,14 @@
 - `Blocked` — waiting on decision, dependency, or external party
 - `Deferred` — deliberately parked
 - `Done` — closed (kept here for trail until pruned)
+
+---
+
+## Phase status
+
+**Phase 5: ✅ Closed — 2026-06-17.** All in-scope work shipped or descoped; deferred work moved to Post-Phase-5 Cleanup (Section 7). Cutover toggle infrastructure (§5.27) shipped with default position "Classic wizard" — flipping any tenant remains gated on §24 (Edit workflow design) implementation. Production deployment of §5.28 (Anthropic model deprecation fix) is operational and tracked separately.
+
+See `docs/phase-5/closure-notes.md` for the closure summary.
 
 ---
 
@@ -1103,7 +1111,7 @@ Recon-first. Likely chunks:
 
 - **Priority:** P0
 - **Origin:** `[Engineering]`
-- **Status:** ✅ Done — 2026-06-16
+- **Status:** ✅ Done — 2026-06-16 — Unified `AIProviders` configuration section introduced with `IValidateOptions<T>` fail-fast startup validation. Six hardcoded Anthropic model identifier sites converted to inject `IOptions<AIProviderOptions>`. `claude-sonnet-4-20250514` (retired by Anthropic 2026-06-15) replaced with `claude-sonnet-4-5` across all sites. Orphaned `Round3Provider` config key removed. Code shipped to Development and smoke-verified against affected surfaces (lesson parse, Help Chat, TransVal Round 3D, Haiku-side conversions, ElevenLabs transcription, DeepL Round 1B). Production deployment is an operational concern — tracked via commit history and Railway deployment logs, not in BACKLOG. Recon: `docs/phase-5/reports/anthropic-model-deprecation-recon.md` and `docs/phase-5/reports/multi-provider-config-recon.md`. Fix report: `docs/phase-5/reports/multi-provider-config-fix.md`.
 
 **Incident:** Anthropic retired `claude-sonnet-4-20250514` (also known as `claude-sonnet-4-0`) effective 2026-06-15 after a 60-day deprecation notice. Six production code paths broke: help chat, subtitle translation (`SubtitleProcessing:Claude:Model`), regulatory requirement ingestion, regulatory requirement mapping, regulatory scoring, and the Round 3 back-translation provider in TransVal.
 
