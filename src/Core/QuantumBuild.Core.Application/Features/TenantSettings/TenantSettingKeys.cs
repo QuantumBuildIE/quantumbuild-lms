@@ -10,6 +10,7 @@ public static class TenantSettingKeys
     public const string SkipValidationStep = "SkipValidationStep";
     public const string QrLocationTrainingEnabled = "QrLocationTrainingEnabled";
     public const string ExternalParticipantTokenLifetimeDays = "ExternalParticipantTokenLifetimeDays";
+    public const string UseNewWizard = "UseNewWizard";
 
     public static class Defaults
     {

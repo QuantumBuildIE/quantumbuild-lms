@@ -10,6 +10,7 @@ import { AuditPurposeSection } from '@/features/toolbox-talks/components/setting
 import { SkipValidationSection } from '@/features/toolbox-talks/components/settings/skip-validation-section';
 import { QrLocationTrainingSection } from '@/features/toolbox-talks/components/settings/qr-location-training-section';
 import { WizardDefaultsSection } from '@/features/toolbox-talks/components/settings/wizard-defaults-section';
+import { WizardToggleSection } from '@/features/toolbox-talks/components/settings/wizard-toggle-section';
 
 const VALID_TABS = ['general', 'notifications', 'quiz', 'validation', 'qr-training'] as const;
 type SettingsTab = typeof VALID_TABS[number];
@@ -60,6 +61,7 @@ export default function AdminToolboxTalksSettingsPage() {
 
         <TabsContent value="general" className="space-y-6 pt-4">
           <WizardDefaultsSection />
+          <WizardToggleSection />
         </TabsContent>
 
         <TabsContent value="notifications" className="space-y-6 pt-4">

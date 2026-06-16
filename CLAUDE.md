@@ -1386,6 +1386,21 @@ Archived notes 1-89 are in CLAUDE-archive.md
 
 **Note 28 — EF migrations must be CLI-generated**: Always create migrations with `dotnet ef migrations add <MigrationName>` (from `src/QuantumBuild.API`, with `--project` pointing to the target Infrastructure project). The CLI generates both `<Name>.cs` and `<Name>.Designer.cs` together. A hand-written `.cs` without its `.Designer.cs` causes EF to silently skip the migration on startup — the `[Migration]` attribute EF reads lives in the `.Designer.cs` partial class declaration. Four instances of this trap in one session (one production bug, three Development drift cases). Always verify both files exist after every `migrations add`.
 
+**Note 29 — Wizard cutover toggle (§5.27)**: Two wizard versions run in parallel during the cutover period. The `UseNewWizard` `TenantSettings` key controls which one the "Create New" button routes to.
+
+- **Legacy wizard** (`/admin/toolbox-talks/create`) — SPA, all 7 steps at one URL, React state. Talks created here have `lastEditedStep == null`.
+- **New wizard** (`/admin/toolbox-talks/learnings/**`) — URL-per-step, server-side state. Talks created here have `lastEditedStep != null`.
+
+**Discriminator:** `lastEditedStep != null` → new wizard; `null` → legacy. This is the only reliable signal — there is no `CreatedByWizard` field.
+
+**Toggle:** `TenantSettings.UseNewWizard`. Default `"false"` (legacy). When `"true"`, Create New on the Learnings list and "Create Another" on the legacy wizard's publish step both route to the new wizard. The drafts list shows both wizard types; legacy drafts get a "Legacy" badge and Resume routes to the talk detail page instead of a wizard URL.
+
+**URL override for smoke-testing:** append `?wizard=new` or `?wizard=old` to any page with the Create New button. One-shot — disappears on next navigation. Not persisted to localStorage/cookie.
+
+**Flip sequence:** Settings → General tab → "Wizard Version" toggle. Only flip after §24 (Edit workflow) is sufficiently complete for production use. The toggle is gated to users who can access the Settings page (Admin / SuperUser).
+
+**Eventual removal (§7.1):** when all tenants are on the new wizard and the legacy wizard is decommissioned, remove: the `UseNewWizard` key, `useWizardPreference` hook, `WizardToggleSection` component, `wizard-toggle-section.tsx`, and the Legacy badge logic in `drafts/page.tsx`.
+
 ## Backlog
 
 ### High

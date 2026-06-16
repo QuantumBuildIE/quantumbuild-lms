@@ -31,6 +31,7 @@ import type {
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { FREQUENCY_OPTIONS } from '@/lib/constants/frequency';
+import { useWizardPreference } from '@/features/toolbox-talks/hooks/useWizardPreference';
 
 interface ToolboxTalkListProps {
   onSchedule?: (talk: ToolboxTalkListItem) => void;
@@ -53,6 +54,7 @@ export function ToolboxTalkList({ onSchedule, basePath = '/admin/toolbox-talks' 
   const router = useRouter();
   const searchParams = useSearchParams();
   const canManage = usePermission('Learnings.Manage');
+  const wizardPreference = useWizardPreference();
   const canSchedule = usePermission('Learnings.Schedule');
 
   // URL params state
@@ -352,7 +354,11 @@ export function ToolboxTalkList({ onSchedule, basePath = '/admin/toolbox-talks' 
 
         {/* Create button */}
         {canManage && (
-          <Button onClick={() => router.push(`${basePath}/create`)}>
+          <Button onClick={() => router.push(
+            wizardPreference === 'new'
+              ? '/admin/toolbox-talks/learnings/new'
+              : `${basePath}/create`
+          )}>
             <PlusIcon className="mr-2 h-4 w-4" />
             Create New
           </Button>

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { FileText, Play, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DeleteDraftDialog } from '@/features/toolbox-talks/components/learning-wizard/components/DeleteDraftDialog';
 import { useDraftsList } from '@/features/toolbox-talks/components/learning-wizard/hooks/useDraftsList';
@@ -14,7 +15,7 @@ import { getStepUrl as buildStepUrl } from '@/features/toolbox-talks/components/
 import type { ToolboxTalkListItem } from '@/types/toolbox-talks';
 
 function stepLabel(step: number | null): string {
-  if (step === null || step === undefined) return 'Step 1 — Input & Config';
+  if (step === null || step === undefined) return '—';
   const def = WIZARD_STEPS.find((s) => s.number === step);
   return def ? `Step ${def.number} — ${def.label}` : `Step ${step}`;
 }
@@ -31,7 +32,12 @@ function DraftRow({ draft, onDelete, onResume }: DraftRowProps) {
       <FileText className="hidden h-5 w-5 shrink-0 text-muted-foreground sm:block" aria-hidden="true" />
 
       <div className="flex-1 min-w-0 space-y-0.5">
-        <p className="font-medium truncate">{draft.title}</p>
+        <div className="flex items-center gap-2">
+          <p className="font-medium truncate">{draft.title}</p>
+          {draft.lastEditedStep === null && (
+            <Badge variant="secondary" className="shrink-0">Legacy</Badge>
+          )}
+        </div>
         <p className="text-xs text-muted-foreground">
           {draft.createdByName ?? draft.createdBy}
           {' · '}
@@ -111,10 +117,13 @@ export default function LearningDraftsPage() {
   const [deleteTarget, setDeleteTarget] = useState<ToolboxTalkListItem | null>(null);
 
   const handleResume = (draft: ToolboxTalkListItem) => {
-    // Default to step 2 (Parse) if no step was saved — step 1 creates the talk,
-    // so any talk in the list must have passed step 1.
-    const step = draft.lastEditedStep ?? 2;
-    router.push(buildStepUrl(draft.id, step));
+    if (draft.lastEditedStep === null) {
+      // Legacy wizard draft — no per-step URL exists; route to talk detail
+      // where the Edit action is available.
+      router.push(`/admin/toolbox-talks/talks/${draft.id}`);
+      return;
+    }
+    router.push(buildStepUrl(draft.id, draft.lastEditedStep));
   };
 
   const handleDeleteConfirm = () => {

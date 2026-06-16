@@ -877,7 +877,7 @@ Scope when picked up:
 
 - **Priority:** P1
 - **Origin:** `[Engineering]`
-- **Status:** Open
+- **Status:** ✅ Done — vitest + @testing-library/react + jsdom installed (confirmed via package.json). Test suite runs via `npm run test`. Framework smoke test and stepOrder unit tests both passing. §5.19 (Step 7 reachability tests, previously blocked on §5.18) can now be actioned.
 - **Surfaced:** 2026-06-14 during Phase 5.5b implementation.
 
 No jest/vitest/@testing-library/react in package.json. The Phase
@@ -1065,7 +1065,7 @@ obviously breaks earlier) covers:
 
 - **Priority:** P1
 - **Origin:** `[Engineering]` `[Boss]`
-- **Status:** Open — gated on §24 (Edit workflow design). §5.24 (Frequency conflict) resolved 2026-06-16. §5.20 (Refresh Amendment) resolved 2026-06-15.
+- **Status:** ✅ Done — 2026-06-16 — Cutover toggle infrastructure shipped. Tenant-level `UseNewWizard` setting defaults to `"false"` (legacy wizard). When `"true"`, the "Create New" button on the Learnings list and the legacy wizard's "Create Another" both route to the new wizard. URL parameter `?wizard=new|old` overrides per-navigation for smoke-testing. `useWizardPreference` hook resolves preference order (URL override → TenantSettings → default old). Legacy wizard drafts show a "Legacy" badge in the drafts list with corrected Resume routing (live bug fix — without this fix, Resume would have navigated legacy-draft IDs to new-wizard step URLs). Toggle exposed via Settings → General tab. CLAUDE.md Note 29 added. Unit tests: 6 cases in `hooks/__tests__/useWizardPreference.test.ts`. Fix report: `docs/phase-5/reports/5.27-cutover-toggle-fix.md`. **Flipping any tenant to `"true"` remains gated on §24 (Edit workflow design).**
 - **Surfaced:** 2026-06-15 stocktaking discussion (renumbering 2026-06-15).
 
 The original Phase 5.6 was framed as "move the Create New button to the new wizard." The 2026-06-15 stocktaking refined this to: a toggle that lets old and new wizards run in parallel, with the user's preferred wizard chosen per-tenant (and per-URL for testing), until business sign-off triggers manual cutover.
@@ -1609,6 +1609,7 @@ Likely 3-5 day chunk if a notification framework needs building from scratch; 1-
 **Priority:** P0
 **Origin:** [Internal-QA]
 **Status:** Open — design rules locked 2026-06-15; sub-tasks to scope as separate chunks.
+**Note (2026-06-16):** §5.27 toggle infrastructure is now deployed (defaulted to legacy wizard). The `UseNewWizard` TenantSetting is ready to flip per-tenant as soon as this §24 work reaches a defensible production state. No tenant should be toggled to `"true"` before Chunk 1 (talk detail edit UI) and Chunk 3 (validate step on talk detail) are in place.
 **Surfaced:** 2026-06-15 stocktaking discussion.
 
 **Note:** Earlier draft of this entry (previously §29) merged into this entry on 2026-06-15 — the locked design rules subsume the open-questions framing of the earlier draft.
