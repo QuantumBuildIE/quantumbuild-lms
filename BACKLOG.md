@@ -1041,7 +1041,7 @@ fix can wait for a cross-cutting cleanup.
 
 - **Priority:** P1
 - **Origin:** `[Engineering]`
-- **Status:** Open
+- **Status:** Descoped — 2026-06-17 — Mobile UX rescoped from Phase 5 closeout to product-wide concern. The "mandatory audit at closure" framing was artificially narrow (the wizard is one of many surfaces; mobile correctness matters for all of them). Broader audit lives in §7.2 (Post-Phase-5 Cleanup). PHASE_5_STANDARDS §10 amended to remove the closure-gate framing. Mobile-breaking bugs noticed during Phase 5 work get logged as normal BACKLOG entries, not held against Phase 5 sign-off.
 - **Surfaced:** 2026-06-10 during 5.2 smoke.
 
 PHASE_5_STANDARDS §10 requires the wizard to be seamless on mobile.
@@ -1210,6 +1210,41 @@ Once the old wizard is decommissioned and `UpdateToolboxTalkCommandHandler` no l
 Adjacent: `Weekly` refreshers have been non-functional for refresher scheduling since before Phase 5 (`RefresherSchedulingService` uses `RefresherIntervalMonths` — integer months only). Removing `Frequency` is the natural moment to make that state honest.
 
 References: `docs/phase-5/reports/5.24-frequency-conflict-recon.md` (§2 read-site inventory, §6 fix candidates, §10 enum mismatch mapping).
+
+#### 7.2 Product-wide mobile UX audit
+
+- **Priority:** P2
+- **Origin:** `[Engineering]`
+- **Status:** Open
+- **Surfaced:** 2026-06-17 during §5.25 descope discussion.
+
+Mobile UX correctness applies across the entire product, not just the new wizard. The original Phase 5 framing (§5.25 — wizard mobile audit at closure) was artificially narrow. This entry replaces it with a product-wide audit.
+
+**Scope:** every authenticated route the product exposes, including:
+
+- The new learning wizard (eight routes: drafts, new, parse, quiz, settings, translate, validate, publish)
+- The talk detail page and its sub-pages (validation runs, translation review, edit)
+- The course builder
+- Settings admin pages (all five tabs: General, Notifications, Quiz, Validation, QR Training)
+- The admin dashboard
+- Employee portal (My Learnings, in-progress, completed, certificates)
+- QR scan flow (PIN entry, language selection, talk playback)
+- Certificate views (admin list, individual certificate)
+- Schedule management
+- Asset Management (when shipped per §2.2.1)
+- Any other authenticated route surfaced by the codebase
+
+External-reviewer-facing pages (third-party review links) — separate audit; not in this scope.
+
+**Breakpoints:** 320px (minimum supported), 375px (small phone), 768px (tablet), 1280px (desktop). The 320px check is the floor — no horizontal scroll at or above this width.
+
+**Method:** code-driven sweep first to identify systemic patterns (fixed widths, missing responsive utilities, hardcoded padding that doesn't scale, modals without full-screen mobile behaviour, hover-only affordances, drag-and-drop lacking touch handlers). Visual confirmation pass at each breakpoint. Categorise findings as blocking / significant friction / polish / touch interaction.
+
+**Findings disposition:** blocking and significant-friction issues land as individual BACKLOG entries with severity. Polish and per-breakpoint issues group into a single follow-up entry. Touch interaction issues that fail PHASE_5_STANDARDS §10.2 (drag-to-reorder with touch) are blockers.
+
+**Sizing:** substantial work — probably multi-day. Should be approached as its own focused effort, not interleaved with feature work. Worth doing once the product surface is more settled (post §24 edit workflow, post §5.27 cutover toggle).
+
+References: PHASE_5_STANDARDS §10 (the standard that motivates this), §5.25 (the original wizard-scoped entry that was descoped here).
 
 ---
 

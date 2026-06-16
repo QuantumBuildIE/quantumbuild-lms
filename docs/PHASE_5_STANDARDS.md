@@ -411,6 +411,10 @@ Every action reachable by mouse must be reachable by keyboard. Specifics:
 
 ## 10. Mobile
 
+Mobile UX is a product-wide concern, not a Phase 5 closure gate. Mobile-breaking bugs noticed during Phase 5 work are logged as normal BACKLOG entries and prioritised against other work — they do not block Phase 5 sign-off unless the wizard is unusably broken on mobile.
+
+A comprehensive product-wide mobile audit lives in BACKLOG §7.2 (Post-Phase-5 Cleanup).
+
 ### 10.1 The bar: seamless, not functional
 
 The wizard is desktop-first because it's an admin tool, but "doesn't crash on mobile" is not the standard. The bar is seamless: an admin who happens to open the wizard on a tablet or phone has a working, usable experience that doesn't feel like a desktop site jammed into a small viewport.
