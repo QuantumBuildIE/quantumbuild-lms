@@ -9,6 +9,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Pdf;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
+using QuantumBuild.Core.Application.Configuration;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services;
 
@@ -20,8 +21,8 @@ namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 /// </summary>
 public class RequirementIngestionJob
 {
-    private const string SonnetModel = "claude-sonnet-4-20250514";
     private const int MaxTokens = 8192;
+    private readonly string _sonnetModel;
 
     private static readonly JsonSerializerOptions CamelCaseOptions = new()
     {
@@ -42,7 +43,8 @@ public class RequirementIngestionJob
         HttpClient httpClient,
         IOptions<SubtitleProcessingSettings> settings,
         IAiUsageLogger aiUsageLogger,
-        ILogger<RequirementIngestionJob> logger)
+        ILogger<RequirementIngestionJob> logger,
+        IOptions<AIProviderOptions> aiProviders)
     {
         _dbContext = dbContext;
         _pdfExtractionService = pdfExtractionService;
@@ -50,6 +52,7 @@ public class RequirementIngestionJob
         _settings = settings.Value;
         _aiUsageLogger = aiUsageLogger;
         _logger = logger;
+        _sonnetModel = aiProviders.Value.Anthropic.Models.Sonnet;
     }
 
     [AutomaticRetry(Attempts = 1)]
@@ -239,7 +242,7 @@ DOCUMENT TEXT:
     {
         var requestBody = new
         {
-            model = SonnetModel,
+            model = _sonnetModel,
             max_tokens = MaxTokens,
             messages = new[]
             {

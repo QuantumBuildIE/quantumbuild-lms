@@ -8,6 +8,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
+using QuantumBuild.Core.Application.Configuration;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services;
 
@@ -20,8 +21,8 @@ namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 /// </summary>
 public class RequirementMappingJob
 {
-    private const string SonnetModel = "claude-sonnet-4-20250514";
     private const int MaxTokens = 8192;
+    private readonly string _sonnetModel;
 
     private static readonly JsonSerializerOptions CamelCaseOptions = new()
     {
@@ -40,13 +41,15 @@ public class RequirementMappingJob
         HttpClient httpClient,
         IOptions<SubtitleProcessingSettings> settings,
         IAiUsageLogger aiUsageLogger,
-        ILogger<RequirementMappingJob> logger)
+        ILogger<RequirementMappingJob> logger,
+        IOptions<AIProviderOptions> aiProviders)
     {
         _dbContext = dbContext;
         _httpClient = httpClient;
         _settings = settings.Value;
         _aiUsageLogger = aiUsageLogger;
         _logger = logger;
+        _sonnetModel = aiProviders.Value.Anthropic.Models.Sonnet;
     }
 
     [AutomaticRetry(Attempts = 1)]
@@ -265,7 +268,7 @@ If no requirements are addressed, respond with an empty array: []";
     {
         var requestBody = new
         {
-            model = SonnetModel,
+            model = _sonnetModel,
             max_tokens = MaxTokens,
             messages = new[]
             {

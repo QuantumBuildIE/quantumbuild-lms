@@ -62,16 +62,16 @@ public class TranslationValidationSettings
 
     /// <summary>
     /// Claude model used as Round 1A back-translator (Provider A in the consensus engine).
-    /// Default: claude-haiku-4-5-20251001
+    /// Value sourced from AIProviders:Anthropic:Models:Haiku (no hardcoded fallback).
     /// </summary>
-    public string Round1AModel { get; set; } = "claude-haiku-4-5-20251001";
+    public string Round1AModel { get; set; } = string.Empty;
 
     /// <summary>
     /// Claude model used as Round 3D back-translator (Provider D — final tiebreaker).
     /// Replaced DeepSeek in pipeline v6.4 for GDPR compliance.
-    /// Default: claude-sonnet-4-20250514
+    /// Value sourced from AIProviders:Anthropic:Models:Sonnet (no hardcoded fallback).
     /// </summary>
-    public string Round3DModel { get; set; } = "claude-sonnet-4-20250514";
+    public string Round3DModel { get; set; } = string.Empty;
 
     /// <summary>
     /// Maximum score difference between Round 1 providers (A and B) that is still considered
@@ -126,9 +126,9 @@ public class GeminiSettings
 
     /// <summary>
     /// Gemini model to use.
-    /// Default: gemini-2.0-flash
+    /// Value sourced from AIProviders:Gemini:Models:Flash (no hardcoded fallback).
     /// </summary>
-    public string Model { get; set; } = "gemini-2.0-flash";
+    public string Model { get; set; } = string.Empty;
 
     /// <summary>
     /// Google AI API base URL.

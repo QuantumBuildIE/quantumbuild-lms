@@ -65,9 +65,9 @@ public class ElevenLabsSettings
 
     /// <summary>
     /// Transcription model to use.
-    /// Default: scribe_v1
+    /// Value sourced from AIProviders:ElevenLabs:Models:Transcription (no hardcoded fallback).
     /// </summary>
-    public string Model { get; set; } = "scribe_v1";
+    public string Model { get; set; } = string.Empty;
 
     /// <summary>
     /// ElevenLabs API base URL.

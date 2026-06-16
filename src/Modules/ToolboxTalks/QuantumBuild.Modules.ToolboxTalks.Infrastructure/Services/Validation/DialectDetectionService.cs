@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
+using QuantumBuild.Core.Application.Configuration;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Validation;
@@ -15,23 +16,24 @@ namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Validation;
 /// </summary>
 public class DialectDetectionService : IDialectDetectionService
 {
-    private const string HaikuModel = "claude-haiku-4-5-20251001";
-
     private readonly HttpClient _httpClient;
     private readonly SubtitleProcessingSettings _settings;
     private readonly IAiUsageLogger _aiUsageLogger;
     private readonly ILogger<DialectDetectionService> _logger;
+    private readonly string _haikuModel;
 
     public DialectDetectionService(
         HttpClient httpClient,
         IOptions<SubtitleProcessingSettings> settings,
         IAiUsageLogger aiUsageLogger,
-        ILogger<DialectDetectionService> logger)
+        ILogger<DialectDetectionService> logger,
+        IOptions<AIProviderOptions> aiProviders)
     {
         _httpClient = httpClient;
         _settings = settings.Value;
         _aiUsageLogger = aiUsageLogger;
         _logger = logger;
+        _haikuModel = aiProviders.Value.Anthropic.Models.Haiku;
     }
 
     /// <inheritdoc />
@@ -127,7 +129,7 @@ public class DialectDetectionService : IDialectDetectionService
 
         var requestBody = new
         {
-            model = HaikuModel,
+            model = _haikuModel,
             max_tokens = 1024,
             messages = new[]
             {

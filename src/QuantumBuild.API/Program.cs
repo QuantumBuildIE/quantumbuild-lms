@@ -26,8 +26,10 @@ using QuantumBuild.Modules.LessonParser.Infrastructure.Jobs;
 using QuantumBuild.Core.Application.Http;
 using QuantumBuild.Modules.LessonParser.Infrastructure.Persistence;
 using QuantumBuild.Core.Application.Abstractions;
+using QuantumBuild.Core.Application.Configuration;
 using QuantumBuild.Core.Application.Features.BulkImport;
 using QuantumBuild.Core.Infrastructure.Jobs;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -110,6 +112,11 @@ builder.Services.Configure<EmailProviderSettings>(
 
 builder.Services.Configure<BulkImportSettings>(
     builder.Configuration.GetSection(BulkImportSettings.SectionName));
+
+builder.Services.AddOptions<AIProviderOptions>()
+    .BindConfiguration(AIProviderOptions.SectionName)
+    .ValidateOnStart();
+builder.Services.AddSingleton<IValidateOptions<AIProviderOptions>, AIProviderOptionsValidator>();
 
 var emailProvider = builder.Configuration.GetValue<string>("EmailProvider:Provider");
 if (string.Equals(emailProvider, "MailerSend", StringComparison.OrdinalIgnoreCase))

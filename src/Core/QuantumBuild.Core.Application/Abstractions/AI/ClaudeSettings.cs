@@ -18,9 +18,9 @@ public class ClaudeSettings
 
     /// <summary>
     /// Claude model to use.
-    /// Default: claude-sonnet-4-20250514
+    /// Value sourced from AIProviders:Anthropic:Models:Sonnet (no hardcoded fallback).
     /// </summary>
-    public string Model { get; set; } = "claude-sonnet-4-20250514";
+    public string Model { get; set; } = string.Empty;
 
     /// <summary>
     /// Maximum tokens for responses.

@@ -848,6 +848,7 @@ as a real issue.
 - **Origin:** `[Engineering]`
 - **Status:** Open
 - **Surfaced:** 2026-06-10 during 5.2 smoke.
+- **Note (2026-06-16):** Smoke verification paused mid-session when the P0 Anthropic deprecation incident (§5.28) was discovered. Resume from where smoke left off after §5.28 is deployed.
 
 The new learning-wizard routes
 (/admin/toolbox-talks/learnings/...) render with the page header
@@ -1058,6 +1059,35 @@ Recon-first. Likely chunks:
 
 - Migration of in-flight drafts between wizard models (rule 2 says they stay).
 - Removal of old wizard code paths (separate chunk after toggle is removed).
+
+#### 5.28 P0 — Anthropic model deprecation incident (claude-sonnet-4-20250514 retired)
+
+- **Priority:** P0
+- **Origin:** `[Engineering]`
+- **Status:** ✅ Done — 2026-06-16
+
+**Incident:** Anthropic retired `claude-sonnet-4-20250514` (also known as `claude-sonnet-4-0`) effective 2026-06-15 after a 60-day deprecation notice. Six production code paths broke: help chat, subtitle translation (`SubtitleProcessing:Claude:Model`), regulatory requirement ingestion, regulatory requirement mapping, regulatory scoring, and the Round 3 back-translation provider in TransVal.
+
+**Fix:** Multi-provider config unification patch. See `docs/phase-5/reports/multi-provider-config-fix.md` for full details.
+
+- Introduced `AIProviderOptions` (`AIProviders` config section) as a single canonical model-identifier registry for Anthropic, Gemini, and ElevenLabs
+- Added `IValidateOptions<AIProviderOptions>` with `.ValidateOnStart()` — missing config now causes immediate startup failure instead of silent null-reference at call time
+- Converted 6 hardcoded `claude-sonnet-4-20250514` / `claude-haiku-4-5-20251001` sites to inject `IOptions<AIProviderOptions>`
+- Updated `appsettings.json` and `appsettings.Development.json`: added `AIProviders` section, set `Sonnet = "claude-sonnet-4-5"`, removed orphaned `Round3Provider` key
+- Removed C# default model values from `ClaudeSettings`, `TranslationValidationSettings`, `SubtitleProcessingSettings` — no silent fallback to retired models possible
+
+#### 5.29 Follow-up items from P0 incident (§5.28)
+
+- **Priority:** P2
+- **Origin:** `[Engineering]`
+- **Status:** Open — non-blocking, do not hold §5.28 deploy
+
+**Follow-up items identified during the §5.28 patch:**
+
+1. **API key security:** API keys (Anthropic, Gemini, ElevenLabs, DeepL) remain in `appsettings.json`. They should be moved to Railway environment variables only. This is a known gap; the §5.28 patch explicitly excluded key migration from scope.
+2. **CostEstimationService rate table:** Rates for `claude-sonnet-4-5` (`SonnetInputPer1K`, `SonnetOutputPer1K`) were inherited from the deprecated `claude-sonnet-4-0` rate table (April 2026 EUR). Verify against current Anthropic pricing and update if needed.
+3. **DI registration pattern for new services:** Any new service that calls a Claude, Gemini, or ElevenLabs model must (a) inject `IOptions<AIProviderOptions>` instead of hardcoding a model string, and (b) chain `.AddPolicyHandler(ResiliencePolicies.Get*Policy(logger))` at registration. Both rules to be added to CLAUDE.md coding conventions.
+4. **Railway env vars:** Ensure `AIProviders__Anthropic__Models__Sonnet` and `AIProviders__Anthropic__Models__Haiku` (plus Gemini Flash and ElevenLabs Transcription) are set in Railway Production and Development services before deploy. The fail-fast validator will catch missing values at startup.
 
 ---
 

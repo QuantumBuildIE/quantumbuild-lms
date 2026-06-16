@@ -10,7 +10,7 @@ using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Validation;
 
 /// <summary>
-/// Back-translation service using Claude Sonnet (claude-sonnet-4-20250514) via the Anthropic Messages API.
+/// Back-translation service using Claude Sonnet (model identifier sourced from TranslationValidation:Round3DModel) via the Anthropic Messages API.
 /// Provider D in the consensus engine — Round 3 final tiebreaker.
 /// Replaced DeepSeek in pipeline v6.4 for GDPR compliance.
 /// </summary>

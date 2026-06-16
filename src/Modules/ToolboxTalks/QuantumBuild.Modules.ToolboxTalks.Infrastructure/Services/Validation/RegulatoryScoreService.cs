@@ -9,6 +9,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
+using QuantumBuild.Core.Application.Configuration;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Validation;
@@ -20,8 +21,8 @@ namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Validation;
 /// </summary>
 public class RegulatoryScoreService : IRegulatoryScoreService
 {
-    private const string SonnetModel = "claude-sonnet-4-20250514";
     private const int MaxTokens = 4096;
+    private readonly string _sonnetModel;
 
     private static readonly JsonSerializerOptions CamelCaseOptions = new()
     {
@@ -40,13 +41,15 @@ public class RegulatoryScoreService : IRegulatoryScoreService
         HttpClient httpClient,
         IOptions<SubtitleProcessingSettings> settings,
         IAiUsageLogger aiUsageLogger,
-        ILogger<RegulatoryScoreService> logger)
+        ILogger<RegulatoryScoreService> logger,
+        IOptions<AIProviderOptions> aiProviders)
     {
         _dbContext = dbContext;
         _httpClient = httpClient;
         _settings = settings.Value;
         _aiUsageLogger = aiUsageLogger;
         _logger = logger;
+        _sonnetModel = aiProviders.Value.Anthropic.Models.Sonnet;
     }
 
     public async Task<RegulatoryScoreResultDto> ScoreAsync(
@@ -438,7 +441,7 @@ public class RegulatoryScoreService : IRegulatoryScoreService
 
         var requestBody = new
         {
-            model = SonnetModel,
+            model = _sonnetModel,
             max_tokens = MaxTokens,
             messages = new[]
             {
