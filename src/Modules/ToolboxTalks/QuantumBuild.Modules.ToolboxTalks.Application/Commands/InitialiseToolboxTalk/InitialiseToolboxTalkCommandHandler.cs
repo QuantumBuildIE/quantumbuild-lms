@@ -6,6 +6,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
+using QuantumBuild.Modules.ToolboxTalks.Domain.Helpers;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Application.Commands.InitialiseToolboxTalk;
 
@@ -68,13 +69,8 @@ public class InitialiseToolboxTalkCommandHandler : IRequestHandler<InitialiseToo
 
         // Map refresher string → RequiresRefresher + RefresherIntervalMonths
         var refresherFrequency = tenantSettings?.DefaultRefresherFrequency ?? "Once";
-        var (defaultRequiresRefresher, defaultRefresherIntervalMonths) = refresherFrequency switch
-        {
-            "Monthly" => (true, 1),
-            "Quarterly" => (true, 3),
-            "Annually" => (true, 12),
-            _ => (false, 12),
-        };
+        var (defaultRequiresRefresher, defaultRefresherIntervalMonths) =
+            RefresherFrequencyMapper.FromWizardFrequencyString(refresherFrequency);
 
         var talk = new ToolboxTalk
         {
@@ -124,6 +120,7 @@ public class InitialiseToolboxTalkCommandHandler : IRequestHandler<InitialiseToo
             PassingScore = tenantSettings?.DefaultPassingScore ?? 80,
             RequiresRefresher = defaultRequiresRefresher,
             RefresherIntervalMonths = defaultRefresherIntervalMonths,
+            Frequency = RefresherFrequencyMapper.ToLegacyFrequency(defaultRequiresRefresher, defaultRefresherIntervalMonths),
             LastEditedStep = 1,
         };
 
@@ -205,7 +202,14 @@ public class InitialiseToolboxTalkCommandHandler : IRequestHandler<InitialiseToo
             Description = entity.Description,
             Category = entity.Category,
             Frequency = entity.Frequency,
-            FrequencyDisplay = "Once",
+            FrequencyDisplay = entity.Frequency switch
+            {
+                ToolboxTalkFrequency.Once => "One-time",
+                ToolboxTalkFrequency.Weekly => "Weekly",
+                ToolboxTalkFrequency.Monthly => "Monthly",
+                ToolboxTalkFrequency.Annually => "Annually",
+                _ => entity.Frequency.ToString()
+            },
             VideoUrl = entity.VideoUrl,
             VideoSource = entity.VideoSource,
             VideoSourceDisplay = entity.VideoSource == VideoSource.None ? "None" : entity.VideoSource.ToString(),

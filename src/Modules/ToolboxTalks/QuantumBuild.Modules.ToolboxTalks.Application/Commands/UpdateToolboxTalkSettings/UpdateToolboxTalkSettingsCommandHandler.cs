@@ -7,6 +7,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Workflows;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
+using QuantumBuild.Modules.ToolboxTalks.Domain.Helpers;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalkSettings;
 
@@ -74,14 +75,15 @@ public class UpdateToolboxTalkSettingsCommandHandler
         talk.UpdatedAt = DateTime.UtcNow;
         talk.UpdatedBy = _currentUser.UserId;
 
-        // Translate wizard RefresherFrequency → entity fields
-        (talk.RequiresRefresher, talk.RefresherIntervalMonths) = request.RefresherFrequency switch
-        {
-            RefresherFrequency.Monthly => (true, 1),
-            RefresherFrequency.Quarterly => (true, 3),
-            RefresherFrequency.Annually => (true, 12),
-            _ => (false, talk.RefresherIntervalMonths) // Once — preserve existing interval value
-        };
+        // Translate wizard RefresherFrequency → canonical entity fields, preserving the
+        // existing interval when Once is selected so a user who switches back to a
+        // non-Once value later gets the same interval restored.
+        (talk.RequiresRefresher, talk.RefresherIntervalMonths) =
+            RefresherFrequencyMapper.FromWizardFrequencyString(
+                request.RefresherFrequency.ToString(), talk.RefresherIntervalMonths);
+
+        // Keep legacy Frequency in sync so dashboard breakdown and old edit form stay correct
+        talk.Frequency = RefresherFrequencyMapper.ToLegacyFrequency(talk.RequiresRefresher, talk.RefresherIntervalMonths);
 
         if ((talk.LastEditedStep ?? 0) < 4)
             talk.LastEditedStep = 4;

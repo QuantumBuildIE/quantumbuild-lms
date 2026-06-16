@@ -15,6 +15,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services.Subtitles;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
+using QuantumBuild.Modules.ToolboxTalks.Domain.Helpers;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
@@ -1449,21 +1450,12 @@ public class ContentCreationSessionService : IContentCreationSessionService
                 draftTalk.AutoAssignToNewEmployees = courseSessionSettings?.AutoAssign ?? false;
                 draftTalk.AutoAssignDueDays = courseSessionSettings?.AutoAssignDueDays ?? 14;
 
-                if (courseSessionSettings != null && courseSessionSettings.RefresherFrequency != "Once")
-                {
-                    draftTalk.RequiresRefresher = true;
-                    draftTalk.RefresherIntervalMonths = courseSessionSettings.RefresherFrequency switch
-                    {
-                        "Monthly" => 1,
-                        "Quarterly" => 3,
-                        "Annually" => 12,
-                        _ => 12
-                    };
-                }
-                else
-                {
-                    draftTalk.RequiresRefresher = false;
-                }
+                (draftTalk.RequiresRefresher, draftTalk.RefresherIntervalMonths) =
+                    RefresherFrequencyMapper.FromWizardFrequencyString(
+                        courseSessionSettings?.RefresherFrequency, draftTalk.RefresherIntervalMonths);
+
+                draftTalk.Frequency = RefresherFrequencyMapper.ToLegacyFrequency(
+                    draftTalk.RequiresRefresher, draftTalk.RefresherIntervalMonths);
 
                 // Regenerate code if a custom one was requested
                 if (!string.IsNullOrWhiteSpace(request.Code) && request.Code.Trim() != draftTalk.Code)
@@ -1735,17 +1727,10 @@ public class ContentCreationSessionService : IContentCreationSessionService
             AutoAssignDueDays = sessionSettings?.AutoAssignDueDays ?? 14
         };
 
-        if (sessionSettings != null && sessionSettings.RefresherFrequency != "Once")
-        {
-            talk.RequiresRefresher = true;
-            talk.RefresherIntervalMonths = sessionSettings.RefresherFrequency switch
-            {
-                "Monthly" => 1,
-                "Quarterly" => 3,
-                "Annually" => 12,
-                _ => 12
-            };
-        }
+        (talk.RequiresRefresher, talk.RefresherIntervalMonths) =
+            RefresherFrequencyMapper.FromWizardFrequencyString(sessionSettings?.RefresherFrequency);
+
+        talk.Frequency = RefresherFrequencyMapper.ToLegacyFrequency(talk.RequiresRefresher, talk.RefresherIntervalMonths);
 
         // Create sections (same pattern as CreateToolboxTalkCommandHandler)
         foreach (var parsedSection in sections)

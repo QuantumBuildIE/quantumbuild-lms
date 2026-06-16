@@ -438,7 +438,9 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {FREQUENCY_OPTIONS.map((option) => (
+                        {FREQUENCY_OPTIONS.filter(
+                          (opt) => opt.value !== 'Weekly' || talk?.frequency === 'Weekly'
+                        ).map((option) => (
                           <SelectItem key={option.value} value={option.value}>
                             {option.label}
                           </SelectItem>

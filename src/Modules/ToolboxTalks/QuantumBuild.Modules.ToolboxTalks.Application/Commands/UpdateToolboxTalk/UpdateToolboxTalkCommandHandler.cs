@@ -8,6 +8,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
+using QuantumBuild.Modules.ToolboxTalks.Domain.Helpers;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalk;
 
@@ -132,8 +133,14 @@ public class UpdateToolboxTalkCommandHandler : IRequestHandler<UpdateToolboxTalk
         toolboxTalk.SourceLanguageCode = request.SourceLanguageCode;
         toolboxTalk.GenerateSlidesFromPdf = request.GenerateSlidesFromPdf;
         toolboxTalk.GenerateCertificate = request.GenerateCertificate;
-        toolboxTalk.RequiresRefresher = request.RequiresRefresher;
-        toolboxTalk.RefresherIntervalMonths = request.RefresherIntervalMonths;
+
+        // Derive canonical refresher fields from the legacy Frequency that the old edit
+        // form submitted. This prevents the old form from silently writing RequiresRefresher=false
+        // (the DTO default for an absent field) over a new-wizard Step 4 configuration.
+        // request.RequiresRefresher / request.RefresherIntervalMonths are intentionally ignored
+        // here — Frequency is the old wizard's single write point for refresher intent.
+        (toolboxTalk.RequiresRefresher, toolboxTalk.RefresherIntervalMonths) =
+            RefresherFrequencyMapper.ToCanonicalFields(request.Frequency, toolboxTalk.RefresherIntervalMonths);
         toolboxTalk.UpdatedAt = DateTime.UtcNow;
         toolboxTalk.UpdatedBy = _currentUser.UserId;
 

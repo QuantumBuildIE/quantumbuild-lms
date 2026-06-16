@@ -1034,30 +1034,8 @@ fix can wait for a cross-cutting cleanup.
 
 - **Priority:** P2
 - **Origin:** `[Engineering]`
-- **Status:** Deferred — not in scope for 5.3d
+- **Status:** ✅ Done — 2026-06-16 — Bidirectional mirror added between `ToolboxTalk.Frequency` and `RequiresRefresher`/`RefresherIntervalMonths` via `RefresherFrequencyMapper` shared helper (Domain/Helpers). All write paths now keep both representations in sync: `InitialiseToolboxTalkCommandHandler` (new wizard create), `UpdateToolboxTalkSettingsCommandHandler` (Step 4 save), `UpdateToolboxTalkCommandHandler` (old wizard edit — the critical overwrite fix), and both publish paths in `ContentCreationSessionService`. The old edit form's silent overwrite of `RequiresRefresher = false` is closed — `UpdateToolboxTalkCommandHandler` now derives canonical fields from `request.Frequency` rather than trusting absent DTO defaults. Hardcoded `FrequencyDisplay = "Once"` in `InitialiseToolboxTalkCommandHandler.MapToDto` removed. `Weekly` removed from new-selection options in old form; existing Weekly talks display correctly. Full removal of `Frequency` deferred to §7.1. Fix: `docs/phase-5/reports/5.24-frequency-conflict-fix.md`.
 - **Source:** Phase 5.3d spec item I2
-
-`ToolboxTalk` has two overlapping mechanisms for refresher scheduling:
-
-- **Legacy:** `Frequency` column (enum: Once/Weekly/Monthly/Annually) used
-  by the old wizard and `ToolboxTalkSchedule`
-- **New wizard:** `RequiresRefresher` + `RefresherIntervalMonths` (Phase 5.3d)
-
-The `UpdateToolboxTalkSettingsCommandHandler` writes to
-`RequiresRefresher`/`RefresherIntervalMonths` and leaves `Frequency`
-unchanged. The `Frequency` value is still read by the old wizard's edit
-form and some schedule processing jobs.
-
-**Risk:** An admin who edits a new-wizard talk via the old edit form may
-see a stale `Frequency` value and accidentally re-set it, overwriting the
-refresher configuration from Step 4.
-
-**Fix direction:** Either:
-
-1. Mirror the `RefresherFrequency → Frequency` translation in
-   `UpdateToolboxTalkSettingsCommandHandler` (keeping old field in sync), or
-2. Remove `Frequency` from the old edit form and fully migrate to the new
-   model — a larger cross-cutting change.
 
 #### 5.25 Mobile audit at Phase 5 closure
 
@@ -1088,7 +1066,7 @@ obviously breaks earlier) covers:
 
 - **Priority:** P1
 - **Origin:** `[Engineering]` `[Boss]`
-- **Status:** Open — gated on §5.24 (Frequency conflict) and §24 (Edit workflow design) at minimum.
+- **Status:** Open — gated on §24 (Edit workflow design). §5.24 (Frequency conflict) resolved 2026-06-16. §5.20 (Refresh Amendment) resolved 2026-06-15.
 - **Surfaced:** 2026-06-15 stocktaking discussion (renumbering 2026-06-15).
 
 The original Phase 5.6 was framed as "move the Create New button to the new wizard." The 2026-06-15 stocktaking refined this to: a toggle that lets old and new wizards run in parallel, with the user's preferred wizard chosen per-tenant (and per-URL for testing), until business sign-off triggers manual cutover.
@@ -1101,11 +1079,11 @@ The original Phase 5.6 was framed as "move the Create New button to the new wiza
 
 ### Adjacent dependencies before any tenant is toggled to new-as-default
 
-- **§24** (Edit workflow design): without edit, new-wizard talks are creation-only. Not a defensible production state.
-- **§5.24** (Frequency conflict): risk that admin edits a new-wizard talk via the old edit form and overwrites Step 4 refresher config.
-- **§5.20** (Refresh Amendment): standards violation on new wizard's refresh behavior.
+- **§24** (Edit workflow design): without edit, new-wizard talks are creation-only. Not a defensible production state. ← **remaining gate**
+- **§5.24** (Frequency conflict): ✅ resolved 2026-06-16 — bidirectional mirror prevents old form from overwriting Step 4 refresher config.
+- **§5.20** (Refresh Amendment): ✅ resolved 2026-06-15 — closed by §5.22 + phantom recon.
 
-These three at minimum should be resolved before any production tenant is toggled to "new" position. Toggle infrastructure itself can ship before these are resolved (default position is "old").
+§24 is the sole remaining gate before any production tenant is toggled to "new" position. Toggle infrastructure itself can ship before §24 is resolved (default position is "old").
 
 ### Implementation scope
 
@@ -1203,6 +1181,35 @@ Files:
 - `src/Modules/ToolboxTalks/.../Queries/GetMyToolboxTalkById/GetMyToolboxTalkByIdQueryHandler.cs:29-44`
 - `src/Modules/ToolboxTalks/.../Jobs/ProcessToolboxTalkSchedulesJob.cs:57-63`
 - `src/Modules/ToolboxTalks/.../Queries/GetToolboxTalkDashboard/GetToolboxTalkDashboardQueryHandler.cs:23-30`
+
+---
+
+# 7. Post-Phase-5 Cleanup
+
+Items deferred until specific Phase 5 work decommissions allow them to land cleanly. Do not action these until the stated blocker is resolved.
+
+#### 7.1 Remove `ToolboxTalk.Frequency` after old-wizard decommission
+
+- **Priority:** P2
+- **Origin:** `[Engineering]`
+- **Status:** Open — blocked on old-wizard decommission (§5.27 cutover toggle + subsequent removal of the old edit form and `UpdateToolboxTalkCommandHandler` legacy paths).
+- **Surfaced:** 2026-06-16 during §5.24 fix.
+
+`ToolboxTalk.Frequency` is a legacy enum column (`Once / Weekly / Monthly / Annually`) kept in sync with the canonical `RequiresRefresher` + `RefresherIntervalMonths` fields via `RefresherFrequencyMapper` (added in §5.24). The dual representation is a workaround — the new wizard treats the canonical fields as authoritative; the legacy `Frequency` is mirrored so the old edit form, dashboard frequency breakdown, admin list filter, and legacy DTO `frequencyDisplay` field continue to work.
+
+Once the old wizard is decommissioned and `UpdateToolboxTalkCommandHandler` no longer needs to accept `Frequency` as input, the `Frequency` column can be removed entirely. Work needed:
+
+- Migrate every read site listed in `docs/phase-5/reports/5.24-frequency-conflict-recon.md` §2 (Step 1) to read `RequiresRefresher` + `RefresherIntervalMonths` instead (~14 backend read sites).
+- Rework the admin dashboard `talksByFrequency` KPI breakdown — compute from canonical fields or replace with a "has refresher" / "interval bucket" grouping.
+- Rework the admin list frequency filter similarly.
+- Remove `RefresherFrequencyMapper.ToCanonicalFields` (no longer needed once `UpdateToolboxTalkCommandHandler` is gone) and `ToLegacyFrequency` / `FromWizardFrequencyString` (all write paths removed).
+- Update the frontend `ToolboxTalkFrequency` type and `frequency` / `frequencyDisplay` properties on TypeScript interfaces (~4 sites per recon).
+- Drop the `Frequency` column via CLI-generated EF migration with Designer.cs (CLAUDE.md Note 28).
+- Decide on existing-data handling for rows still carrying `Weekly` — round to no-refresher (current behaviour) or monthly.
+
+Adjacent: `Weekly` refreshers have been non-functional for refresher scheduling since before Phase 5 (`RefresherSchedulingService` uses `RefresherIntervalMonths` — integer months only). Removing `Frequency` is the natural moment to make that state honest.
+
+References: `docs/phase-5/reports/5.24-frequency-conflict-recon.md` (§2 read-site inventory, §6 fix candidates, §10 enum mismatch mapping).
 
 ---
 
