@@ -1,7 +1,7 @@
 # CertifiedIQ — Backlog (Source of Truth)
 
 **Last updated:** 15 June 2026
-**Purpose:** Comprehensive record of every known item — bug, feature, refactor, product decision — across the CertifiedIQ LMS. This is the long reference. For the active prioritised list, see `SPRINT.md`.
+**Purpose:** Comprehensive record of every known item — bug, feature, refactor, product decision — across the CertifiedIQ LMS. This is the long reference. Active prioritised work is captured directly in this document. A separate sprint file is no longer maintained — see §5.26 for the rationale.
 
 ## Conventions
 
@@ -1059,8 +1059,7 @@ obviously breaks earlier) covers:
 
 - **Priority:** P2
 - **Origin:** `[Engineering]`
-- **Status:** Open
-- **Description:** SPRINT.md last updated 3 June 2026 (10 days stale as of 2026-06-13). Currently references UAT P1s 1.1.6–1.1.9 as future work — all four are now ✅ Done as of 4 June. The "Next" section lists UAT P2s and the rich-text editor, which doesn't reflect the current state of Phase 5 (5.4 just landed, 5.5 Publish recon next). Needs full rewrite covering: completed Phase 5 work to date, active chunk (5.5 Publish), known BACKLOG-deferred items relevant to current phase. Surfaced by 2026-06-13 BACKLOG sweep recon. Out of scope for the sweep itself.
+- **Status:** ✅ Done — 2026-06-17 — SPRINT.md deleted rather than rewritten. Read-through confirmed every item in SPRINT.md was already tracked in BACKLOG (either as an open entry or in §7 Recently Closed). The duplicated content invited drift (SPRINT.md was 10+ days stale at the point §5.26 was opened). Active prioritised work is now captured directly in BACKLOG. A new sprint document may be created when a future large phase begins; for now the surface is BACKLOG only.
 
 #### 5.27 Phase 5.6 cutover toggle — parallel-period mechanism
 
@@ -1787,4 +1786,4 @@ Screenshots 2026-06-14: validation run detail page for "Validation Run — NL" w
 
 ---
 
-_End of BACKLOG.md. For active prioritised work, see `SPRINT.md`._
+_End of BACKLOG.md._
