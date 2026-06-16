@@ -871,7 +871,7 @@ Scope when picked up:
 
 - **Priority:** P1
 - **Origin:** `[Engineering]`
-- **Status:** Open
+- **Status:** ✅ Done — 2026-06-15 — `serverTimeoutInMilliseconds = 120_000` and `keepAliveIntervalInMilliseconds = 10_000` applied to all four hooks: `use-subtitle-hub.ts`, `use-corpus-run-hub.ts`, `use-lesson-parser-hub.ts`, and `use-subtitle-processing.ts` — six build sites total (initial connection and manual reconnect paths where applicable). TypeScript compile clean; vitest 9/9 passing. Fix: `docs/phase-5/reports/5.16-signalr-timeouts.md`. Recon: `docs/phase-5/reports/5.16-signalr-timeouts-recon.md`.
 - **Description:** `use-subtitle-hub.ts`, `use-corpus-run-hub.ts`, `use-subtitle-processing.ts`, and `use-lesson-parser-hub.ts` all build `HubConnection` instances without setting `serverTimeoutInMilliseconds` / `keepAliveIntervalInMilliseconds`. Exposed to the same Railway proxy idle-timeout drop (1006 close) fixed in the validation hub (chunk 5.4-signalr-timeout-fix). Fix is a two-line patch per hook (`serverTimeoutInMilliseconds = 120_000`, `keepAliveIntervalInMilliseconds = 10_000` after `.build()`). Recommend a single dedicated chunk covering all four.
 
 #### 5.17 First-language row state lag in Step 5 Translate under Start All
@@ -912,7 +912,7 @@ The five cases to cover:
 
 - **Priority:** P2
 - **Origin:** `[Engineering]`
-- **Status:** Open — blocked on §5.18 (frontend test framework not installed)
+- **Status:** ✅ Done — 2026-06-15 — 7 unit tests added in `stepOrder.test.ts` covering all behavioural states for the Step 7 reachability rule: zero sections, no target languages (English-only path), targets declared with no completed runs, targets declared with a completed run (with and without pending reviewer decisions), and already-published status. Defensive `validationRuns = undefined` case also covered via the `?? []` guard. 9 of 9 tests passing (2 from §5.18 smoke + 7 new). Fix: `docs/phase-5/reports/5.19-stepOrder-tests.md`.
 - **Surfaced:** 2026-06-14 during structural robustness refactor of `stepOrder.ts`.
 
 The Step 7 reachability rule in
@@ -965,9 +965,8 @@ as a real issue.
 
 - **Priority:** P3
 - **Origin:** `[Engineering]`
-- **Status:** Open
+- **Status:** ✅ Done — 2026-06-15 — `web/src/app/(authenticated)/admin/toolbox-talks/layout.tsx` extended with a `leafLabels` map covering all 8 learnings routes and a UUID-skip guard for the dynamic `[talkId]` segment. Breadcrumb for learnings routes now renders three levels: "Administration / [Learnings] / Leaf" where "Learnings" is a link back to the drafts list. Non-learnings toolbox-talks routes are unchanged — "Learnings" remains plain text, no third segment. The subtitle header sub-issue originally described in §5.21 was already resolved before this work — `admin/layout.tsx` correctly emits "Manage learnings and training" for all `/admin/toolbox-talks/*` paths. Fix: `docs/phase-5/reports/5.21-wizard-breadcrumb-leaf-fix.md`. Recon: `docs/phase-5/reports/5.21-wizard-header-context-recon.md`.
 - **Surfaced:** 2026-06-10 during 5.2 smoke.
-- **Note (2026-06-16):** Smoke verification paused mid-session when the P0 Anthropic deprecation incident (§5.28) was discovered. Resume from where smoke left off after §5.28 is deployed.
 
 The new learning-wizard routes
 (/admin/toolbox-talks/learnings/...) render with the page header

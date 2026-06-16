@@ -34,9 +34,12 @@ The core deliverable: eight new routes under `/admin/toolbox-talks/learnings/`, 
 | §5.3 | Migration forensic audit | 3 Jun 2026 |
 | §5.13 | English-only learning creation fix | 14 Jun 2026 |
 | §5.14 | Quiz-skipped navigation fix | 14 Jun 2026 |
+| §5.16 | SignalR client timeout defaults applied to four hooks | 15 Jun 2026 |
 | §5.17 | First-language row state lag in Step 5 under Start All | 15 Jun 2026 |
 | §5.18 | Frontend test framework (vitest + @testing-library/react) | Jun 2026 |
+| §5.19 | Unit tests for Step 7 reachability rule | 15 Jun 2026 |
 | §5.20 | Refresh Amendment — SuperUser slice closed; regular-admin slice confirmed phantom | 15 Jun 2026 |
+| §5.21 | Learning wizard breadcrumb leaf segment for learnings routes | 15 Jun 2026 |
 | §5.23 | Wizard Step 4 Settings — tenant defaults | 16 Jun 2026 |
 | §5.24 | `ToolboxTalk.Frequency` vs `RequiresRefresher`/`RefresherIntervalMonths` conflict | 16 Jun 2026 |
 | §5.26 | SPRINT.md deleted | 17 Jun 2026 |
@@ -53,15 +56,13 @@ The core deliverable: eight new routes under `/admin/toolbox-talks/learnings/`, 
 
 ## Items with fix reports but open BACKLOG entries
 
-Three items have fix reports in `docs/phase-5/reports/` but their BACKLOG entries were not updated to Done before the Phase 5 closure marker was set. They are counted as open work until verified:
+All three flagged items were confirmed as **drift cases** — fixes shipped 2026-06-15 but BACKLOG was not updated when the commits landed. Reconciled 2026-06-16: BACKLOG status lines updated to Done and items moved to the "What shipped" table above.
 
-| Item | Fix report | BACKLOG status | Note |
-|------|------------|----------------|------|
-| §5.16 | `5.16-signalr-timeouts.md` | Open | SignalR client timeouts on 4 hooks |
-| §5.19 | `5.19-stepOrder-tests.md` | Open | Step 7 reachability unit tests (§5.18 is now Done, so this is actionable) |
-| §5.21 | `5.21-wizard-breadcrumb-leaf-fix.md` | Open | Smoke paused during §5.28 P0 incident |
-
-Verify these early in the next session: if the fixes are confirmed working, close the BACKLOG entries; if not, action them as normal open work.
+| Item | Fix report | Resolution |
+|------|------------|------------|
+| §5.16 | `5.16-signalr-timeouts.md` | ✅ Confirmed shipped — drift corrected |
+| §5.19 | `5.19-stepOrder-tests.md` | ✅ Confirmed shipped — drift corrected |
+| §5.21 | `5.21-wizard-breadcrumb-leaf-fix.md` | ✅ Confirmed shipped — drift corrected |
 
 ---
 
