@@ -26,6 +26,7 @@ import { useValidationRuns } from '@/lib/api/toolbox-talks/use-content-creation'
 import { useTalk } from '../hooks/useTalk';
 import { useWorkflowSubscription } from '../hooks/useWorkflowSubscription';
 import { LoadingState } from '../components/LoadingState';
+import { parseLanguageCodes } from '@/features/toolbox-talks/utils/parseLanguageCodes';
 import type { ValidationOutcome, ValidationRunSummary } from '@/types/content-creation';
 import type { TranslationWorkflowStateDto } from '@/types/workflows';
 import type { ToolboxTalk } from '@/types/toolbox-talks';
@@ -43,14 +44,6 @@ export interface PublishStepProps {
 // ============================================
 // Helpers
 // ============================================
-
-function parseTargetLanguageCodes(json: string | null): string[] {
-  if (!json) return [];
-  try {
-    const parsed = JSON.parse(json);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch { return []; }
-}
 
 const LANG_NAMES: Record<string, string> = {
   en: 'English', fr: 'French', pl: 'Polish', ro: 'Romanian',
@@ -80,7 +73,7 @@ export function PublishStep({ talkId, isPublishing, publishError }: PublishStepP
   const { data: workflowStates } = useWorkflowSubscription(talkId);
 
   const targetLanguageCodes = useMemo(
-    () => parseTargetLanguageCodes(talk?.targetLanguageCodes ?? null),
+    () => parseLanguageCodes(talk?.targetLanguageCodes ?? null),
     [talk?.targetLanguageCodes]
   );
 

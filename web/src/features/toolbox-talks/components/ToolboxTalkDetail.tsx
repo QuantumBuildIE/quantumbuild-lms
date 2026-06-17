@@ -27,6 +27,7 @@ import { ValidationHistoryTab } from './ValidationHistoryTab';
 import { SectionEditPanel } from './detail/SectionEditPanel';
 import { QuizEditPanel } from './detail/QuizEditPanel';
 import { TranslateStep } from './learning-wizard/steps/TranslateStep';
+import { parseLanguageCodes } from '@/features/toolbox-talks/utils/parseLanguageCodes';
 import { useToolboxTalk, useDeleteToolboxTalk } from '@/lib/api/toolbox-talks';
 import { usePermission } from '@/lib/auth/use-auth';
 import { useWizardPreference } from '@/features/toolbox-talks/hooks/useWizardPreference';
@@ -90,15 +91,7 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
 
   const stats = talk.completionStats;
   const isPartOfCourse = talk.isPartOfCourse;
-  const hasTargetLanguages = (() => {
-    if (!talk.targetLanguageCodes) return false;
-    try {
-      const parsed = JSON.parse(talk.targetLanguageCodes);
-      return Array.isArray(parsed) && parsed.length > 0;
-    } catch {
-      return false;
-    }
-  })();
+  const hasTargetLanguages = parseLanguageCodes(talk.targetLanguageCodes).length > 0;
 
   return (
     <div className="space-y-6">

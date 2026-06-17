@@ -1,5 +1,6 @@
 import type { ToolboxTalk } from '@/types/toolbox-talks';
 import type { ValidationRunSummary } from '@/types/content-creation';
+import { parseLanguageCodes } from '@/features/toolbox-talks/utils/parseLanguageCodes';
 
 // ============================================
 // Step definitions
@@ -32,13 +33,6 @@ export function getStepDef(step: number): WizardStepDef | undefined {
 // Real logic for steps 5-7 lands in 5.4/5.5 when workflow state is wired.
 // ============================================
 
-function parseTargetCodes(json: string | null): string[] {
-  if (!json) return [];
-  try {
-    const parsed = JSON.parse(json);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch { return []; }
-}
 
 export function isStepReachable(
   step: number,
@@ -64,17 +58,17 @@ export function isStepReachable(
       return talk.sections.length > 0;
     case 5:
       // Translate: reachable once sections exist AND target languages are declared
-      return talk.sections.length > 0 && parseTargetCodes(talk.targetLanguageCodes ?? null).length > 0;
+      return talk.sections.length > 0 && parseLanguageCodes(talk.targetLanguageCodes ?? null).length > 0;
     case 6:
       // Validate: reachable once sections exist AND target languages are declared
-      return talk.sections.length > 0 && parseTargetCodes(talk.targetLanguageCodes ?? null).length > 0;
+      return talk.sections.length > 0 && parseLanguageCodes(talk.targetLanguageCodes ?? null).length > 0;
     case 7: {
       // Sections required
       if (talk.sections.length === 0) return false;
       // Already published — no re-publish
       if (talk.status === 'Published') return false;
 
-      const codes = parseTargetCodes(talk.targetLanguageCodes ?? null);
+      const codes = parseLanguageCodes(talk.targetLanguageCodes ?? null);
 
       // No target languages declared — English-only path, no translation gate
       if (codes.length === 0) return true;
@@ -104,7 +98,7 @@ export function isStepSkipped(step: number, talk: ToolboxTalk | null): boolean {
   if (!talk) return false;
   if (step === 3) return talk.sections.length > 0 && !talk.requiresQuiz;
   if (step === 5 || step === 6) {
-    return talk.sections.length > 0 && parseTargetCodes(talk.targetLanguageCodes ?? null).length === 0;
+    return talk.sections.length > 0 && parseLanguageCodes(talk.targetLanguageCodes ?? null).length === 0;
   }
   return false;
 }

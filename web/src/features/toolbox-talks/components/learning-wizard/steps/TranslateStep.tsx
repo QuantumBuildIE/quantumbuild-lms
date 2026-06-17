@@ -10,20 +10,11 @@ import { WorkflowSubscriber } from '../hooks/WorkflowSubscriber';
 import { useTalk } from '../hooks/useTalk';
 import { useWorkflowSubscription } from '../hooks/useWorkflowSubscription';
 import { useStartTalkTranslation } from '@/lib/api/toolbox-talks/use-toolbox-talks';
+import { parseLanguageCodes } from '@/features/toolbox-talks/utils/parseLanguageCodes';
 import type { TranslationWorkflowState } from '@/types/workflows';
 
 export interface TranslateStepProps {
   talkId: string;
-}
-
-function parseLanguageCodes(json: string | null): string[] {
-  if (!json) return [];
-  try {
-    const parsed = JSON.parse(json);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
 }
 
 function canStart(state: TranslationWorkflowState | undefined): boolean {

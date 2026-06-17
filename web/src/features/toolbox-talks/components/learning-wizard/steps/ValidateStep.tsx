@@ -19,6 +19,7 @@ import { ValidationProgressPanel } from '@/features/toolbox-talks/components/cre
 import { ValidationSectionCard } from '@/features/toolbox-talks/components/create-wizard/steps/validate/ValidationSectionCard';
 import { SendExternalReviewDialog } from '../../SendExternalReviewDialog';
 import { LoadingState } from '../components/LoadingState';
+import { parseLanguageCodes } from '@/features/toolbox-talks/utils/parseLanguageCodes';
 import type { ValidationRunSummary } from '@/types/content-creation';
 
 const LANG_NAMES: Record<string, string> = {
@@ -32,16 +33,6 @@ const LANG_NAMES: Record<string, string> = {
   de: 'German',
   lv: 'Latvian',
 };
-
-function parseLanguageCodes(json: string | null): string[] {
-  if (!json) return [];
-  try {
-    const parsed = JSON.parse(json);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
 
 export interface ValidateStepProps {
   talkId: string;
