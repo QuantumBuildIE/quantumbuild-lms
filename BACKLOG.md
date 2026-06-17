@@ -1280,6 +1280,40 @@ This entry tracks the investigation if per-section becomes a real ask. Investiga
 
 Investigation produces a doc with findings and a recommendation: implement, defer indefinitely, or close as not-needed. The doc lives at `docs/per-section-external-review-investigation.md`. The investigation itself is read-only; any actual implementation work would be a separate entry.
 
+#### 7.4 User-ID propagation gap in translation pipeline events
+
+- **Priority:** P3
+- **Origin:** `[Engineering]`
+- **Status:** Open — surfaced during §31 implementation (2026-06-17).
+
+`GenerateContentTranslationsCommand` carries `TriggeredByType` (enum: `User` / `System`) but not a user ID. `TranslationValidationJob` always uses `TriggeredByType.System` regardless of who initiated the run. This means notification recipients for §31 default to **all Admins** — there is no way to target the specific user who triggered the job.
+
+If per-user targeted notifications become a product requirement:
+
+- Add `TriggeredByUserId? Guid?` to `GenerateContentTranslationsCommand`. Controller sets it from `ICurrentUserService.UserIdGuid`. Background jobs (`ContentGenerationJob`, `MissingTranslationsJob`, `EmployeeLanguageChangeHandler`) leave it null.
+- Thread it through `GenerateContentTranslationsCommandHandler` to the notification dispatch.
+- For validation: `TranslationValidationController` sets `TriggeredByUserId` on the job parameter (requires adding the field to `TranslationValidationJob`). All other validation trigger sites leave it null.
+- Notification dispatch: send to triggering user if non-null; fall back to all Admins when null.
+- The `ContentGenerationJob` path deserves care — it sets `TriggeredBy = TriggeredByType.User` by default but has no user ID. The misleading default should be corrected to `System` before this work lands.
+
+**Caveat:** At typical tenant sizes (1-3 Admins), the broadcast approach in §31 is fine. Only action this if a multi-Admin tenant reports notification noise or a specific workflow requires targeted delivery.
+
+#### 7.5 Email body templates — extract to shared pattern
+
+- **Priority:** P3
+- **Origin:** `[Engineering]`
+- **Status:** Open — surfaced during §31 implementation (2026-06-17).
+
+`ToolboxTalkNotificationService` and `EmailService` both build HTML email bodies as large inline `$"..."` string literals. As the number of notification types grows, this becomes a maintenance burden — visual inconsistency, no previewing, no localisation path.
+
+Options (in order of complexity):
+
+1. **Shared `EmailBodyBuilder` static helper** — a set of C# methods (`BuildHeader`, `BuildSection`, `BuildCtaButton`, `BuildTable`) that compose HTML from typed parameters. Zero new dependencies. Bodies stay in C# but are assembled from reusable blocks.
+2. **Razor template engine (`.cshtml` files)** — compile-time type-checked, previewable in a browser, familiar to .NET devs. Requires `Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation` or standalone Razor renderer. Non-trivial setup.
+3. **Fluid / Scriban template engine** — lightweight Liquid-syntax templates, loadable from files or strings. Easier to hand-edit than raw HTML. Adds a NuGet dependency.
+
+**Not urgent while there are only ~8 email types.** Revisit when the count exceeds ~15 or when a designer needs to touch the templates without touching C# code.
+
 ---
 
 # 6. Security Notes (Product Decisions)
@@ -1601,7 +1635,7 @@ Investigation 2026-06-15: UI exists on the talk detail page via TranslationWorkf
 
 **Priority:** P1
 **Origin:** `[Internal-QA]`
-**Status:** Open — investigation completed; design confirmed missing.
+**Status:** Done — 2026-06-17. Email-only implementation shipped: `IToolboxTalkNotificationService` + 4 toggle settings in `ToolboxTalkSettings` + frontend Notifications tab in Settings. See `docs/phase-5/reports/31-translation-completion-notifications-fix.md`. Two follow-on items logged: §7.4 (user-ID propagation gap) and §7.5 (email template extraction).
 **Surfaced:** 2026-06-15 stocktaking discussion.
 
 Phase 5 standards committed to "translations run in the background." The implementation records translation completion via `ITranslationWorkflowService.RecordTranslationCompleted` (called from `GenerateContentTranslationsCommandHandler.cs:167`) and validation completion via `RecordValidationCompleted` (called from `TranslationValidationJob.cs:362`). Both maintain the internal workflow state machine.

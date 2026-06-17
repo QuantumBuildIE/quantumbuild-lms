@@ -42,7 +42,11 @@ public class GetToolboxTalkSettingsQueryHandler : IRequestHandler<GetToolboxTalk
                 DefaultAutoAssignDueDays = settings.DefaultAutoAssignDueDays,
                 DefaultGenerateCertificate = settings.DefaultGenerateCertificate,
                 DefaultRefresherFrequency = settings.DefaultRefresherFrequency,
-                DefaultIsActive = settings.DefaultIsActive
+                DefaultIsActive = settings.DefaultIsActive,
+                NotifyOnTranslationComplete = settings.NotifyOnTranslationComplete,
+                NotifyOnValidationComplete = settings.NotifyOnValidationComplete,
+                NotifyOnFailure = settings.NotifyOnFailure,
+                NotifyOnExternalReviewResponse = settings.NotifyOnExternalReviewResponse
             };
         }
 
@@ -67,7 +71,11 @@ public class GetToolboxTalkSettingsQueryHandler : IRequestHandler<GetToolboxTalk
             DefaultAutoAssignDueDays = 14,
             DefaultGenerateCertificate = true,
             DefaultRefresherFrequency = "Once",
-            DefaultIsActive = false
+            DefaultIsActive = false,
+            NotifyOnTranslationComplete = true,
+            NotifyOnValidationComplete = true,
+            NotifyOnFailure = true,
+            NotifyOnExternalReviewResponse = true
         };
     }
 }

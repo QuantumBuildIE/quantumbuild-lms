@@ -84,6 +84,22 @@ public class ToolboxTalkSettingsConfiguration : IEntityTypeConfiguration<Toolbox
             .IsRequired()
             .HasDefaultValue(true);
 
+        builder.Property(s => s.NotifyOnTranslationComplete)
+            .IsRequired()
+            .HasDefaultValue(true);
+
+        builder.Property(s => s.NotifyOnValidationComplete)
+            .IsRequired()
+            .HasDefaultValue(true);
+
+        builder.Property(s => s.NotifyOnFailure)
+            .IsRequired()
+            .HasDefaultValue(true);
+
+        builder.Property(s => s.NotifyOnExternalReviewResponse)
+            .IsRequired()
+            .HasDefaultValue(true);
+
         // Audit fields
         builder.Property(s => s.CreatedAt)
             .IsRequired();

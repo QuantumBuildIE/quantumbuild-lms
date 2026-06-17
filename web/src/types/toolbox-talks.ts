@@ -509,6 +509,18 @@ export interface ToolboxTalkSettings {
   defaultGenerateCertificate: boolean;
   defaultRefresherFrequency: string;
   defaultIsActive: boolean;
+  // Notification toggles
+  notifyOnTranslationComplete: boolean;
+  notifyOnValidationComplete: boolean;
+  notifyOnFailure: boolean;
+  notifyOnExternalReviewResponse: boolean;
+}
+
+export interface UpdateToolboxTalkNotificationSettingsRequest {
+  notifyOnTranslationComplete: boolean;
+  notifyOnValidationComplete: boolean;
+  notifyOnFailure: boolean;
+  notifyOnExternalReviewResponse: boolean;
 }
 
 export interface UpdateToolboxTalkSettingsRequest {

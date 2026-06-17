@@ -11,6 +11,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Workflows;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Prompts;
+using QuantumBuild.Modules.ToolboxTalks.Application.Services;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services.Subtitles;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Hubs;
@@ -34,6 +35,7 @@ public class TranslationValidationJob
     private readonly IPreFlightScanService _preFlightScanService;
     private readonly IPipelineVersionService _pipelineVersionService;
     private readonly ITranslationWorkflowService _workflowService;
+    private readonly IToolboxTalkNotificationService _notificationService;
     private readonly ILogger<TranslationValidationJob> _logger;
     private readonly ISentenceSplitter _sentenceSplitter;
     private readonly IBackTranslationSelector _backTranslationSelector;
@@ -56,6 +58,7 @@ public class TranslationValidationJob
         IPreFlightScanService preFlightScanService,
         IPipelineVersionService pipelineVersionService,
         ITranslationWorkflowService workflowService,
+        IToolboxTalkNotificationService notificationService,
         ILogger<TranslationValidationJob> logger,
         ISentenceSplitter sentenceSplitter,
         IBackTranslationSelector backTranslationSelector,
@@ -72,6 +75,7 @@ public class TranslationValidationJob
         _preFlightScanService = preFlightScanService;
         _pipelineVersionService = pipelineVersionService;
         _workflowService = workflowService;
+        _notificationService = notificationService;
         _logger = logger;
         _sentenceSplitter = sentenceSplitter;
         _backTranslationSelector = backTranslationSelector;
@@ -408,6 +412,21 @@ public class TranslationValidationJob
 
             await SendCompletionAsync(validationRunId, true, "Validation complete");
 
+            // Hook 2 — notify tenant admins of validation completion
+            if (run.ToolboxTalkId.HasValue)
+            {
+                var talkTitle = await _dbContext.ToolboxTalks.IgnoreQueryFilters()
+                    .Where(t => t.Id == run.ToolboxTalkId.Value)
+                    .Select(t => t.Title)
+                    .FirstOrDefaultAsync(cancellationToken) ?? "Unknown";
+                var languageName = await _languageCodeService.GetLanguageNameAsync(run.LanguageCode);
+                await _notificationService.NotifyValidationCompleteAsync(
+                    tenantId, run.ToolboxTalkId.Value, talkTitle, languageName,
+                    run.OverallOutcome.ToString(),
+                    (double)run.OverallScore,
+                    run.PassedSections, run.TotalSections, cancellationToken);
+            }
+
             // If this run belongs to a creation session, check if all runs are done
             await TryUpdateSessionStatusAsync(validationRunId, tenantId);
         }
@@ -443,6 +462,24 @@ public class TranslationValidationJob
                 ex.StackTrace);
 
             await UpdateRunStatusAsync(validationRunId, tenantId, ValidationRunStatus.Failed);
+
+            // Hook 4 — notify tenant admins of validation failure
+            try
+            {
+                var failedRun = await _dbContext.TranslationValidationRuns.IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(r => r.Id == validationRunId && r.TenantId == tenantId, default);
+                if (failedRun?.ToolboxTalkId.HasValue == true)
+                {
+                    var talkTitle = await _dbContext.ToolboxTalks.IgnoreQueryFilters()
+                        .Where(t => t.Id == failedRun.ToolboxTalkId.Value)
+                        .Select(t => t.Title)
+                        .FirstOrDefaultAsync(default) ?? "Unknown";
+                    await _notificationService.NotifyFailureAsync(
+                        tenantId, failedRun.ToolboxTalkId.Value, talkTitle,
+                        "Translation validation", ex.Message, default);
+                }
+            }
+            catch { /* swallow — never let notification failure hide the original exception */ }
 
             // Surface a meaningful error to the frontend instead of a generic fallback
             var clientMessage = ex switch

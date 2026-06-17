@@ -8,6 +8,7 @@ import {
   getToolboxTalkDashboard,
   getToolboxTalkSettings,
   updateToolboxTalkSettings,
+  updateToolboxTalkNotificationSettings,
   generateContentTranslations,
   getContentTranslations,
   getToolboxTalkPreview,
@@ -29,6 +30,7 @@ import type {
   CreateToolboxTalkRequest,
   UpdateToolboxTalkRequest,
   UpdateToolboxTalkSettingsRequest,
+  UpdateToolboxTalkNotificationSettingsRequest,
   GetToolboxTalksParams,
 } from '@/types/toolbox-talks';
 
@@ -118,6 +120,18 @@ export function useUpdateToolboxTalkSettings() {
 
   return useMutation({
     mutationFn: (data: UpdateToolboxTalkSettingsRequest) => updateToolboxTalkSettings(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: TOOLBOX_TALKS_SETTINGS_KEY });
+    },
+  });
+}
+
+export function useUpdateToolboxTalkNotificationSettings() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: UpdateToolboxTalkNotificationSettingsRequest) =>
+      updateToolboxTalkNotificationSettings(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: TOOLBOX_TALKS_SETTINGS_KEY });
     },

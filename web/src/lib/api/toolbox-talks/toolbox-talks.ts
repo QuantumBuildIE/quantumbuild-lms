@@ -11,6 +11,7 @@ import type {
   CreateToolboxTalkRequest,
   UpdateToolboxTalkRequest,
   UpdateToolboxTalkSettingsRequest,
+  UpdateToolboxTalkNotificationSettingsRequest,
   GetToolboxTalksParams,
   CheckDuplicateRequest,
   DuplicateCheckResponse,
@@ -299,6 +300,16 @@ export async function updateToolboxTalkSettings(
 ): Promise<ToolboxTalkSettings> {
   const response = await apiClient.put<ApiResponse<ToolboxTalkSettings>>(
     '/toolbox-talks/settings',
+    data
+  );
+  return response.data.data;
+}
+
+export async function updateToolboxTalkNotificationSettings(
+  data: UpdateToolboxTalkNotificationSettingsRequest
+): Promise<ToolboxTalkSettings> {
+  const response = await apiClient.put<ApiResponse<ToolboxTalkSettings>>(
+    '/toolbox-talks/settings/notifications',
     data
   );
   return response.data.data;

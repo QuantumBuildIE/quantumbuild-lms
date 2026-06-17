@@ -38,4 +38,10 @@ public record ToolboxTalkSettingsDto
     public bool DefaultGenerateCertificate { get; init; }
     public string DefaultRefresherFrequency { get; init; } = "Once";
     public bool DefaultIsActive { get; init; }
+
+    // Notification toggles
+    public bool NotifyOnTranslationComplete { get; init; }
+    public bool NotifyOnValidationComplete { get; init; }
+    public bool NotifyOnFailure { get; init; }
+    public bool NotifyOnExternalReviewResponse { get; init; }
 }

@@ -55,6 +55,9 @@ public static class ServiceCollectionExtensions
         // Register email service
         services.AddScoped<IToolboxTalkEmailService, ToolboxTalkEmailService>();
 
+        // Register translation/validation pipeline notification service
+        services.AddScoped<IToolboxTalkNotificationService, ToolboxTalkNotificationService>();
+
         // Register reports service
         services.AddScoped<IToolboxTalkReportsService, ToolboxTalkReportsService>();
 

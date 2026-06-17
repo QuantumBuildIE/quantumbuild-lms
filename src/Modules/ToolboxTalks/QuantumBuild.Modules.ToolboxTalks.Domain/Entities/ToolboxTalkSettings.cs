@@ -109,4 +109,13 @@ public class ToolboxTalkSettings : BaseEntity
     /// Consumed by wizard Step 4 via InitialiseToolboxTalkCommandHandler at talk creation.
     /// </summary>
     public bool DefaultIsActive { get; set; } = true;
+
+    // Notification toggles — each independently controls one email notification type.
+    // All default to true so notifications work out-of-the-box.
+    // Recipients: all Admin users on the tenant.
+
+    public bool NotifyOnTranslationComplete { get; set; } = true;
+    public bool NotifyOnValidationComplete { get; set; } = true;
+    public bool NotifyOnFailure { get; set; } = true;
+    public bool NotifyOnExternalReviewResponse { get; set; } = true;
 }

@@ -24,6 +24,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalkQu
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.PublishToolboxTalk;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalkSettings;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalkTenantDefaults;
+using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalkNotificationSettings;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Reports;
 using QuantumBuild.Modules.ToolboxTalks.Application.Queries.GetSlideshowHtml;
@@ -876,6 +877,38 @@ public class ToolboxTalksController : ControllerBase
         {
             _logger.LogError(ex, "Error updating learning settings");
             return StatusCode(500, Result.Fail("Error updating learning settings"));
+        }
+    }
+
+    /// <summary>
+    /// Update notification toggle settings for the current tenant
+    /// </summary>
+    [HttpPut("settings/notifications")]
+    [Authorize(Policy = "Learnings.Admin")]
+    [ProducesResponseType(typeof(ToolboxTalkSettingsDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UpdateNotificationSettings([FromBody] UpdateToolboxTalkNotificationSettingsDto dto)
+    {
+        try
+        {
+            var command = new UpdateToolboxTalkNotificationSettingsCommand(
+                TenantId: _currentUserService.TenantId,
+                NotifyOnTranslationComplete: dto.NotifyOnTranslationComplete,
+                NotifyOnValidationComplete: dto.NotifyOnValidationComplete,
+                NotifyOnFailure: dto.NotifyOnFailure,
+                NotifyOnExternalReviewResponse: dto.NotifyOnExternalReviewResponse
+            );
+
+            var result = await _mediator.Send(command);
+            if (!result.Success)
+                return BadRequest(result);
+
+            return Ok(Result.Ok(result.Data));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating notification settings");
+            return StatusCode(500, Result.Fail("Error updating notification settings"));
         }
     }
 
@@ -2334,6 +2367,17 @@ public class ToolboxTalksController : ControllerBase
     }
 
     #endregion
+}
+
+/// <summary>
+/// DTO for updating notification toggle settings
+/// </summary>
+public record UpdateToolboxTalkNotificationSettingsDto
+{
+    public bool NotifyOnTranslationComplete { get; init; } = true;
+    public bool NotifyOnValidationComplete { get; init; } = true;
+    public bool NotifyOnFailure { get; init; } = true;
+    public bool NotifyOnExternalReviewResponse { get; init; } = true;
 }
 
 /// <summary>

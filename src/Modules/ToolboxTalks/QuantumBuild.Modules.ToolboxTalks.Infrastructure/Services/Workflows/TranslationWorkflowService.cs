@@ -10,6 +10,7 @@ using QuantumBuild.Core.Application.Models;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Workflows;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Workflows;
+using QuantumBuild.Modules.ToolboxTalks.Application.Services;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services.Subtitles;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities.Workflows;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
@@ -24,6 +25,7 @@ public sealed class TranslationWorkflowService(
     ILanguageCodeService languageCodeService,
     IEmailService emailService,
     IConfiguration configuration,
+    IToolboxTalkNotificationService notificationService,
     ILogger<TranslationWorkflowService> logger) : ITranslationWorkflowService
 {
     // -- Tenant resolution --
@@ -485,7 +487,15 @@ public sealed class TranslationWorkflowService(
 
         await context.SaveChangesAsync(ct);
 
-        // TODO Phase 7: fire WorkflowNotificationTrigger
+        // Hook 3 — notify tenant admins that an external review response has arrived
+        var talkTitle = await context.ToolboxTalks.IgnoreQueryFilters()
+            .Where(t => t.Id == invitation.TargetEntityId)
+            .Select(t => t.Title)
+            .FirstOrDefaultAsync(ct) ?? "Unknown";
+        var langName = await languageCodeService.GetLanguageNameAsync(invitation.TargetEntitySubKey ?? string.Empty);
+        await notificationService.NotifyExternalReviewResponseAsync(
+            invitation.TenantId, invitation.TargetEntityId, talkTitle, langName, accepted, ct);
+
         return Result.Ok();
     }
 

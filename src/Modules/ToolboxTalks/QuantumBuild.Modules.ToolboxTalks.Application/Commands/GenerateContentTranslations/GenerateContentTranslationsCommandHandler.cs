@@ -8,6 +8,7 @@ using QuantumBuild.Core.Application.Models;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Translations;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Workflows;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Application.Services;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services.Subtitles;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 
@@ -23,6 +24,7 @@ public class GenerateContentTranslationsCommandHandler
     private readonly IContentTranslationService _translationService;
     private readonly ILanguageCodeService _languageCodeService;
     private readonly ITranslationWorkflowService _workflowService;
+    private readonly IToolboxTalkNotificationService _notificationService;
     private readonly ILogger<GenerateContentTranslationsCommandHandler> _logger;
 
     public GenerateContentTranslationsCommandHandler(
@@ -30,12 +32,14 @@ public class GenerateContentTranslationsCommandHandler
         IContentTranslationService translationService,
         ILanguageCodeService languageCodeService,
         ITranslationWorkflowService workflowService,
+        IToolboxTalkNotificationService notificationService,
         ILogger<GenerateContentTranslationsCommandHandler> logger)
     {
         _context = context;
         _translationService = translationService;
         _languageCodeService = languageCodeService;
         _workflowService = workflowService;
+        _notificationService = notificationService;
         _logger = logger;
     }
 
@@ -178,6 +182,15 @@ public class GenerateContentTranslationsCommandHandler
                     successfulResult.Language, successfulResult.LanguageCode,
                     recordResult.Errors.FirstOrDefault() ?? "unknown");
             }
+        }
+
+        // Notify tenant admins that translation has completed (hook 1)
+        if (results.Count > 0)
+        {
+            var notifyResults = results.Select(r => new TranslationLanguageResult(
+                r.Language, r.LanguageCode, r.Success, r.ErrorMessage)).ToList();
+            await _notificationService.NotifyTranslationCompleteAsync(
+                request.TenantId, request.ToolboxTalkId, toolboxTalk.Title, notifyResults, cancellationToken);
         }
 
         return GenerateContentTranslationsResult.SuccessResult(results);
