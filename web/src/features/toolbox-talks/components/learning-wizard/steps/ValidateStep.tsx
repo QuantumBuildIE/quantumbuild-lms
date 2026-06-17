@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Languages } from 'lucide-react';
+import { Languages, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { WorkflowSubscriber } from '../hooks/WorkflowSubscriber';
@@ -14,8 +14,10 @@ import {
   useSectionDecision,
   contentCreationKeys,
 } from '@/lib/api/toolbox-talks/use-content-creation';
+import { useInitiateExternalReview } from '@/lib/api/toolbox-talks/use-toolbox-talks';
 import { ValidationProgressPanel } from '@/features/toolbox-talks/components/create-wizard/steps/validate/ValidationProgressPanel';
 import { ValidationSectionCard } from '@/features/toolbox-talks/components/create-wizard/steps/validate/ValidationSectionCard';
+import { SendExternalReviewDialog } from '../../SendExternalReviewDialog';
 import { LoadingState } from '../components/LoadingState';
 import type { ValidationRunSummary } from '@/types/content-creation';
 
@@ -48,7 +50,7 @@ export interface ValidateStepProps {
 export function ValidateStep({ talkId }: ValidateStepProps) {
   const queryClient = useQueryClient();
   const { talk, isLoading: talkLoading } = useTalk(talkId);
-  const { activeRunIds, onValidationComplete, onSectionCompleted } =
+  const { data: workflowStates, activeRunIds, onValidationComplete, onSectionCompleted } =
     useWorkflowSubscription(talkId);
   const { data: validationRuns, isLoading: runsLoading } = useValidationRuns(talkId);
 
@@ -72,6 +74,13 @@ export function ValidateStep({ talkId }: ValidateStepProps) {
   const { data: runDetail, refetch: refetchRun } = useValidationRun(talkId, activeRunId);
 
   const sectionDecision = useSectionDecision();
+  const initiateReviewMutation = useInitiateExternalReview();
+
+  const [sendReviewLang, setSendReviewLang] = useState<{
+    code: string;
+    name: string;
+    flaggedCount: number;
+  } | null>(null);
 
   const handleSectionAction = useCallback(
     (
@@ -154,6 +163,28 @@ export function ValidateStep({ talkId }: ValidateStepProps) {
     };
   }, [mergedSections]);
 
+  const activeWorkflowState = (workflowStates ?? []).find((s) => s.languageCode === activeLangCode) ?? null;
+  const canSendForReview =
+    activeWorkflowState?.state === 'Validated' || activeWorkflowState?.state === 'ReviewerAccepted';
+
+  const handleSendForExternalReview = useCallback(
+    async (email: string) => {
+      if (!sendReviewLang) return;
+      try {
+        await initiateReviewMutation.mutateAsync({
+          toolboxTalkId: talkId,
+          languageCode: sendReviewLang.code,
+          reviewerEmail: email,
+        });
+        toast.success(`Invitation sent to ${email}`);
+        setSendReviewLang(null);
+      } catch {
+        toast.error(`Failed to send invitation for ${sendReviewLang.name}`);
+      }
+    },
+    [talkId, sendReviewLang, initiateReviewMutation]
+  );
+
   // All-language readiness: every completed run must have no pending non-Pass decisions
   const allLanguagesReady = useMemo(() => {
     const completed = (validationRuns ?? []).filter((r) => r.status === 'Completed');
@@ -183,6 +214,22 @@ export function ValidateStep({ talkId }: ValidateStepProps) {
           onSectionCompleted={onSectionCompleted}
         />
       ))}
+
+      {/* Send for external review dialog */}
+      <SendExternalReviewDialog
+        open={sendReviewLang !== null}
+        onOpenChange={(open) => {
+          if (!open) setSendReviewLang(null);
+        }}
+        onConfirm={handleSendForExternalReview}
+        isLoading={initiateReviewMutation.isPending}
+        flaggedWordCount={sendReviewLang?.flaggedCount ?? 0}
+        languageName={
+          sendReviewLang
+            ? (LANG_NAMES[sendReviewLang.code] ?? sendReviewLang.code.toUpperCase())
+            : ''
+        }
+      />
 
       <div className="space-y-6">
         <div>
@@ -233,6 +280,27 @@ export function ValidateStep({ talkId }: ValidateStepProps) {
               passThreshold={passThreshold}
               isConnected={false}
             />
+
+            {/* Send for external review — available when language is Validated or ReviewerAccepted */}
+            {canSendForReview && activeLangCode && (
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setSendReviewLang({
+                      code: activeLangCode,
+                      name: LANG_NAMES[activeLangCode] ?? activeLangCode.toUpperCase(),
+                      flaggedCount: activeWorkflowState?.flaggedWordCount ?? 0,
+                    })
+                  }
+                >
+                  <Send className="mr-1.5 h-3.5 w-3.5" />
+                  Send for external review
+                </Button>
+              </div>
+            )}
 
             {/* Per-section review cards */}
             <div className="space-y-3">

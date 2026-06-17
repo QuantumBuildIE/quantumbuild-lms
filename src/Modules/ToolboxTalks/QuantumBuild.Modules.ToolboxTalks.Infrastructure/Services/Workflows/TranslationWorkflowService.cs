@@ -345,9 +345,9 @@ public sealed class TranslationWorkflowService(
         var stateDto = await GetState(talkId, languageCode, explicitTenantId, ct);
         var state = stateDto.State;
 
-        if (state != TranslationWorkflowState.ReviewerAccepted)
+        if (state != TranslationWorkflowState.Validated && state != TranslationWorkflowState.ReviewerAccepted)
             return Result.Fail<InitiateExternalReviewResult>(
-                $"Cannot initiate external review from state {state}; requires ReviewerAccepted.",
+                $"Cannot initiate external review from state {state}; requires Validated or ReviewerAccepted.",
                 FailureCode.WorkflowInvalidState);
 
         var rawToken = Guid.NewGuid().ToString("N");

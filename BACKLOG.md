@@ -1128,7 +1128,7 @@ Recon-first. Likely chunks:
 - **Origin:** `[Engineering]`
 - **Status:** Open — non-blocking, do not hold §5.28 deploy
 
-**Follow-up items identified during the §5.28 patch:**
+**Follow-up items identified during the §5.28 patch and subsequent work:**
 
 1. **API key security:** API keys (Anthropic, Gemini, ElevenLabs, DeepL) remain in `appsettings.json`. They should be moved to Railway environment variables only. This is a known gap; the §5.28 patch explicitly excluded key migration from scope.
 2. **CostEstimationService rate table:** Rates for `claude-sonnet-4-5` (`SonnetInputPer1K`, `SonnetOutputPer1K`) were inherited from the deprecated `claude-sonnet-4-0` rate table (April 2026 EUR). Verify against current Anthropic pricing and update if needed.
@@ -1149,6 +1149,8 @@ between them is a future incident shape. Proper fix: refactor `ClaudeSettings`,
 derive from `AIProviderOptions` at bind time rather than being independently
 configured. Also extend `AIProviderOptionsValidator` to cover the operational
 keys until the refactor lands.
+
+5. **`PublishSuccessState` dead code in `PublishStep.tsx`:** `PublishSuccessState` is exported at `web/src/features/toolbox-talks/components/learning-wizard/steps/PublishStep.tsx` (bottom of file) but the publish page uses `router.push` on success rather than rendering this component — it was presumably an inline success state replaced by navigation. Safe to delete if no other consumer exists (surfaced 2026-06-17 during §30 implementation).
 
 #### 5.30 ToolboxTalk.IsActive is functionally decorative
 
@@ -1252,6 +1254,32 @@ External-reviewer-facing pages (third-party review links) — separate audit; no
 
 References: PHASE_5_STANDARDS §10 (the standard that motivates this), §5.25 (the original wizard-scoped entry that was descoped here).
 
+#### 7.3 Investigate per-section external review escalation
+
+- **Priority:** P3
+- **Origin:** `[Engineering]`
+- **Status:** Open — investigation deferred until §30 per-language fix has shipped.
+- **Surfaced:** 2026-06-17 during §30 product discussion.
+
+The §30 fix ships per-language external review escalation — the reviewer escalates an entire language to external review at once. The original product intent included per-section escalation: the reviewer escalates specific sections (e.g., "this regulatory section is too important for me to sign off on") while accepting or editing others internally.
+
+Per-language was scoped for §30 because:
+- Existing `InitiateExternalReview` backend operates per-language.
+- Smaller change, faster to ship.
+- Per-section may not be needed if tenants don't request it.
+
+This entry tracks the investigation if per-section becomes a real ask. Investigation scope:
+
+- What changes to the workflow state machine would be needed? Currently the state lives on `ToolboxTalkTranslation` (per-language). Per-section would need state on `TranslationValidationResult` (per-section per-language) — possibly a new field or a separate per-section escalation entity.
+- How does the external reviewer's UI surface "you're reviewing only sections X, Y, Z of this translation"?
+- How are decisions on non-escalated sections preserved when escalated sections come back?
+- What happens if the reviewer wants to escalate after some sections are already accepted?
+- Does the validation run's overall pass/fail logic need adjustment to account for "some sections externally reviewed, others internally"?
+- UI for selecting which sections to escalate.
+- State display: a language that has some externally reviewed sections is no longer a simple workflow state — it's a mix.
+
+Investigation produces a doc with findings and a recommendation: implement, defer indefinitely, or close as not-needed. The doc lives at `docs/per-section-external-review-investigation.md`. The investigation itself is read-only; any actual implementation work would be a separate entry.
+
 ---
 
 # 6. Security Notes (Product Decisions)
@@ -1335,6 +1363,8 @@ the translation pipeline.
 ---
 
 ## 11. Cancel external review — end-to-end
+
+**Status:** ✅ Done — 2026-06-17 (side-effect of §30) — `AwaitingThirdParty` state is now reachable end-to-end, which was the only remaining blocker. The "Cancel invitation" button in `TranslationWorkflowPanel` renders for `state === 'AwaitingThirdParty'` (unchanged). The `CancelExternalReviewDialog` is wired. Backend `cancel-external-review` endpoint is confirmed working (as of 2026-06-15). No code changes needed for §11 itself — §30's state gate fix was the missing piece.
 
 **Update (2026-06-15):** The backend implementation now exists — `POST /api/toolbox-talks/{id}/translations/{languageCode}/cancel-external-review` is implemented and working (confirmed in §21 / 5.5a gap-check). The `InvitationStatus.Revoked` path is wired. The frontend UI to trigger cancellation has not been built; the remaining gap is a "Cancel external review" button on the per-language panel of the talk detail/edit page.
 
@@ -1541,7 +1571,7 @@ documented, and implementation chunk gets scoped from there.
 
 **Priority:** P1
 **Origin:** [Internal-QA]
-**Status:** Open — investigation needed.
+**Status:** ✅ Done — 2026-06-17 — External review is now reachable from the new wizard's Validate step. Backend: state gate on `InitiateExternalReview` relaxed to accept `Validated` in addition to `ReviewerAccepted` — external review is part of the internal reviewer's workflow (escalation when a translation is too important or too uncertain to sign off internally), not a step after it. Frontend: per-language "Send for external review" button added to the Validate step's per-language row (above the section cards, visible when `workflowState === 'Validated' || 'ReviewerAccepted'`); `canSendForExternalReview` in `TranslationWorkflowPanel` updated to accept `Validated`; `SendExternalReviewDialog` reused from its existing location (not lifted — both callers use the component directly from `components/SendExternalReviewDialog.tsx`). `ExternalReviewWarningBanner` on the Publish step is now reachable for the first time and verified correct (copy, pluralization, non-blocking). Side effects: §11 closed (see entry), §21 partially addressed via Edit page path (detail page path blocked on §24). Recon: `docs/phase-5/reports/30-external-review-discoverability-recon.md`. Fix: `docs/phase-5/reports/30-external-review-per-language-fix.md`.
 **Surfaced:** 2026-06-15 stocktaking discussion.
 
 Backend infrastructure for external (third-party) review exists and is tested:
@@ -1734,6 +1764,8 @@ Kept here for trail; prune periodically.
 ---
 
 ## 21. Post-publish translation management UI — AwaitingThirdParty languages (Medium)
+
+**Status:** Partially addressed as side-effect of §30 (2026-06-17). The Edit page path now works end-to-end: `TranslationWorkflowPanel` shows "Cancel invitation" for `AwaitingThirdParty` languages (existing button, now reachable since `AwaitingThirdParty` is reachable). Admin can navigate Talk detail → Edit → scroll to Content Translations card → cancel. The detail page path (no `TranslationWorkflowPanel` on the detail page itself) remains blocked on §24 (Chunk 2 — detail page translation surface).
 
 **Surfaced by:** 5.5a gap-check, 2026-06-14.
 
