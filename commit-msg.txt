@@ -1,0 +1,62 @@
+fix(tenants): close double-submit race + input hygiene (§3.11)
+
+The Create Tenant form returned 400 "A tenant with this name already
+exists" on what appeared to be a clean first submit. The recon
+confirmed: the tenant WAS being created (by the actual first request)
+but the user-visible state showed the bug because a second POST
+overlapping it returned the 400.
+
+Root cause: the submit button used `disabled={isPending}` where
+isPending is a TanStack Query state value. React state updates are
+asynchronous — there's a ~16ms window between calling mutateAsync
+and React re-rendering with the button disabled. A second click,
+keyboard Enter, or any double-dispatch within that window fires a
+second onSubmit → second POST → duplicate check finds the row the
+first POST just committed → 400.
+
+Three layers of hardening:
+
+Frontend race close:
+- tenant-form.tsx submit button now disabled={isPending ||
+  form.formState.isSubmitting}. React Hook Form sets isSubmitting
+  synchronously via internal ref tracking, the moment the submit
+  event fires, before any async work and before any React re-render.
+  Closes the race window completely.
+
+Defensive input trimming (both sides):
+- Frontend payload construction trims all user-typed string fields
+  (.trim() on name, code, companyName, contactName, contactEmail).
+- Backend TenantService.CreateAsync trims Name and Code before the
+  duplicate check and entity construction. Whitespace-only code
+  stored as null rather than empty string. Optional fields trimmed
+  at entity creation too.
+
+Backend defense-in-depth:
+- Specific DbUpdateException catch added before the generic
+  Exception catch, keyed on IsUniqueConstraintViolation (message-
+  based — Application layer has no Npgsql reference, so detection
+  uses "duplicate key" / "23505" substring checks rather than
+  importing PostgresException). Translates the rare concurrent-tab
+  scenario (two browser sessions racing to insert the same name)
+  from a generic EF exception leak into the same clean "A tenant
+  with this name already exists" message.
+- Same catch incidentally handles the §7.6 latent gap: soft-deleted
+  tenant names blocking reinstatement at the DB level (the
+  application check excludes soft-deleted, the IX_Tenants_Name index
+  does not). Users see the clean message in that edge case too,
+  though the underlying index misalignment remains tracked
+  separately.
+
+Test coverage deferred: the bug is a UI race that unit tests cannot
+catch and that manual testing only catches intermittently. Playwright
+(next chunk) will provide canonical coverage.
+
+BACKLOG:
+- Closes §3.11 (Tenant creation 400 on first submit)
+- Opens §7.6 (IX_Tenants_Name soft-delete index alignment — P3
+  latent, deferred until a CLI migration chunk is the right shape)
+
+Build: 0 errors, 0 new warnings.
+No migration generated (verified).
+Report: docs/phase-5/reports/3.11-tenant-creation-400-fix.md
+Recon: docs/phase-5/reports/3.11-tenant-creation-400-recon.md

@@ -661,7 +661,7 @@ Removed from Employee:
 
 - **Priority:** P1
 - **Origin:** `[Internal-QA]`
-- **Status:** Open
+- **Status:** ✅ Done — 2026-06-17 — Frontend race window closed via `form.formState.isSubmitting` (React Hook Form's synchronous internal-ref guard), preventing the double-submit pattern that caused first-submit 400s. Trimming added to user-input string fields on both frontend payload construction and backend duplicate-check / entity creation. Backend defensive catch added for EF unique-constraint violations (concurrent-tab scenarios where two browser sessions race to create the same tenant name): returns the clean "already exists" message instead of a generic EF exception. Recon: `docs/phase-5/reports/3.11-tenant-creation-400-recon.md`. Fix: `docs/phase-5/reports/3.11-tenant-creation-400-fix.md`. Test coverage: deferred — Playwright will provide canonical coverage for UI-level race conditions.
 - **Description:** Submitting the Create Tenant form once produces an HTTP 400 with "A tenant with this name already exists", but the tenant row is actually created. Possible double-submit (form fires POST twice; first creates, second hits uniqueness check) or misleading error from post-commit exception during admin-user creation. Predates 3.1. Repro: submit Create Tenant form with a fresh unique name, observe 400 in browser network tab, query DB to confirm row exists.
 
 #### **3.12 (new)** — New user activation timing question
@@ -1313,6 +1313,37 @@ Options (in order of complexity):
 3. **Fluid / Scriban template engine** — lightweight Liquid-syntax templates, loadable from files or strings. Easier to hand-edit than raw HTML. Adds a NuGet dependency.
 
 **Not urgent while there are only ~8 email types.** Revisit when the count exceeds ~15 or when a designer needs to touch the templates without touching C# code.
+
+#### 7.6 `IX_Tenants_Name` does not align with application soft-delete semantics
+
+- **Priority:** P3
+- **Origin:** `[Engineering]`
+- **Status:** Open — latent edge-case bug surfaced during §3.11 recon (2026-06-17).
+
+The unique index `IX_Tenants_Name` ([TenantConfiguration.cs](src/Core/QuantumBuild.Core.Infrastructure/Data/Configurations/TenantConfiguration.cs)) is declared without a filter clause:
+
+```csharp
+builder.HasIndex(e => e.Name)
+    .IsUnique()
+    .HasDatabaseName("IX_Tenants_Name");
+```
+
+This enforces uniqueness across ALL tenant rows, including soft-deleted ones. The application-level duplicate check in `TenantService.CreateAsync` explicitly excludes soft-deleted tenants (`&& !t.IsDeleted`).
+
+Result: a tenant named "Acme" that has been soft-deleted does not appear as a duplicate at the application layer (the check passes), but the DB index blocks the insert. After §3.11's fix, the `DbUpdateException` is caught and translated to "A tenant with this name already exists" — but the message is misleading because, semantically, the application doesn't consider a soft-deleted tenant to exist.
+
+The fix is to add a filter to the index:
+
+```csharp
+builder.HasIndex(e => e.Name)
+    .IsUnique()
+    .HasFilter("\"IsDeleted\" = false")
+    .HasDatabaseName("IX_Tenants_Name");
+```
+
+This requires a CLI-generated migration (per CLAUDE.md Note 28). The same misalignment may apply to `IX_Tenants_Code` — that index already filters for non-null codes but does not exclude soft-deleted rows. Worth reviewing both in the same chunk.
+
+**Risk if not addressed:** rare. Requires a tenant to be soft-deleted, then an attempt to create a new tenant with the exact same name. Post-§3.11 the user sees a clean error message, but the system is rejecting a legitimate request. Workaround: use a different name.
 
 ---
 
