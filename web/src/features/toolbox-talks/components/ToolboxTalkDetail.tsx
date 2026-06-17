@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { format } from 'date-fns';
 import {
   PencilIcon,
@@ -10,30 +9,26 @@ import {
   CalendarClockIcon,
   VideoIcon,
   FileTextIcon,
-  HelpCircleIcon,
-  CheckCircle2Icon,
   ClockIcon,
   AlertTriangleIcon,
   ListChecksIcon,
   ExternalLinkIcon,
   EyeIcon,
+  CheckCircle2Icon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DeleteConfirmationDialog } from '@/components/shared/delete-confirmation-dialog';
 import { PreviewModal } from './PreviewModal';
 import { ValidationHistoryTab } from './ValidationHistoryTab';
+import { SectionEditPanel } from './detail/SectionEditPanel';
+import { QuizEditPanel } from './detail/QuizEditPanel';
 import { useToolboxTalk, useDeleteToolboxTalk } from '@/lib/api/toolbox-talks';
 import { usePermission } from '@/lib/auth/use-auth';
+import { useWizardPreference } from '@/features/toolbox-talks/hooks/useWizardPreference';
 import type { ToolboxTalk } from '@/types/toolbox-talks';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -53,8 +48,9 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
   const canManage = usePermission('Learnings.Manage');
   const canSchedule = usePermission('Learnings.Schedule');
 
-  const { data: talk, isLoading, error } = useToolboxTalk(talkId);
+  const { data: talk, isLoading, error, refetch } = useToolboxTalk(talkId);
   const deleteMutation = useDeleteToolboxTalk();
+  const wizardPreference = useWizardPreference();
 
   const handleDelete = async () => {
     if (!talk) return;
@@ -137,7 +133,7 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
               <EyeIcon className="mr-2 h-4 w-4" />
               Preview as Employee
             </Button>
-            {canManage && (
+            {canManage && wizardPreference === 'old' && (
               <Button variant="outline" onClick={() => router.push(`${basePath}/${talk.id}/edit`)}>
                 <PencilIcon className="mr-2 h-4 w-4" />
                 Edit
@@ -326,114 +322,11 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
             )}
           </div>
 
-          {/* Translation note */}
-          {!previewMode && (talk.videoSource !== 'None' || talk.sections.length > 0 || talk.questions.length > 0) && (
-            <p className="text-sm text-muted-foreground">
-              To generate translations or subtitles, use the{' '}
-              <Link href={`${basePath}/${talk.id}/edit`} className="underline text-primary hover:text-primary/80">
-                Edit page
-              </Link>.
-            </p>
-          )}
+          {/* Sections — inline editable for new-wizard talks */}
+          <SectionEditPanel talk={talk} onRefetch={refetch} />
 
-          {/* Sections Preview */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileTextIcon className="h-5 w-5" />
-                Sections ({talk.sections.length})
-              </CardTitle>
-              <CardDescription>Content sections for this learning</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Accordion type="multiple" className="w-full">
-                {talk.sections.map((section) => (
-                  <AccordionItem key={section.id} value={section.id}>
-                    <AccordionTrigger className="hover:no-underline">
-                      <div className="flex items-center gap-3 text-left">
-                        <Badge variant="outline" className="shrink-0">
-                          {section.sectionNumber}
-                        </Badge>
-                        <span className="font-medium">{section.title}</span>
-                        {section.requiresAcknowledgment && (
-                          <Badge variant="secondary" className="text-xs">
-                            Acknowledgment Required
-                          </Badge>
-                        )}
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      <div className="rounded-lg bg-muted/50 p-4 mt-2">
-                        <div className="prose prose-sm max-w-none dark:prose-invert">
-                          <p className="whitespace-pre-wrap">{section.content}</p>
-                        </div>
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
-            </CardContent>
-          </Card>
-
-          {/* Questions Preview */}
-          {talk.requiresQuiz && talk.questions.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <HelpCircleIcon className="h-5 w-5" />
-                  Quiz Questions ({talk.questions.length})
-                </CardTitle>
-                <CardDescription>
-                  Passing score: {talk.passingScore}%
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {talk.questions.map((question) => (
-                    <div key={question.id} className="rounded-lg border p-4">
-                      <div className="flex items-start gap-3">
-                        <Badge variant="outline" className="shrink-0">
-                          Q{question.questionNumber}
-                        </Badge>
-                        <div className="flex-1 space-y-2">
-                          <p className="font-medium">{question.questionText}</p>
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            <span>{question.questionTypeDisplay}</span>
-                            <span>{question.points} point{question.points !== 1 ? 's' : ''}</span>
-                          </div>
-                          {question.options && question.options.length > 0 && (
-                            <div className="mt-2 space-y-1">
-                              {question.options.map((option, idx) => (
-                                <div
-                                  key={idx}
-                                  className={cn(
-                                    'flex items-center gap-2 text-sm',
-                                    option === question.correctAnswer && 'text-green-600 font-medium'
-                                  )}
-                                >
-                                  <span className="w-6">{String.fromCharCode(65 + idx)}.</span>
-                                  <span>{option}</span>
-                                  {option === question.correctAnswer && (
-                                    <CheckCircle2Icon className="h-4 w-4" />
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          {question.questionType === 'ShortAnswer' && (
-                            <div className="mt-2 text-sm">
-                              <span className="text-muted-foreground">Expected answer: </span>
-                              <span className="font-medium text-green-600">{question.correctAnswer}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          {/* Quiz Questions — inline editable for new-wizard talks */}
+          <QuizEditPanel talk={talk} onRefetch={refetch} />
         </TabsContent>
 
         {!isPartOfCourse && !previewMode && (
