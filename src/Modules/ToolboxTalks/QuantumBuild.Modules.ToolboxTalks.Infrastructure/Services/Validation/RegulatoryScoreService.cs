@@ -20,7 +20,7 @@ namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Validation;
 /// </summary>
 public class RegulatoryScoreService : IRegulatoryScoreService
 {
-    private const string SonnetModel = "claude-sonnet-4-20250514";
+    private const string SonnetModel = "claude-sonnet-4-5";
     private const int MaxTokens = 4096;
 
     private static readonly JsonSerializerOptions CamelCaseOptions = new()

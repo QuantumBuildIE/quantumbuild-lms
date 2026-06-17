@@ -45,7 +45,7 @@ public class HelpChatController : ControllerBase
 
         var payload = new
         {
-            model = "claude-sonnet-4-20250514",
+            model = "claude-sonnet-4-5",
             max_tokens = 1000,
             system = systemPrompt,
             messages = request.Messages.Select(m => new { role = m.Role, content = m.Content }).ToArray()

@@ -20,7 +20,7 @@ namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 /// </summary>
 public class RequirementMappingJob
 {
-    private const string SonnetModel = "claude-sonnet-4-20250514";
+    private const string SonnetModel = "claude-sonnet-4-5";
     private const int MaxTokens = 8192;
 
     private static readonly JsonSerializerOptions CamelCaseOptions = new()
