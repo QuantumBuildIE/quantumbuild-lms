@@ -773,6 +773,7 @@ Removed from Employee:
 **Pre-requisite decision required before starting:**
 
 - R2 bucket sharing — Option A: shared with Dev/Prod (zero setup, demo media available immediately, tenant-folder isolation only partially mitigates pollution risk). Option B: separate Demo bucket (clean isolation, but QR images / subtitles / certificates all missing until regenerated). Recommendation: **Option A** for initial bring-up, promote to isolated buckets before external customer demo sessions.
+- 5.31 must ship before Demo is brought up, or Demo will be created with the seeded literal credentials.
 
 **Missing environment variables (organised by block, see detailed spec in session notes):**
 
@@ -1191,6 +1192,31 @@ Files:
 - `src/Modules/ToolboxTalks/.../Queries/GetToolboxTalkDashboard/GetToolboxTalkDashboardQueryHandler.cs:23-30`
 
 ---
+
+## 5.31 — DataSeeder seeds credentialled accounts ungated in Production
+
+Priority: P1
+Origin: [Engineering]
+Status: ✅ Done — 2026-06-17 (see docs/5.31-dataseeder-gating-fix.md)
+Surfaced: 2026-06-17 during Playwright Step 2 recon (see docs/dataseeder-production-recon.md).
+
+DataSeeder.SeedAsync at Program.cs:332 runs unconditionally on every startup in every environment. It seeds two accounts with hardcoded literal passwords:
+
+superuser@certifiediq.ai / SuperUser123! (DataSeeder.cs:255–256) — SuperUser role
+admin@quantumbuild.ai / Admin123! (DataSeeder.cs:309–310) — Admin role
+
+Skip-if-exists guards (DataSeeder.cs:258, :315) prevent password overwrite on rolling restarts. Fresh-DB scenarios (new deploy on a clean instance, DB reset, Demo restore per §5.7) recreate the accounts with the literal passwords. Repo is private; credentials are known to two people; exposure is bounded but the pattern is wrong and should be fixed before §5.7's Demo refresh brings up another environment that would inherit them.
+Fix direction:
+
+Gate credentialled user-creation blocks in DataSeeder.cs behind Environment.IsDevelopment(). System data (roles, permissions, sectors, regulatory bodies) continues to seed in all environments.
+Replace literal passwords with config-driven values for the Development seeding path — sourced from environment variables or appsettings.Development.json per implementation recon's recommendation. No insecure fallback defaults — fail-fast on missing config.
+Add a regression test asserting DataSeeder does not create credentialled accounts when Environment != Development.
+Rotation of Production credentials can happen at the same time as the code fix or after — operational decision, not code-blocking.
+
+Adjacent: §5.7 (Demo refresh) must not bring up Demo without this fix in place, or Demo gets the seeded accounts with the literal passwords. Worth cross-referencing in §5.7.
+Out of scope for this entry: API keys in appsettings.json (separate finding — docs/dataseeder-production-recon.md Finding A).
+
+--- 
 
 # 7. Post-Phase-5 Cleanup
 

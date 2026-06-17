@@ -1409,6 +1409,17 @@ Archived notes 1-89 are in CLAUDE-archive.md
 
 **Workers:** locked to 1 (`fullyParallel: false`). The Dev DB is shared, and parallel runs are unsafe until Step 2 establishes per-test data isolation. Do not increase parallelism without revisiting test data strategy.
 
+**Note 31 — DataSeeder credentials are Development-only and config-sourced**: `DataSeeder.SeedAsync` creates two credentialled accounts (`superuser@certifiediq.ai` and `admin@quantumbuild.ai`) only when `IHostEnvironment.IsDevelopment()` returns true. Credentials are read from configuration:
+
+- `Seed:SuperUser:Email` / `Seed:SuperUser:Password`
+- `Seed:Admin:Email` / `Seed:Admin:Password`
+
+Defaults live in `appsettings.Development.json`. These are dev-only local credentials, not secrets. If credentials are missing from configuration, the seeder logs a warning and skips that account; it does not throw.
+
+**System data** (roles, permissions, sectors, regulatory bodies, lookup categories, language data, training categories, tenant modules) seeds unconditionally in all environments and is independent of the credential gate.
+
+**Bootstrap pattern for fresh non-Development environments** (Production, Demo per §5.7): per Note 20, SuperUser accounts must be seeded or created directly in the database. The application seeder no longer bootstraps the initial SuperUser outside Development. For a fresh Production or Demo deploy, the initial SuperUser must be inserted via direct DB script or pre-deploy migration, after which tenant Admins can be created via the application UI.
+
 ## Backlog
 
 ### High

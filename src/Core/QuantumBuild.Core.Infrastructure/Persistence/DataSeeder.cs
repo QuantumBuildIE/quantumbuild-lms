@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Hosting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using QuantumBuild.Core.Domain;
@@ -33,14 +35,34 @@ public static class DataSeeder
             var context = services.GetRequiredService<DbContext>();
             var userManager = services.GetRequiredService<UserManager<User>>();
             var roleManager = services.GetRequiredService<RoleManager<Role>>();
+            var environment = services.GetRequiredService<IHostEnvironment>();
+            var configuration = services.GetRequiredService<IConfiguration>();
 
             await SeedTenantsAsync(context, logger);
             await SeedPermissionsAsync(context, logger);
             await SeedRolesAsync(context, roleManager, logger);
             await SeedRolePermissionsAsync(context, logger);
-            await SeedSuperUserAsync(userManager, roleManager, logger);
-            await SeedAdminUserAsync(userManager, roleManager, logger);
-            await EnsureAdminEmployeeAsync(context, userManager, logger);
+
+            if (environment.IsDevelopment())
+            {
+                var superUserEmail = configuration["Seed:SuperUser:Email"];
+                var superUserPassword = configuration["Seed:SuperUser:Password"];
+                if (!string.IsNullOrEmpty(superUserEmail) && !string.IsNullOrEmpty(superUserPassword))
+                    await SeedSuperUserAsync(userManager, roleManager, superUserEmail, superUserPassword, logger);
+                else
+                    logger.LogWarning("Seed:SuperUser credentials not configured — skipping SuperUser seeding");
+
+                var adminEmail = configuration["Seed:Admin:Email"];
+                var adminPassword = configuration["Seed:Admin:Password"];
+                if (!string.IsNullOrEmpty(adminEmail) && !string.IsNullOrEmpty(adminPassword))
+                {
+                    await SeedAdminUserAsync(userManager, roleManager, adminEmail, adminPassword, logger);
+                    await EnsureAdminEmployeeAsync(context, userManager, adminEmail, logger);
+                }
+                else
+                    logger.LogWarning("Seed:Admin credentials not configured — skipping Admin seeding");
+            }
+
             await SeedLookupCategoriesAsync(context, logger);
             await SeedLanguageLookupAsync(context, logger);
             await SeedTrainingCategoriesAsync(context, logger);
@@ -250,10 +272,8 @@ public static class DataSeeder
         }
     }
 
-    private static async Task SeedSuperUserAsync(UserManager<User> userManager, RoleManager<Role> roleManager, ILogger logger)
+    private static async Task SeedSuperUserAsync(UserManager<User> userManager, RoleManager<Role> roleManager, string superUserEmail, string superUserPassword, ILogger logger)
     {
-        const string superUserEmail = "superuser@certifiediq.ai";
-        const string superUserPassword = "SuperUser123!";
 
         var existingUser = await userManager.FindByEmailAsync(superUserEmail);
         if (existingUser != null)
@@ -304,10 +324,8 @@ public static class DataSeeder
         }
     }
 
-    private static async Task SeedAdminUserAsync(UserManager<User> userManager, RoleManager<Role> roleManager, ILogger logger)
+    private static async Task SeedAdminUserAsync(UserManager<User> userManager, RoleManager<Role> roleManager, string adminEmail, string adminPassword, ILogger logger)
     {
-        const string adminEmail = "admin@quantumbuild.ai";
-        const string adminPassword = "Admin123!";
 
         var existingUser = await userManager.FindByEmailAsync(adminEmail);
         if (existingUser != null)
@@ -698,10 +716,9 @@ public static class DataSeeder
         }
     }
 
-    private static async Task EnsureAdminEmployeeAsync(DbContext context, UserManager<User> userManager, ILogger logger)
+    private static async Task EnsureAdminEmployeeAsync(DbContext context, UserManager<User> userManager, string adminEmail, ILogger logger)
     {
         var employees = context.Set<Employee>();
-        var adminEmail = "admin@quantumbuild.ai";
 
         var adminUser = await userManager.FindByEmailAsync(adminEmail);
         if (adminUser == null)

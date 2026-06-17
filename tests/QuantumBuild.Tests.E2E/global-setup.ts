@@ -3,8 +3,8 @@ import { FullConfig } from '@playwright/test';
 const API_BASE = process.env.API_BASE_URL || 'http://localhost:5222';
 
 const SEED_ADMIN = {
-  email: 'admin@quantumbuild.ai',
-  password: 'Admin123!',
+  email: process.env.SEED_ADMIN_EMAIL || 'admin@quantumbuild.ai',
+  password: process.env.SEED_ADMIN_PASSWORD || 'Admin123!',
 };
 
 const TEST_USERS = [
