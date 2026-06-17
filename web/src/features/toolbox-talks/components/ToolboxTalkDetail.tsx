@@ -26,6 +26,7 @@ import { PreviewModal } from './PreviewModal';
 import { ValidationHistoryTab } from './ValidationHistoryTab';
 import { SectionEditPanel } from './detail/SectionEditPanel';
 import { QuizEditPanel } from './detail/QuizEditPanel';
+import { TranslateStep } from './learning-wizard/steps/TranslateStep';
 import { useToolboxTalk, useDeleteToolboxTalk } from '@/lib/api/toolbox-talks';
 import { usePermission } from '@/lib/auth/use-auth';
 import { useWizardPreference } from '@/features/toolbox-talks/hooks/useWizardPreference';
@@ -89,6 +90,15 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
 
   const stats = talk.completionStats;
   const isPartOfCourse = talk.isPartOfCourse;
+  const hasTargetLanguages = (() => {
+    if (!talk.targetLanguageCodes) return false;
+    try {
+      const parsed = JSON.parse(talk.targetLanguageCodes);
+      return Array.isArray(parsed) && parsed.length > 0;
+    } catch {
+      return false;
+    }
+  })();
 
   return (
     <div className="space-y-6">
@@ -214,10 +224,13 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
         </div>
       )}
 
-      {/* Tabs: Overview / Validation */}
+      {/* Tabs: Overview / Translations / Validation */}
       <Tabs defaultValue="overview">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          {!isPartOfCourse && !previewMode && (
+            <TabsTrigger value="translations">Translations</TabsTrigger>
+          )}
           {!isPartOfCourse && !previewMode && (
             <TabsTrigger value="validation">Validation</TabsTrigger>
           )}
@@ -328,6 +341,19 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
           {/* Quiz Questions — inline editable for new-wizard talks */}
           <QuizEditPanel talk={talk} onRefetch={refetch} />
         </TabsContent>
+
+        {!isPartOfCourse && !previewMode && (
+          <TabsContent value="translations" className="mt-4">
+            {hasTargetLanguages ? (
+              <TranslateStep talkId={talkId} />
+            ) : (
+              <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
+                <p className="text-sm font-medium">No target languages configured for this talk</p>
+                <p className="text-xs mt-1">Languages must be added at creation time.</p>
+              </div>
+            )}
+          </TabsContent>
+        )}
 
         {!isPartOfCourse && !previewMode && (
           <TabsContent value="validation" className="mt-4">

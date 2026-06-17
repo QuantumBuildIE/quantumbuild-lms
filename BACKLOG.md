@@ -1781,7 +1781,7 @@ Without edit, the new wizard is creation-only. Tenants toggled to the new wizard
 
 Phase 5.6 (cutover toggle) should not enable any tenant for production rollout until at least the highest-priority sub-chunks of this work are shipped. Recommended minimum before any rollout: chunks 1, 2, 3, and the Rule-8 stale gate (chunk 6).
 
-**Chunk 1 (inline section & quiz edit on talk detail page) shipped 2026-06-17.** Remaining chunks: 2 (TranslateStep lift), 3 (ValidateStep lift), 4 (settings editing), 5 (add target language), 6 (Rule-8 stale gate). Demo cut requires chunks 2 and 3; toggle-flip cut additionally requires chunk 6.
+**Chunks 1 (inline section & quiz edit) and 2 (TranslateStep lift to detail page) shipped 2026-06-17.** Remaining chunks: 3 (ValidateStep lift), 4 (settings editing), 5 (add target language), 6 (Rule-8 stale gate). Demo cut additionally requires chunk 3; toggle-flip cut additionally requires chunk 6.
 
 ---
 
