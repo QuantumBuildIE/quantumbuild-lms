@@ -1401,6 +1401,14 @@ Archived notes 1-89 are in CLAUDE-archive.md
 
 **Eventual removal (§7.1):** when all tenants are on the new wizard and the legacy wizard is decommissioned, remove: the `UseNewWizard` key, `useWizardPreference` hook, `WizardToggleSection` component, `wizard-toggle-section.tsx`, and the Legacy badge logic in `drafts/page.tsx`.
 
+**Note 30 — Running Playwright E2E tests locally**: Playwright is installed in `web/`. Tests live under `web/e2e/`. Run with `npm run e2e` from `web/`. Variants: `e2e:ui` (Playwright UI mode, recommended for debugging), `e2e:headed` (visible browser), `e2e:debug` (step-through), `e2e:report` (open the last HTML report).
+
+**Prerequisites:** the Next.js dev server must be running at `http://localhost:3000` (`npm run dev` from `web/`). The .NET API must be running at `http://localhost:5222` (`dotnet run` from `src/QuantumBuild.API`). PostgreSQL must be up. Playwright does not spawn these for you in the current config.
+
+**Current coverage:** one unauthenticated smoke test (`login-page.spec.ts`) that verifies the login page renders. Step 2 of the Playwright work will create a dedicated test tenant and test users and build authenticated coverage on top of this base.
+
+**Workers:** locked to 1 (`fullyParallel: false`). The Dev DB is shared, and parallel runs are unsafe until Step 2 establishes per-test data isolation. Do not increase parallelism without revisiting test data strategy.
+
 ## Backlog
 
 ### High
