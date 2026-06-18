@@ -1920,4 +1920,27 @@ Screenshots 2026-06-14: validation run detail page for "Validation Run — NL" w
 
 ---
 
+## 24 — New wizard visual polish to parity with legacy
+
+Priority: P0 — blocks §5.7 (Demo refresh) closure and blocks the wizard cutover toggle being flipped for paying tenants.
+Origin: [Engineering] [Demo refresh discovery 2026-06-18]
+Status: Open
+Surfaced: During §5.7 Demo refresh smoke verify. Side-by-side comparison of the new wizard against the legacy revealed the new wizard ships with significantly less visual polish — flat field stack vs the legacy's card-based layout, no subsection markers, tile selectors not styled, no helper text patterns, etc. Functional but visibly unfinished.
+
+Scope: Bring the new wizard's visual layer to at minimum legacy parity. Cards, subsection markers, tile selectors, toggle patterns, helper text, step indicator subtitles. All wizard steps (Input & Config, Parse, Quiz, Settings, Translate, Validate, Publish) plus the §24 edit panels on the talk detail page (SectionEditPanel, QuizEditPanel, SettingsEditPanel, AddTargetLanguagePicker).
+Blocks:
+
+§5.7 closure (Demo can't be declared done with the wizard looking like a draft)
+Wizard cutover toggle being flipped for paying tenants (cutover at this visual standard generates "why does the new one look worse" feedback)
+
+Definition of done:
+
+New wizard renders with visual polish at parity with legacy
+Both wizards screenshotted side-by-side in the implementation report for verification
+Phase 7.4–7.6 smoke verify on Demo passes end-to-end
+§5.7 unblocked and closed
+Cutover toggle ready to flip for real tenants
+
+---
+
 _End of BACKLOG.md._
