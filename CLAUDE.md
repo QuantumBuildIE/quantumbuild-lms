@@ -1403,7 +1403,9 @@ Archived notes 1-89 are in CLAUDE-archive.md
 
 **Note 30 — Running Playwright E2E tests locally**: Playwright is installed in `web/`. Tests live under `web/e2e/`. Run with `npm run e2e` from `web/`. Variants: `e2e:ui` (Playwright UI mode, recommended for debugging), `e2e:headed` (visible browser), `e2e:debug` (step-through), `e2e:report` (open the last HTML report).
 
-**Prerequisites:** the Next.js dev server must be running at `http://localhost:3000` (`npm run dev` from `web/`). The .NET API must be running at `http://localhost:5222` (`dotnet run` from `src/QuantumBuild.API`). PostgreSQL must be up. Playwright does not spawn these for you in the current config.
+**Prerequisites:** Playwright auto-spawns the Next.js dev server via the `webServer` config (reuses an existing server at `http://localhost:3000` if one is already running). No manual `npm run dev` step required for `npm run e2e`.
+
+The current Step 1 smoke (`login-page.spec.ts`) does not require the .NET API or PostgreSQL — it only verifies the login page renders. When Step 2's authenticated tests land, the .NET API (`dotnet run` from `src/QuantumBuild.API`) and PostgreSQL will become hard prerequisites.
 
 **Current coverage:** one unauthenticated smoke test (`login-page.spec.ts`) that verifies the login page renders. Step 2 of the Playwright work will create a dedicated test tenant and test users and build authenticated coverage on top of this base.
 
