@@ -47,6 +47,9 @@ public record UpdateToolboxTalkCommand : IRequest<ToolboxTalkDto>
     public bool RequiresRefresher { get; init; } = false;
     public int RefresherIntervalMonths { get; init; } = 12;
 
+    // Quiz retry setting
+    public bool AllowRetry { get; init; } = true;
+
     /// <summary>
     /// Content sections for this toolbox talk.
     /// Sections with null Id are created, existing sections are updated,

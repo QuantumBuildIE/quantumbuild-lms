@@ -120,6 +120,7 @@ export function SectionEditPanel({ talk, onRefetch }: SectionEditPanelProps) {
           autoAssignDueDays: talk.autoAssignDueDays,
           generateSlidesFromPdf: talk.generateSlidesFromPdf,
           generateCertificate: talk.generateCertificate,
+          allowRetry: talk.allowRetry,
           requiresRefresher: talk.requiresRefresher,
           refresherIntervalMonths: talk.refresherIntervalMonths,
           sections: editedSections.map((s, i) => ({

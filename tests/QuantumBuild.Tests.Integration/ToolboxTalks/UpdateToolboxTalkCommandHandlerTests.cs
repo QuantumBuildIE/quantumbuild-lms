@@ -396,6 +396,44 @@ public class UpdateToolboxTalkCommandHandlerTests : IntegrationTestBase
         deTranslation!.NeedsRevalidation.Should().BeTrue();
     }
 
+    // 10 — Explicit RefresherIntervalMonths honored over Frequency mapper
+    //      Regression guard: before the fix, Frequency=Monthly would silently overwrite
+    //      RefresherIntervalMonths=3 (quarterly) with 1 (monthly).
+    [Fact]
+    public async Task ExplicitRefresherFields_HonoredOverFrequencyMapper()
+    {
+        var talkTitle = UniqueTitle("ExplicitRefresher");
+
+        // Arrange — create a talk with default refresher settings
+        var talk = await CreateTalkAsync(talkTitle,
+            new SectionCreateDto(1, "Section", "<p>Content</p>", true));
+
+        // Act — PUT with explicit quarterly refresher (3 months) but Frequency=Monthly
+        // (Monthly is the nearest legacy bucket for quarterly, but must NOT override the explicit 3).
+        var response = await AdminClient.PutAsJsonAsync($"/api/toolbox-talks/{talk.Id}", new
+        {
+            Id = talk.Id,
+            Title = talk.Title,
+            Frequency = ToolboxTalkFrequency.Monthly,   // legacy bucket (nearest for quarterly)
+            RequiresRefresher = true,
+            RefresherIntervalMonths = 3,                // explicit quarterly value
+            RequiresQuiz = false,
+            IsActive = true,
+            Sections = talk.Sections.Select(s => new { s.Id, s.SectionNumber, s.Title, s.Content, s.RequiresAcknowledgment }),
+            Questions = Array.Empty<object>()
+        });
+        response.StatusCode.Should().Be(System.Net.HttpStatusCode.OK);
+
+        // Assert — DB must have the explicit 3-month interval, NOT the mapper's 1-month output
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var dbTalk = await db.Set<QuantumBuild.Modules.ToolboxTalks.Domain.Entities.ToolboxTalk>()
+            .IgnoreQueryFilters()
+            .FirstAsync(t => t.Id == talk.Id);
+        dbTalk.RequiresRefresher.Should().BeTrue();
+        dbTalk.RefresherIntervalMonths.Should().Be(3, "explicit quarterly value must survive the Frequency=Monthly mapper");
+    }
+
     // ── local DTOs (private to this test class) ────────────────────────────────
 
     private record SectionCreateDto(

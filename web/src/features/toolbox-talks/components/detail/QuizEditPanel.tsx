@@ -212,6 +212,7 @@ export function QuizEditPanel({ talk, onRefetch }: QuizEditPanelProps) {
           autoAssignDueDays: talk.autoAssignDueDays,
           generateSlidesFromPdf: talk.generateSlidesFromPdf,
           generateCertificate: talk.generateCertificate,
+          allowRetry: talk.allowRetry,
           requiresRefresher: talk.requiresRefresher,
           refresherIntervalMonths: talk.refresherIntervalMonths,
           // Preserve existing sections unchanged

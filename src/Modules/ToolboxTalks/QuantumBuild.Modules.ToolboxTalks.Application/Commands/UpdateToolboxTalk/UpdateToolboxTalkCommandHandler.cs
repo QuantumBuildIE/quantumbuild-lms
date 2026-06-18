@@ -128,19 +128,26 @@ public class UpdateToolboxTalkCommandHandler : IRequestHandler<UpdateToolboxTalk
         toolboxTalk.ShuffleQuestions = request.RequiresQuiz && request.ShuffleQuestions;
         toolboxTalk.ShuffleOptions = request.RequiresQuiz && request.ShuffleOptions;
         toolboxTalk.UseQuestionPool = request.RequiresQuiz && request.UseQuestionPool;
+        toolboxTalk.AllowRetry = request.AllowRetry;
         toolboxTalk.AutoAssignToNewEmployees = request.AutoAssignToNewEmployees;
         toolboxTalk.AutoAssignDueDays = request.AutoAssignDueDays;
         toolboxTalk.SourceLanguageCode = request.SourceLanguageCode;
         toolboxTalk.GenerateSlidesFromPdf = request.GenerateSlidesFromPdf;
         toolboxTalk.GenerateCertificate = request.GenerateCertificate;
 
-        // Derive canonical refresher fields from the legacy Frequency that the old edit
-        // form submitted. This prevents the old form from silently writing RequiresRefresher=false
-        // (the DTO default for an absent field) over a new-wizard Step 4 configuration.
-        // request.RequiresRefresher / request.RefresherIntervalMonths are intentionally ignored
-        // here — Frequency is the old wizard's single write point for refresher intent.
-        (toolboxTalk.RequiresRefresher, toolboxTalk.RefresherIntervalMonths) =
-            RefresherFrequencyMapper.ToCanonicalFields(request.Frequency, toolboxTalk.RefresherIntervalMonths);
+        // Honor explicit refresher fields from new-wizard and detail-page payloads;
+        // fall back to the Frequency mapper only for legacy edit-form submissions that
+        // omit these fields (they arrive as the DTO defaults: false and 12).
+        if (request.RequiresRefresher || request.RefresherIntervalMonths != 12)
+        {
+            toolboxTalk.RequiresRefresher = request.RequiresRefresher;
+            toolboxTalk.RefresherIntervalMonths = request.RefresherIntervalMonths;
+        }
+        else
+        {
+            (toolboxTalk.RequiresRefresher, toolboxTalk.RefresherIntervalMonths) =
+                RefresherFrequencyMapper.ToCanonicalFields(request.Frequency, toolboxTalk.RefresherIntervalMonths);
+        }
         toolboxTalk.UpdatedAt = DateTime.UtcNow;
         toolboxTalk.UpdatedBy = _currentUser.UserId;
 
@@ -466,6 +473,7 @@ public class UpdateToolboxTalkCommandHandler : IRequestHandler<UpdateToolboxTalk
             ShuffleQuestions = entity.ShuffleQuestions,
             ShuffleOptions = entity.ShuffleOptions,
             UseQuestionPool = entity.UseQuestionPool,
+            AllowRetry = entity.AllowRetry,
             IsPartOfCourse = entity.IsPartOfCourse,
             AutoAssignToNewEmployees = entity.AutoAssignToNewEmployees,
             AutoAssignDueDays = entity.AutoAssignDueDays,

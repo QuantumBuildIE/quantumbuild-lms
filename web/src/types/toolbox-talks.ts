@@ -631,6 +631,7 @@ export interface CreateToolboxTalkRequest {
   shuffleQuestions?: boolean;
   shuffleOptions?: boolean;
   useQuestionPool?: boolean;
+  allowRetry?: boolean;
   // Source language
   sourceLanguageCode?: string;
   // Auto-assignment settings
