@@ -19,6 +19,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DeleteConfirmationDialog } from '@/components/shared/delete-confirmation-dialog';
@@ -27,8 +28,10 @@ import { ValidationHistoryTab } from './ValidationHistoryTab';
 import { SectionEditPanel } from './detail/SectionEditPanel';
 import { QuizEditPanel } from './detail/QuizEditPanel';
 import { TranslateStep } from './learning-wizard/steps/TranslateStep';
+import { ValidateStep } from './learning-wizard/steps/ValidateStep';
 import { parseLanguageCodes } from '@/features/toolbox-talks/utils/parseLanguageCodes';
 import { useToolboxTalk, useDeleteToolboxTalk } from '@/lib/api/toolbox-talks';
+import { useValidationRuns } from '@/lib/api/toolbox-talks/use-content-creation';
 import { usePermission } from '@/lib/auth/use-auth';
 import { useWizardPreference } from '@/features/toolbox-talks/hooks/useWizardPreference';
 import type { ToolboxTalk } from '@/types/toolbox-talks';
@@ -52,6 +55,7 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
 
   const { data: talk, isLoading, error, refetch } = useToolboxTalk(talkId);
   const deleteMutation = useDeleteToolboxTalk();
+  const { data: validationRuns, isLoading: validationRunsLoading } = useValidationRuns(talkId);
   const wizardPreference = useWizardPreference();
 
   const handleDelete = async () => {
@@ -350,7 +354,23 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
 
         {!isPartOfCourse && !previewMode && (
           <TabsContent value="validation" className="mt-4">
-            <ValidationHistoryTab talkId={talkId} basePath={basePath} />
+            {validationRunsLoading ? (
+              <div className="space-y-3">
+                {[...Array(3)].map((_, i) => (
+                  <Skeleton key={i} className="h-12 w-full" />
+                ))}
+              </div>
+            ) : (validationRuns ?? []).length === 0 ? (
+              <div className="rounded-md border border-dashed border-muted-foreground/30 p-6 text-center text-sm text-muted-foreground">
+                No validation runs yet. Start a translation to begin validation.
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <ValidateStep talkId={talkId} />
+                <Separator />
+                <ValidationHistoryTab talkId={talkId} basePath={basePath} />
+              </div>
+            )}
           </TabsContent>
         )}
       </Tabs>
