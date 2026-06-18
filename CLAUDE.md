@@ -1423,7 +1423,7 @@ Archived notes 1-89 are in CLAUDE-archive.md
 
 **Adding new authenticated tests:** create files under `web/e2e/authenticated/`. They automatically inherit the SuperUser storage state. Read-only tests need no setup/teardown. Write tests must use the Playwright `request` fixture for API-based setup and cleanup in `beforeEach`/`afterEach`.
 
-**Note 31 — DataSeeder credentials are Development-only and config-sourced**: `DataSeeder.SeedAsync` creates two credentialled accounts (`superuser@certifiediq.ai` and `admin@quantumbuild.ai`) only when `IHostEnvironment.IsDevelopment()` returns true. Credentials are read from configuration:
+**Note 31 — DataSeeder credentials are Development and Demo-sourced from config**: `DataSeeder.SeedAsync` creates two credentialled accounts only when `environment.IsDevelopment() || environment.IsEnvironment("Demo")` is true. Credentials are read from configuration:
 
 - `Seed:SuperUser:Email` / `Seed:SuperUser:Password`
 - `Seed:Admin:Email` / `Seed:Admin:Password`
@@ -1432,7 +1432,10 @@ Defaults live in `appsettings.Development.json`. These are dev-only local creden
 
 **System data** (roles, permissions, sectors, regulatory bodies, lookup categories, language data, training categories, tenant modules) seeds unconditionally in all environments and is independent of the credential gate.
 
-**Bootstrap pattern for fresh non-Development environments** (Production, Demo per §5.7): per Note 20, SuperUser accounts must be seeded or created directly in the database. The application seeder no longer bootstraps the initial SuperUser outside Development. For a fresh Production or Demo deploy, the initial SuperUser must be inserted via direct DB script or pre-deploy migration, after which tenant Admins can be created via the application UI.
+**Bootstrap pattern by environment:**
+
+- **Demo:** Seeded automatically on first deploy provided `Seed__SuperUser__Email`, `Seed__SuperUser__Password`, `Seed__Admin__Email`, and `Seed__Admin__Password` are set as Railway env vars (ASP.NET Core env-var separator is `__` not `:`). Missing values log a warning and skip that account — no throw.
+- **Production:** SuperUser must still be inserted via direct DB script or pre-deploy migration (per Note 20). The seeder does not run for Production.
 
 ## Backlog
 

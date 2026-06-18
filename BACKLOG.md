@@ -1198,6 +1198,7 @@ Files:
 Priority: P1
 Origin: [Engineering]
 Status: ✅ Done — 2026-06-17 (see docs/5.31-dataseeder-gating-fix.md)
+**Amendment 2026-06-18:** Gate widened to include Demo environment per §5.7 requirement. See docs/5.31-amendment-fix.md.
 Surfaced: 2026-06-17 during Playwright Step 2 recon (see docs/dataseeder-production-recon.md).
 
 DataSeeder.SeedAsync at Program.cs:332 runs unconditionally on every startup in every environment. It seeds two accounts with hardcoded literal passwords:

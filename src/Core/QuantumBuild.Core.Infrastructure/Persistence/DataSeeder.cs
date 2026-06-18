@@ -43,7 +43,7 @@ public static class DataSeeder
             await SeedRolesAsync(context, roleManager, logger);
             await SeedRolePermissionsAsync(context, logger);
 
-            if (environment.IsDevelopment())
+            if (environment.IsDevelopment() || environment.IsEnvironment("Demo"))
             {
                 var superUserEmail = configuration["Seed:SuperUser:Email"];
                 var superUserPassword = configuration["Seed:SuperUser:Password"];
