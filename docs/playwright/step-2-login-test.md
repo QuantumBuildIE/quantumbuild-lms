@@ -107,3 +107,40 @@ Every future authenticated test inherits from this work:
 The auth fixture will stay fresh for the full test run (access tokens are 60 min; the setup project runs at the start of each `npm run e2e` invocation).
 
 For non-SuperUser roles (Admin, Supervisor, Operator): create additional setup files (e.g., `admin.setup.ts`) following the same pattern as `auth.setup.ts`, register a second setup project in `playwright.config.ts`, and add a corresponding authenticated project with its own `storageState` path.
+
+---
+
+## Addendum — SuperUser identity verification (2026-06-18)
+
+### Option chosen: Option B (API call from inside the test)
+
+**Why not Option A (add `data-testid` to TopNav email element):** The email is rendered inside `DropdownMenuContent` — a Radix UI portal that is not in the DOM until the user clicks the avatar. Testing it would require an extra click step and relies on UI rendering details. Option B is faster and more direct.
+
+**What the assertion now verifies:**
+
+The test now does two things, not one:
+
+1. `page.getByRole("heading", { name: "Tenants", level: 1 })` — proves SOME authenticated session reached the correct page.
+2. The `/api/auth/me` assertion — proves the token in `localStorage` belongs to the SuperUser account specifically, by asserting `body.email === "superuser@certifiediq.ai"` and `body.isSuperUser === true`.
+
+A wrong-user auth bug (e.g., auth setup accidentally logged in as the tenant Admin) would pass assertion 1 but fail assertion 2. The test now catches that class of silent failure.
+
+**How it works:**
+
+```typescript
+const token = await page.evaluate(() => localStorage.getItem("accessToken"));
+// JWT is stored under "accessToken" key in localStorage (see auth-context.tsx getStoredToken)
+
+const response = await page.request.get(
+  "http://localhost:5222/api/auth/me",
+  { headers: { Authorization: `Bearer ${token!}` } }
+);
+// /api/auth/me returns a direct DTO (no Result<T> envelope) — see Note 18 in CLAUDE.md
+
+expect(body.email).toBe(SUPERUSER_EMAIL);     // "superuser@certifiediq.ai"
+expect(body.isSuperUser).toBe(true);           // JWT claim is_super_user === "true"
+```
+
+**Credential constant:** `SUPERUSER_EMAIL` uses the same `process.env.SEED_SUPERUSER_EMAIL || "superuser@certifiediq.ai"` pattern as `auth.setup.ts` — both sides stay in sync if the env var is set.
+
+**No selectors added:** Option B required no changes to any production source file. Only `login-flow.spec.ts` was modified.
