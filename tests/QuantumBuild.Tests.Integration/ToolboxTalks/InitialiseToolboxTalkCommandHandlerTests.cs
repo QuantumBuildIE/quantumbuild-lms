@@ -89,7 +89,7 @@ public class InitialiseToolboxTalkCommandHandlerTests : IntegrationTestBase
         result.Id.Should().NotBeEmpty();
         result.Title.Should().Be(title);
         result.Status.Should().Be(ToolboxTalkStatus.Draft);
-        result.IsActive.Should().BeFalse();
+        result.IsActive.Should().BeTrue(); // reflects test-tenant DefaultIsActive = true (entity default)
         result.LastEditedStep.Should().Be(1);
         result.ReviewerName.Should().Be("Alice Tester");
         result.ReviewerOrg.Should().Be("Test Org");
