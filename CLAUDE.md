@@ -1403,13 +1403,25 @@ Archived notes 1-89 are in CLAUDE-archive.md
 
 **Note 30 — Running Playwright E2E tests locally**: Playwright is installed in `web/`. Tests live under `web/e2e/`. Run with `npm run e2e` from `web/`. Variants: `e2e:ui` (Playwright UI mode, recommended for debugging), `e2e:headed` (visible browser), `e2e:debug` (step-through), `e2e:report` (open the last HTML report).
 
-**Prerequisites:** Playwright auto-spawns the Next.js dev server via the `webServer` config (reuses an existing server at `http://localhost:3000` if one is already running). No manual `npm run dev` step required for `npm run e2e`.
+**Prerequisites:**
+- **PostgreSQL** — must be running (Playwright does not start it)
+- **Next.js dev server** — auto-spawned via `webServer` config; reuses `http://localhost:3000` if already running
+- **CORS** — `playwright.config.ts` injects `Cors__AllowedOrigins__0=http://localhost:3000` as an env var when it spawns the API. If you run the API manually before `npm run e2e`, add this to your local (gitignored) `appsettings.Development.json` instead: `{ "Cors": { "AllowedOrigins": ["http://localhost:3000"] } }` — without this, Chromium cannot reach the API from the Next.js origin.
 
-The current Step 1 smoke (`login-page.spec.ts`) does not require the .NET API or PostgreSQL — it only verifies the login page renders. When Step 2's authenticated tests land, the .NET API (`dotnet run` from `src/QuantumBuild.API`) and PostgreSQL will become hard prerequisites.
+**Auto-spawned servers:** `webServer` in `playwright.config.ts` manages both the Next.js dev server AND the .NET API (`dotnet run --project ../src/QuantumBuild.API --launch-profile http`). Playwright polls `http://localhost:5222/health` until the API is ready before running tests. If either server is already running, Playwright reuses it and leaves it alive after tests complete.
 
-**Current coverage:** one unauthenticated smoke test (`login-page.spec.ts`) that verifies the login page renders. Step 2 of the Playwright work will create a dedicated test tenant and test users and build authenticated coverage on top of this base.
+**Project structure:** three projects — `setup` (runs `auth.setup.ts` once, saves SuperUser session to `e2e/.auth/superuser.json`), `unauthenticated` (root-level `e2e/*.spec.ts`, no auth state), `authenticated` (files under `e2e/authenticated/`, loads SuperUser session automatically). The setup project must succeed for authenticated tests to run.
 
-**Workers:** locked to 1 (`fullyParallel: false`). The Dev DB is shared, and parallel runs are unsafe until Step 2 establishes per-test data isolation. Do not increase parallelism without revisiting test data strategy.
+**Auth credentials:** SuperUser (`superuser@certifiediq.ai` / `SuperUser123!`) from `appsettings.Development.json` Seed section. Session saved to `web/e2e/.auth/superuser.json` — gitignored, never committed.
+
+**Current coverage:**
+- `e2e/login-page.spec.ts` — unauthenticated smoke: login page renders
+- `e2e/auth.setup.ts` — setup project: logs in as SuperUser, saves session state
+- `e2e/authenticated/login-flow.spec.ts` — authenticated: SuperUser reaches `/admin/tenants`
+
+**Workers:** locked to 1 (`fullyParallel: false`). The Dev DB is shared, and parallel runs are unsafe until per-test data isolation is established. Do not increase without revisiting test data strategy.
+
+**Adding new authenticated tests:** create files under `web/e2e/authenticated/`. They automatically inherit the SuperUser storage state. Read-only tests need no setup/teardown. Write tests must use the Playwright `request` fixture for API-based setup and cleanup in `beforeEach`/`afterEach`.
 
 **Note 31 — DataSeeder credentials are Development-only and config-sourced**: `DataSeeder.SeedAsync` creates two credentialled accounts (`superuser@certifiediq.ai` and `admin@quantumbuild.ai`) only when `IHostEnvironment.IsDevelopment()` returns true. Credentials are read from configuration:
 

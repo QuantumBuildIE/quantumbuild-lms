@@ -110,6 +110,7 @@ function LoginForm() {
               onChange={(e) => setEmail(e.target.value)}
               disabled={loading}
               autoComplete="email"
+              data-testid="login-email-input"
             />
           </div>
           <div className="space-y-2">
@@ -122,6 +123,7 @@ function LoginForm() {
               onChange={(e) => setPassword(e.target.value)}
               disabled={loading}
               autoComplete="current-password"
+              data-testid="login-password-input"
             />
           </div>
           <div className="flex items-center space-x-2">
@@ -138,7 +140,7 @@ function LoginForm() {
               Keep me logged in
             </Label>
           </div>
-          <Button type="submit" className="w-full" disabled={loading}>
+          <Button type="submit" className="w-full" disabled={loading} data-testid="login-submit-button">
             {loading ? "Signing in..." : "Sign In"}
           </Button>
         </form>
