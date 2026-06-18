@@ -28,6 +28,7 @@ import { PreviewModal } from './PreviewModal';
 import { ValidationHistoryTab } from './ValidationHistoryTab';
 import { SectionEditPanel } from './detail/SectionEditPanel';
 import { QuizEditPanel } from './detail/QuizEditPanel';
+import { SettingsEditPanel } from './detail/SettingsEditPanel';
 import { TranslateStep } from './learning-wizard/steps/TranslateStep';
 import { ValidateStep } from './learning-wizard/steps/ValidateStep';
 import { parseLanguageCodes } from '@/features/toolbox-talks/utils/parseLanguageCodes';
@@ -351,6 +352,9 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
               </AlertDescription>
             </Alert>
           )}
+
+          {/* Settings — inline editable for new-wizard talks */}
+          <SettingsEditPanel talk={talk} onRefetch={refetch} />
 
           {/* Sections — inline editable for new-wizard talks */}
           <SectionEditPanel talk={talk} onRefetch={refetch} />
