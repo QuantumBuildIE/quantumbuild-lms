@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -19,6 +19,10 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Card, CardContent } from '@/components/ui/card';
+import { WizardSectionDivider } from '@/components/ui/wizard-section-divider';
 import {
   Select,
   SelectContent,
@@ -41,6 +45,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth/use-auth';
 import { useLookupValues } from '@/hooks/use-lookups';
+import { useAllCompanies } from '@/lib/api/admin/use-companies';
 import { useTenantSectors, useAvailableSectors } from '@/lib/api/admin/use-tenant-sectors';
 import { useTenantSettings } from '@/lib/api/admin/use-tenant-settings';
 import { useAvailableLanguages } from '@/lib/api/toolbox-talks/use-subtitle-processing';
@@ -68,6 +73,15 @@ const AUDIENCE_ROLE_OPTIONS = [
 
 const DEFAULT_PASS_THRESHOLDS = [50, 60, 70, 75, 80, 85, 90, 95];
 
+const DEFAULT_AUDIT_PURPOSES = [
+  'Regulatory Compliance',
+  'Internal Learning',
+  'Safety Certification',
+  'Client Requirement',
+  'Quality Assurance',
+  'Onboarding',
+];
+
 // ============================================
 // Component
 // ============================================
@@ -77,30 +91,53 @@ export function InputConfigStep() {
   const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectedFileRef = useRef<File | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [auditPurposeMode, setAuditPurposeMode] = useState<'preset' | 'custom'>('preset');
+  const [customAuditPurpose, setCustomAuditPurpose] = useState('');
 
   // Data queries
   const { data: languages = [], isLoading: languagesLoading } = useLookupValues('Language');
   const { data: availableLanguages } = useAvailableLanguages();
   const { data: tenantSettings } = useTenantSettings();
+  const { data: companies = [], isLoading: companiesLoading } = useAllCompanies();
   const tenantId = user?.tenantId ?? '';
-  const { data: tenantSectors = [], isLoading: tenantSectorsLoading, isError: tenantSectorsError } =
-    useTenantSectors(tenantId);
+  const {
+    data: tenantSectors = [],
+    isLoading: tenantSectorsLoading,
+    isError: tenantSectorsError,
+  } = useTenantSectors(tenantId);
   const { data: allSectors = [] } = useAvailableSectors();
 
   const initialiseMutation = useInitialiseToolboxTalk();
   const { upload, progress, isUploading, error: uploadError, reset: resetUpload } = useUploadSourceFile();
 
-  // Derive default pass threshold from tenant settings
-  const defaultPassThreshold = (() => {
+  // Derive pass thresholds and default from tenant settings
+  const passThresholds = (() => {
     const raw = tenantSettings?.['ValidationPassThresholds'];
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as number[];
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed.sort((a, b) => a - b);
       } catch { /* ignore */ }
     }
-    return 75;
+    return DEFAULT_PASS_THRESHOLDS;
   })();
+
+  const defaultPassThreshold = passThresholds[0] ?? 75;
+
+  // Derive audit purposes from tenant settings
+  const auditPurposes = (() => {
+    const raw = tenantSettings?.['ValidationAuditPurposes'];
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as string[];
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch { /* ignore */ }
+    }
+    return DEFAULT_AUDIT_PURPOSES;
+  })();
+
+  const companyList = Array.isArray(companies) ? companies : [];
 
   // ---- Form setup ----
   const form = useForm<InputConfigValues>({
@@ -131,6 +168,10 @@ export function InputConfigStep() {
   });
 
   const inputMode = form.watch('inputMode');
+  const sourceText = form.watch('sourceText');
+  const sourceFileName = form.watch('sourceFileName');
+  const videoUrl = form.watch('videoUrl');
+  const { errors } = form.formState;
 
   // Pre-populate reviewer defaults from JWT user
   useEffect(() => {
@@ -156,14 +197,11 @@ export function InputConfigStep() {
     }
   }, [availableLanguages, form]);
 
-  // ---- Sector 3-case branching ----
-  // Case 1: Single sector → auto-lock (no dropdown)
-  // Case 2: Multiple sectors → required dropdown
-  // Case 3: No sectors or error → optional dropdown over all sectors with an alert
+  // Sector auto-select
   useEffect(() => {
     if (tenantSectorsLoading || tenantSectorsError) return;
     const current = form.getValues('sectorKey');
-    if (current) return; // already set
+    if (current) return;
     if (tenantSectors.length === 1) {
       form.setValue('sectorKey', tenantSectors[0].sectorKey, { shouldDirty: false });
     } else if (tenantSectors.length > 1) {
@@ -174,12 +212,11 @@ export function InputConfigStep() {
     }
   }, [tenantSectors, tenantSectorsLoading, tenantSectorsError, form]);
 
-  // Reset file state when mode changes away from file mode
+  // Reset file state when mode changes
   const handleModeChange = useCallback(
     (mode: InputConfigValues['inputMode']) => {
       form.setValue('inputMode', mode);
       if (mode !== inputMode) {
-        // Clear source-specific fields
         form.setValue('sourceText', '');
         form.setValue('sourceFileUrl', undefined);
         form.setValue('sourceFileName', undefined);
@@ -194,12 +231,9 @@ export function InputConfigStep() {
     [inputMode, form, resetUpload]
   );
 
-  // ---- File selection ----
-  const handleFileChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-
+  // File selection (shared by click and drag-and-drop)
+  const handleFileSelected = useCallback(
+    (file: File) => {
       const isPdf = inputMode === 'Pdf';
       const maxSize = isPdf ? 50 * 1024 * 1024 : 500 * 1024 * 1024;
       const allowed = isPdf
@@ -216,13 +250,19 @@ export function InputConfigStep() {
       }
 
       selectedFileRef.current = file;
-      // Show the filename immediately; URL is uploaded on Continue
       form.setValue('sourceFileName', file.name, { shouldValidate: false });
       form.setValue('sourceFileType', file.type, { shouldValidate: false });
-      // Clear any previous URL so the cross-field rule doesn't pass from a stale upload
       form.setValue('sourceFileUrl', undefined, { shouldValidate: false });
     },
     [inputMode, form]
+  );
+
+  const handleFileChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) handleFileSelected(file);
+    },
+    [handleFileSelected]
   );
 
   const handleRemoveFile = useCallback(() => {
@@ -234,14 +274,13 @@ export function InputConfigStep() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   }, [form, resetUpload]);
 
-  // ---- Continue / submit ----
+  // Continue / submit
   const onSubmit = useCallback(
     async (values: InputConfigValues) => {
       let finalSourceFileUrl = values.sourceFileUrl;
       let finalSourceFileName = values.sourceFileName;
       let finalSourceFileType = values.sourceFileType;
 
-      // Upload file if one was selected but not yet uploaded
       if (selectedFileRef.current && !finalSourceFileUrl) {
         try {
           const result = await upload(selectedFileRef.current);
@@ -287,22 +326,16 @@ export function InputConfigStep() {
   );
 
   const isSubmitting = initialiseMutation.isPending || isUploading;
-  const { errors } = form.formState;
 
-  // ---- Language options ----
+  // Language options
   const languageOptions: MultiSelectOption[] = languages.map(
     (lang) => ({ value: lang.code, label: lang.name })
   );
 
-  // ---- Sector UI ----
-  // Three-case sector branching:
-  //   1) 0 sectors (or error) → optional dropdown over allSectors + warning alert
-  //   2) 1 sector → auto-locked, show read-only badge
-  //   3) 2+ sectors → required dropdown
+  // Sector UI — three-case branching
   const sectorField = (() => {
     if (tenantSectorsLoading) return null;
     if (tenantSectorsError || tenantSectors.length === 0) {
-      // Case 1: no sectors configured — optional selection over system-wide list
       return (
         <div className="space-y-2">
           <Alert>
@@ -335,6 +368,7 @@ export function InputConfigStep() {
                     </SelectContent>
                   </Select>
                 </FormControl>
+                <p className="text-xs text-muted-foreground">Used for regulatory scoring and compliance reporting</p>
                 <FormMessage role="alert" />
               </FormItem>
             )}
@@ -343,17 +377,22 @@ export function InputConfigStep() {
       );
     }
     if (tenantSectors.length === 1) {
-      // Case 2: single sector — auto-locked, no user action needed
       return (
-        <div className="space-y-1">
-          <Label>Sector</Label>
-          <p className="text-sm text-muted-foreground">
-            {(tenantSectors as TenantSectorDto[])[0].sectorName}
-          </p>
+        <div className="flex items-center gap-3 rounded-lg border p-4">
+          {(tenantSectors as TenantSectorDto[])[0].sectorIcon && (
+            <span className="text-lg" aria-hidden="true">
+              {(tenantSectors as TenantSectorDto[])[0].sectorIcon}
+            </span>
+          )}
+          <div className="min-w-0">
+            <p className="text-sm font-medium">{(tenantSectors as TenantSectorDto[])[0].sectorName}</p>
+            <p className="text-xs text-muted-foreground">
+              Auto-selected — used for regulatory scoring and compliance reporting
+            </p>
+          </div>
         </div>
       );
     }
-    // Case 3: multiple sectors — required dropdown
     return (
       <FormField
         control={form.control}
@@ -375,6 +414,7 @@ export function InputConfigStep() {
                 </SelectContent>
               </Select>
             </FormControl>
+            <p className="text-xs text-muted-foreground">Used for regulatory scoring and compliance reporting</p>
             <FormMessage role="alert" />
           </FormItem>
         )}
@@ -385,8 +425,8 @@ export function InputConfigStep() {
   return (
     <Form {...form}>
       <form
-        onSubmit={form.handleSubmit(onSubmit, (errors) => {
-          const firstError = Object.keys(errors)[0];
+        onSubmit={form.handleSubmit(onSubmit, (errs) => {
+          const firstError = Object.keys(errs)[0];
           if (firstError) form.setFocus(firstError as keyof InputConfigValues);
         })}
         className="space-y-8"
@@ -417,9 +457,11 @@ export function InputConfigStep() {
           )}
         />
 
-        {/* ── Input mode ── */}
+        {/* ── 1a Content Source ── */}
+        <WizardSectionDivider number="1a" label="Content Source" firstSection />
+
         <fieldset className="space-y-3">
-          <legend className="text-sm font-medium">
+          <legend className="sr-only">
             Content source <span aria-hidden="true">*</span>
           </legend>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -429,25 +471,29 @@ export function InputConfigStep() {
                 type="button"
                 onClick={() => handleModeChange(mode)}
                 className={cn(
-                  'flex flex-col items-start gap-1 rounded-lg border p-4 text-left transition-colors',
-                  'min-h-[44px] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                  'flex flex-col items-center gap-2 rounded-lg border-2 p-4 text-center transition-all',
+                  'min-h-[44px] hover:border-primary/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
                   inputMode === mode
                     ? 'border-primary bg-primary/5'
-                    : 'border-border hover:border-primary/50'
+                    : 'border-border'
                 )}
                 aria-pressed={inputMode === mode}
               >
-                <div className="flex items-center gap-2">
-                  <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  <span className="text-sm font-medium">{label}</span>
-                </div>
+                <Icon
+                  className={cn(
+                    'h-6 w-6 shrink-0',
+                    inputMode === mode ? 'text-primary' : 'text-muted-foreground'
+                  )}
+                  aria-hidden="true"
+                />
+                <span className="text-sm font-medium">{label}</span>
                 <span className="text-xs text-muted-foreground">{description}</span>
               </button>
             ))}
           </div>
         </fieldset>
 
-        {/* ── Source-mode-specific fields ── */}
+        {/* Source text */}
         {inputMode === 'Text' && (
           <FormField
             control={form.control}
@@ -464,12 +510,18 @@ export function InputConfigStep() {
                     aria-invalid={!!errors.sourceText}
                   />
                 </FormControl>
+                <p className="text-xs text-muted-foreground">
+                  {sourceText && sourceText.trim().length > 0
+                    ? `${sourceText.split(/\s+/).filter(Boolean).length} words`
+                    : 'Minimum 50 words recommended'}
+                </p>
                 <FormMessage id="source-text-error" role="alert" />
               </FormItem>
             )}
           />
         )}
 
+        {/* PDF / Video dropzone */}
         {(inputMode === 'Pdf' || inputMode === 'Video') && (
           <div className="space-y-2">
             <Label htmlFor="source-file-input">
@@ -477,19 +529,36 @@ export function InputConfigStep() {
               <span aria-hidden="true">*</span>
             </Label>
 
-            {!form.watch('sourceFileName') ? (
+            {!sourceFileName ? (
               <label
                 htmlFor="source-file-input"
+                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDragging(false);
+                  const file = e.dataTransfer.files[0];
+                  if (file) handleFileSelected(file);
+                }}
                 className={cn(
                   'flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 cursor-pointer',
-                  'hover:border-primary/50 transition-colors',
-                  'min-h-[100px]'
+                  'transition-colors min-h-[120px]',
+                  isDragging
+                    ? 'border-primary bg-primary/5'
+                    : 'hover:border-primary/50'
                 )}
               >
-                <Upload className="h-6 w-6 text-muted-foreground mb-2" aria-hidden="true" />
-                <span className="text-sm text-muted-foreground">
-                  Click to select {inputMode === 'Pdf' ? 'a PDF (max 50MB)' : 'a video file (max 500MB)'}
-                </span>
+                <Upload className="h-8 w-8 text-muted-foreground mb-2" aria-hidden="true" />
+                <p className="text-sm font-medium">
+                  {isDragging
+                    ? 'Drop to upload'
+                    : inputMode === 'Pdf'
+                      ? 'Drop a PDF here or click to browse'
+                      : 'Drop a video file here or click to browse'}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {inputMode === 'Pdf' ? 'PDF only, max 50MB' : 'MP4, WebM, MOV — max 500MB'}
+                </p>
                 <input
                   id="source-file-input"
                   ref={fileInputRef}
@@ -508,7 +577,7 @@ export function InputConfigStep() {
                   ) : (
                     <FileVideo className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                   )}
-                  <span className="truncate text-sm">{form.watch('sourceFileName')}</span>
+                  <span className="truncate text-sm">{sourceFileName}</span>
                 </div>
                 <button
                   type="button"
@@ -545,6 +614,7 @@ export function InputConfigStep() {
           </div>
         )}
 
+        {/* Video URL + rights checkbox */}
         {inputMode === 'Video' && (
           <div className="space-y-4">
             <div className="relative flex items-center gap-3">
@@ -573,19 +643,17 @@ export function InputConfigStep() {
               )}
             />
 
-            {form.watch('videoUrl') && (
+            {videoUrl && (
               <FormField
                 control={form.control}
                 name="videoRightsConfirmed"
                 render={({ field }) => (
                   <FormItem className="flex items-start gap-2">
                     <FormControl>
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         id="video-rights"
                         checked={field.value}
-                        onChange={field.onChange}
-                        className="mt-0.5 h-4 w-4 rounded border-input"
+                        onCheckedChange={(checked) => field.onChange(checked === true)}
                         aria-describedby={errors.videoRightsConfirmed ? 'rights-error' : undefined}
                       />
                     </FormControl>
@@ -593,11 +661,7 @@ export function InputConfigStep() {
                       <Label htmlFor="video-rights" className="cursor-pointer">
                         I confirm I have the rights to use this video for training purposes
                       </Label>
-                      {errors.videoRightsConfirmed && (
-                        <p id="rights-error" role="alert" className="text-sm text-destructive">
-                          {errors.videoRightsConfirmed.message}
-                        </p>
-                      )}
+                      <FormMessage id="rights-error" role="alert" />
                     </div>
                   </FormItem>
                 )}
@@ -606,66 +670,41 @@ export function InputConfigStep() {
           </div>
         )}
 
-        {/* ── Target languages ── */}
-        <FormField
-          control={form.control}
-          name="targetLanguageCodes"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>
-                Target languages <span aria-hidden="true">*</span>
-              </FormLabel>
-              <FormControl>
-                <MultiSelectCombobox
-                  options={languageOptions}
-                  selectedValues={field.value}
-                  onValuesChange={(values) => field.onChange(values)}
-                  placeholder={languagesLoading ? 'Loading languages…' : 'Select target languages'}
-                />
-              </FormControl>
-              <FormMessage id="lang-error" role="alert" />
-            </FormItem>
-          )}
-        />
+        {/* ── 1b Translation Settings ── */}
+        <WizardSectionDivider number="1b" label="Translation Settings" />
 
-        {/* ── Sector ── */}
-        {sectorField}
-
-        {/* ── Generation preferences ── */}
-        <div className="space-y-4">
-          <h3 className="text-sm font-medium">Generation preferences</h3>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="flex items-start gap-3 rounded-lg border p-4">
+          <div className="min-w-0" style={{ flex: '1 1 60%' }}>
             <FormField
               control={form.control}
-              name="audienceRole"
+              name="targetLanguageCodes"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Audience role</FormLabel>
+                <FormItem className="space-y-1">
+                  <FormLabel>
+                    Target languages <span aria-hidden="true">*</span>
+                  </FormLabel>
                   <FormControl>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <SelectTrigger aria-label="Audience role">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {AUDIENCE_ROLE_OPTIONS.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <MultiSelectCombobox
+                      options={languageOptions}
+                      selectedValues={field.value}
+                      onValuesChange={(values) => field.onChange(values)}
+                      placeholder={languagesLoading ? 'Loading languages…' : 'Select target languages'}
+                    />
                   </FormControl>
-                  <FormMessage role="alert" />
+                  <p className="text-xs text-muted-foreground">
+                    Content will be translated and validated for each selected language.
+                  </p>
+                  <FormMessage id="lang-error" role="alert" />
                 </FormItem>
               )}
             />
-
+          </div>
+          <div className="w-52 shrink-0">
             <FormField
               control={form.control}
               name="passThreshold"
               render={({ field }) => (
-                <FormItem>
+                <FormItem className="space-y-1">
                   <FormLabel>Pass threshold (%)</FormLabel>
                   <FormControl>
                     <Select
@@ -676,7 +715,7 @@ export function InputConfigStep() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {DEFAULT_PASS_THRESHOLDS.map((t) => (
+                        {passThresholds.map((t) => (
                           <SelectItem key={t} value={String(t)}>
                             {t}%
                           </SelectItem>
@@ -684,160 +723,279 @@ export function InputConfigStep() {
                       </SelectContent>
                     </Select>
                   </FormControl>
+                  <p className="text-xs text-muted-foreground">Minimum score to pass validation</p>
                   <FormMessage role="alert" />
-                </FormItem>
-              )}
-            />
-          </div>
-
-          <div className="flex flex-col gap-3 sm:flex-row sm:gap-6">
-            <FormField
-              control={form.control}
-              name="includeQuiz"
-              render={({ field }) => (
-                <FormItem className="flex items-center gap-2">
-                  <FormControl>
-                    <input
-                      type="checkbox"
-                      id="include-quiz"
-                      checked={field.value}
-                      onChange={field.onChange}
-                      className="h-4 w-4 rounded border-input"
-                    />
-                  </FormControl>
-                  <Label htmlFor="include-quiz" className="cursor-pointer font-normal">
-                    Include quiz
-                  </Label>
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="preserveSourceWording"
-              render={({ field }) => (
-                <FormItem className="flex items-center gap-2">
-                  <FormControl>
-                    <input
-                      type="checkbox"
-                      id="preserve-wording"
-                      checked={field.value}
-                      onChange={field.onChange}
-                      className="h-4 w-4 rounded border-input"
-                    />
-                  </FormControl>
-                  <Label htmlFor="preserve-wording" className="cursor-pointer font-normal">
-                    Preserve source wording
-                  </Label>
                 </FormItem>
               )}
             />
           </div>
         </div>
 
-        {/* ── Audit metadata ── */}
-        <div className="space-y-4">
-          <h3 className="text-sm font-medium">Audit metadata</h3>
+        {/* ── 1c Content Options ── */}
+        <WizardSectionDivider number="1c" label="Content Options" />
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField
-              control={form.control}
-              name="reviewerName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Reviewer name</FormLabel>
-                  <FormControl>
-                    <Input {...field} maxLength={200} />
-                  </FormControl>
-                  <FormMessage role="alert" />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="reviewerRole"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Reviewer role</FormLabel>
-                  <FormControl>
-                    <Input {...field} maxLength={200} />
-                  </FormControl>
-                  <FormMessage role="alert" />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="reviewerOrg"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Organisation</FormLabel>
-                  <FormControl>
-                    <Input {...field} maxLength={200} />
-                  </FormControl>
-                  <FormMessage role="alert" />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="clientName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Client name</FormLabel>
-                  <FormControl>
-                    <Input {...field} maxLength={200} />
-                  </FormControl>
-                  <FormMessage role="alert" />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="documentRef"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>
-                    Document reference{' '}
-                    <span className="text-xs text-muted-foreground font-normal">
-                      (auto-generated if blank)
-                    </span>
-                  </FormLabel>
-                  <FormControl>
-                    <Input {...field} maxLength={100} />
-                  </FormControl>
-                  <FormMessage role="alert" />
-                </FormItem>
-              )}
-            />
-          </div>
-
+        <div className="space-y-3">
+          {/* Include Quiz */}
           <FormField
             control={form.control}
-            name="auditPurpose"
+            name="includeQuiz"
             render={({ field }) => (
-              <FormItem>
-                <FormLabel>Audit purpose</FormLabel>
+              <FormItem className="flex items-center justify-between rounded-lg border p-4">
+                <div>
+                  <FormLabel className="text-sm font-medium">Include quiz</FormLabel>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Generate quiz questions for this content. When disabled, the Quiz step is skipped.
+                  </p>
+                </div>
                 <FormControl>
-                  <Textarea
-                    {...field}
-                    maxLength={500}
-                    placeholder="e.g. Regulatory compliance, Internal learning..."
-                    className="resize-none"
-                    rows={3}
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    aria-label="Include quiz"
                   />
                 </FormControl>
+              </FormItem>
+            )}
+          />
+
+          {/* Audience Role */}
+          <FormField
+            control={form.control}
+            name="audienceRole"
+            render={({ field }) => (
+              <FormItem className="rounded-lg border p-4">
+                <div className="flex items-start gap-4">
+                  <div className="min-w-0 flex-1">
+                    <FormLabel className="text-sm font-medium">Audience</FormLabel>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Determines quiz question style. Operators focus on procedure; Supervisors plan and oversee; Auditors verify compliance.
+                    </p>
+                  </div>
+                  <div className="w-44 shrink-0">
+                    <FormControl>
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <SelectTrigger aria-label="Audience role">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {AUDIENCE_ROLE_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormControl>
+                  </div>
+                </div>
                 <FormMessage role="alert" />
+              </FormItem>
+            )}
+          />
+
+          {/* Preserve Source Wording */}
+          <FormField
+            control={form.control}
+            name="preserveSourceWording"
+            render={({ field }) => (
+              <FormItem className="flex items-center justify-between rounded-lg border p-4">
+                <div>
+                  <FormLabel className="text-sm font-medium">Preserve source wording</FormLabel>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    When on, the AI keeps your source text exactly as written instead of rewriting for clarity.
+                    Useful for SOPs or approved policy text that must not be paraphrased.
+                  </p>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    aria-label="Preserve source wording"
+                  />
+                </FormControl>
               </FormItem>
             )}
           />
         </div>
 
-        {/* ── Form-level error banner ── */}
+        {/* ── 1d Sector ── */}
+        <WizardSectionDivider number="1d" label="Sector" />
+        {sectorField}
+
+        {/* ── 1e Audit Metadata ── */}
+        <WizardSectionDivider number="1e" label="Audit Metadata" />
+
+        <Card>
+          <CardContent>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="reviewerName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Reviewer name</FormLabel>
+                    <FormControl>
+                      <Input {...field} maxLength={200} />
+                    </FormControl>
+                    <p className="text-xs text-muted-foreground">Pre-populated from your profile — edit if different</p>
+                    <FormMessage role="alert" />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="reviewerRole"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Reviewer role</FormLabel>
+                    <FormControl>
+                      <Input {...field} maxLength={200} />
+                    </FormControl>
+                    <p className="text-xs text-muted-foreground">Pre-populated from your profile — edit if different</p>
+                    <FormMessage role="alert" />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="reviewerOrg"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Organisation</FormLabel>
+                    <FormControl>
+                      <Input {...field} maxLength={200} />
+                    </FormControl>
+                    <p className="text-xs text-muted-foreground">Pre-populated from your profile — edit if different</p>
+                    <FormMessage role="alert" />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="clientName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Client</FormLabel>
+                    <Select
+                      value={field.value}
+                      onValueChange={field.onChange}
+                      disabled={!companiesLoading && companyList.length === 0}
+                    >
+                      <SelectTrigger>
+                        <SelectValue
+                          placeholder={
+                            companiesLoading
+                              ? 'Loading…'
+                              : companyList.length === 0
+                                ? 'No companies available'
+                                : 'Select client…'
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {companyList.map((c) => (
+                          <SelectItem key={c.id} value={c.companyName}>
+                            {c.companyName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {!companiesLoading && companyList.length === 0 && (
+                      <p className="text-xs text-muted-foreground">No companies configured for this tenant</p>
+                    )}
+                    <FormMessage role="alert" />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="documentRef"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      Document reference{' '}
+                      <span className="text-xs text-muted-foreground font-normal">
+                        (auto-generated if blank)
+                      </span>
+                    </FormLabel>
+                    <FormControl>
+                      <Input {...field} maxLength={100} />
+                    </FormControl>
+                    <FormMessage role="alert" />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="mt-4">
+              <FormField
+                control={form.control}
+                name="auditPurpose"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Audit purpose</FormLabel>
+                    {auditPurposeMode === 'preset' ? (
+                      <Select
+                        value={field.value}
+                        onValueChange={(v) => {
+                          if (v === '_other') {
+                            setAuditPurposeMode('custom');
+                            field.onChange('');
+                          } else {
+                            field.onChange(v);
+                          }
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select purpose…" />
+                        </SelectTrigger>
+                        <SelectContent position="popper" className="max-h-60">
+                          {auditPurposes.map((p) => (
+                            <SelectItem key={p} value={p}>
+                              {p}
+                            </SelectItem>
+                          ))}
+                          <SelectItem value="_other">Other...</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <div className="flex gap-2">
+                        <Input
+                          value={customAuditPurpose}
+                          onChange={(e) => {
+                            setCustomAuditPurpose(e.target.value);
+                            field.onChange(e.target.value);
+                          }}
+                          placeholder="Describe purpose…"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setAuditPurposeMode('preset');
+                            setCustomAuditPurpose('');
+                            field.onChange('');
+                          }}
+                          className="shrink-0"
+                        >
+                          Presets
+                        </Button>
+                      </div>
+                    )}
+                    <FormMessage role="alert" />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Form-level error banner */}
         {initialiseMutation.isError && (
           <Alert variant="destructive" role="alert">
             <AlertTriangle className="h-4 w-4" aria-hidden="true" />
@@ -849,7 +1007,7 @@ export function InputConfigStep() {
           </Alert>
         )}
 
-        {/* ── Continue button ── */}
+        {/* Continue button */}
         <div className="flex justify-end pt-2">
           <Button
             type="submit"

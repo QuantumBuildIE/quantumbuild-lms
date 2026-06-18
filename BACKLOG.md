@@ -1341,6 +1341,19 @@ Options (in order of complexity):
 
 **Not urgent while there are only ~8 email types.** Revisit when the count exceeds ~15 or when a designer needs to touch the templates without touching C# code.
 
+#### 7.7 Company list Select truncated at pagination limit
+
+- **Priority:** P3
+- **Origin:** `[Engineering]` `[§25 Chunk 1 recon discovery 2026-06-18]`
+- **Status:** Open
+- **Surfaced:** During §25 Chunk 1 implementation. The `useAllCompanies` hook used by InputConfigStep's Client Name Select calls `GET /companies/all` and returns the full array in one request. However, if the backend ever pages this endpoint or a separate paginated call is substituted, tenants with more than the page-size limit will have a truncated Select dropdown — companies beyond the first page are silently invisible. The legacy wizard has the same pattern. Does not block §25.
+
+**Fix direction:**
+- The current `/companies/all` endpoint returns an unbounded flat array — no pagination issue today.
+- If this endpoint is ever replaced with a paginated call, either: pass a high `pageSize` parameter to the Select call, or implement a Combobox with server-side search instead of a flat Select.
+
+Defer until a real tenant hits any limit or the endpoint shape changes. Track sightings; if more than one Select consumer surfaces the same gap, prioritise.
+
 #### 7.6 `IX_Tenants_Name` does not align with application soft-delete semantics
 
 - **Priority:** P3
