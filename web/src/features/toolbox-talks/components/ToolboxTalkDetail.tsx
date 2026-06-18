@@ -16,6 +16,7 @@ import {
   EyeIcon,
   CheckCircle2Icon,
 } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,6 +33,7 @@ import { ValidateStep } from './learning-wizard/steps/ValidateStep';
 import { parseLanguageCodes } from '@/features/toolbox-talks/utils/parseLanguageCodes';
 import { useToolboxTalk, useDeleteToolboxTalk } from '@/lib/api/toolbox-talks';
 import { useValidationRuns } from '@/lib/api/toolbox-talks/use-content-creation';
+import { useWorkflowSubscription } from './learning-wizard/hooks/useWorkflowSubscription';
 import { usePermission } from '@/lib/auth/use-auth';
 import { useWizardPreference } from '@/features/toolbox-talks/hooks/useWizardPreference';
 import type { ToolboxTalk } from '@/types/toolbox-talks';
@@ -56,7 +58,11 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
   const { data: talk, isLoading, error, refetch } = useToolboxTalk(talkId);
   const deleteMutation = useDeleteToolboxTalk();
   const { data: validationRuns, isLoading: validationRunsLoading } = useValidationRuns(talkId);
+  const { data: workflowStates, isLoading: workflowStatesLoading } = useWorkflowSubscription(talkId);
   const wizardPreference = useWizardPreference();
+
+  const hasStaleTranslation = !workflowStatesLoading
+    && (workflowStates ?? []).some(s => s.state === 'Stale');
 
   const handleDelete = async () => {
     if (!talk) return;
@@ -331,6 +337,20 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
               </Card>
             )}
           </div>
+
+          {/* Stale-translation banner — shown when any target language is outdated */}
+          {hasStaleTranslation && (
+            <Alert className="border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/30">
+              <AlertTriangleIcon className="h-4 w-4 text-amber-600" />
+              <AlertTitle className="text-amber-800 dark:text-amber-300">
+                One or more translations are outdated
+              </AlertTitle>
+              <AlertDescription className="text-amber-700 dark:text-amber-400">
+                Content changes have been made since the last translation run.
+                Re-run translations before scheduling new assignments.
+              </AlertDescription>
+            </Alert>
+          )}
 
           {/* Sections — inline editable for new-wizard talks */}
           <SectionEditPanel talk={talk} onRefetch={refetch} />

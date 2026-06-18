@@ -34,7 +34,7 @@
 
 ## Phase status
 
-**Phase 5: ✅ Closed — 2026-06-17.** All in-scope work shipped or descoped; deferred work moved to Post-Phase-5 Cleanup (Section 7). Cutover toggle infrastructure (§5.27) shipped with default position "Classic wizard" — flipping any tenant remains gated on §24 (Edit workflow design) implementation. Production deployment of §5.28 (Anthropic model deprecation fix) is operational and tracked separately.
+**Phase 5: ✅ Closed — 2026-06-17.** All in-scope work shipped or descoped; deferred work moved to Post-Phase-5 Cleanup (Section 7). Cutover toggle infrastructure (§5.27) shipped with default position "Classic wizard" — **§24 engineering gate cleared 2026-06-18; toggle-flip is now an operational decision.** Production deployment of §5.28 (Anthropic model deprecation fix) is operational and tracked separately.
 
 See `docs/phase-5/closure-notes.md` for the closure summary.
 
@@ -1086,11 +1086,11 @@ The original Phase 5.6 was framed as "move the Create New button to the new wiza
 
 ### Adjacent dependencies before any tenant is toggled to new-as-default
 
-- **§24** (Edit workflow design): without edit, new-wizard talks are creation-only. Not a defensible production state. ← **remaining gate**
+- **§24** (Edit workflow design): ✅ **engineering gate cleared 2026-06-18** (Chunks 1, 2, 3, 6 shipped — Demo cut and toggle-flip cut complete). Flipping any tenant to `"true"` is now an operational decision; no further engineering work blocks it.
 - **§5.24** (Frequency conflict): ✅ resolved 2026-06-16 — bidirectional mirror prevents old form from overwriting Step 4 refresher config.
 - **§5.20** (Refresh Amendment): ✅ resolved 2026-06-15 — closed by §5.22 + phantom recon.
 
-§24 is the sole remaining gate before any production tenant is toggled to "new" position. Toggle infrastructure itself can ship before §24 is resolved (default position is "old").
+§24 engineering gate cleared. Toggle infrastructure is ready. Any production tenant can now be toggled to `"true"` as an operational decision.
 
 ### Implementation scope
 
@@ -1781,7 +1781,7 @@ Without edit, the new wizard is creation-only. Tenants toggled to the new wizard
 
 Phase 5.6 (cutover toggle) should not enable any tenant for production rollout until at least the highest-priority sub-chunks of this work are shipped. Recommended minimum before any rollout: chunks 1, 2, 3, and the Rule-8 stale gate (chunk 6).
 
-**Chunks 1 (inline section & quiz edit), 2 (TranslateStep lift), and 3 (ValidateStep lift) shipped 2026-06-17. Demo cut complete.** Remaining chunks: 4 (settings), 5 (add target language), 6 (Rule-8 stale gate). Toggle-flip cut additionally requires Chunk 6.
+**Chunks 1 (inline section & quiz edit), 2 (TranslateStep lift), 3 (ValidateStep lift), and 6 (stale-translation banner) shipped 2026-06-18. Demo cut and toggle-flip cut both engineering-complete.** Remaining chunks: 4 (settings inline edit), 5 (add target language post-publish). Neither is required for Demo or toggle-flip; both can ship post-cutover. §5.27 (cutover toggle) is now engineering-unblocked — operational decision on tenant flip-timing is separate.
 
 ---
 
