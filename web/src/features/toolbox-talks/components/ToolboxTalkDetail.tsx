@@ -29,6 +29,7 @@ import { ValidationHistoryTab } from './ValidationHistoryTab';
 import { SectionEditPanel } from './detail/SectionEditPanel';
 import { QuizEditPanel } from './detail/QuizEditPanel';
 import { SettingsEditPanel } from './detail/SettingsEditPanel';
+import { AddTargetLanguagePicker } from './detail/AddTargetLanguagePicker';
 import { TranslateStep } from './learning-wizard/steps/TranslateStep';
 import { ValidateStep } from './learning-wizard/steps/ValidateStep';
 import { parseLanguageCodes } from '@/features/toolbox-talks/utils/parseLanguageCodes';
@@ -365,14 +366,19 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
 
         {!isPartOfCourse && !previewMode && (
           <TabsContent value="translations" className="mt-4">
-            {hasTargetLanguages ? (
-              <TranslateStep talkId={talkId} />
-            ) : (
-              <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
-                <p className="text-sm font-medium">No target languages configured for this talk</p>
-                <p className="text-xs mt-1">Languages must be added at creation time.</p>
-              </div>
-            )}
+            <div className="space-y-4">
+              <AddTargetLanguagePicker
+                talkId={talkId}
+                existingLanguages={parseLanguageCodes(talk?.targetLanguageCodes)}
+              />
+              {hasTargetLanguages ? (
+                <TranslateStep talkId={talkId} />
+              ) : (
+                <div className="rounded-md border border-dashed border-muted-foreground/30 p-6 text-center text-sm text-muted-foreground">
+                  No translations yet — use the language picker above to add a target language and begin translation.
+                </div>
+              )}
+            </div>
           </TabsContent>
         )}
 

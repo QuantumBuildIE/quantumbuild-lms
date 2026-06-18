@@ -22,6 +22,7 @@ import {
   initiateExternalReview,
   cancelExternalReview,
   startTalkTranslation,
+  addTargetLanguage,
 } from './toolbox-talks';
 import type {
   GenerateTranslationsRequest,
@@ -287,6 +288,22 @@ export function useStartTalkTranslation() {
     onSuccess: (_, { talkId, languageCode }) => {
       queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, talkId, 'workflow-state'] });
       queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, talkId, 'workflow-history', languageCode] });
+    },
+  });
+}
+
+export function useAddTargetLanguage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ talkId, languageCode }: { talkId: string; languageCode: string }) =>
+      addTargetLanguage(talkId, languageCode),
+    onSuccess: (_, { talkId }) => {
+      // Invalidate the talk object so ToolboxTalkDetail sees the updated targetLanguageCodes
+      queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, talkId] });
+      // Invalidate workflow states so TranslateStep renders the new language (Initial state)
+      queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, talkId, 'workflow-state'] });
+      // Invalidate the learnings cache key used by TranslateStep's useTalk hook
+      queryClient.invalidateQueries({ queryKey: ['learnings', talkId] });
     },
   });
 }

@@ -709,3 +709,18 @@ export async function startTalkTranslation(
   );
   return response.data;
 }
+
+// ============================================
+// Add Target Language (§24 Chunk 5)
+// ============================================
+
+export async function addTargetLanguage(
+  talkId: string,
+  languageCode: string
+): Promise<ToolboxTalk> {
+  const response = await apiClient.post<ToolboxTalk>(
+    `/toolbox-talks/${talkId}/target-languages`,
+    { languageCode }
+  );
+  return response.data;
+}

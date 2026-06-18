@@ -15,6 +15,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalkSe
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.DeleteToolboxTalk;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.GenerateContentTranslations;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.StartTalkTranslation;
+using QuantumBuild.Modules.ToolboxTalks.Application.Commands.AddTargetLanguage;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.SmartGenerateContent;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateLastEditedStep;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalk;
@@ -1598,6 +1599,37 @@ public class ToolboxTalksController : ControllerBase
     }
 
     /// <summary>
+    /// Adds a new target language to an existing (Published) learning.
+    /// The language immediately appears in the Translations tab with Initial state,
+    /// ready for translation to be started.
+    /// </summary>
+    /// <param name="id">Toolbox talk ID</param>
+    /// <param name="request">Language code to add</param>
+    /// <param name="ct">Cancellation token</param>
+    [HttpPost("{id:guid}/target-languages")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(typeof(ToolboxTalkDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> AddTargetLanguage(
+        Guid id,
+        [FromBody] AddTargetLanguageRequest request,
+        CancellationToken ct)
+    {
+        var command = new AddTargetLanguageCommand(id, _currentUserService.TenantId, request.LanguageCode);
+        var result = await _mediator.Send(command, ct);
+
+        if (!result.Success)
+        {
+            if (result.Errors.FirstOrDefault()?.Contains("not found", StringComparison.OrdinalIgnoreCase) == true)
+                return NotFound(new { error = result.Errors.FirstOrDefault() });
+            return BadRequest(new { error = result.Errors.FirstOrDefault() });
+        }
+
+        return Ok(result.Data);
+    }
+
+    /// <summary>
     /// Gets existing content translations for a toolbox talk.
     /// </summary>
     /// <param name="id">Toolbox talk ID</param>
@@ -2827,6 +2859,14 @@ public record UpdateTalkQuizSettingsRequest
     public bool ShuffleOptions { get; init; }
     public bool UseQuestionPool { get; init; }
     public bool AllowRetry { get; init; } = true;
+}
+
+/// <summary>Request body for POST {id}/target-languages.</summary>
+public record AddTargetLanguageRequest
+{
+    /// <summary>ISO 639-1 language code (e.g. "fr", "de").</summary>
+    [Required, MaxLength(10)]
+    public string LanguageCode { get; init; } = string.Empty;
 }
 
 public record UpdateLearningSettingsRequest
