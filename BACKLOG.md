@@ -1920,7 +1920,7 @@ Screenshots 2026-06-14: validation run detail page for "Validation Run — NL" w
 
 ---
 
-## 24 — New wizard visual polish to parity with legacy
+## 25 — New wizard visual polish to parity with legacy
 
 Priority: P0 — blocks §5.7 (Demo refresh) closure and blocks the wizard cutover toggle being flipped for paying tenants.
 Origin: [Engineering] [Demo refresh discovery 2026-06-18]
