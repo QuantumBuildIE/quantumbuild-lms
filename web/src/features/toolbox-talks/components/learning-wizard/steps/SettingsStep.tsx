@@ -35,6 +35,7 @@ import {
   FormControl,
   FormMessage,
 } from '@/components/ui/form';
+import { WizardSectionDivider } from '@/components/ui/wizard-section-divider';
 import { LoadingState } from '../components/LoadingState';
 import { CoverImageUpload } from '../components/CoverImageUpload';
 import { useTalk } from '../hooks/useTalk';
@@ -61,6 +62,9 @@ function refresherFromTalk(
   if (intervalMonths <= 3) return 'Quarterly';
   return 'Annually';
 }
+
+const WATCH_PRESETS = [50, 60, 70, 80, 90, 100];
+const DUE_DAYS_PRESETS = [7, 14, 30, 60, 90];
 
 export function SettingsStep({ talkId, onContinue }: SettingsStepProps) {
   const { talk, isLoading } = useTalk(talkId);
@@ -173,99 +177,96 @@ export function SettingsStep({ talkId, onContinue }: SettingsStepProps) {
         className="space-y-8"
         aria-label="Learning settings"
       >
-        {/* ── Core fields ─────────────────────────────────── */}
-        <section aria-labelledby="core-fields-heading">
-          <h2 id="core-fields-heading" className="text-base font-semibold mb-4">
-            Details
-          </h2>
-          <div className="space-y-4">
-            {/* Title */}
-            <FormField
-              control={form.control}
-              name="title"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Title <span aria-hidden="true">*</span></FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      placeholder="e.g. Manual Handling Safety"
-                      onBlur={async () => {
-                        field.onBlur();
-                        await saveField(form.getValues());
-                      }}
-                    />
-                  </FormControl>
-                  <FormMessage role="alert" />
-                </FormItem>
-              )}
-            />
-
-            {/* Description */}
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      {...field}
-                      value={field.value ?? ''}
-                      placeholder="Optional short description shown to employees"
-                      rows={3}
-                      onBlur={async () => {
-                        field.onBlur();
-                        await saveField(form.getValues());
-                      }}
-                    />
-                  </FormControl>
-                  <FormMessage role="alert" />
-                </FormItem>
-              )}
-            />
-
-            {/* Category */}
-            <FormField
-              control={form.control}
-              name="category"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Category</FormLabel>
-                  <Select
-                    value={field.value ?? '__none__'}
-                    onValueChange={async (val) => {
-                      const category = val === '__none__' ? null : val;
-                      field.onChange(category);
-                      await saveField({ ...form.getValues(), category });
+        {/* ── Details ─────────────────────────────────────── */}
+        <WizardSectionDivider number="4a" label="Details" firstSection />
+        <div className="space-y-4">
+          {/* Title */}
+          <FormField
+            control={form.control}
+            name="title"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Title <span aria-hidden="true">*</span></FormLabel>
+                <FormControl>
+                  <Input
+                    {...field}
+                    placeholder="e.g. Manual Handling Safety"
+                    onBlur={async () => {
+                      field.onBlur();
+                      await saveField(form.getValues());
                     }}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a category…" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="__none__">None</SelectItem>
-                      {categories.map((c) => (
-                        <SelectItem key={c.id} value={c.name}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage role="alert" />
-                </FormItem>
-              )}
-            />
-          </div>
-        </section>
+                  />
+                </FormControl>
+                <FormMessage role="alert" />
+              </FormItem>
+            )}
+          />
 
-        {/* ── Cover image ──────────────────────────────────── */}
-        <section aria-labelledby="cover-image-heading">
-          <h2 id="cover-image-heading" className="text-base font-semibold mb-1">
-            Cover Image
-          </h2>
+          {/* Description */}
+          <FormField
+            control={form.control}
+            name="description"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Description</FormLabel>
+                <FormControl>
+                  <Textarea
+                    {...field}
+                    value={field.value ?? ''}
+                    placeholder="Optional short description shown to employees"
+                    rows={3}
+                    onBlur={async () => {
+                      field.onBlur();
+                      await saveField(form.getValues());
+                    }}
+                  />
+                </FormControl>
+                <FormMessage role="alert" />
+              </FormItem>
+            )}
+          />
+
+          {/* Category */}
+          <FormField
+            control={form.control}
+            name="category"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Category</FormLabel>
+                <Select
+                  value={field.value ?? '__none__'}
+                  onValueChange={async (val) => {
+                    const category = val === '__none__' ? null : val;
+                    field.onChange(category);
+                    await saveField({ ...form.getValues(), category });
+                  }}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a category…" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="__none__">None</SelectItem>
+                    {categories.map((c) => (
+                      <SelectItem key={c.id} value={c.name}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage role="alert" />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Used to group learnings in reports and filters.
+                </p>
+              </FormItem>
+            )}
+          />
+        </div>
+
+        {/* ── Cover Image ──────────────────────────────────── */}
+        <WizardSectionDivider number="4b" label="Cover Image" />
+        <div>
           <p className="text-sm text-muted-foreground mb-4">
             Displayed on the employee training card. Optional.
           </p>
@@ -273,197 +274,206 @@ export function SettingsStep({ talkId, onContinue }: SettingsStepProps) {
             talkId={talkId}
             currentUrl={talk?.coverImageUrl ?? null}
           />
-        </section>
+        </div>
 
         {/* ── Behaviour ────────────────────────────────────── */}
-        <section aria-labelledby="behaviour-heading">
-          <h2 id="behaviour-heading" className="text-base font-semibold mb-4">
-            Behaviour
-          </h2>
-          <div className="space-y-6">
-            {/* Refresher frequency */}
-            <FormField
-              control={form.control}
-              name="refresherFrequency"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Refresher frequency</FormLabel>
-                  <Select
-                    value={field.value}
-                    onValueChange={async (val) => {
-                      field.onChange(val);
-                      await saveField({
-                        ...form.getValues(),
-                        refresherFrequency: val as SettingsFormData['refresherFrequency'],
-                      });
+        <WizardSectionDivider number="4c" label="Behaviour" />
+        <div className="space-y-6">
+          {/* Refresher frequency */}
+          <FormField
+            control={form.control}
+            name="refresherFrequency"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Refresher frequency</FormLabel>
+                <Select
+                  value={field.value}
+                  onValueChange={async (val) => {
+                    field.onChange(val);
+                    await saveField({
+                      ...form.getValues(),
+                      refresherFrequency: val as SettingsFormData['refresherFrequency'],
+                    });
+                  }}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {REFRESHER_FREQUENCIES.map((f) => (
+                      <SelectItem key={f} value={f}>
+                        {f}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage role="alert" />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Employees will be reminded to retake this learning at the selected interval.
+                </p>
+              </FormItem>
+            )}
+          />
+
+          {/* Minimum watch % */}
+          <FormField
+            control={form.control}
+            name="minimumWatchPercent"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Minimum video watch percentage</FormLabel>
+                <div className="flex flex-wrap gap-1.5">
+                  {WATCH_PRESETS.map((preset) => (
+                    <Button
+                      key={preset}
+                      type="button"
+                      variant={field.value === preset ? 'default' : 'outline'}
+                      size="sm"
+                      className="h-8 min-w-[3.5rem] text-xs tabular-nums"
+                      onClick={async () => {
+                        field.onChange(preset);
+                        await saveField({ ...form.getValues(), minimumWatchPercent: preset });
+                      }}
+                    >
+                      {preset}%
+                    </Button>
+                  ))}
+                </div>
+                {!WATCH_PRESETS.includes(field.value) && (
+                  <p className="text-xs text-muted-foreground mt-1">Currently: {field.value}%</p>
+                )}
+                <FormMessage role="alert" />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Employees must watch at least this percentage of the video to proceed.
+                </p>
+              </FormItem>
+            )}
+          />
+
+          {/* Generate certificate */}
+          <FormField
+            control={form.control}
+            name="generateCertificate"
+            render={({ field }) => (
+              <FormItem className="flex items-center justify-between rounded-lg border p-4">
+                <div>
+                  <FormLabel className="text-sm font-medium">Generate certificate on completion</FormLabel>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    A PDF certificate is emailed to the employee when they complete this learning.
+                  </p>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={async (checked) => {
+                      field.onChange(checked);
+                      await saveField({ ...form.getValues(), generateCertificate: checked });
                     }}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {REFRESHER_FREQUENCIES.map((f) => (
-                        <SelectItem key={f} value={f}>
-                          {f}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage role="alert" />
-                </FormItem>
-              )}
-            />
+                    aria-label="Generate certificate on completion"
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
 
-            {/* Minimum watch % */}
-            <FormField
-              control={form.control}
-              name="minimumWatchPercent"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Minimum video watch percentage</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      min={50}
-                      max={100}
-                      {...field}
-                      value={field.value}
-                      onChange={(e) => field.onChange(Number(e.target.value))}
-                      onBlur={async () => {
-                        field.onBlur();
-                        await saveField(form.getValues());
-                      }}
-                      className="w-24"
-                    />
-                  </FormControl>
-                  <FormMessage role="alert" />
-                </FormItem>
-              )}
-            />
-
-            {/* Generate certificate */}
-            <FormField
-              control={form.control}
-              name="generateCertificate"
-              render={({ field }) => (
-                <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                  <div>
-                    <FormLabel className="text-sm font-medium">Generate certificate on completion</FormLabel>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      A PDF certificate is emailed to the employee when they complete this learning.
-                    </p>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={async (checked) => {
-                        field.onChange(checked);
-                        await saveField({ ...form.getValues(), generateCertificate: checked });
-                      }}
-                      aria-label="Generate certificate on completion"
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-
-            {/* Active on publish */}
-            <FormField
-              control={form.control}
-              name="isActiveOnPublish"
-              render={({ field }) => (
-                <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                  <div>
-                    <FormLabel className="text-sm font-medium">Active on publish</FormLabel>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      When disabled, the learning is published but not schedulable.
-                    </p>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={async (checked) => {
-                        field.onChange(checked);
-                        await saveField({ ...form.getValues(), isActiveOnPublish: checked });
-                      }}
-                      aria-label="Active on publish"
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-          </div>
-        </section>
+          {/* Active on publish */}
+          <FormField
+            control={form.control}
+            name="isActiveOnPublish"
+            render={({ field }) => (
+              <FormItem className="flex items-center justify-between rounded-lg border p-4">
+                <div>
+                  <FormLabel className="text-sm font-medium">Active on publish</FormLabel>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    When disabled, the learning is published but not schedulable.
+                  </p>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={async (checked) => {
+                      field.onChange(checked);
+                      await saveField({ ...form.getValues(), isActiveOnPublish: checked });
+                    }}
+                    aria-label="Active on publish"
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+        </div>
 
         {/* ── Auto-assign ──────────────────────────────────── */}
-        <section aria-labelledby="auto-assign-heading">
-          <h2 id="auto-assign-heading" className="text-base font-semibold mb-4">
-            Auto-assign
-          </h2>
-          <div className="space-y-4">
+        <WizardSectionDivider number="4d" label="Auto-assign" />
+        <div className="space-y-4">
+          <FormField
+            control={form.control}
+            name="autoAssign"
+            render={({ field }) => (
+              <FormItem className="flex items-center justify-between rounded-lg border p-4">
+                <div>
+                  <FormLabel className="text-sm font-medium">Auto-assign to new employees</FormLabel>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    New employees are automatically assigned this learning when they are created.
+                  </p>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={async (checked) => {
+                      field.onChange(checked);
+                      await saveField({ ...form.getValues(), autoAssign: checked });
+                    }}
+                    aria-label="Auto-assign to new employees"
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          {form.watch('autoAssign') && (
             <FormField
               control={form.control}
-              name="autoAssign"
+              name="autoAssignDueDays"
               render={({ field }) => (
-                <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                  <div>
-                    <FormLabel className="text-sm font-medium">Auto-assign to new employees</FormLabel>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      New employees are automatically assigned this learning when they are created.
-                    </p>
+                <FormItem>
+                  <FormLabel>Due within (days)</FormLabel>
+                  <div className="flex flex-wrap gap-1.5">
+                    {DUE_DAYS_PRESETS.map((preset) => (
+                      <Button
+                        key={preset}
+                        type="button"
+                        variant={field.value === preset ? 'default' : 'outline'}
+                        size="sm"
+                        className="h-8 text-xs tabular-nums"
+                        onClick={async () => {
+                          field.onChange(preset);
+                          await saveField({ ...form.getValues(), autoAssignDueDays: preset });
+                        }}
+                      >
+                        {preset} days
+                      </Button>
+                    ))}
                   </div>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={async (checked) => {
-                        field.onChange(checked);
-                        await saveField({ ...form.getValues(), autoAssign: checked });
-                      }}
-                      aria-label="Auto-assign to new employees"
-                    />
-                  </FormControl>
+                  {!DUE_DAYS_PRESETS.includes(field.value) && (
+                    <p className="text-xs text-muted-foreground mt-1">Currently: {field.value} days</p>
+                  )}
+                  <FormMessage role="alert" />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    New employees will be assigned this learning with this many days to complete it.
+                  </p>
                 </FormItem>
               )}
             />
-
-            {form.watch('autoAssign') && (
-              <FormField
-                control={form.control}
-                name="autoAssignDueDays"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Due within (days)</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        min={1}
-                        max={90}
-                        {...field}
-                        value={field.value}
-                        onChange={(e) => field.onChange(Number(e.target.value))}
-                        onBlur={async () => {
-                          field.onBlur();
-                          await saveField(form.getValues());
-                        }}
-                        className="w-24"
-                      />
-                    </FormControl>
-                    <FormMessage role="alert" />
-                  </FormItem>
-                )}
-              />
-            )}
-          </div>
-        </section>
+          )}
+        </div>
 
         {/* ── Slideshow ────────────────────────────────────── */}
         {talk?.pdfUrl && (
-          <section aria-labelledby="slideshow-heading">
-            <h2 id="slideshow-heading" className="text-base font-semibold mb-4">
-              Slideshow
-            </h2>
+          <>
+            <WizardSectionDivider number="4e" label="Slideshow" />
             <FormField
               control={form.control}
               name="generateSlideshow"
@@ -488,7 +498,7 @@ export function SettingsStep({ talkId, onContinue }: SettingsStepProps) {
                 </FormItem>
               )}
             />
-          </section>
+          </>
         )}
 
         {/* ── Continue ─────────────────────────────────────── */}
