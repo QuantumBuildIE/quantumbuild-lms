@@ -45,7 +45,7 @@ export default function LearningWizardNewPage() {
         canGoBack={false}
         canGoNext={false}
         leftFooter={
-          <Button variant="ghost" onClick={() => setShowCancelConfirm(true)}>
+          <Button variant="outline" onClick={() => setShowCancelConfirm(true)}>
             Cancel
           </Button>
         }
