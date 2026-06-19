@@ -21,6 +21,8 @@ interface WizardLayoutProps {
   isNavigating?: boolean;
   // Allow custom footer slot (e.g., publish button on last step)
   footer?: React.ReactNode;
+  // Allow custom left footer slot (e.g., Cancel button)
+  leftFooter?: React.ReactNode;
 }
 
 export function WizardLayout({
@@ -36,6 +38,7 @@ export function WizardLayout({
   nextLabel = 'Continue',
   isNavigating = false,
   footer,
+  leftFooter,
 }: WizardLayoutProps) {
   return (
     <div className="flex flex-col min-h-0">
@@ -62,7 +65,7 @@ export function WizardLayout({
 
       {/* Navigation bar */}
       <div className="mt-8 pt-4 border-t flex items-center justify-between gap-4">
-        <div>
+        <div className="flex items-center gap-3">
           {canGoBack && onBack && (
             <Button
               type="button"
@@ -75,6 +78,7 @@ export function WizardLayout({
               Back
             </Button>
           )}
+          {leftFooter}
         </div>
 
         <div className="flex items-center gap-3">
