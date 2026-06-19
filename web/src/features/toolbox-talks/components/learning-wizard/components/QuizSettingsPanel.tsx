@@ -60,8 +60,6 @@ export function QuizSettingsPanel({ talk, onSave, isSaving }: QuizSettingsPanelP
 
   return (
     <div className="border rounded-lg p-4 space-y-5 bg-card">
-      <h3 className="text-sm font-semibold">Quiz Settings</h3>
-
       {/* Passing score */}
       <div className="space-y-1.5">
         <Label htmlFor="passingScore">Passing Score (%)</Label>

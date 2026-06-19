@@ -1,12 +1,23 @@
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
-import { Loader2, Wand2, AlertTriangle } from 'lucide-react';
+import { Loader2, Wand2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Card, CardHeader, CardTitle, CardDescription, CardAction, CardContent } from '@/components/ui/card';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { SectionList, toSectionDrafts } from '../components/SectionList';
 import { useParseTalk } from '../hooks/useParseTalk';
 import { useUpdateTalkSections } from '../hooks/useUpdateTalkSections';
@@ -48,6 +59,7 @@ export function ParseStep({ talkId, onContinue }: ParseStepProps) {
   const { data: talk, isLoading } = useTalkStatusPolling(talkId, true);
   const parseMutation = useParseTalk(talkId);
   const updateSectionsMutation = useUpdateTalkSections(talkId);
+  const [showReparseConfirm, setShowReparseConfirm] = useState(false);
 
   const form = useForm<ParseStepFormValues>({
     resolver: zodResolver(parseStepSchema),
@@ -100,6 +112,20 @@ export function ParseStep({ talkId, onContinue }: ParseStepProps) {
       toast.error('Failed to start parsing. Please try again.');
     }
   }, [parseMutation, form]);
+
+  const handleReparseClick = useCallback(() => {
+    const sections = form.getValues('sections');
+    if (sections.length > 0) {
+      setShowReparseConfirm(true);
+    } else {
+      handleParse();
+    }
+  }, [form, handleParse]);
+
+  const handleReparseConfirm = useCallback(() => {
+    setShowReparseConfirm(false);
+    handleParse();
+  }, [handleParse]);
 
   // No cascade-reset needed at Step 2 — quiz, settings, validation, and translations don't exist yet when sections are saved. The old wizard's cascade-reset UI is intentionally not carried over.
   const handleContinue = useCallback(async () => {
@@ -218,8 +244,8 @@ export function ParseStep({ talkId, onContinue }: ParseStepProps) {
 
   if (!hasSections) {
     return (
-      <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
-        <div className="rounded-full border p-3 text-muted-foreground">
+      <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
+        <div className="rounded-full bg-primary/10 p-4 text-primary">
           <Wand2 className="h-6 w-6" aria-hidden="true" />
         </div>
         <div>
@@ -245,33 +271,63 @@ export function ParseStep({ talkId, onContinue }: ParseStepProps) {
   const sectionsError = form.formState.errors.sections?.message;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-semibold">Sections</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Sections</CardTitle>
+          <CardDescription>
             {sections.length} section{sections.length !== 1 ? 's' : ''} — reorder, edit, or delete before continuing.
-          </p>
-        </div>
-      </div>
+          </CardDescription>
+          <CardAction>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleReparseClick}
+              disabled={isParsing || isSaving}
+            >
+              <RefreshCw className="h-4 w-4 mr-2" aria-hidden="true" />
+              Re-parse
+            </Button>
+          </CardAction>
+        </CardHeader>
+        <CardContent>
+          <SectionList
+            sections={sections}
+            onChange={(newSections) =>
+              form.setValue('sections', newSections as SectionFormValue[], {
+                shouldValidate: true,
+                shouldDirty: true,
+              })
+            }
+            disabled={isSaving}
+          />
+          {/* Array-level validation error (e.g. "At least one section is required") */}
+          {sectionsError && (
+            <p role="alert" className="text-sm text-destructive mt-4">
+              {sectionsError}
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
-      <SectionList
-        sections={sections}
-        onChange={(newSections) =>
-          form.setValue('sections', newSections as SectionFormValue[], {
-            shouldValidate: true,
-            shouldDirty: true,
-          })
-        }
-        disabled={isSaving}
-      />
-
-      {/* Array-level validation error (e.g. "At least one section is required") */}
-      {sectionsError && (
-        <p role="alert" className="text-sm text-destructive">
-          {sectionsError}
-        </p>
-      )}
+      <AlertDialog open={showReparseConfirm} onOpenChange={setShowReparseConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Re-parse content?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will discard your current sections and re-run the AI parsing.
+              Any edits you&apos;ve made to sections will be lost. Continue?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleReparseConfirm}>
+              Re-parse
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Save & Continue */}
       <div className="flex justify-end pt-2">

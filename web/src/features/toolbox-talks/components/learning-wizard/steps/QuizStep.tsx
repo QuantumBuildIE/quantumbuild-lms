@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { AlertTriangle, Loader2, Wand2 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { WizardSectionDivider } from '@/components/ui/wizard-section-divider';
 import { SectionQuestionGroup } from '../components/SectionQuestionGroup';
 import { QuizSettingsPanel } from '../components/QuizSettingsPanel';
 import { useGenerateQuiz } from '../hooks/useGenerateQuiz';
@@ -277,8 +278,8 @@ export function QuizStep({ talkId, onContinue }: QuizStepProps) {
 
   if (!hasQuestions) {
     return (
-      <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
-        <div className="rounded-full border p-3 text-muted-foreground">
+      <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
+        <div className="rounded-full bg-primary/10 p-4 text-primary">
           <Wand2 className="h-6 w-6" aria-hidden="true" />
         </div>
         <div>
@@ -306,35 +307,34 @@ export function QuizStep({ talkId, onContinue }: QuizStepProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-semibold">Quiz Questions</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {hasQuestions
-              ? `${questions.length} question${questions.length !== 1 ? 's' : ''} — edit, reorder, or delete before continuing.`
-              : 'No questions yet.'}
-          </p>
+      <div className="rounded-xl border shadow-sm bg-card overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b">
+          <div>
+            <p className="font-semibold leading-none">Quiz Questions</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {questions.length} question{questions.length !== 1 ? 's' : ''} — edit, reorder, or delete before continuing.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={handleGenerateQuiz}
+            disabled={isGenerating}
+          >
+            <Wand2 className="h-3.5 w-3.5" aria-hidden="true" />
+            Regenerate All
+          </Button>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="gap-1.5"
-          onClick={handleGenerateQuiz}
-          disabled={isGenerating}
-        >
-          <Wand2 className="h-3.5 w-3.5" aria-hidden="true" />
-          Regenerate All
-        </Button>
+        <SectionQuestionGroup
+          questions={questions.map(toDisplayQuestion)}
+          onSaveQuestion={handleSaveQuestion}
+          onDeleteQuestion={handleDeleteQuestion}
+          onAddQuestion={handleAddQuestion}
+          isSaving={isSaving}
+        />
       </div>
-
-      <SectionQuestionGroup
-        questions={questions.map(toDisplayQuestion)}
-        onSaveQuestion={handleSaveQuestion}
-        onDeleteQuestion={handleDeleteQuestion}
-        onAddQuestion={handleAddQuestion}
-        isSaving={isSaving}
-      />
 
       {/* Array-level validation error (e.g. "At least one question is required") */}
       {questionsError && (
@@ -344,11 +344,14 @@ export function QuizStep({ talkId, onContinue }: QuizStepProps) {
       )}
 
       {talk && (
-        <QuizSettingsPanel
-          talk={talk}
-          onSave={handleSaveSettings}
-          isSaving={updateSettingsMutation.isPending}
-        />
+        <>
+          <WizardSectionDivider number="2a" label="Quiz Settings" />
+          <QuizSettingsPanel
+            talk={talk}
+            onSave={handleSaveSettings}
+            isSaving={updateSettingsMutation.isPending}
+          />
+        </>
       )}
 
       {/* Save & Continue */}
