@@ -9,6 +9,7 @@ export interface StepItem {
   reachable: boolean;
   /** Step intentionally bypassed by user config (e.g. requiresQuiz=false skips Quiz). */
   skipped?: boolean;
+  subtitle?: string;
 }
 
 interface StepIndicatorProps {
@@ -102,6 +103,11 @@ export function StepIndicator({ steps, currentStep, onStepClick }: StepIndicator
                 >
                   {state === 'skipped' ? `${step.label} — Skipped` : step.label}
                 </span>
+                {step.subtitle && !isDisabled && (
+                  <span className="hidden sm:block text-[10px] text-muted-foreground whitespace-nowrap leading-tight -mt-0.5">
+                    {step.subtitle}
+                  </span>
+                )}
               </button>
             </li>
           );

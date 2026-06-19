@@ -10,16 +10,17 @@ export interface WizardStepDef {
   number: number;
   label: string;
   slug: string;
+  subtitle?: string;
 }
 
 export const WIZARD_STEPS: WizardStepDef[] = [
-  { number: 1, label: 'Input & Config',  slug: 'new' },
-  { number: 2, label: 'Parse',           slug: 'parse' },
-  { number: 3, label: 'Quiz',            slug: 'quiz' },
-  { number: 4, label: 'Settings',        slug: 'settings' },
-  { number: 5, label: 'Translate',       slug: 'translate' },
-  { number: 6, label: 'Validate',        slug: 'validate' },
-  { number: 7, label: 'Publish',         slug: 'publish' },
+  { number: 1, label: 'Input & Config',  slug: 'new',       subtitle: 'Upload source, set languages' },
+  { number: 2, label: 'Parse',           slug: 'parse',     subtitle: 'Review AI-extracted sections' },
+  { number: 3, label: 'Quiz',            slug: 'quiz',      subtitle: 'Review generated questions' },
+  { number: 4, label: 'Settings',        slug: 'settings',  subtitle: 'Title, refresher, certificate' },
+  { number: 5, label: 'Translate',       slug: 'translate', subtitle: 'Run translations per language' },
+  { number: 6, label: 'Validate',        slug: 'validate',  subtitle: 'Review back-translation scores' },
+  { number: 7, label: 'Publish',         slug: 'publish',   subtitle: 'Confirm and publish' },
 ];
 
 export const TOTAL_STEPS = WIZARD_STEPS.length;
