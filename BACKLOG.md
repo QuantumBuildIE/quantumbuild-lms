@@ -2001,12 +2001,11 @@ The wizard's async philosophy (validated as intentional design during the naviga
 - Both use shadcn `AlertDialog`, matching the convention from §25 Chunk 2's Re-parse dialog and the existing `DeleteDraftDialog.tsx`.
 - Depends on Chunk 1 landing first — without it, Cancel on Step 2 during a video parse produces zombie data.
 
-**Chunk 3 — Destructive-action confirmation dialogs + settings nav prop**
+**Chunk 3 — Regenerate All confirmation dialog + settings nav prop**
 
-- Re-introduce confirmation dialog on Step 2 Re-parse (currently no confirmation per "intentionally not carried over" code comment, reassessed as oversight). Warn that re-parsing discards section edits.
-- Re-introduce confirmation dialog on Step 3 Regenerate All. Warn that regenerating discards quiz edits.
-- Both follow the AlertDialog convention established in §25 Chunk 2.
-- Fold in: settings/page.tsx pass `isNavigating={updateStep.isPending}` to `WizardLayout` (one-line fix, parallel pattern to other step pages). Prevents Back button double-click during step save.
+- _Scope correction (2026-06-19, post-§26-Chunk-3-recon):_ The Re-parse confirmation dialog originally listed in this chunk was found to already be shipped — it landed in §25 Chunk 2 alongside the Re-parse button itself. The post-§25 navigation recon misread the file. Confirmed by §26 Chunk 3 recon: `ParseStep.tsx` lines 62, 116-128, 314-330 contain the full implementation. Re-parse item removed from this chunk's scope.
+- Add confirmation dialog on Step 3 Regenerate All in `QuizStep.tsx`. Currently the button fires the regenerate mutation directly with no warning; should match the pattern of the already-shipped Re-parse dialog. Non-destructive `AlertDialogAction` styling (recoverable action, not permanent loss). Trigger only when questions exist (the empty-state Generate Quiz and the error-state Retry buttons stay un-gated — nothing to lose in either case).
+- Fold in: settings/page.tsx pass `isNavigating={isNavigating}` to `WizardLayout` (one-line fix sourced from the existing `useStepNavigation` hook). Prevents Back button double-action during step save.
 - Independent of Chunks 1 and 2.
 
 **Chunk 4 — (reserved if needed)**

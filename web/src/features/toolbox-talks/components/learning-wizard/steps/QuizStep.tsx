@@ -1,11 +1,21 @@
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { AlertTriangle, Loader2, Wand2 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { WizardSectionDivider } from '@/components/ui/wizard-section-divider';
 import { SectionQuestionGroup } from '../components/SectionQuestionGroup';
@@ -77,6 +87,7 @@ export function QuizStep({ talkId, onContinue }: QuizStepProps) {
   const generateMutation = useGenerateQuiz(talkId);
   const updateQuestionsMutation = useUpdateTalkQuestions(talkId);
   const updateSettingsMutation = useUpdateQuizSettings(talkId);
+  const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
 
   const form = useForm<QuizStepFormValues>({
     resolver: zodResolver(quizStepSchema),
@@ -320,7 +331,7 @@ export function QuizStep({ talkId, onContinue }: QuizStepProps) {
             variant="outline"
             size="sm"
             className="gap-1.5"
-            onClick={handleGenerateQuiz}
+            onClick={() => setShowRegenerateConfirm(true)}
             disabled={isGenerating}
           >
             <Wand2 className="h-3.5 w-3.5" aria-hidden="true" />
@@ -353,6 +364,24 @@ export function QuizStep({ talkId, onContinue }: QuizStepProps) {
           />
         </>
       )}
+
+      <AlertDialog open={showRegenerateConfirm} onOpenChange={setShowRegenerateConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Regenerate all questions?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will replace all current questions with newly AI-generated ones.
+              Any edits you&apos;ve made to questions will be lost.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleGenerateQuiz}>
+              Regenerate
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Save & Continue */}
       <div className="flex justify-end pt-2">

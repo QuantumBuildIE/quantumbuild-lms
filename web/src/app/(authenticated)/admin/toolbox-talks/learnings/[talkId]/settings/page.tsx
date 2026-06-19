@@ -16,7 +16,7 @@ export default function LearningWizardSettingsPage() {
 
   const { talk, isError, error, refetch } = useTalk(talkId);
   const { data: validationRuns } = useValidationRuns(talkId);
-  const { reachableSteps, canGoBack, goBack, goNext, goToStep } =
+  const { reachableSteps, canGoBack, goBack, goNext, goToStep, isNavigating } =
     useStepNavigation({ talkId, currentStep: 4, talk: talk ?? null, validationRuns });
 
   if (isError)
@@ -37,6 +37,7 @@ export default function LearningWizardSettingsPage() {
       onStepClick={goToStep}
       canGoBack={canGoBack}
       onBack={goBack}
+      isNavigating={isNavigating}
     >
       {/* SettingsStep owns its own Continue button and saves on blur (see SettingsStep.tsx §4.4 deviation note) */}
       <SettingsStep
