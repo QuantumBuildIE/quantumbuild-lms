@@ -44,6 +44,14 @@ public class VideoTranscriptionJobForTalk(
             return;
         }
 
+        if (talk.IsDeleted)
+        {
+            logger.LogInformation(
+                "[VideoTranscriptionForTalk] Talk {TalkId} has been deleted — skipping",
+                talkId);
+            return;
+        }
+
         if (talk.Status != ToolboxTalkStatus.Processing)
         {
             logger.LogWarning(

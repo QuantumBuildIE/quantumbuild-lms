@@ -39,6 +39,14 @@ public class ContentCreationParseJobForTalk(
             return;
         }
 
+        if (talk.IsDeleted)
+        {
+            logger.LogInformation(
+                "[ContentCreationParseForTalk] Talk {TalkId} has been deleted — skipping",
+                talkId);
+            return;
+        }
+
         if (talk.Status != ToolboxTalkStatus.Processing)
         {
             logger.LogWarning(
