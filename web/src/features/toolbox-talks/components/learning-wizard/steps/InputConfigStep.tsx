@@ -318,8 +318,21 @@ export function InputConfigStep() {
 
         router.push(getStepUrl(talk.id, 2));
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to create learning';
-        toast.error(message);
+        // The backend returns 400 { message: "A learning with title 'X' already exists." }
+        // for duplicate titles. The match relies on the substring "already exists" — if
+        // the backend message ever changes, this falls back to the toast (correct, but
+        // less useful). InvalidOperationException is the only source of this shape
+        // from POST /toolbox-talks/initialise; FluentValidation errors have a different
+        // shape ({ message, errors: [...] }) and won't false-positive here.
+        const data = (err as { response?: { data?: { message?: string } } }).response?.data;
+        const serverMessage = data?.message;
+        if (serverMessage?.includes('already exists')) {
+          form.setError('title', { type: 'manual', message: serverMessage });
+          form.setFocus('title');
+        } else {
+          const fallback = serverMessage ?? (err instanceof Error ? err.message : 'Failed to create learning');
+          toast.error(fallback);
+        }
       }
     },
     [initialiseMutation, upload, router]
@@ -994,18 +1007,6 @@ export function InputConfigStep() {
             </div>
           </CardContent>
         </Card>
-
-        {/* Form-level error banner */}
-        {initialiseMutation.isError && (
-          <Alert variant="destructive" role="alert">
-            <AlertTriangle className="h-4 w-4" aria-hidden="true" />
-            <AlertDescription>
-              {initialiseMutation.error instanceof Error
-                ? initialiseMutation.error.message
-                : 'Failed to create learning. Please try again.'}
-            </AlertDescription>
-          </Alert>
-        )}
 
         {/* Continue button */}
         <div className="flex justify-end pt-2">

@@ -1406,7 +1406,7 @@ Estimated 0.5 day. Not blocking §25 closure; moderate user impact (real edit wo
 
 - **Priority:** P2
 - **Origin:** `[Engineering]` `[UAT discovery 2026-06-19]`
-- **Status:** Open
+- **Status:** ✅ Done — 2026-06-19 — Fix shipped. Frontend-only: catch blocks in InputConfigStep (new-talk creation, 400 with message) and SettingsStep (rename, 409 with structured code) now surface server messages as field-level errors on the Title field via form.setError + form.setFocus. Inline mutation-error banner removed from InputConfigStep (was redundant and always showed generic Axios message). Reports: docs/7.9-duplicate-title-recon.md, docs/7.9-duplicate-title-fix.md.
 - **Surfaced:** When creating a new learning via the wizard with a title that matches an existing learning's title in the same tenant, clicking Continue on Step 1 fails with an HTTP 400 from the create-talk endpoint. The UI shows a generic error (toast or banner) without the actual server-side message. The duplicate-title reason is only visible by opening the browser developer tools and inspecting the network tab. Users have no way to discover that simply changing the title would let them proceed.
 
 **Likely scope (frontend-only if backend already returns useful body):**

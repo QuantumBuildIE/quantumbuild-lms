@@ -129,8 +129,18 @@ export function SettingsStep({ talkId, onContinue }: SettingsStepProps) {
       };
       try {
         await updateMutation.mutateAsync(payload);
-      } catch {
-        toast.error('Failed to save settings. Please try again.');
+      } catch (err) {
+        // The backend returns 409 { error: "...", code: "TitleNotUnique" } when the
+        // new title collides with an existing learning in the tenant. The structured
+        // code field makes the disambiguation clean — no string matching needed.
+        const response = (err as { response?: { status?: number; data?: { error?: string; code?: string } } }).response;
+        if (response?.status === 409 && response?.data?.code === 'TitleNotUnique') {
+          const message = response.data?.error ?? 'A learning with this title already exists.';
+          form.setError('title', { type: 'manual', message });
+          form.setFocus('title');
+        } else {
+          toast.error('Failed to save settings. Please try again.');
+        }
       }
     },
     [form, updateMutation]
@@ -160,8 +170,18 @@ export function SettingsStep({ talkId, onContinue }: SettingsStepProps) {
     try {
       await updateMutation.mutateAsync(payload);
       await onContinue();
-    } catch {
-      toast.error('Failed to save settings. Please try again.');
+    } catch (err) {
+      // The backend returns 409 { error: "...", code: "TitleNotUnique" } when the
+      // new title collides with an existing learning in the tenant. The structured
+      // code field makes the disambiguation clean — no string matching needed.
+      const response = (err as { response?: { status?: number; data?: { error?: string; code?: string } } }).response;
+      if (response?.status === 409 && response?.data?.code === 'TitleNotUnique') {
+        const message = response.data?.error ?? 'A learning with this title already exists.';
+        form.setError('title', { type: 'manual', message });
+        form.setFocus('title');
+      } else {
+        toast.error('Failed to save settings. Please try again.');
+      }
     }
   }, [form, updateMutation, onContinue]);
 
