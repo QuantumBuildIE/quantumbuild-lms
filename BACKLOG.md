@@ -1952,7 +1952,7 @@ Screenshots 2026-06-14: validation run detail page for "Validation Run — NL" w
 
 Priority: P0 — blocks §5.7 (Demo refresh) closure and blocks the wizard cutover toggle being flipped for paying tenants.
 Origin: [Engineering] [Demo refresh discovery 2026-06-18]
-Status: Open
+Status: ✅ Done — 2026-06-19 — Closed via six chunks. Outer step container shell (Chunk 6) closed the final visible gap. New wizard now at visual parity with the legacy across all seven steps plus the §24 detail panels. Demo cut (Chunks 1-4) unblocked §5.7 partially; full closure on §5.7 now also requires §26 (closed same day). Chunks: 1 InputConfigStep, 2 ParseStep+QuizStep, 3 SettingsStep, 4 StepIndicator subtitles, 5 detail panels, 6 outer shell. Reports: docs/25/recon.md, docs/25/chunk-{1-6}-recon.md, docs/25/chunk-{1-6}-fix.md.
 Surfaced: During §5.7 Demo refresh smoke verify. Side-by-side comparison of the new wizard against the legacy revealed the new wizard ships with significantly less visual polish — flat field stack vs the legacy's card-based layout, no subsection markers, tile selectors not styled, no helper text patterns, etc. Functional but visibly unfinished.
 
 Scope: Bring the new wizard's visual layer to at minimum legacy parity. Cards, subsection markers, tile selectors, toggle patterns, helper text, step indicator subtitles. All wizard steps (Input & Config, Parse, Quiz, Settings, Translate, Validate, Publish) plus the §24 edit panels on the talk detail page (SectionEditPanel, QuizEditPanel, SettingsEditPanel, AddTargetLanguagePicker).
@@ -1974,7 +1974,7 @@ Cutover toggle ready to flip for real tenants
 ## §26 — Wizard navigation & cancellation parity
 
 - **Priority:** P1 — surfaces real ghost-data bug; affects user trust in the new wizard
-- **Status:** Open
+- **Status:** ✅ Done — 2026-06-19 — Closed via three chunks. Chunk 4 was reserved during scoping for items surfaced during implementation; nothing warranted it. Chunk 1: backend parse-job IsDeleted guards (zombie-revival bug fix). Chunk 2: Cancel affordances on Steps 1 (non-destructive, form-state discard) and 2 (destructive, soft-delete via useDeleteToolboxTalk). Chunk 3: Regenerate All confirmation dialog on Step 3 + isNavigating prop fix on settings/page.tsx. The Re-parse dialog originally listed in Chunk 3 was found already-shipped via §25 Chunk 2; BACKLOG scope corrected during Chunk 3. Reports: docs/26/chunk-{1-3}-recon.md, docs/26/chunk-{1-3}-fix.md.
 - **Origin:** Post-§25 navigation recon (`docs/25/post-close-navigation-recon.md`) and parse-handler investigation (`docs/parse-handler-cancellation-investigation.md`), both 2026-06-19
 - **Predecessors:** §24 (Edit workflow), §25 (Visual polish — closed 2026-06-19)
 
