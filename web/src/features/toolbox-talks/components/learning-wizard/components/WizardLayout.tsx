@@ -2,6 +2,7 @@
 
 import { ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { StepIndicator } from './StepIndicator';
 import type { StepItem } from './StepIndicator';
 
@@ -53,9 +54,11 @@ export function WizardLayout({
       </div>
 
       {/* Step content */}
-      <div className="flex-1 min-h-0">
-        {children}
-      </div>
+      <Card>
+        <CardContent>
+          {children}
+        </CardContent>
+      </Card>
 
       {/* Navigation bar */}
       <div className="mt-8 pt-4 border-t flex items-center justify-between gap-4">
