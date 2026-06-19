@@ -251,16 +251,16 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
               <CardContent className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Frequency</label>
-                    <p className="mt-1">{talk.frequencyDisplay}</p>
+                    <p className="text-xs text-muted-foreground">Frequency</p>
+                    <p className="text-sm font-medium mt-0.5">{talk.frequencyDisplay}</p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Sections</label>
-                    <p className="mt-1">{talk.sections.length}</p>
+                    <p className="text-xs text-muted-foreground">Sections</p>
+                    <p className="text-sm font-medium mt-0.5">{talk.sections.length}</p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Video</label>
-                    <div className="mt-1 flex items-center gap-2">
+                    <p className="text-xs text-muted-foreground">Video</p>
+                    <div className="mt-0.5 flex items-center gap-2 text-sm font-medium">
                       {talk.videoSource !== 'None' ? (
                         <>
                           <VideoIcon className="h-4 w-4 text-muted-foreground" />
@@ -277,41 +277,41 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
                           )}
                         </>
                       ) : (
-                        <span className="text-muted-foreground">No video</span>
+                        <span className="text-muted-foreground font-normal">No video</span>
                       )}
                     </div>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Minimum Watch %</label>
-                    <p className="mt-1">
+                    <p className="text-xs text-muted-foreground">Minimum Watch %</p>
+                    <p className="text-sm font-medium mt-0.5">
                       {talk.videoSource !== 'None' ? `${talk.minimumVideoWatchPercent}%` : '-'}
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Quiz Required</label>
-                    <p className="mt-1">{talk.requiresQuiz ? 'Yes' : 'No'}</p>
+                    <p className="text-xs text-muted-foreground">Quiz Required</p>
+                    <p className="text-sm font-medium mt-0.5">{talk.requiresQuiz ? 'Yes' : 'No'}</p>
                   </div>
                   {talk.requiresQuiz && (
                     <>
                       <div>
-                        <label className="text-sm font-medium text-muted-foreground">Passing Score</label>
-                        <p className="mt-1">{talk.passingScore}%</p>
+                        <p className="text-xs text-muted-foreground">Passing Score</p>
+                        <p className="text-sm font-medium mt-0.5">{talk.passingScore}%</p>
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-muted-foreground">Questions</label>
-                        <p className="mt-1">{talk.questions.length}</p>
+                        <p className="text-xs text-muted-foreground">Questions</p>
+                        <p className="text-sm font-medium mt-0.5">{talk.questions.length}</p>
                       </div>
                     </>
                   )}
                   {talk.attachmentUrl && (
                     <div className="sm:col-span-2">
-                      <label className="text-sm font-medium text-muted-foreground">Attachment</label>
-                      <div className="mt-1">
+                      <p className="text-xs text-muted-foreground">Attachment</p>
+                      <div className="mt-0.5">
                         <a
                           href={talk.attachmentUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-2 text-primary hover:underline"
+                          className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
                         >
                           <FileTextIcon className="h-4 w-4" />
                           Download Attachment

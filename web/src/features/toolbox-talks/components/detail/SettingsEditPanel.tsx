@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { PencilIcon, XIcon, SaveIcon, SlidersHorizontalIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -236,6 +236,7 @@ export function SettingsEditPanel({ talk, onRefetch }: SettingsEditPanelProps) {
               <SlidersHorizontalIcon className="h-5 w-5" />
               Settings
             </CardTitle>
+            <CardDescription>Quiz, refresher, and certificate settings</CardDescription>
             {canManage && !isEditMode && (
               <Button variant="outline" size="sm" onClick={openEditMode}>
                 <PencilIcon className="mr-2 h-4 w-4" />
@@ -276,7 +277,7 @@ export function SettingsEditPanel({ talk, onRefetch }: SettingsEditPanelProps) {
               >
                 {/* ── Quiz ─────────────────────────────────────── */}
                 <section>
-                  <h3 className="text-sm font-semibold mb-3">Quiz</h3>
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Quiz</h3>
                   <div className="space-y-3">
                     <FormField
                       control={form.control}
@@ -399,7 +400,7 @@ export function SettingsEditPanel({ talk, onRefetch }: SettingsEditPanelProps) {
 
                 {/* ── Refresher ─────────────────────────────────── */}
                 <section>
-                  <h3 className="text-sm font-semibold mb-3">Refresher</h3>
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Refresher</h3>
                   <div className="space-y-3">
                     <FormField
                       control={form.control}
@@ -448,7 +449,7 @@ export function SettingsEditPanel({ talk, onRefetch }: SettingsEditPanelProps) {
 
                 {/* ── Certificate ───────────────────────────────── */}
                 <section>
-                  <h3 className="text-sm font-semibold mb-3">Certificate</h3>
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Certificate</h3>
                   <FormField
                     control={form.control}
                     name="generateCertificate"
@@ -470,7 +471,7 @@ export function SettingsEditPanel({ talk, onRefetch }: SettingsEditPanelProps) {
 
                 {/* ── Schedule ──────────────────────────────────── */}
                 <section>
-                  <h3 className="text-sm font-semibold mb-3">Schedule</h3>
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Schedule</h3>
                   <FormField
                     control={form.control}
                     name="autoAssignDueDays"

@@ -1385,6 +1385,21 @@ This requires a CLI-generated migration (per CLAUDE.md Note 28). The same misali
 
 **Risk if not addressed:** rare. Requires a tenant to be soft-deleted, then an attempt to create a new tenant with the exact same name. Post-§3.11 the user sees a clean error message, but the system is rejecting a legitimate request. Workaround: use a different name.
 
+#### 7.8 SettingsEditPanel missing fields: video watch %, active status, auto-assign
+
+- **Priority:** P3
+- **Origin:** `[Engineering]` `[§25 Chunk 5 recon discovery 2026-06-19]`
+- **Status:** Open
+- **Surfaced:** During §25 Chunk 5 recon, while assessing the §24 detail panels for visual polish. `settingsEditSchema` in `web/src/features/toolbox-talks/components/detail/SettingsEditPanel.tsx` does not include `minimumVideoWatchPercent`, `isActive`, or `autoAssignToNewEmployees` — these fields exist on the underlying talk model and are settable via the wizard but cannot be edited from the talk detail page once a talk is created. Users who want to change watch %, active status, or auto-assignment after publish must either use the wizard's re-edit flow or modify the data directly.
+
+**Fix direction:**
+- Add `minimumVideoWatchPercent`, `isActive`, and `autoAssignToNewEmployees` to `settingsEditSchema` with the same Zod validation rules as the wizard's `settingsSchema` (`minimumVideoWatchPercent: z.number().int().min(50).max(100)`, booleans for `isActive` and `autoAssignToNewEmployees`)
+- Add corresponding form fields in edit mode: Switch + bordered tile via `ToggleRow` (for `isActive` and `autoAssignToNewEmployees`), and a `w-24` number input with label-unit suffix (for `minimumVideoWatchPercent`, matching the existing `w-24` + label-with-unit convention already in the panel)
+- Add corresponding `ViewRow` entries to the view-mode rendering
+- Wire the values into `onSubmit` — currently these three fields are passed through from `talk.*` unchanged; they need to come from `values.*` like the other edited fields
+
+Estimated 0.5 day. Not blocking §25 closure; moderate user impact (real edit workflow gap) but workaround exists (re-run wizard).
+
 ---
 
 # 6. Security Notes (Product Decisions)
