@@ -1402,6 +1402,36 @@ Estimated 0.5 day. Not blocking §25 closure; moderate user impact (real edit wo
 
 ---
 
+#### §7.9 — Duplicate-title error on new learning creation surfaces generically (network tab only)
+
+- **Priority:** P2
+- **Origin:** `[Engineering]` `[UAT discovery 2026-06-19]`
+- **Status:** Open
+- **Surfaced:** When creating a new learning via the wizard with a title that matches an existing learning's title in the same tenant, clicking Continue on Step 1 fails with an HTTP 400 from the create-talk endpoint. The UI shows a generic error (toast or banner) without the actual server-side message. The duplicate-title reason is only visible by opening the browser developer tools and inspecting the network tab. Users have no way to discover that simply changing the title would let them proceed.
+
+**Likely scope (frontend-only if backend already returns useful body):**
+
+1. Verify the backend's `POST /api/toolbox-talks` (or whichever endpoint Step 1 Continue calls) returns a 400 with a structured body containing a useful error message — likely something like "A learning with this title already exists" or an `errors.Title` validation entry. If the backend returns a generic 400 with no body, expand scope to include backend.
+
+2. Update the Step 1 Continue handler in `new/page.tsx` (or the mutation hook it uses) to extract the actual message from the 400 response body and either:
+   - Display it as a field-level error on the Title `<FormItem>` (preferred — directs the user to the field they need to change), OR
+   - Display it as a toast with the actual message (less ideal — user has to mentally connect "this learning already exists" with "I should change the title")
+
+3. Verify same fix applies on Edit when renaming an existing draft to collide with another talk's title — likely the same code path, but confirm during implementation.
+
+4. Confirm the title-uniqueness constraint is per-tenant (expected) — if it's something narrower (per-language, per-status), the error wording should be specific enough that users understand the scope.
+
+**Out of scope:**
+- Title autocomplete or suggestion of available titles
+- Allowing duplicate titles with a forced-uniqueness suffix (e.g., "Title (2)") — separate UX decision
+- Refactoring error-handling globally across the app — only this surface
+
+**Estimated effort:** 0.5 day if backend already returns a useful body (frontend extract + display only). 1 day if backend also needs updating.
+
+**Verifies:** Creating a learning with a duplicate title shows the user a clear, actionable error message at the title field, not a generic "failed" message that requires developer-tools investigation.
+
+---
+
 # 6. Security Notes (Product Decisions)
 
 These are not backlog items — they're explicit product decisions with known trade-offs, captured here for reference and to inform future revisits.
