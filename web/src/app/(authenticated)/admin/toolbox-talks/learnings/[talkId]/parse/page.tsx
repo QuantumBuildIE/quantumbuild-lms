@@ -70,7 +70,7 @@ export default function LearningWizardParsePage() {
         onBack={goBack}
         isNavigating={isNavigating}
         leftFooter={
-          <Button variant="ghost" onClick={() => setShowCancelConfirm(true)}>
+          <Button variant="outline" onClick={() => setShowCancelConfirm(true)}>
             Cancel
           </Button>
         }

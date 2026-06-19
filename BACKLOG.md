@@ -2064,4 +2064,75 @@ The wizard's async philosophy (validated as intentional design during the naviga
 
 ---
 
+#### §27 — Translation flow gaps (full investigation findings)
+
+- **Priority:** P2 overall (new-wizard subgroup gates cutover toggle; legacy subgroup is deferrable)
+- **Origin:** `[Engineering]` `[Translation-flow investigation 2026-06-19]`
+- **Status:** Open
+- **Surfaced:** Translation flow investigation 2026-06-19. Full report: `docs/translation-flow-investigation.md`.
+
+**Summary.** Twelve findings from the translation investigation, split by relevance to the new wizard end-to-end flow. The new-wizard subgroup should land before the wizard cutover toggle flips for paying tenants; the legacy / cross-cutting subgroup can be deferred and scheduled independently.
+
+---
+
+**Subgroup A — New wizard (relevant to current cutover work)**
+
+**A1. Add-language post-publish has no immediate translation path** (investigation R3)
+When a user adds a target language to a published talk via `AddTargetLanguagePicker`, `TargetLanguageCodes` is updated but no translation job runs. The user must either wait up to 24h for `DailyTranslationScanJob`, or revisit the wizard's TranslateStep and click "Start" manually. For a published talk the wizard step isn't naturally reachable. Fix candidates: enqueue `MissingTranslationsJob` immediately on `AddTargetLanguageCommand`, or surface a "Translation pending" state with manual trigger on the detail page. Refs: `AddTargetLanguageCommandHandler.cs:31-93`.
+
+**A2. PDF slide translations never re-translated when source changes** (investigation R5)
+`ToolboxTalkSlideTranslation` rows are skip-if-exists in `GenerateContentTranslationsCommandHandler` and not included in `UpdateToolboxTalkCommandHandler`'s `anyStaleningChange` detection. Re-uploading a PDF leaves stale slide translations with no UI signal. Fix: include slide-source changes in stale detection; auto-delete or stale-mark `ToolboxTalkSlideTranslation` rows on source change. Refs: `GenerateContentTranslationsCommandHandler.cs:421`; `UpdateToolboxTalkCommandHandler.cs:156-193`.
+
+**A3. Verify subtitle `EnglishSrtContent` always populated** (investigation R7)
+`SubtitleProcessingOrchestrator.TranslateMissingLanguagesAsync` requires `job.EnglishSrtContent` for add-language subtitle translation. Old jobs predating the field's introduction would silently fail (returns 0, logs warning, user sees no error). 5-minute verification needed: does the current pipeline always populate this field on initial processing? If yes, A3 closes as verified-no-action. If no, A3 becomes a backfill or fix. Refs: `SubtitleProcessingOrchestrator.cs:592-615`.
+
+**A4. Translation cancellation token not propagated to HttpClient** (investigation R10)
+`ContentTranslationService.TranslateTextAsync` accepts a `CancellationToken` in its signature but does not pass it to `HttpClient.SendAsync()`. Currently no consumer cancels mid-translation, so the bug is latent. Becomes relevant if/when a Cancel-on-Step-5 affordance is added (parallel to §26's Cancel work). Defer until cancellation surface is built. Refs: `ContentTranslationService.cs:269`.
+
+**A5. Verify background-job overwrite guard for reviewer-accepted translations** (investigation R11)
+`TranslationWorkflowPanel` has UI guards against overwriting `Accepted` / `ReviewerAccepted` translations. Background jobs (`MissingTranslationsJob`, `DailyTranslationScanJob`, `ContentGenerationJob`) dispatch `GenerateContentTranslationsCommand` which internally calls `workflow.StartTranslation()` — the guard at `TranslationWorkflowService.StartTranslation:155-190` should block these. Verify enforcement at all background call sites. May be verification-only with no fix needed. Refs: `TranslationWorkflowService.cs:155-190`.
+
+---
+
+**Subgroup B — Legacy / cross-cutting (deferrable)**
+
+**B1. Language names vs codes inconsistency** (investigation R1) — Already tracked as `§1.2.12`. See existing entry. Not duplicated here.
+
+**B2. Hardcoded English source language at 13 sites** (investigation R2) — Already tracked as `§9`. See existing entry. Not duplicated here.
+
+**B3. `DailyTranslationScanJob` coarser completeness check than `MissingTranslationsJob`** (investigation R4)
+Daily scan only detects absent `ToolboxTalkTranslation` rows, not incomplete ones. A crashed translation job that created the row before failing leaves the talk undetected by daily scan. Refs: `DailyTranslationScanJob.cs:106-119`; `MissingTranslationsJob.cs:114-162`.
+
+**B4. Slideshow HTML skip-if-exists prevents clean re-run after partial failure** (investigation R6)
+If a previous `TranslateSlideshowAsync` partially succeeded (row created, HTML empty/garbled), the skip-if-exists guard prevents a clean re-run without manual row deletion. Refs: `GenerateContentTranslationsCommandHandler.cs:521-529`.
+
+**B5. Missing soft-delete query filters on slideshow / slide translation entities** (investigation R8)
+`ToolboxTalkSlideshowTranslation` and `ToolboxTalkSlideTranslation` entity configurations do not apply `HasQueryFilter(!IsDeleted)`. Low risk today (both tables hard-delete or append-only with skip), but inconsistent with the rest of the codebase. Refs: entity configurations.
+
+**B6. `ToolboxTalkCourseTranslation` has no staleness mechanism** (investigation R9)
+No `TranslatedAt` column, no workflow events for course translations. Course title/description edits leave course translations unmarked. Likely cleanup, low priority. Refs: `ToolboxTalkCourseTranslation` entity.
+
+**B7. Dual-path architecture creates parallel artefact sets** (investigation R12)
+A talk translated via the legacy path (`GenerateContentTranslationsCommand`) has `ToolboxTalkTranslation` rows but no `TranslationValidationRun`. If opened in the new wizard's Validate step, the reviewer UI has nothing to display. Affects boundary between legacy and new wizard data. Out of scope for the new wizard's own foreground flow; relevant if/when a porting concern surfaces. Refs: see investigation §8 R12.
+
+---
+
+**Definition of done**
+
+- Subgroup A: each item either resolved with fix-and-test, or verified-no-action with finding documented (A3, A4, A5 may be verifications only).
+- Subgroup B: items can be picked off individually as bandwidth permits. No bundled closure required; close per-item.
+
+**Scheduling guidance**
+
+- Subgroup A should land before wizard cutover toggle flips for paying tenants (alongside §7.9).
+- Subgroup B can be deferred. Recommend revisiting after Demo refresh closes and the cutover toggle is live.
+
+**Out of scope for §27**
+
+- Architectural refactor to unify the dual-path translation pipeline (B7 is a finding; the larger work would be its own §-level entry if pursued).
+- Backfilling existing legacy-path translations with `TranslationValidationRun` records (related to B7; not addressed here).
+- Adding cancellation surface to translation jobs (A4 is preparatory; the surface itself would be its own work).
+
+---
+
 _End of BACKLOG.md._
