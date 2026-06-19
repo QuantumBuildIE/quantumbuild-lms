@@ -1971,4 +1971,68 @@ Cutover toggle ready to flip for real tenants
 
 ---
 
+## §26 — Wizard navigation & cancellation parity
+
+- **Priority:** P1 — surfaces real ghost-data bug; affects user trust in the new wizard
+- **Status:** Open
+- **Origin:** Post-§25 navigation recon (`docs/25/post-close-navigation-recon.md`) and parse-handler investigation (`docs/parse-handler-cancellation-investigation.md`), both 2026-06-19
+- **Predecessors:** §24 (Edit workflow), §25 (Visual polish — closed 2026-06-19)
+
+### Context
+
+The new wizard ships at visual parity with the legacy (§25), but a comparison of navigation and action surfaces found five real gaps and one latent backend bug. The headline finding: video-mode parse jobs do not respect soft-deletion of their target talk row, producing zombie talks (deleted in DB, with sections still being written by the AI handler) — a bug that activates any time a video-mode talk is deleted mid-parse, including via the planned Cancel feature, drafts-list deletion, or admin actions.
+
+The wizard's async philosophy (validated as intentional design during the navigation recon) is preserved throughout: no synchronous "must wait here" gates, async work continues server-side, user has agency to move freely. The gaps being addressed are the user-agency affordances missing from that model: the ability to explicitly abandon a creation attempt without leaving server-side debris.
+
+### Scope (four chunks)
+
+**Chunk 1 — Parse jobs tolerate soft-deleted talks (backend)**
+
+- `VideoTranscriptionJobForTalk` and `ContentCreationParseJobForTalk` add an `IsDeleted` check after talk load, matching the convention in `TranslationValidationJob:990-992`.
+- Preferred shape: extend the predicate to `&& !t.IsDeleted` rather than an explicit if-block — matches the existing pattern.
+- ~4 lines net diff across two files.
+- Prerequisite for Chunk 2's Cancel-mid-parse to work without zombie data.
+- Out of scope: aborting in-flight AI API calls (transcription and Claude both run to completion at provider end; the fix prevents the write, not the spend). Tracked separately if cost optimisation becomes worthwhile.
+
+**Chunk 2 — Cancel affordances (frontend)**
+
+- Cancel button on Step 1: discards local form state, confirmation dialog, navigates to `/admin/toolbox-talks/talks`. No backend involvement (no talk row exists yet).
+- Cancel button on Step 2 (and arguably any draft state from Step 2 onward): confirmation dialog, calls `DELETE /api/toolbox-talks/{id}`, navigates to talks list.
+- Both use shadcn `AlertDialog`, matching the convention from §25 Chunk 2's Re-parse dialog and the existing `DeleteDraftDialog.tsx`.
+- Depends on Chunk 1 landing first — without it, Cancel on Step 2 during a video parse produces zombie data.
+
+**Chunk 3 — Destructive-action confirmation dialogs + settings nav prop**
+
+- Re-introduce confirmation dialog on Step 2 Re-parse (currently no confirmation per "intentionally not carried over" code comment, reassessed as oversight). Warn that re-parsing discards section edits.
+- Re-introduce confirmation dialog on Step 3 Regenerate All. Warn that regenerating discards quiz edits.
+- Both follow the AlertDialog convention established in §25 Chunk 2.
+- Fold in: settings/page.tsx pass `isNavigating={updateStep.isPending}` to `WizardLayout` (one-line fix, parallel pattern to other step pages). Prevents Back button double-click during step save.
+- Independent of Chunks 1 and 2.
+
+**Chunk 4 — (reserved if needed)**
+
+- Originally planned as separate `isNavigating` fix; folded into Chunk 3.
+- Reserved for any item surfaced during Chunks 1-3 implementation that warrants its own chunk.
+
+### Out of scope
+
+- Back from Step 2 (intentional design decision — talk row exists at end of Step 1, "going back" is structurally ambiguous; StepIndicator + Cancel cover the user intents).
+- Translate Step 5 Continue gate (intentional async design — user can advance to Validate before translations complete; Validate handles progressive rendering correctly).
+- "Preview as Learner" on Step 7 (preview accessible via talk detail page after publish; wizard-step preview is nice-to-have, not regression).
+- Aborting in-flight AI API calls server-side (separate concern; would reduce cost on cancel but isn't required for correctness).
+- Reaper for orphaned drafts created by browser-close / network-drop scenarios (separate concern from explicit Cancel).
+
+### Definition of done
+
+- All four chunks shipped, each with recon and fix reports
+- §5.7 Demo refresh (which has been blocked / unblocked / blocked again through §25's cycles) can run against a wizard with full navigation parity
+- Wizard cutover toggle (`UseNewWizard`) ready to flip for paying tenants without known UX dead-ends
+
+### Risks
+
+- Chunk 1's fix doesn't prevent the AI API cost — only the write. If this is unacceptable (e.g., a tenant runs many cancels and the cost adds up), the deeper "abort AI calls server-side" work surfaces as a separate chunk.
+- The intentional new-wizard design decisions (Back from Step 2 absent, no Translate gate) may surface as confusion from users habituated to the legacy. Worth monitoring but not addressing pre-emptively.
+
+---
+
 _End of BACKLOG.md._
