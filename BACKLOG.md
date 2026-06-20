@@ -457,6 +457,16 @@ Related: see `ContentCreationSession.cs` (AudienceRole property), `QuizGeneratio
 - **Description:** File upload component displays size in MB to one decimal. Files smaller than ~50KB show as "0.0 MB" which reads as "no file uploaded".
 - **Fix direction:** Switch to KB for files < 1MB, MB for files ≥ 1MB. Simple formatting fix in the upload component.
 
+#### 1.3.9 FormMessage missing live-region role for screen-reader announcements
+
+- **Priority:** P2
+- **Origin:** `[Engineering]` `[Playwright test discovery 2026-06-20]`
+- **Status:** ✅ Done — 2026-06-20 — `role="alert"` added to the `<p>` element rendered by `FormMessage` in `web/src/components/ui/form.tsx:150`. Purely additive change; existing `aria-invalid` + `aria-describedby` wiring on `<FormControl>` unchanged. Verified with all 6 Playwright tests passing (including the validation test that asserts on `aria-invalid="true"`).
+- **Surfaced:** During Playwright tenant-creation test implementation (2026-06-20). The validation test asserted on the field-level `aria-invalid` attribute, which works correctly — but inspection of `FormMessage` revealed it renders as a plain `<p data-slot="form-message">` with no `role="alert"` and no `aria-live`. Cross-field errors (validation errors not attached to the focused input — e.g., array-field errors like `sectorIds`) receive no live-region announcement at all. A screen reader or keyboard-only user could be silently blocked on form submission failures that don't bind to a single field.
+- **Scope when found:** Product-wide. `FormMessage` is the shared form-error component used by every react-hook-form-driven form in the app — tenant create, employee create, settings, wizard steps, validation review, etc. The fix improves accessibility across all of them.
+- **References PHASE_5_STANDARDS §9.3:** "Validation errors are announced via `role='alert'` or `aria-live='polite'` on the error container." This entry closes the standard for the `FormMessage` element specifically. Other error surfaces (toast errors, modal errors, page-level error banners) are not in scope of this fix — `FormMessage` is the inline-field-error component only.
+- **Choice of `role="alert"` over `aria-live="polite"`:** Validation errors are user-initiated and immediate — they warrant assertive announcement. `aria-live="polite"` would queue the announcement behind other speech, which for a "you can't submit because X" message is the wrong urgency.
+
 ---
 
 # 2. QR Workstations & PINs
