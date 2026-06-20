@@ -2068,29 +2068,26 @@ The wizard's async philosophy (validated as intentional design during the naviga
 
 - **Priority:** P2 overall (new-wizard subgroup gates cutover toggle; legacy subgroup is deferrable)
 - **Origin:** `[Engineering]` `[Translation-flow investigation 2026-06-19]`
-- **Status:** Open
-- **Surfaced:** Translation flow investigation 2026-06-19. Full report: `docs/translation-flow-investigation.md`.
+- **Status:** Subgroup A engineering-closed 2026-06-20 (recon verified four items as no-action, one reclassified to Subgroup B as B8). Subgroup B remains open.
+- **Surfaced:** Translation flow investigation 2026-06-19. Full report: `docs/translation-flow-investigation.md`. Subgroup A recon: `docs/27-subgroup-a-recon.md`.
 
 **Summary.** Twelve findings from the translation investigation, split by relevance to the new wizard end-to-end flow. The new-wizard subgroup should land before the wizard cutover toggle flips for paying tenants; the legacy / cross-cutting subgroup can be deferred and scheduled independently.
 
 ---
 
-**Subgroup A — New wizard (relevant to current cutover work)**
+**Subgroup A — New wizard (relevant to current cutover work) — ENGINEERING-CLOSED 2026-06-20**
 
-**A1. Add-language post-publish has no immediate translation path** (investigation R3)
-When a user adds a target language to a published talk via `AddTargetLanguagePicker`, `TargetLanguageCodes` is updated but no translation job runs. The user must either wait up to 24h for `DailyTranslationScanJob`, or revisit the wizard's TranslateStep and click "Start" manually. For a published talk the wizard step isn't naturally reachable. Fix candidates: enqueue `MissingTranslationsJob` immediately on `AddTargetLanguageCommand`, or surface a "Translation pending" state with manual trigger on the detail page. Refs: `AddTargetLanguageCommandHandler.cs:31-93`.
+Verification recon (`docs/27-subgroup-a-recon.md`) resolved all five items without implementation work. Summary:
 
-**A2. PDF slide translations never re-translated when source changes** (investigation R5)
-`ToolboxTalkSlideTranslation` rows are skip-if-exists in `GenerateContentTranslationsCommandHandler` and not included in `UpdateToolboxTalkCommandHandler`'s `anyStaleningChange` detection. Re-uploading a PDF leaves stale slide translations with no UI signal. Fix: include slide-source changes in stale detection; auto-delete or stale-mark `ToolboxTalkSlideTranslation` rows on source change. Refs: `GenerateContentTranslationsCommandHandler.cs:421`; `UpdateToolboxTalkCommandHandler.cs:156-193`.
+**A1. Add-language post-publish has no immediate translation path** (investigation R3) — ✅ Verified — no action needed. §24 Chunk 5 (shipped 2026-06-18) embedded `TranslateStep` directly in the talk detail page's translations tab. Adding a language invalidates the workflow-state cache; the user sees "Start" immediately and can trigger translation without waiting for the daily scan. Refs: `AddTargetLanguageCommandHandler.cs:31-93`; `ToolboxTalkDetail.tsx:365-382`; `use-toolbox-talks.ts:295-309`.
 
-**A3. Verify subtitle `EnglishSrtContent` always populated** (investigation R7)
-`SubtitleProcessingOrchestrator.TranslateMissingLanguagesAsync` requires `job.EnglishSrtContent` for add-language subtitle translation. Old jobs predating the field's introduction would silently fail (returns 0, logs warning, user sees no error). 5-minute verification needed: does the current pipeline always populate this field on initial processing? If yes, A3 closes as verified-no-action. If no, A3 becomes a backfill or fix. Refs: `SubtitleProcessingOrchestrator.cs:592-615`.
+**A2. PDF slide translations never re-translated when source changes** (investigation R5) — → Reclassified to Subgroup B as **B8**. The gap is real (`ToolboxTalkSlideTranslation` rows are skip-if-exists forever, stale detection doesn't cover slides) but the new wizard's detail-page edit has no PDF re-upload affordance — the gap only surfaces via the legacy edit page, making it an edit-page-only concern rather than a new-wizard pre-cutover concern. See B8 below.
 
-**A4. Translation cancellation token not propagated to HttpClient** (investigation R10)
-`ContentTranslationService.TranslateTextAsync` accepts a `CancellationToken` in its signature but does not pass it to `HttpClient.SendAsync()`. Currently no consumer cancels mid-translation, so the bug is latent. Becomes relevant if/when a Cancel-on-Step-5 affordance is added (parallel to §26's Cancel work). Defer until cancellation surface is built. Refs: `ContentTranslationService.cs:269`.
+**A3. Verify subtitle `EnglishSrtContent` always populated** (investigation R7) — ✅ Verified — no action needed. `EnglishSrtContent` was in the original `AddSubtitleProcessing` migration (2026-01-16) and is unconditionally set in `SubtitleProcessingOrchestrator.ProcessAsync` (line 221-226) before any per-language translation runs. `TranslateMissingLanguagesAsync` only queries for `Status == Completed` jobs; the null-check at lines 608-615 is a defensive guard against unreachable data. Refs: `SubtitleProcessingOrchestrator.cs:221-226, 595, 608-615`; `20260116203306_AddSubtitleProcessing.cs:28`.
 
-**A5. Verify background-job overwrite guard for reviewer-accepted translations** (investigation R11)
-`TranslationWorkflowPanel` has UI guards against overwriting `Accepted` / `ReviewerAccepted` translations. Background jobs (`MissingTranslationsJob`, `DailyTranslationScanJob`, `ContentGenerationJob`) dispatch `GenerateContentTranslationsCommand` which internally calls `workflow.StartTranslation()` — the guard at `TranslationWorkflowService.StartTranslation:155-190` should block these. Verify enforcement at all background call sites. May be verification-only with no fix needed. Refs: `TranslationWorkflowService.cs:155-190`.
+**A4. Translation cancellation token not propagated to HttpClient** (investigation R10) — ✅ Verified — no action needed. The investigation hypothesis does not apply to the current codebase. `ContentTranslationService.TranslateTextAsync` passes the token to `CallClaudeApiAsync` at line 76, which passes it to both `HttpClient.SendAsync` (line 269) and `Content.ReadAsStringAsync` (line 270). Same correct propagation in `TranslateBatchAsync` and `SendCustomPromptAsync`. Refs: `ContentTranslationService.cs:76, 143, 210, 269-270`.
+
+**A5. Verify background-job overwrite guard for reviewer-accepted translations** (investigation R11) — ✅ Verified — correct enforcement, no action needed. `TranslationWorkflowService.StartTranslation:175-178` blocks `Accepted`/`ReviewerAccepted` states when `confirmOverwrite=false`, regardless of `TriggeredBy`. All three background paths (`MissingTranslationsJob`, `DailyTranslationScanJob` via `MissingTranslationsJob`, `ContentGenerationJob.AutoGenerateTranslationsAsync`) dispatch with `ConfirmOverwrite=false` and `TriggeredBy=System`. The guard fires and skips the language silently (warning log + per-language failure result, no exception, no job failure). Refs: `TranslationWorkflowService.cs:175-178`; `MissingTranslationsJob.cs:274-281`; `GenerateContentTranslationsCommandHandler.cs:107-132`.
 
 ---
 
@@ -2115,6 +2112,9 @@ No `TranslatedAt` column, no workflow events for course translations. Course tit
 **B7. Dual-path architecture creates parallel artefact sets** (investigation R12)
 A talk translated via the legacy path (`GenerateContentTranslationsCommand`) has `ToolboxTalkTranslation` rows but no `TranslationValidationRun`. If opened in the new wizard's Validate step, the reviewer UI has nothing to display. Affects boundary between legacy and new wizard data. Out of scope for the new wizard's own foreground flow; relevant if/when a porting concern surfaces. Refs: see investigation §8 R12.
 
+**B8. Stale slide translations after PDF re-upload** (reclassified from A2 by recon 2026-06-20)
+`ToolboxTalkSlideTranslation` rows are skip-if-exists in `GenerateContentTranslationsCommandHandler` (line 420) and never stale-marked. `UpdateToolboxTalkCommandHandler.anyStaleningChange` (lines 154-162) covers title/description, sections, and questions — not slides. When a PDF is re-uploaded on a published talk via the legacy edit page, existing slide translations remain unchanged and are skipped on subsequent translation runs. Fix: in `UpdateToolboxTalkCommandHandler`, when PDF/slide source changes are detected (track via `AttachmentUrl` change or `SlidesGenerated` cycling false→true), hard-delete all `ToolboxTalkSlideTranslation` rows for the talk to reset the skip guard. Estimated half-day. No migration needed. Refs: `GenerateContentTranslationsCommandHandler.cs:417-448`; `UpdateToolboxTalkCommandHandler.cs:154-162`.
+
 ---
 
 **Definition of done**
@@ -2124,8 +2124,8 @@ A talk translated via the legacy path (`GenerateContentTranslationsCommand`) has
 
 **Scheduling guidance**
 
-- Subgroup A should land before wizard cutover toggle flips for paying tenants (alongside §7.9).
-- Subgroup B can be deferred. Recommend revisiting after Demo refresh closes and the cutover toggle is live.
+- Subgroup A: engineering-closed 2026-06-20. No pre-cutover work required.
+- Subgroup B: deferrable. Recommend revisiting after Demo refresh closes and the cutover toggle is live. B8 is a half-day item with no dependencies — could be folded into the §5.7 + cutover prep window if convenient, or deferred with the rest of Subgroup B.
 
 **Out of scope for §27**
 
