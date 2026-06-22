@@ -15,8 +15,6 @@ public class SubtitleProcessingSettingsValidator : IValidateOptions<SubtitleProc
 
         if (string.IsNullOrWhiteSpace(options.ElevenLabs.ApiKey))
             errors.Add("SubtitleProcessing:ElevenLabs:ApiKey must be set");
-        if (string.IsNullOrWhiteSpace(options.ElevenLabs.Model))
-            errors.Add("SubtitleProcessing:ElevenLabs:Model must be set");
 
         return errors.Count > 0
             ? ValidateOptionsResult.Fail(errors)

@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using QuantumBuild.Core.Application.Configuration;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.ContentCreation;
 using QuantumBuild.Modules.ToolboxTalks.Application.Prompts;
@@ -17,6 +18,7 @@ public class ContentParserService : IContentParserService
 {
     private readonly HttpClient _httpClient;
     private readonly SubtitleProcessingSettings _settings;
+    private readonly string _claudeModel;
     private readonly IAiUsageLogger _aiUsageLogger;
     private readonly ILogger<ContentParserService> _logger;
 
@@ -25,11 +27,13 @@ public class ContentParserService : IContentParserService
     public ContentParserService(
         HttpClient httpClient,
         IOptions<SubtitleProcessingSettings> settings,
+        IOptions<AIProviderOptions> aiProviders,
         IAiUsageLogger aiUsageLogger,
         ILogger<ContentParserService> logger)
     {
         _httpClient = httpClient;
         _settings = settings.Value;
+        _claudeModel = aiProviders.Value.Anthropic.Models.Sonnet;
         _aiUsageLogger = aiUsageLogger;
         _logger = logger;
     }
@@ -81,7 +85,7 @@ public class ContentParserService : IContentParserService
 
             var requestBody = new
             {
-                model = _settings.Claude.Model,
+                model = _claudeModel,
                 max_tokens = 8000,
                 messages = new[]
                 {

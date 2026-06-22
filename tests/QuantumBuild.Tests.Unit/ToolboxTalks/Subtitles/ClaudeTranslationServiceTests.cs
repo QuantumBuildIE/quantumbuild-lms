@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Moq.Protected;
 using QuantumBuild.Core.Application.Abstractions.AI;
+using QuantumBuild.Core.Application.Configuration;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Subtitles;
@@ -21,6 +22,7 @@ public class ClaudeTranslationServiceTests
     private readonly Mock<ILogger<ClaudeTranslationService>> _loggerMock;
     private readonly Mock<IAiUsageLogger> _aiUsageLoggerMock;
     private readonly IOptions<SubtitleProcessingSettings> _settings;
+    private readonly IOptions<AIProviderOptions> _aiProviders;
 
     public ClaudeTranslationServiceTests()
     {
@@ -34,12 +36,19 @@ public class ClaudeTranslationServiceTests
             Claude = new ClaudeSettings
             {
                 ApiKey = "test-api-key",
-                Model = "claude-sonnet-4-20250514",
                 MaxTokens = 4000,
                 BaseUrl = "https://api.anthropic.com/v1"
             }
         };
         _settings = Options.Create(settings);
+
+        _aiProviders = Options.Create(new AIProviderOptions
+        {
+            Anthropic = new AnthropicProviderOptions
+            {
+                Models = new AnthropicModels { Sonnet = "claude-sonnet-4-5" }
+            }
+        });
     }
 
     [Fact]
@@ -389,7 +398,7 @@ public class ClaudeTranslationServiceTests
         // Assert
         capturedBody.Should().NotBeNull();
         capturedBody.Should().Contain("Polish");
-        capturedBody.Should().Contain("claude-sonnet-4-20250514");
+        capturedBody.Should().Contain("claude-sonnet-4-5");
         capturedBody.Should().Contain("max_tokens");
     }
 
@@ -510,7 +519,7 @@ public class ClaudeTranslationServiceTests
 
     private ClaudeTranslationService CreateService()
     {
-        return new ClaudeTranslationService(_httpClient, _settings, _aiUsageLoggerMock.Object, _loggerMock.Object);
+        return new ClaudeTranslationService(_httpClient, _settings, _aiProviders, _aiUsageLoggerMock.Object, _loggerMock.Object);
     }
 
     private void SetupHttpResponse(HttpStatusCode statusCode, string content)

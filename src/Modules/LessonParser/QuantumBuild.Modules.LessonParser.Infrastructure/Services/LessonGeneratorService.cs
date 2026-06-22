@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using QuantumBuild.Core.Application.Abstractions.AI;
+using QuantumBuild.Core.Application.Configuration;
 using QuantumBuild.Modules.LessonParser.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
@@ -20,6 +21,7 @@ public class LessonGeneratorService : ILessonGeneratorService
 {
     private readonly HttpClient _httpClient;
     private readonly ClaudeSettings _claudeSettings;
+    private readonly string _claudeModel;
     private readonly IToolboxTalksDbContext _toolboxTalksDbContext;
     private readonly ITranslationQueueService _translationQueueService;
     private readonly IAiUsageLogger _aiUsageLogger;
@@ -38,6 +40,7 @@ public class LessonGeneratorService : ILessonGeneratorService
     public LessonGeneratorService(
         HttpClient httpClient,
         IOptions<ClaudeSettings> claudeSettings,
+        IOptions<AIProviderOptions> aiProviders,
         IToolboxTalksDbContext toolboxTalksDbContext,
         ITranslationQueueService translationQueueService,
         IAiUsageLogger aiUsageLogger,
@@ -45,6 +48,7 @@ public class LessonGeneratorService : ILessonGeneratorService
     {
         _httpClient = httpClient;
         _claudeSettings = claudeSettings.Value;
+        _claudeModel = aiProviders.Value.Anthropic.Models.Sonnet;
         _toolboxTalksDbContext = toolboxTalksDbContext;
         _translationQueueService = translationQueueService;
         _aiUsageLogger = aiUsageLogger;
@@ -297,7 +301,7 @@ public class LessonGeneratorService : ILessonGeneratorService
 
         var requestBody = new
         {
-            model = _claudeSettings.Model,
+            model = _claudeModel,
             max_tokens = 16000,
             messages = new[]
             {

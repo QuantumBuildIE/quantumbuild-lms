@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using QuantumBuild.Core.Application.Configuration;
 using QuantumBuild.Core.Application.Models;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Prompts;
@@ -19,6 +20,7 @@ public class AiSlideshowGenerationService : IAiSlideshowGenerationService
 {
     private readonly HttpClient _httpClient;
     private readonly SubtitleProcessingSettings _settings;
+    private readonly string _claudeModel;
     private readonly IAiUsageLogger _aiUsageLogger;
     private readonly ILogger<AiSlideshowGenerationService> _logger;
 
@@ -33,11 +35,13 @@ public class AiSlideshowGenerationService : IAiSlideshowGenerationService
     public AiSlideshowGenerationService(
         HttpClient httpClient,
         IOptions<SubtitleProcessingSettings> settings,
+        IOptions<AIProviderOptions> aiProviders,
         IAiUsageLogger aiUsageLogger,
         ILogger<AiSlideshowGenerationService> logger)
     {
         _httpClient = httpClient;
         _settings = settings.Value;
+        _claudeModel = aiProviders.Value.Anthropic.Models.Sonnet;
         _aiUsageLogger = aiUsageLogger;
         _logger = logger;
     }
@@ -67,7 +71,7 @@ public class AiSlideshowGenerationService : IAiSlideshowGenerationService
 
             string SerializeBody(string p) => JsonSerializer.Serialize(new
             {
-                model = _settings.Claude.Model,
+                model = _claudeModel,
                 max_tokens = 32000,
                 messages = new[]
                 {
@@ -176,7 +180,7 @@ public class AiSlideshowGenerationService : IAiSlideshowGenerationService
 
             string SerializeBody(string p) => JsonSerializer.Serialize(new
             {
-                model = _settings.Claude.Model,
+                model = _claudeModel,
                 max_tokens = 32000,
                 messages = new[]
                 {
@@ -298,7 +302,7 @@ public class AiSlideshowGenerationService : IAiSlideshowGenerationService
 
             string SerializeBody(string p) => JsonSerializer.Serialize(new
             {
-                model = _settings.Claude.Model,
+                model = _claudeModel,
                 max_tokens = 32000,
                 messages = new[]
                 {

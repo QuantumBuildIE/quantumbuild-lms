@@ -1437,6 +1437,8 @@ Defaults live in `appsettings.Development.json`. These are dev-only local creden
 - **Demo:** Seeded automatically on first deploy provided `Seed__SuperUser__Email`, `Seed__SuperUser__Password`, `Seed__Admin__Email`, and `Seed__Admin__Password` are set as Railway env vars (ASP.NET Core env-var separator is `__` not `:`). Missing values log a warning and skip that account — no throw.
 - **Production:** SuperUser must still be inserted via direct DB script or pre-deploy migration (per Note 20). The seeder does not run for Production.
 
+**Note 32 — Config layer migration rule, complete or leave intact:** When migrating a model identifier from a legacy config key (e.g., `SubtitleProcessing:Claude:Model`) to the canonical `AIProviders:*` registry, the migration must be atomic end-to-end: (1) add `IOptions<AIProviderOptions>` to the service constructor, (2) change the model read to the new property, (3) remove the old C# property from the settings class, (4) remove the old key from `appsettings.json`, (5) update the validator if it checked the old property — all in the same commit. A partial migration (changing C# defaults to empty without updating the service read) leaves the system in a state worse than either old or new architecture: the old key in config is silently ignored, the new key may not be set, and the first actual API call fails at runtime rather than at startup. The §5.28 → ElevenLabs `unsupported_model` P0 (2026-06-22) is the reference incident.
+
 ## Backlog
 
 ### High

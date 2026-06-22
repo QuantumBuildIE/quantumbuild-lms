@@ -17,12 +17,6 @@ public class ClaudeSettings
     public string ApiKey { get; set; } = string.Empty;
 
     /// <summary>
-    /// Claude model to use.
-    /// Value sourced from AIProviders:Anthropic:Models:Sonnet (no hardcoded fallback).
-    /// </summary>
-    public string Model { get; set; } = string.Empty;
-
-    /// <summary>
     /// Maximum tokens for responses.
     /// Default: 4000
     /// </summary>

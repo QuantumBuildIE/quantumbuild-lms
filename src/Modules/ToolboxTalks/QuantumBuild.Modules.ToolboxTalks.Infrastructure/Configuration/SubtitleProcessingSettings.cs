@@ -64,12 +64,6 @@ public class ElevenLabsSettings
     public string ApiKey { get; set; } = string.Empty;
 
     /// <summary>
-    /// Transcription model to use.
-    /// Value sourced from AIProviders:ElevenLabs:Models:Transcription (no hardcoded fallback).
-    /// </summary>
-    public string Model { get; set; } = string.Empty;
-
-    /// <summary>
     /// ElevenLabs API base URL.
     /// Default: https://api.elevenlabs.io/v1
     /// </summary>
