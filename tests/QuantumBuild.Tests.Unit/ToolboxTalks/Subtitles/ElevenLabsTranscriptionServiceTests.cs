@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using Moq.Protected;
+using QuantumBuild.Core.Application.Configuration;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Subtitles;
 
@@ -18,6 +19,7 @@ public class ElevenLabsTranscriptionServiceTests
     private readonly HttpClient _httpClient;
     private readonly Mock<ILogger<ElevenLabsTranscriptionService>> _loggerMock;
     private readonly IOptions<SubtitleProcessingSettings> _settings;
+    private readonly IOptions<AIProviderOptions> _aiProviders;
 
     public ElevenLabsTranscriptionServiceTests()
     {
@@ -35,6 +37,15 @@ public class ElevenLabsTranscriptionServiceTests
             }
         };
         _settings = Options.Create(settings);
+
+        var aiProviders = new AIProviderOptions
+        {
+            ElevenLabs = new ElevenLabsProviderOptions
+            {
+                Models = new ElevenLabsModels { Transcription = "scribe_v1" }
+            }
+        };
+        _aiProviders = Options.Create(aiProviders);
     }
 
     [Fact]
@@ -475,7 +486,7 @@ public class ElevenLabsTranscriptionServiceTests
 
     private ElevenLabsTranscriptionService CreateService()
     {
-        return new ElevenLabsTranscriptionService(_httpClient, _settings, _loggerMock.Object);
+        return new ElevenLabsTranscriptionService(_httpClient, _settings, _aiProviders, _loggerMock.Object);
     }
 
     /// <summary>
