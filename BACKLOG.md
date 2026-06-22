@@ -1316,7 +1316,7 @@ Recon-first. Likely chunks:
 3. **DI registration pattern for new services:** Any new service that calls a Claude, Gemini, or ElevenLabs model must (a) inject `IOptions<AIProviderOptions>` instead of hardcoding a model string, and (b) chain `.AddPolicyHandler(ResiliencePolicies.Get*Policy(logger))` at registration. Both rules to be added to CLAUDE.md coding conventions.
 4. **Railway env vars:** Ensure `AIProviders__Anthropic__Models__Sonnet` and `AIProviders__Anthropic__Models__Haiku` (plus Gemini Flash and ElevenLabs Transcription) are set in Railway Production and Development services before deploy. The fail-fast validator will catch missing values at startup.
 
-**Duplicate source of truth: AIProviders vs operational config keys:** The §5.28
+**Duplicate source of truth: AIProviders vs operational config keys: — ✅ Closed 2026-06-22 by Option B (Chunks 1 + 2).**  The §5.28
 patch introduced `AIProviders` as the canonical model identifier registry, but
 six operational config keys still hold the same identifiers separately:
 `SubtitleProcessing:Claude:Model`, `TranslationValidation:Round1AModel`,
@@ -1396,6 +1396,37 @@ Rotation of Production credentials can happen at the same time as the code fix o
 
 Adjacent: §5.7 (Demo refresh) must not bring up Demo without this fix in place, or Demo gets the seeded accounts with the literal passwords. Worth cross-referencing in §5.7.
 Out of scope for this entry: API keys in appsettings.json (separate finding — docs/dataseeder-production-recon.md Finding A).
+
+#### 5.32 P0 incident: ElevenLabs unsupported_model — partial-migration failure mode
+
+- **Priority:** P0 (incident); ✅ Done
+- **Origin:** `[Production-incident]` `[Engineering]`
+- **Status:** ✅ Closed 2026-06-22. Option A (narrow fix) shipped; Option B (Chunks 1 + 2, complete §5.28 migration) followed within the same day to close the broader risk.
+- **Surfaced:** 2026-06-22 during routine video learning creation on Development. ElevenLabs API returned `unsupported_model` because an empty string was sent as `model_id`.
+
+**Root cause:** §5.28's multi-provider config migration was incomplete. It introduced `AIProviders:ElevenLabs:Models:Transcription` as the canonical key, added a startup validator for it, removed the C# default (`"scribe_v1"` → `string.Empty`) from `SubtitleProcessingSettings.ElevenLabsSettings.Model`, and added a doc comment claiming the property was "sourced from AIProviders" — but never migrated `ElevenLabsTranscriptionService` to read from the new key. The service kept reading the now-defaulted-to-empty old property at runtime. The validator passed at startup because it checked only the new (correctly set) key; the failure mode was silent until the first transcription call.
+
+**Why it didn't reproduce locally:** Both `appsettings.json` and `appsettings.Development.json` still had `SubtitleProcessing:ElevenLabs:Model = "scribe_v1"`. The error manifested only on Railway where the env var checklist from §5.28 listed only `AIProviders__*` keys, so the old key wasn't preserved.
+
+**Option A (narrow fix, 2026-06-22):**
+- Migrated `ElevenLabsTranscriptionService` to inject `IOptions<AIProviderOptions>` and read from `_aiProviders.ElevenLabs.Models.Transcription`.
+- Added `SubtitleProcessingSettingsValidator` as belt-and-suspenders so future config-source mismatches fail at startup rather than at first API call.
+- Did NOT migrate the other five duplicate-source-of-truth sites — those became Option B.
+
+**Option B (broader fix, 2026-06-22 — Chunks 1 + 2):**
+- Migrated the seven remaining Claude consumers and four `TranslationValidationSettings` consumers (eleven services total).
+- Removed the legacy `Model` properties from `ClaudeSettings`, `SubtitleProcessingSettings.ElevenLabsSettings`, and `TranslationValidationSettings`.
+- Removed the corresponding appsettings keys.
+- Closes the duplicate-source-of-truth class of bug structurally.
+
+**Validator coverage gap (separately noted):** The Option A fix exposed that `AIProviderOptionsValidator` validates the canonical key being *set* but not that any service actually *reads* from it. A future validator design pattern could verify both — but the structural fix (no duplicate sources) makes this less urgent. Captured as a learning rather than a tracked work item.
+
+**Reference incident:** documented in CLAUDE.md Note 32 as the canonical example of the partial-migration anti-pattern. Future config-layer refactors must complete the migration end-to-end or leave the old behaviour fully intact.
+
+**References:**
+- `docs/elevenlabs-model-error-recon.md`
+- `docs/option-b-multi-provider-recon.md`
+- CLAUDE.md Note 32
 
 --- 
 

@@ -1439,6 +1439,10 @@ Defaults live in `appsettings.Development.json`. These are dev-only local creden
 
 **Note 32 — Config layer migration rule, complete or leave intact:** When migrating a model identifier from a legacy config key (e.g., `SubtitleProcessing:Claude:Model`) to the canonical `AIProviders:*` registry, the migration must be atomic end-to-end: (1) add `IOptions<AIProviderOptions>` to the service constructor, (2) change the model read to the new property, (3) remove the old C# property from the settings class, (4) remove the old key from `appsettings.json`, (5) update the validator if it checked the old property — all in the same commit. A partial migration (changing C# defaults to empty without updating the service read) leaves the system in a state worse than either old or new architecture: the old key in config is silently ignored, the new key may not be set, and the first actual API call fails at runtime rather than at startup. The §5.28 → ElevenLabs `unsupported_model` P0 (2026-06-22) is the reference incident.
 
+Option B (2026-06-22) is the canonical example of this rule applied end-to-end — see BACKLOG §5.29 follow-up item 3 closure and §5.34.
+
+**Note 33 — Multi-chunk migration test runs must rebuild, not `--no-build`.** When a migration spans multiple chunks (e.g., Option B Chunks 1 + 2), running `dotnet test --no-build` between chunks can use a stale compiled binary from an earlier chunk and produce false test failures against logic that no longer exists in source. The Option B Chunk 2 verification initially showed 478 false failures because the loaded test binary still contained Chunk 1's now-removed `SubtitleProcessingSettingsValidator.ElevenLabs.Model` check. Always run a full build (`dotnet build` then `dotnet test`, or `dotnet test` without `--no-build`) when verifying across chunk boundaries. The trade-off is build time vs. trustworthy results — trust wins.
+
 ## Backlog
 
 ### High
