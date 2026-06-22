@@ -348,8 +348,8 @@ Lives on a dedicated `RegulatoryBrowseController` (class-gated `Learnings.Admin`
 | GET    | `/pending`                  | Pending assignments                          | ToolboxTalks.View     |
 | GET    | `/in-progress`              | In-progress assignments                      | ToolboxTalks.View     |
 | GET    | `/completed`                | Completed assignments                        | ToolboxTalks.View     |
-| POST   | `/{id}/reminder`            | Send reminder                                | ToolboxTalks.Schedule |
-| DELETE | `/{id}`                     | Cancel assignment                            | ToolboxTalks.Schedule |
+| POST   | `/{id}/reminder`            | Send reminder                                | Learnings.Schedule |
+| DELETE | `/{id}`                     | Cancel assignment                            | Learnings.Schedule |
 
 #### Schedules (`/api/toolbox-talks/schedules`)
 
@@ -357,10 +357,10 @@ Lives on a dedicated `RegulatoryBrowseController` (class-gated `Learnings.Admin`
 | ------ | --------------- | -------------------------------------- | --------------------- |
 | GET    | `/`             | List schedules (paginated, filterable) | ToolboxTalks.View     |
 | GET    | `/{id}`         | Get schedule with assignments          | ToolboxTalks.View     |
-| POST   | `/`             | Create schedule                        | ToolboxTalks.Schedule |
-| PUT    | `/{id}`         | Update schedule                        | ToolboxTalks.Schedule |
-| DELETE | `/{id}`         | Cancel schedule                        | ToolboxTalks.Schedule |
-| POST   | `/{id}/process` | Process schedule to create assignments | ToolboxTalks.Schedule |
+| POST   | `/`             | Create schedule                        | Learnings.Schedule |
+| PUT    | `/{id}`         | Update schedule                        | Learnings.Schedule |
+| DELETE | `/{id}`         | Cancel schedule                        | Learnings.Schedule |
+| POST   | `/{id}/process` | Process schedule to create assignments | Learnings.Schedule |
 
 #### Courses (`/api/toolbox-talks/courses`)
 

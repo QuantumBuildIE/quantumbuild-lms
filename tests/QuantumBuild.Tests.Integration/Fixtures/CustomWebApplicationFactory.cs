@@ -408,6 +408,15 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
                 },
                 (Guid?)TestTenantConstants.Employees.OperatorEmployee // Link to operator employee
             ),
+            TestUserType.Supervisor => (
+                TestTenantConstants.Users.Supervisor.Id,
+                TestTenantConstants.Users.Supervisor.Email,
+                TestTenantConstants.Users.Supervisor.FirstName,
+                TestTenantConstants.Users.Supervisor.LastName,
+                new[] { "Supervisor" },
+                new[] { "Learnings.View", "Learnings.Schedule" },
+                (Guid?)TestTenantConstants.Employees.SupervisorEmployee // Link to supervisor employee
+            ),
             _ => throw new ArgumentOutOfRangeException(nameof(userType))
         };
 
@@ -484,5 +493,10 @@ public enum TestUserType
     /// <summary>
     /// Operator with Learnings.View permission only.
     /// </summary>
-    Operator
+    Operator,
+
+    /// <summary>
+    /// Supervisor with Learnings.View and Learnings.Schedule permissions, linked to SupervisorEmployee.
+    /// </summary>
+    Supervisor
 }

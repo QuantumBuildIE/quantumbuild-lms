@@ -1,5 +1,6 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using QuantumBuild.Core.Application.Features.Employees;
 using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs;
@@ -12,13 +13,19 @@ public class UpdateToolboxTalkScheduleCommandHandler : IRequestHandler<UpdateToo
 {
     private readonly IToolboxTalksDbContext _dbContext;
     private readonly ICoreDbContext _coreDbContext;
+    private readonly ICurrentUserService _currentUserService;
+    private readonly ISupervisorAssignmentService _supervisorAssignmentService;
 
     public UpdateToolboxTalkScheduleCommandHandler(
         IToolboxTalksDbContext dbContext,
-        ICoreDbContext coreDbContext)
+        ICoreDbContext coreDbContext,
+        ICurrentUserService currentUserService,
+        ISupervisorAssignmentService supervisorAssignmentService)
     {
         _dbContext = dbContext;
         _coreDbContext = coreDbContext;
+        _currentUserService = currentUserService;
+        _supervisorAssignmentService = supervisorAssignmentService;
     }
 
     public async Task<ToolboxTalkScheduleDto> Handle(UpdateToolboxTalkScheduleCommand request, CancellationToken cancellationToken)
@@ -38,6 +45,33 @@ public class UpdateToolboxTalkScheduleCommandHandler : IRequestHandler<UpdateToo
         if (schedule.Status != ToolboxTalkScheduleStatus.Draft)
         {
             throw new InvalidOperationException($"Schedule can only be updated when in Draft status. Current status: {schedule.Status}");
+        }
+
+        // Supervisor-scoping: restrict to assigned operators only
+        var isSupervisorOnly = !_currentUserService.IsSuperUser
+            && !_currentUserService.Roles.Contains("Admin", StringComparer.OrdinalIgnoreCase)
+            && _currentUserService.Roles.Contains("Supervisor", StringComparer.OrdinalIgnoreCase);
+
+        if (isSupervisorOnly)
+        {
+            var supervisorEmployeeId = _currentUserService.EmployeeId;
+            if (!supervisorEmployeeId.HasValue)
+                throw new InvalidOperationException(
+                    "Supervisor account is not linked to an employee record.");
+
+            if (request.AssignToAllEmployees)
+                throw new InvalidOperationException(
+                    "Supervisors cannot schedule training for all employees. Please select your assigned team members.");
+
+            var assignedResult = await _supervisorAssignmentService.GetAssignedOperatorIdsAsync(
+                supervisorEmployeeId.Value);
+            if (!assignedResult.Success)
+                throw new InvalidOperationException("Could not verify supervisor assignments.");
+
+            var unauthorised = request.EmployeeIds.Except(assignedResult.Data!).ToList();
+            if (unauthorised.Any())
+                throw new InvalidOperationException(
+                    $"{unauthorised.Count} selected employee(s) are not in your assigned team and cannot be scheduled.");
         }
 
         // Get employee IDs to assign

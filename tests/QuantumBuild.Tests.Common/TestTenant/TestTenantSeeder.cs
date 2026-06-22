@@ -98,6 +98,7 @@ public class TestTenantSeeder
         // Core module (must be last due to foreign keys)
         await ExecuteDeleteAsync("Contacts", "\"TenantId\" = {0}", tenantId);
         await ExecuteDeleteAsync("Companies", "\"TenantId\" = {0}", tenantId);
+        await ExecuteDeleteAsync("SupervisorAssignments", "\"TenantId\" = {0}", tenantId);
         await ExecuteDeleteAsync("Employees", "\"TenantId\" = {0}", tenantId);
         await ExecuteDeleteAsync("Sites", "\"TenantId\" = {0}", tenantId);
 
@@ -485,6 +486,23 @@ public class TestTenantSeeder
                 IsActive = true,
                 StartDate = DateTime.UtcNow.AddMonths(-6),
                 PreferredLanguage = "en",
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = "test-seeder"
+            },
+            new Employee
+            {
+                Id = TestTenantConstants.Employees.SupervisorEmployee,
+                TenantId = TestTenantConstants.TenantId,
+                EmployeeCode = TestTenantConstants.Employees.SupervisorEmployeeCode,
+                FirstName = TestTenantConstants.Employees.SupervisorEmployeeFirstName,
+                LastName = TestTenantConstants.Employees.SupervisorEmployeeLastName,
+                Email = "supervisor.test@test.quantumbuild.ie",
+                JobTitle = "Supervisor",
+                PrimarySiteId = TestTenantConstants.Sites.MainSite,
+                IsActive = true,
+                StartDate = DateTime.UtcNow.AddYears(-3),
+                PreferredLanguage = "en",
+                UserId = TestTenantConstants.Users.Supervisor.Id,
                 CreatedAt = DateTime.UtcNow,
                 CreatedBy = "test-seeder"
             }

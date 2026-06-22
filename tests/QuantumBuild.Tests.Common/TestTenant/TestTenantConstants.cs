@@ -97,6 +97,11 @@ public static class TestTenantConstants
         public const string InactiveEmployeeCode = "EMP006";
         public const string InactiveEmployeeFirstName = "Inactive";
         public const string InactiveEmployeeLastName = "Test";
+
+        public static readonly Guid SupervisorEmployee = Guid.Parse("AAAAAAAA-0003-0001-0001-000000000007");
+        public const string SupervisorEmployeeCode = "EMP007";
+        public const string SupervisorEmployeeFirstName = "Supervisor";
+        public const string SupervisorEmployeeLastName = "Test";
     }
 
     // ==================== COMPANIES ====================
