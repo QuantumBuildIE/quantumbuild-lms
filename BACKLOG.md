@@ -688,6 +688,108 @@ Removed from Employee:
 - **Status:** Open
 - **Description:** Admin should be tested in a separate browser profile from end-user verification flows. Same-origin localStorage means token state from a user-login can clobber an admin's token state silently. Caused a 403 cascade during 3.1 verification on 5 June. Documentation/discipline note rather than code change — not operationalized as a hook or checklist yet.
 
+#### 3.14 Supervisor can schedule learnings outside their assigned team
+
+- **Priority:** P1
+- **Origin:** `[Engineering]` `[Supervisor-operator recon discovery 2026-06-22]`
+- **Status:** Open — blocked on §3.16 product decisions before implementation
+- **Surfaced:** During supervisor–operator relationship recon (`docs/supervisor-operator-relationship-recon.md` R1 / Gap A / Gap B).
+
+`CreateToolboxTalkScheduleCommandHandler` accepts any active employee IDs in the tenant via the `EmployeeIds` list, and accepts `AssignToAllEmployees = true` which targets every active employee in the tenant. The handler does not check whether the calling user is a Supervisor, and does not validate that the provided employee IDs are in the caller's assigned-operator list. A user with `Learnings.Schedule` permission (which the Supervisor role has) can schedule learnings to employees they do not supervise — including, via `AssignToAllEmployees`, the entire tenant.
+
+This contradicts the intent expressed by every other surface in the supervisor feature (My Team page, scoped reports, scoped skills matrix, the role's narrow permission set). The bug is silent: the schedule succeeds, the `ScheduledTalk` rows are created, the targeted employees see the learning in their portal. There is no error and no audit signal that the Supervisor scheduled outside their team.
+
+**Files referenced:**
+- `src/Modules/ToolboxTalks/QuantumBuild.Modules.ToolboxTalks.Application/Commands/CreateToolboxTalkSchedule/CreateToolboxTalkScheduleCommandHandler.cs`
+- Frontend: `web/src/app/(authenticated)/admin/toolbox-talks/schedules/new/` — the schedule creation form does not constrain the employee picker for Supervisor users, so this gap is reachable via both the API directly and the normal UI path.
+
+**Fix direction (sketch — final shape depends on §3.16 product decisions):**
+1. In `CreateToolboxTalkScheduleCommandHandler`, when the caller is a Supervisor (resolved via `ICurrentUserService` role/claim inspection), reject `AssignToAllEmployees = true` and reject any `EmployeeIds` not present in the caller's `SupervisorAssignmentService.GetAssignedOperatorIdsAsync` result.
+2. Error response: `FailureCode.Forbidden` (or a more specific code) with a message identifying the unauthorised employees. Do not leak employee IDs the caller cannot see — name the count, not the IDs.
+3. Frontend: constrain the schedule creation form's employee picker for Supervisor users to their assigned operators only. Hide the "Assign to all employees" toggle.
+4. Tests: integration test covering each rejection path; Playwright test as a follow-up if appetite exists.
+
+**Blocked on §3.16 because:** the validation logic differs depending on whether multi-supervisor assignment is intentional (R4 in the recon). If an operator can be supervised by multiple supervisors, the validation must check the union of all such assignments correctly. If not, the recon also raises the question of whether the schema should enforce single-supervisor uniqueness — which would be a structural fix, not a handler change.
+
+**Estimated effort once unblocked:** 1-2 days (backend command handler + frontend form + integration test).
+
+**Closes:** R1 / Gap A / Gap B from the recon.
+
+#### 3.15 Supervisor feature consistency cleanup
+
+- **Priority:** P2
+- **Origin:** `[Engineering]` `[Supervisor-operator recon discovery 2026-06-22]`
+- **Status:** Open — individual items pickable independently; see breakdown
+- **Surfaced:** During supervisor–operator relationship recon (`docs/supervisor-operator-relationship-recon.md` R2, R3, R5, R6, R7, Gap C, Gap D, Gap E, Gap F, Gap G, Gap H).
+
+The supervisor feature has been iterated on across multiple chunks without a single coherent design pass. Individually-minor inconsistencies have accumulated. None is urgent; together they suggest the feature warrants a tidy-up before the next significant extension.
+
+**Item-by-item breakdown** (each can be a chunk on its own, or several can be bundled):
+
+**A — Team Reports pages have no role guard** (Gap C, R7)
+`/toolbox-talks/reports` and its children do not check for the Supervisor role. An Operator deep-linking to the route sees the page rendered with their own data (correctly scoped, no leak). The UI framing ("compliance reports for your assigned operators") is confusing for a solo Operator. Add an explicit role redirect matching the My Team page pattern.
+
+**B — Supervisor demotion leaves orphaned assignments** (R2)
+Demoting a Supervisor to Operator does not clean up their `SupervisorAssignment` rows. The former supervisor stops seeing My Team / Team Reports nav. The operators previously assigned to them effectively lose their supervisor with no alert or audit. Add cleanup: when a user's roles change and the Supervisor role is removed, soft-delete their `SupervisorAssignment` rows. Consider whether an audit log entry or admin notification is warranted.
+
+**C — Supervisor with no linked Employee** (R3)
+A user with the Supervisor role but `employeeId = null` silently has no functional supervisor capability — Assign Operators button hidden, my-operators endpoint returns empty. No error surfaces. Either: (a) reject Supervisor role assignment to users without a linked employee at the user-edit form layer, or (b) surface a clear error state on the My Team page explaining the limitation.
+
+**D — Assignment endpoint auth policy mismatch** (Gap E)
+The five supervisor-assignment endpoints in `EmployeesController` use `Learnings.View` as the policy. Creating/removing assignments is conceptually a management action closer to `Learnings.Schedule`. The current policy means an Operator (who has `Learnings.View`) can call the endpoints; the `CanManageSupervisorData` guard then protects against cross-user manipulation, but the policy is misleading. Promote the policy on POST/DELETE/available endpoints to `Learnings.Schedule`.
+
+**E — Available-operators filter uses role-name strings, not permissions** (Gap F, R6)
+`GET /api/employees/{supervisorId}/operators/available` excludes employees whose linked user has Admin, Supervisor, or SuperUser role via string comparison. Brittle: a future role that should also be excluded (e.g., Auditor) needs manual filter update. Replace string comparison with a permission-based check or a maintained "non-assignable roles" constant.
+
+**F — Admin employee detail uses role-name string detection** (Gap G)
+`AssignedOperatorsSection` on the admin employee detail page renders when the linked user has a role named exactly "Supervisor". Same brittleness as item E. Use a permission check or a centralised role-name constant.
+
+**G — No UI for assignment audit history** (Gap H)
+Audit log entries are written for `AssignOperator` and `UnassignOperator` actions but no UI surface exposes them. Low priority. Consider when a tenant requests "who assigned this person to me and when". Add to employee detail page or a dedicated history view.
+
+**H — Schema does not enforce single-supervisor uniqueness** (R4)
+The unique index allows multiple `SupervisorAssignment` rows for the same operator with different supervisors. The current handling is permissive: an operator can have N supervisors and appears in each supervisor's scoped reports, leading to double-counting in cross-team reporting. Depends on §3.16 question 2: if the product decision is "single supervisor per operator", add a uniqueness constraint and migration. If multi-supervisor is intentional, document the implication and ensure reports clearly indicate multi-team membership.
+
+**FK delete coupling** (R5) — Documented in the recon for completeness; existing `EmployeeService.DeleteAsync` guard makes this a theoretical risk only, not currently actionable.
+
+**Estimated effort:** Items A and D are half-day each. Item B is a day (cleanup logic + audit decision). Items C, E, F are half-day each. Item G is a day if specced minimally. Item H depends on §3.16. Total of items A-G if bundled: ~3-4 days; can be picked piecemeal.
+
+**Closes:** R2 / R3 / R5 / R6 / R7 / Gaps C / D / E / F / G / H from the recon. R1 / Gap A / Gap B are §3.14. R4 / Gap H structural decision is §3.16.
+
+#### 3.16 Supervisor–operator outstanding product decisions
+
+- **Priority:** PD (Product Decision Required)
+- **Origin:** `[Engineering]` `[Supervisor-operator recon discovery 2026-06-22]`
+- **Status:** Open — needs product owner decisions before any §3.14 or §3.15 implementation lands
+- **Surfaced:** During supervisor–operator relationship recon (`docs/supervisor-operator-relationship-recon.md` §9 — ten questions).
+
+The supervisor–operator recon surfaced ten questions that need explicit product decisions. Some have implementation implications (notably questions 1, 2, 5 which affect the shape of §3.14's fix); others are scoping decisions about how far the supervisor feature should extend. Listed in approximate priority order — questions earlier in the list block more downstream work.
+
+1. **Should schedule creation be restricted to a Supervisor's assigned operators?** Directly blocks §3.14. Recommended answer: yes, with `AssignToAllEmployees = true` rejected for Supervisors. Confirmation needed.
+
+2. **Can an operator be assigned to multiple supervisors simultaneously?** The schema currently allows it. Affects §3.14's validation logic and §3.15 item H. If multi-supervisor is intentional, what does double-counting in reports look like — accept, de-duplicate at the API layer, or surface it visually? If not, add uniqueness constraint.
+
+3. **Should unassignment history be visible in the UI?** Soft-deleted `SupervisorAssignment` rows exist; is there value in exposing them to Admins or to the Supervisor themselves? Affects §3.15 item G's priority.
+
+4. **Should notifications be sent on assignment/unassignment?** To the operator, the supervisor, other Admins, or no one? Cross-cutting with §1.3.5 (long-running job fire-and-notify).
+
+5. **What happens to scheduled learnings created by a Supervisor when their team membership changes?** Currently `ScheduledTalk` rows are not re-scoped on assignment change. A learning scheduled by Supervisor A for Operator X persists if Operator X is later unassigned from A or moved to Supervisor B. Is this correct (the learning is a commitment, not a relationship artefact), or should reassignment trigger re-scoping?
+
+6. **Should Admins be able to bulk-assign operators across multiple supervisors?** Currently the admin employee detail page manages one supervisor at a time. Would a bulk-management UI be useful for tenants with many supervisors?
+
+7. **Is the Supervisor role intended only for employees with a linked Employee record?** Affects §3.15 item C — the fix shape depends on whether the answer is "yes, enforce at assignment time" or "no, support administrative-only supervisors".
+
+8. **Should a Supervisor see the full admin Toolbox Talks list and talk detail pages?** Currently they can, because `Learnings.Schedule` grants admin area access. This may be intentional (they need to see talks before they schedule them) or an accidental side effect (the access wasn't scoped narrowly).
+
+9. **Should Team Reports and Skills Matrix pages redirect non-Supervisors who deep-link?** Affects §3.15 item A — current data scoping is correct; this is a UX framing decision.
+
+10. **What should happen when a Supervisor is demoted to Operator?** Affects §3.15 item B — silent assignment retention, automatic cleanup, or admin notification?
+
+Once decisions land, this entry can be closed with a summary of the answers and pointers to the implementation chunks they unblock.
+
+**Reference:** Full recon at `docs/supervisor-operator-relationship-recon.md`. The recon is read-only and final — the product decisions go in this BACKLOG entry, not the recon.
+
+
 ---
 
 # 4. Tenant Management & Regulatory
