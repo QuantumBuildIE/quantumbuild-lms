@@ -61,19 +61,6 @@ public class TranslationValidationSettings
     public int SessionExpiryHours { get; set; } = 24;
 
     /// <summary>
-    /// Claude model used as Round 1A back-translator (Provider A in the consensus engine).
-    /// Value sourced from AIProviders:Anthropic:Models:Haiku (no hardcoded fallback).
-    /// </summary>
-    public string Round1AModel { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Claude model used as Round 3D back-translator (Provider D — final tiebreaker).
-    /// Replaced DeepSeek in pipeline v6.4 for GDPR compliance.
-    /// Value sourced from AIProviders:Anthropic:Models:Sonnet (no hardcoded fallback).
-    /// </summary>
-    public string Round3DModel { get; set; } = string.Empty;
-
-    /// <summary>
     /// Maximum score difference between Round 1 providers (A and B) that is still considered
     /// high agreement. If the difference exceeds this value, the engine escalates to Round 2.
     /// Default: 10
@@ -123,12 +110,6 @@ public class GeminiSettings
     /// Google AI API key
     /// </summary>
     public string ApiKey { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Gemini model to use.
-    /// Value sourced from AIProviders:Gemini:Models:Flash (no hardcoded fallback).
-    /// </summary>
-    public string Model { get; set; } = string.Empty;
 
     /// <summary>
     /// Google AI API base URL.

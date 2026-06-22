@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using QuantumBuild.Core.Application.Configuration;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
@@ -19,20 +20,20 @@ public class ClaudeHaikuBackTranslationService : IClaudeHaikuBackTranslationServ
 
     private readonly HttpClient _httpClient;
     private readonly SubtitleProcessingSettings _settings;
-    private readonly TranslationValidationSettings _tvSettings;
+    private readonly string _haikuModel;
     private readonly IAiUsageLogger _aiUsageLogger;
     private readonly ILogger<ClaudeHaikuBackTranslationService> _logger;
 
     public ClaudeHaikuBackTranslationService(
         HttpClient httpClient,
         IOptions<SubtitleProcessingSettings> settings,
-        IOptions<TranslationValidationSettings> tvSettings,
+        IOptions<AIProviderOptions> aiProviders,
         IAiUsageLogger aiUsageLogger,
         ILogger<ClaudeHaikuBackTranslationService> logger)
     {
         _httpClient = httpClient;
         _settings = settings.Value;
-        _tvSettings = tvSettings.Value;
+        _haikuModel = aiProviders.Value.Anthropic.Models.Haiku;
         _aiUsageLogger = aiUsageLogger;
         _logger = logger;
     }
@@ -75,7 +76,7 @@ public class ClaudeHaikuBackTranslationService : IClaudeHaikuBackTranslationServ
 
             var requestBody = new
             {
-                model = _tvSettings.Round1AModel,
+                model = _haikuModel,
                 max_tokens = 4096,
                 messages = new[]
                 {

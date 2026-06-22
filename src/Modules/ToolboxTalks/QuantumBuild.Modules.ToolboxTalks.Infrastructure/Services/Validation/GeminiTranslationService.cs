@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using QuantumBuild.Core.Application.Configuration;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
 
@@ -17,15 +18,18 @@ public class GeminiTranslationService : IGeminiTranslationService
 
     private readonly HttpClient _httpClient;
     private readonly TranslationValidationSettings _settings;
+    private readonly string _geminiModel;
     private readonly ILogger<GeminiTranslationService> _logger;
 
     public GeminiTranslationService(
         HttpClient httpClient,
         IOptions<TranslationValidationSettings> settings,
+        IOptions<AIProviderOptions> aiProviders,
         ILogger<GeminiTranslationService> logger)
     {
         _httpClient = httpClient;
         _settings = settings.Value;
+        _geminiModel = aiProviders.Value.Gemini.Models.Flash;
         _logger = logger;
     }
 
@@ -74,7 +78,7 @@ public class GeminiTranslationService : IGeminiTranslationService
                 }
             };
 
-            var url = $"{_settings.Gemini.BaseUrl}/models/{_settings.Gemini.Model}:generateContent?key={_settings.Gemini.ApiKey}";
+            var url = $"{_settings.Gemini.BaseUrl}/models/{_geminiModel}:generateContent?key={_settings.Gemini.ApiKey}";
 
             var request = new HttpRequestMessage(HttpMethod.Post, url)
             {

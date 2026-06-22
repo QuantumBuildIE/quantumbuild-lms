@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using QuantumBuild.Core.Application.Configuration;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
@@ -10,7 +11,7 @@ using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Validation;
 
 /// <summary>
-/// Back-translation service using Claude Sonnet (model identifier sourced from TranslationValidation:Round3DModel) via the Anthropic Messages API.
+/// Back-translation service using Claude Sonnet via the Anthropic Messages API.
 /// Provider D in the consensus engine — Round 3 final tiebreaker.
 /// Replaced DeepSeek in pipeline v6.4 for GDPR compliance.
 /// </summary>
@@ -20,20 +21,20 @@ public class ClaudeSonnetBackTranslationService : IClaudeSonnetBackTranslationSe
 
     private readonly HttpClient _httpClient;
     private readonly SubtitleProcessingSettings _settings;
-    private readonly TranslationValidationSettings _tvSettings;
+    private readonly string _sonnetModel;
     private readonly IAiUsageLogger _aiUsageLogger;
     private readonly ILogger<ClaudeSonnetBackTranslationService> _logger;
 
     public ClaudeSonnetBackTranslationService(
         HttpClient httpClient,
         IOptions<SubtitleProcessingSettings> settings,
-        IOptions<TranslationValidationSettings> tvSettings,
+        IOptions<AIProviderOptions> aiProviders,
         IAiUsageLogger aiUsageLogger,
         ILogger<ClaudeSonnetBackTranslationService> logger)
     {
         _httpClient = httpClient;
         _settings = settings.Value;
-        _tvSettings = tvSettings.Value;
+        _sonnetModel = aiProviders.Value.Anthropic.Models.Sonnet;
         _aiUsageLogger = aiUsageLogger;
         _logger = logger;
     }
@@ -76,7 +77,7 @@ public class ClaudeSonnetBackTranslationService : IClaudeSonnetBackTranslationSe
 
             var requestBody = new
             {
-                model = _tvSettings.Round3DModel,
+                model = _sonnetModel,
                 max_tokens = 4096,
                 messages = new[]
                 {
