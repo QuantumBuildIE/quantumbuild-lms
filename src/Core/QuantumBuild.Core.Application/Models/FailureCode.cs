@@ -10,5 +10,6 @@ public enum FailureCode
     WorkflowInvalidState,
     WorkflowConfirmationRequired,
     WorkflowReasonRequired,
-    TitleNotUnique
+    TitleNotUnique,
+    Conflict
 }

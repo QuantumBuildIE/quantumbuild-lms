@@ -210,8 +210,10 @@ export function AssignOperatorsDialog({
           setSearch("");
           onOpenChange(false);
         },
-        onError: () => {
-          toast.error("Failed to assign operators");
+        onError: (error) => {
+          const message = (error as any)?.response?.data?.errors?.[0]
+            ?? "Failed to assign operators";
+          toast.error(message);
         },
       }
     );

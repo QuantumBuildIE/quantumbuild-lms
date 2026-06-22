@@ -65,10 +65,10 @@ public class SupervisorAssignmentService : ISupervisorAssignmentService
             if (!accessCheck.Success)
                 return Result.Fail<List<SupervisorOperatorDto>>(accessCheck.Errors);
 
-            // Get IDs of employees already assigned to this supervisor
+            // Exclude operators actively assigned to ANY supervisor (not just this one)
             var assignedOperatorIds = await _context.SupervisorAssignments
-                .Where(sa => sa.SupervisorEmployeeId == supervisorEmployeeId)
                 .Select(sa => sa.OperatorEmployeeId)
+                .Distinct()
                 .ToListAsync();
 
             // Get employee IDs to exclude: those whose linked User is Admin, Supervisor, or SuperUser
@@ -130,6 +130,17 @@ public class SupervisorAssignmentService : ISupervisorAssignmentService
 
                 if (operatorId == supervisorEmployeeId)
                     return Result.Fail<List<SupervisorAssignmentDto>>("A supervisor cannot be assigned to themselves");
+
+                // Reject if operator is already actively supervised by a different supervisor
+                var currentAssignment = await _context.SupervisorAssignments
+                    .Where(sa => sa.OperatorEmployeeId == operatorId
+                              && sa.SupervisorEmployeeId != supervisorEmployeeId)
+                    .FirstOrDefaultAsync();
+
+                if (currentAssignment != null)
+                    return Result.Fail<List<SupervisorAssignmentDto>>(
+                        "This operator is already assigned to another supervisor. Unassign them first before reassigning.",
+                        FailureCode.Conflict);
             }
 
             // Get existing non-deleted assignments to prevent duplicates
@@ -199,6 +210,13 @@ public class SupervisorAssignmentService : ISupervisorAssignmentService
                 newAssignments.Count, supervisorEmployeeId);
 
             return Result.Ok(createdAssignments);
+        }
+        catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+        {
+            // Two concurrent assign requests raced past the application-layer check
+            return Result.Fail<List<SupervisorAssignmentDto>>(
+                "This operator is already assigned to another supervisor. Unassign them first before reassigning.",
+                FailureCode.Conflict);
         }
         catch (Exception ex)
         {
@@ -297,6 +315,13 @@ public class SupervisorAssignmentService : ISupervisorAssignmentService
         }
 
         return Result.Fail("You do not have permission to manage assignments for this supervisor");
+    }
+
+    private static bool IsUniqueConstraintViolation(DbUpdateException ex)
+    {
+        var message = ex.InnerException?.Message ?? ex.Message;
+        return message.Contains("duplicate key", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("23505", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

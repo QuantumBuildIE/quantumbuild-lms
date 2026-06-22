@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Pdf;
@@ -67,9 +68,11 @@ public static class ServiceCollectionExtensions
         // Register export service (stub implementation for Phase 2)
         services.AddScoped<IToolboxTalkExportService, ToolboxTalkExportService>();
 
-        // Register subtitle processing configuration
-        services.Configure<SubtitleProcessingSettings>(
-            configuration.GetSection(SubtitleProcessingSettings.SectionName));
+        // Register subtitle processing configuration with startup validation
+        services.AddOptions<SubtitleProcessingSettings>()
+            .BindConfiguration(SubtitleProcessingSettings.SectionName)
+            .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<SubtitleProcessingSettings>, SubtitleProcessingSettingsValidator>();
 
         // Register R2 storage configuration and services
         services.Configure<R2StorageSettings>(
