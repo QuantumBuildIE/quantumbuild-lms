@@ -692,7 +692,7 @@ Removed from Employee:
 
 - **Priority:** P1
 - **Origin:** `[Engineering]` `[Supervisor-operator recon discovery 2026-06-22]`
-- **Status:** Open — unblocked by §3.16 (2026-06-22)
+- **Status:** ✅ Done — 2026-06-22. Backend handlers (Create + Update) reject `AssignToAllEmployees` for Supervisor-only callers and validate `EmployeeIds` against the caller's assigned-operator list with count-named errors. Frontend `ScheduleDialog` detects `isSupervisorOnly` from `useAuth()`, swaps data source to `useMyOperators()`, hides "Assign to all" affordance, and conditionally labels the picker. `ICurrentUserService` gains `Roles` property backed by JWT `ClaimTypes.Role` claims (zero DB cost) — preferred over `UserManager.Users.Include(UserRoles.Role)` for read-only role checks. 8 new integration tests cover Create + Update + Admin/SuperUser exemption paths. CLAUDE.md schedule endpoint permission cells corrected (`ToolboxTalks.Schedule` → `Learnings.Schedule`, six cells). Recon: `docs/3.14-schedule-scoping-recon.md`. Follow-ups logged as §3.17 (course assignment same gap) and §3.18 (Update controller 404-vs-400 inconsistency).
 - **Surfaced:** During supervisor–operator relationship recon (`docs/supervisor-operator-relationship-recon.md` R1 / Gap A / Gap B).
 
 `CreateToolboxTalkScheduleCommandHandler` accepts any active employee IDs in the tenant via the `EmployeeIds` list, and accepts `AssignToAllEmployees = true` which targets every active employee in the tenant. The handler does not check whether the calling user is a Supervisor, and does not validate that the provided employee IDs are in the caller's assigned-operator list. A user with `Learnings.Schedule` permission (which the Supervisor role has) can schedule learnings to employees they do not supervise — including, via `AssignToAllEmployees`, the entire tenant.
@@ -809,6 +809,54 @@ Ten questions surfaced by the recon; decisions documented below. Implementation 
 10. **Demotion to Operator — what happens to assignments?** **Assignment retention.** Just because a supervisor is demoted, the actions they took as a supervisor still happened. No automatic cleanup; assignments remain in the database as historical record. The former supervisor stops seeing My Team / Team Reports nav (already correctly gated by role). Operators previously assigned to them keep the assignment row, but functionally have no supervisor (no one with the Supervisor role for that pair). This may surface as a real concern later (orphaned operators) but is the cleaner default — silent cleanup destroys history. Converts §3.15 item B from "implement cleanup" to "no-op confirmed; mark as decision-not-action".
 
 **Reference:** Full recon at `docs/supervisor-operator-relationship-recon.md`. Decisions above are binding for §3.14 and §3.15 implementation work.
+
+#### 3.17 Course assignment lacks supervisor scoping (same gap as §3.14)
+
+- **Priority:** P1
+- **Origin:** `[Engineering]` `[§3.14 recon discovery 2026-06-22]`
+- **Status:** Open — recommended to land after Option B (the §5.29 multi-provider sweep) so the `ICurrentUserService.Roles` pattern is settled in CLAUDE.md before this mirrors it.
+- **Surfaced:** During §3.14 recon (`docs/3.14-schedule-scoping-recon.md` §2.4).
+
+`AssignCourseCommandHandler` accepts `EmployeeIds` and creates `ScheduledTalk` rows for each course item × each targeted employee. The handler has no awareness of the caller's role and does not validate that the provided employee IDs are in a Supervisor caller's assigned-operator list. A Supervisor with `Learnings.Schedule` can assign courses to any employee in the tenant — same shape as the §3.14 gap on schedule creation, different endpoint.
+
+**Files referenced:**
+- `src/Modules/ToolboxTalks/QuantumBuild.Modules.ToolboxTalks.Application/Features/CourseAssignments/AssignCourseCommandHandler.cs`
+- Frontend: course-assignment dialog (path to confirm during implementation; likely mirrors `ScheduleDialog.tsx` shape)
+
+**Fix direction (mirrors §3.14):**
+1. Inject `ICurrentUserService` and `ISupervisorAssignmentService` into `AssignCourseCommandHandler`.
+2. Apply the same Supervisor-only check used in `CreateToolboxTalkScheduleCommandHandler` — reject `AssignToAllEmployees` (if the command has one), validate `EmployeeIds` against the caller's assigned-operator list, throw `InvalidOperationException` with count-named messages.
+3. Constrain the frontend course-assignment dialog to use `useMyOperators()` as the data source when `isSupervisorOnly`, mirroring §3.14's `ScheduleDialog` change.
+4. Integration tests mirroring §3.14's eight cases, adapted for course-assignment-specific edge cases (course preview path, completion preservation, etc.).
+5. Verify no other `ScheduledTalk` creation paths from recon §2.4 (`AutoAssignmentService`, `RefresherSchedulingService`, `QrScanController`) have user-facing gaps — these are system-triggered and out of scope.
+
+**Estimated effort:** Half-day to one day. Pattern is identical to §3.14; the variance is in adapting to the course-assignment surface's specifics.
+
+**Why blocked on Option B:** §3.14 introduced `ICurrentUserService.Roles` as the preferred read-only role-check pattern; Option B will likely add a CLAUDE.md note codifying this. Letting that documentation settle before §3.17 picks up the pattern keeps the convention coherent.
+
+**Closes:** Recon §2.4 finding for the course-assignment surface.
+
+#### 3.18 `UpdateToolboxTalkSchedule` maps `InvalidOperationException` to 404 instead of 400
+
+- **Priority:** P3
+- **Origin:** `[Engineering]` `[§3.14 implementation discovery 2026-06-22]`
+- **Status:** Open
+- **Surfaced:** During §3.14 implementation verification. The Test 8 case (`Supervisor_UpdatesScheduleToAddNonOperator_Returns400`) was renamed to assert 404 to match the controller's actual behaviour. The pre-existing inconsistency was flagged in §3.14's final report as an application concern.
+
+`ToolboxTalkSchedulesController.Update` (the PUT endpoint) maps `InvalidOperationException` → 404 Not Found, while `ToolboxTalkSchedulesController.Create` (the POST endpoint) maps the same exception type → 400 Bad Request. The 404 is semantically wrong for validation failures: a 404 conventionally means "the resource doesn't exist", but a request that *finds* the schedule and then fails validation (bad employee IDs, scoping violation, etc.) is not a missing-resource scenario.
+
+**User impact:** Client-side error handling that branches on status (retry on 5xx, surface to user on 400, route to not-found page on 404) routes validation failures to the wrong UX. A Supervisor attempting to update a schedule with an out-of-team employee receives a "Schedule not found" treatment from the frontend, which is misleading.
+
+**Fix direction:**
+- In `ToolboxTalkSchedulesController.Update`, change the catch block for `InvalidOperationException` to return 400 Bad Request (matching the Create endpoint's pattern). Only the genuine "schedule with this ID does not exist" path should return 404.
+- Update §3.14's Test 8 assertion (currently `Returns404` per the controller's behaviour) back to `Returns400` once the controller is corrected.
+- Sweep adjacent controllers for similar inconsistencies — at minimum, check the Create/Update/Delete trio on every controller that uses `InvalidOperationException` for validation.
+
+**Files referenced:**
+- `src/QuantumBuild.API/Controllers/ToolboxTalkSchedulesController.cs` — the Update action's catch block
+- `tests/QuantumBuild.Tests.Integration/ToolboxTalks/SchedulingTests_SupervisorScoping.cs` — Test 8 to revert when the controller is corrected
+
+**Estimated effort:** Half-day, including the adjacent-controller sweep.
 
 ---
 
