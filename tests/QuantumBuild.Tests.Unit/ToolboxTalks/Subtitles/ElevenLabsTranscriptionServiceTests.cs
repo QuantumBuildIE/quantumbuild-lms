@@ -32,7 +32,6 @@ public class ElevenLabsTranscriptionServiceTests
             ElevenLabs = new ElevenLabsSettings
             {
                 ApiKey = "test-api-key",
-                Model = "scribe_v1",
                 BaseUrl = "https://api.elevenlabs.io/v1"
             }
         };
