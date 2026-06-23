@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import Link from 'next/link';
+import { AlertTriangle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { LoadingState } from '../components/LoadingState';
 import { WizardTranslationPanel } from '../components/WizardTranslationPanel';
@@ -10,7 +12,11 @@ import { WorkflowSubscriber } from '../hooks/WorkflowSubscriber';
 import { useTalk } from '../hooks/useTalk';
 import { useWorkflowSubscription } from '../hooks/useWorkflowSubscription';
 import { useStartTalkTranslation } from '@/lib/api/toolbox-talks/use-toolbox-talks';
+import { useRegulatoryApplicability } from '@/lib/api/toolbox-talks/use-content-creation';
 import { parseLanguageCodes } from '@/features/toolbox-talks/utils/parseLanguageCodes';
+import { useAuth } from '@/lib/auth/use-auth';
+import { useTenantSectors } from '@/lib/api/admin/use-tenant-sectors';
+import type { TenantSectorDto } from '@/types/admin';
 import type { TranslationWorkflowState } from '@/types/workflows';
 
 export interface TranslateStepProps {
@@ -32,6 +38,19 @@ export function TranslateStep({ talkId }: TranslateStepProps) {
   } = useWorkflowSubscription(talkId);
   const { mutate: startTranslation, isPending, variables } = useStartTalkTranslation();
   const [isStartingAll, setIsStartingAll] = useState(false);
+
+  // Derive the tenant's effective sector key for the applicability pre-flight check.
+  // Uses the same auto-select logic as InputConfigStep (single sector → use it;
+  // multiple → use default; ambiguous → null → banner suppressed).
+  const { user } = useAuth();
+  const tenantId = user?.tenantId ?? '';
+  const { data: tenantSectors = [] } = useTenantSectors(tenantId);
+  const sectorKey = (() => {
+    const sectors = tenantSectors as TenantSectorDto[];
+    if (sectors.length === 1) return sectors[0].sectorKey;
+    return sectors.find((s) => s.isDefault)?.sectorKey ?? null;
+  })();
+  const { data: sectorApplicability } = useRegulatoryApplicability(sectorKey);
 
   const languages = parseLanguageCodes(talk?.targetLanguageCodes ?? null);
 
@@ -104,6 +123,32 @@ export function TranslateStep({ talkId }: TranslateStepProps) {
             sections, quiz questions, and titles, then back-translate to validate accuracy.
           </p>
         </div>
+
+        {sectorApplicability && sectorApplicability.approvedRequirementCount === 0 && (
+          <Alert className="border-amber-200 bg-amber-50">
+            <AlertTriangle className="h-4 w-4 text-amber-600" aria-hidden="true" />
+            <AlertDescription className="text-amber-800">
+              {sectorApplicability.hasRegulatoryProfile ? (
+                <>
+                  The regulatory requirements for{' '}
+                  <strong>{sectorApplicability.profileName ?? 'this sector'}</strong> haven&apos;t been
+                  approved yet. Translation and scoring will proceed, but the compliance checklist will
+                  be empty until requirements are reviewed in{' '}
+                  <Link href="/admin/regulatory/system" className="underline font-medium">
+                    Regulatory &rarr; System
+                  </Link>
+                  .
+                </>
+              ) : (
+                <>
+                  There is no regulatory profile configured for this sector. Translation and scoring
+                  will proceed against general criteria, but the compliance checklist will not be
+                  available.
+                </>
+              )}
+            </AlertDescription>
+          </Alert>
+        )}
 
         <div className="flex justify-end mb-3">
           <Button
