@@ -491,7 +491,7 @@ export function SettingsStep({ talkId, onContinue }: SettingsStepProps) {
         </div>
 
         {/* ── Slideshow ────────────────────────────────────── */}
-        {talk?.pdfUrl && (
+        {talk?.pdfUrl && talk?.inputMode !== 'Docx' && (
           <>
             <WizardSectionDivider number="4e" label="Slideshow" />
             <FormField

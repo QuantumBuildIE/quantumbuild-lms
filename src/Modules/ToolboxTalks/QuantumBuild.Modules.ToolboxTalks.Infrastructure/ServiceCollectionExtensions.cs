@@ -86,6 +86,12 @@ public static class ServiceCollectionExtensions
             client.Timeout = TimeSpan.FromSeconds(30); // 30 seconds for PDF download
         });
 
+        // Register DOCX extraction service (for AI content generation from uploaded Word documents)
+        services.AddHttpClient<IDocxExtractionService, DocxExtractionService>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(30); // 30 seconds for DOCX download
+        });
+
         // Register subtitle processing infrastructure services
         // ElevenLabs transcription can take a long time for large videos (download + transcription)
         services.AddHttpClient<ITranscriptionService, ElevenLabsTranscriptionService>(client =>

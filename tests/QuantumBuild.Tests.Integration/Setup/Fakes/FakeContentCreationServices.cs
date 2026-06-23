@@ -32,6 +32,23 @@ public class FakeContentParserService : IContentParserService
 }
 
 /// <summary>
+/// Fake IDocxExtractionService that returns deterministic extracted text without fetching real Word documents.
+/// </summary>
+public class FakeDocxExtractionService : IDocxExtractionService
+{
+    public string NextExtractedText { get; set; } = "This is extracted Word document text for testing purposes and it is certainly longer than fifty characters.";
+    public bool ShouldFail { get; set; } = false;
+
+    public Task<DocxExtractionResult> ExtractTextFromUrlAsync(string docxUrl, CancellationToken cancellationToken = default)
+    {
+        if (ShouldFail)
+            return Task.FromResult(new DocxExtractionResult(false, null, "Fake DOCX extraction failure"));
+
+        return Task.FromResult(new DocxExtractionResult(true, NextExtractedText, null));
+    }
+}
+
+/// <summary>
 /// Fake IPdfExtractionService that returns deterministic extracted text without fetching real PDFs.
 /// </summary>
 public class FakePdfExtractionService : IPdfExtractionService

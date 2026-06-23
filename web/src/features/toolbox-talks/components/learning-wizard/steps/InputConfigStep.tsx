@@ -63,6 +63,7 @@ const INPUT_MODE_OPTIONS = [
   { mode: 'Text' as const, label: 'Text', icon: Type, description: 'Paste or type content directly' },
   { mode: 'Pdf' as const, label: 'Document', icon: FileText, description: 'Upload a PDF document' },
   { mode: 'Video' as const, label: 'Video', icon: FileVideo, description: 'Upload video or paste URL' },
+  { mode: 'Docx' as const, label: 'Word Document', icon: FileText, description: 'Upload a Word document (.docx)' },
 ];
 
 const AUDIENCE_ROLE_OPTIONS = [
@@ -234,6 +235,24 @@ export function InputConfigStep() {
   // File selection (shared by click and drag-and-drop)
   const handleFileSelected = useCallback(
     (file: File) => {
+      if (inputMode === 'Docx') {
+        const isDocxMime = file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        const isDocxExt = file.name.toLowerCase().endsWith('.docx');
+        if (!isDocxMime && !isDocxExt) {
+          toast.error('Invalid file type. Only .docx Word documents are supported.');
+          return;
+        }
+        if (file.size > 50 * 1024 * 1024) {
+          toast.error('File too large. Maximum: 50MB');
+          return;
+        }
+        selectedFileRef.current = file;
+        form.setValue('sourceFileName', file.name, { shouldValidate: false });
+        form.setValue('sourceFileType', file.type || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', { shouldValidate: false });
+        form.setValue('sourceFileUrl', undefined, { shouldValidate: false });
+        return;
+      }
+
       const isPdf = inputMode === 'Pdf';
       const maxSize = isPdf ? 50 * 1024 * 1024 : 500 * 1024 * 1024;
       const allowed = isPdf
@@ -477,7 +496,7 @@ export function InputConfigStep() {
           <legend className="sr-only">
             Content source <span aria-hidden="true">*</span>
           </legend>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
             {INPUT_MODE_OPTIONS.map(({ mode, label, icon: Icon, description }) => (
               <button
                 key={mode}
@@ -534,11 +553,11 @@ export function InputConfigStep() {
           />
         )}
 
-        {/* PDF / Video dropzone */}
-        {(inputMode === 'Pdf' || inputMode === 'Video') && (
+        {/* PDF / Video / Docx dropzone */}
+        {(inputMode === 'Pdf' || inputMode === 'Video' || inputMode === 'Docx') && (
           <div className="space-y-2">
             <Label htmlFor="source-file-input">
-              {inputMode === 'Pdf' ? 'PDF document' : 'Video file'}{' '}
+              {inputMode === 'Pdf' ? 'PDF document' : inputMode === 'Docx' ? 'Word document' : 'Video file'}{' '}
               <span aria-hidden="true">*</span>
             </Label>
 
@@ -567,25 +586,37 @@ export function InputConfigStep() {
                     ? 'Drop to upload'
                     : inputMode === 'Pdf'
                       ? 'Drop a PDF here or click to browse'
-                      : 'Drop a video file here or click to browse'}
+                      : inputMode === 'Docx'
+                        ? 'Drop a Word document here or click to browse'
+                        : 'Drop a video file here or click to browse'}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {inputMode === 'Pdf' ? 'PDF only, max 50MB' : 'MP4, WebM, MOV — max 500MB'}
+                  {inputMode === 'Pdf'
+                    ? 'PDF only, max 50MB'
+                    : inputMode === 'Docx'
+                      ? 'Word Document (.docx), max 50MB'
+                      : 'MP4, WebM, MOV — max 500MB'}
                 </p>
                 <input
                   id="source-file-input"
                   ref={fileInputRef}
                   type="file"
-                  accept={inputMode === 'Pdf' ? '.pdf,application/pdf' : 'video/mp4,video/webm,video/quicktime'}
+                  accept={
+                    inputMode === 'Pdf'
+                      ? '.pdf,application/pdf'
+                      : inputMode === 'Docx'
+                        ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx'
+                        : 'video/mp4,video/webm,video/quicktime'
+                  }
                   className="sr-only"
                   onChange={handleFileChange}
-                  aria-label={`Select ${inputMode === 'Pdf' ? 'PDF' : 'video'} file`}
+                  aria-label={`Select ${inputMode === 'Pdf' ? 'PDF' : inputMode === 'Docx' ? 'Word document' : 'video'} file`}
                 />
               </label>
             ) : (
               <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3">
                 <div className="flex items-center gap-2 min-w-0">
-                  {inputMode === 'Pdf' ? (
+                  {inputMode !== 'Video' ? (
                     <FileText className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                   ) : (
                     <FileVideo className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />

@@ -266,16 +266,19 @@ export function SettingsStep({ state, onNext, onBack }: SettingsStepProps) {
         isSaving={isSaving}
       />
 
-      {/* 4d — Slideshow */}
-      <WizardSectionDivider number="4d" label="Slideshow" />
+      {/* 4d — Slideshow (hidden for Docx: slideshow requires PDF page images) */}
+      {session?.inputMode !== 'Docx' && (
+        <>
+          <WizardSectionDivider number="4d" label="Slideshow" />
 
-      {/* Panel E — Slideshow */}
-      <SlideshowPanel
-        settings={settings}
-        onChange={handleChange}
-        inputMode={session?.inputMode ?? 'Text'}
-        isSaving={isSaving}
-      />
+          <SlideshowPanel
+            settings={settings}
+            onChange={handleChange}
+            inputMode={session?.inputMode ?? 'Text'}
+            isSaving={isSaving}
+          />
+        </>
+      )}
 
       {/* Form-level error: mutation failure shown above the action cluster per PHASE_5_STANDARDS §6.2. */}
       {(updateSettings.isError || startValidation.isError) && (

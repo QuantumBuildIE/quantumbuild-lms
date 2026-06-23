@@ -2,7 +2,7 @@
 // Content Creation Session Types
 // ============================================
 
-export type InputMode = 'Text' | 'Pdf' | 'Video';
+export type InputMode = 'Text' | 'Pdf' | 'Video' | 'Docx';
 
 export type OutputType = 'Lesson' | 'Course';
 

@@ -16,17 +16,20 @@ public class ParseToolboxTalkContentCommandHandler
     private readonly IToolboxTalksDbContext _dbContext;
     private readonly IContentParserService _contentParserService;
     private readonly IPdfExtractionService _pdfExtractionService;
+    private readonly IDocxExtractionService _docxExtractionService;
     private readonly IParseJobScheduler _parseJobScheduler;
 
     public ParseToolboxTalkContentCommandHandler(
         IToolboxTalksDbContext dbContext,
         IContentParserService contentParserService,
         IPdfExtractionService pdfExtractionService,
+        IDocxExtractionService docxExtractionService,
         IParseJobScheduler parseJobScheduler)
     {
         _dbContext = dbContext;
         _contentParserService = contentParserService;
         _pdfExtractionService = pdfExtractionService;
+        _docxExtractionService = docxExtractionService;
         _parseJobScheduler = parseJobScheduler;
     }
 
@@ -49,6 +52,7 @@ public class ParseToolboxTalkContentCommandHandler
         {
             InputMode.Pdf => await HandlePdfAsync(talk, request.UserId, ct),
             InputMode.Video => await HandleVideoAsync(talk, ct),
+            InputMode.Docx => await HandleDocxAsync(talk, request.UserId, ct),
             _ => await HandleTextAsync(talk, request.UserId, ct),
         };
     }
@@ -100,6 +104,33 @@ public class ParseToolboxTalkContentCommandHandler
             talk, parseResult.Sections, ContentSource.Pdf, ct);
 
         talk.GeneratedFromPdf = true;
+        talk.LastEditedStep = 2;
+        await _dbContext.SaveChangesAsync(ct);
+
+        return Result.Ok(MapToDto(talk, newSections));
+    }
+
+    private async Task<Result<ToolboxTalkDto>> HandleDocxAsync(
+        ToolboxTalk talk, Guid? userId, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(talk.SourceFileUrl))
+            return Result.Fail<ToolboxTalkDto>("Source file URL is required for Word document mode.");
+
+        var extractResult = await _docxExtractionService.ExtractTextFromUrlAsync(talk.SourceFileUrl, ct);
+        if (!extractResult.Success)
+            return Result.Fail<ToolboxTalkDto>(
+                extractResult.ErrorMessage ?? "Word document text extraction failed.");
+
+        var parseResult = await _contentParserService.ParseContentAsync(
+            extractResult.Text!, InputMode.Docx, talk.TenantId, userId,
+            talk.PreserveSourceWording, ct);
+
+        if (!parseResult.Success)
+            return Result.Fail<ToolboxTalkDto>(parseResult.ErrorMessage ?? "Content parsing failed.");
+
+        var newSections = await MaterialiseSectionsAsync(
+            talk, parseResult.Sections, ContentSource.Docx, ct);
+
         talk.LastEditedStep = 2;
         await _dbContext.SaveChangesAsync(ct);
 
@@ -246,6 +277,7 @@ public class ParseToolboxTalkContentCommandHandler
                     ContentSource.Manual => "Manual",
                     ContentSource.Video => "Video",
                     ContentSource.Pdf => "PDF",
+                    ContentSource.Docx => "Word",
                     _ => s.Source.ToString()
                 },
                 VideoTimestamp = s.VideoTimestamp,

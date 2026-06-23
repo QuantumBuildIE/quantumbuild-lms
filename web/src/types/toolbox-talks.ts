@@ -18,10 +18,10 @@ export type CourseAssignmentStatus = 'Assigned' | 'InProgress' | 'Completed' | '
 export type ToolboxTalkStatus = 'Draft' | 'Processing' | 'ReadyForReview' | 'Published';
 
 /** Source of content for learning sections and questions */
-export type ContentSource = 'Manual' | 'Video' | 'Pdf' | 'Both';
+export type ContentSource = 'Manual' | 'Video' | 'Pdf' | 'Both' | 'Docx';
 
 /** Input mode chosen in wizard Step 1 */
-export type InputMode = 'Text' | 'Pdf' | 'Video';
+export type InputMode = 'Text' | 'Pdf' | 'Video' | 'Docx';
 
 // ============================================
 // Learning DTOs

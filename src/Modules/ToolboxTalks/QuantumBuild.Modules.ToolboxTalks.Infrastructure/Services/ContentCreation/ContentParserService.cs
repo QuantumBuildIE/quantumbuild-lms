@@ -72,6 +72,7 @@ public class ContentParserService : IContentParserService
                 InputMode.Pdf => "extracted from a PDF document",
                 InputMode.Video => "transcribed from a video",
                 InputMode.Text => "provided as plain text",
+                InputMode.Docx => "extracted from a Word document",
                 _ => "provided as raw content"
             };
 

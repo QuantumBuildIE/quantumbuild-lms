@@ -90,6 +90,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
     /// </summary>
     public FakeContentParserService FakeContentParserService { get; } = new();
     public FakePdfExtractionService FakePdfExtractionService { get; } = new();
+    public FakeDocxExtractionService FakeDocxExtractionService { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -226,6 +227,8 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
             services.AddSingleton<IContentParserService>(FakeContentParserService);
             services.RemoveAll<IPdfExtractionService>();
             services.AddSingleton<IPdfExtractionService>(FakePdfExtractionService);
+            services.RemoveAll<IDocxExtractionService>();
+            services.AddSingleton<IDocxExtractionService>(FakeDocxExtractionService);
 
             // Replace real translation validation service to avoid external API calls
             // (Claude Haiku, DeepL, Gemini). The fake returns deterministic Pass results

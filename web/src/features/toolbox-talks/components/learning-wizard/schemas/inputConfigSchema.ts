@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const INPUT_MODES = ['Text', 'Pdf', 'Video'] as const;
+export const INPUT_MODES = ['Text', 'Pdf', 'Video', 'Docx'] as const;
 export type InputMode = (typeof INPUT_MODES)[number];
 
 export const AUDIENCE_ROLES = ['Operator', 'Supervisor', 'Auditor'] as const;
@@ -62,6 +62,13 @@ export const inputConfigSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Please upload a PDF file',
+        path: ['sourceFileUrl'],
+      });
+    }
+    if (data.inputMode === 'Docx' && !data.sourceFileUrl && !data.sourceFileName) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Please upload a Word document (.docx)',
         path: ['sourceFileUrl'],
       });
     }

@@ -159,6 +159,38 @@ public class ParseToolboxTalkContentCommandHandlerTests : IntegrationTestBase
         db.Should().HaveCount(2);
     }
 
+    // 2b — DOCX mode happy path → 200, sections from fake extracted text
+    [Fact]
+    public async Task DocxMode_ValidFileUrl_Returns200WithSections()
+    {
+        Factory.FakeDocxExtractionService.NextExtractedText =
+            "Extracted Word document text for testing purposes. This text is definitely long enough.";
+        Factory.FakeContentParserService.NextSections =
+        [
+            new("Manual Handling Procedure", "<p>Procedure content.</p>", 1),
+            new("Risk Assessment", "<p>Risk content.</p>", 2),
+        ];
+
+        var init = await InitialiseAsync(UniqueTitle("DOCX Parse"), "Docx",
+            sourceText: null,
+            sourceFileUrl: "https://pub-xxx.r2.dev/uploads/test/safety-sop.docx",
+            sourceFileType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+
+        var response = await AdminClient.PostAsync(
+            $"/api/toolbox-talks/{init.Id}/parse", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var result = await response.Content.ReadFromJsonAsync<TalkResult>();
+        result.Should().NotBeNull();
+        result!.LastEditedStep.Should().Be(2);
+        result.Sections.Should().HaveCount(2);
+        result.Sections[0].Title.Should().Be("Manual Handling Procedure");
+        result.Sections[1].Title.Should().Be("Risk Assessment");
+
+        var db = await GetDbSectionsAsync(init.Id);
+        db.Should().HaveCount(2);
+    }
+
     // 3 — Video mode happy path → 200, status = Processing, sections empty (job enqueued)
     [Fact]
     public async Task VideoMode_WithVideoUrl_Returns200StatusProcessing()

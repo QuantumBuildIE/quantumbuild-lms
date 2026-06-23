@@ -24,5 +24,10 @@ public enum ContentSource
     /// <summary>
     /// Content was generated from both video and PDF sources
     /// </summary>
-    Both = 4
+    Both = 4,
+
+    /// <summary>
+    /// Content was generated from a Word document (.docx)
+    /// </summary>
+    Docx = 5
 }

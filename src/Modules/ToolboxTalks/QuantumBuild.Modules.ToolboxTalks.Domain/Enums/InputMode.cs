@@ -7,5 +7,6 @@ public enum InputMode
 {
     Text = 1,
     Pdf = 2,
-    Video = 3
+    Video = 3,
+    Docx = 4
 }
