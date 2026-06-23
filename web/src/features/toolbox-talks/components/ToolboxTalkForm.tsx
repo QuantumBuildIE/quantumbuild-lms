@@ -54,7 +54,7 @@ const sectionSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   content: z.string().min(1, 'Content is required'),
   requiresAcknowledgment: z.boolean(),
-  source: z.enum(['Manual', 'Video', 'Pdf', 'Both'] as const).optional(),
+  source: z.enum(['Manual', 'Video', 'Pdf', 'Both', 'Docx'] as const).optional(),
 }).superRefine((data, _ctx) => {
   console.log('Section validating:', {
     sectionNumber: data.sectionNumber,
@@ -73,7 +73,7 @@ const questionSchema = z.object({
   options: z.array(z.string()).nullable(),
   correctAnswer: z.string().min(1, 'Correct answer is required'),
   points: z.number().min(1),
-  source: z.enum(['Manual', 'Video', 'Pdf', 'Both'] as const).optional(),
+  source: z.enum(['Manual', 'Video', 'Pdf', 'Both', 'Docx'] as const).optional(),
 });
 
 const toolboxTalkFormSchema = z.object({
