@@ -216,11 +216,27 @@ export function QuizStep({ state, updateState, onNext, onBack }: QuizStepProps) 
 
   const handleDeleteQuestion = useCallback(
     (questionId: string) => {
+      const captured = questions.find((q) => q.id === questionId);
+      if (!captured) return;
+
       const newQuestions = questions.filter((q) => q.id !== questionId);
       setQuestions(newQuestions);
       if (editingQuestionId === questionId) setEditingQuestionId(null);
       saveQuestionsToServer(newQuestions);
-      toast.success('Question deleted');
+
+      toast.success('Question deleted', {
+        duration: 8000,
+        action: {
+          label: 'Undo',
+          onClick: () => {
+            const restored = [...newQuestions, captured].sort(
+              (a, b) => (a.sectionIndex ?? 0) - (b.sectionIndex ?? 0)
+            );
+            setQuestions(restored);
+            saveQuestionsToServer(restored);
+          },
+        },
+      });
     },
     [questions, editingQuestionId, saveQuestionsToServer]
   );

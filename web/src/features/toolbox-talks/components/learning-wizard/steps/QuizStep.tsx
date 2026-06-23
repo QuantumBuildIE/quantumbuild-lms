@@ -76,13 +76,14 @@ function toFormQuestion(q: ToolboxTalkQuestion): QuestionFormData {
 export interface QuizStepProps {
   talkId: string;
   onContinue: () => void | Promise<void>;
+  onBack?: () => void | Promise<void>;
 }
 
 // ============================================
 // Component
 // ============================================
 
-export function QuizStep({ talkId, onContinue }: QuizStepProps) {
+export function QuizStep({ talkId, onContinue, onBack }: QuizStepProps) {
   const { data: talk, isLoading } = useTalkStatusPolling(talkId, true);
   const generateMutation = useGenerateQuiz(talkId);
   const updateQuestionsMutation = useUpdateTalkQuestions(talkId);
@@ -177,6 +178,35 @@ export function QuizStep({ talkId, onContinue }: QuizStepProps) {
     [updateSettingsMutation]
   );
 
+  const buildPayload = useCallback(() => {
+    const questions = form.getValues('questions');
+    return questions.map((q, i) => ({
+      id: q.id || undefined,
+      questionNumber: i + 1,
+      questionText: q.questionText,
+      questionType: q.questionType,
+      options: q.options,
+      correctAnswer: q.correctAnswer,
+      correctOptionIndex: q.correctOptionIndex,
+      points: q.points,
+      source: q.source ?? 'Manual',
+      isFromVideoFinalPortion: q.isFromVideoFinalPortion ?? false,
+      videoTimestamp: q.videoTimestamp ?? null,
+    }));
+  }, [form]);
+
+  const handleBack = useCallback(async () => {
+    if (form.formState.isDirty) {
+      const payload = buildPayload();
+      try {
+        await updateQuestionsMutation.mutateAsync(payload);
+      } catch {
+        toast.error('Could not save your changes. They may be lost when you return.');
+      }
+    }
+    await onBack?.();
+  }, [form, buildPayload, updateQuestionsMutation, onBack]);
+
   // No cascade-reset needed at Step 3 — settings, validation, and translations don't exist yet when questions are saved. The old wizard's cascade-reset UI is intentionally not carried over.
   const handleContinue = useCallback(async () => {
     const valid = await form.trigger();
@@ -197,20 +227,7 @@ export function QuizStep({ talkId, onContinue }: QuizStepProps) {
       return;
     }
 
-    const questions = form.getValues('questions');
-    const payload = questions.map((q, i) => ({
-      id: q.id || undefined,
-      questionNumber: i + 1,
-      questionText: q.questionText,
-      questionType: q.questionType,
-      options: q.options,
-      correctAnswer: q.correctAnswer,
-      correctOptionIndex: q.correctOptionIndex,
-      points: q.points,
-      source: q.source ?? 'Manual',
-      isFromVideoFinalPortion: q.isFromVideoFinalPortion ?? false,
-      videoTimestamp: q.videoTimestamp ?? null,
-    }));
+    const payload = buildPayload();
 
     try {
       await updateQuestionsMutation.mutateAsync(payload);
@@ -218,7 +235,7 @@ export function QuizStep({ talkId, onContinue }: QuizStepProps) {
     } catch {
       toast.error('Failed to save questions. Please try again.');
     }
-  }, [form, updateQuestionsMutation, onContinue]);
+  }, [form, buildPayload, updateQuestionsMutation, onContinue]);
 
   // ── Derived state ──────────────────────────────────────────────────────────
 
@@ -289,25 +306,34 @@ export function QuizStep({ talkId, onContinue }: QuizStepProps) {
 
   if (!hasQuestions) {
     return (
-      <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
-        <div className="rounded-full bg-primary/10 p-4 text-primary">
-          <Wand2 className="h-6 w-6" aria-hidden="true" />
+      <div className="space-y-6">
+        <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
+          <div className="rounded-full bg-primary/10 p-4 text-primary">
+            <Wand2 className="h-6 w-6" aria-hidden="true" />
+          </div>
+          <div>
+            <p className="text-sm font-medium">Ready to generate quiz</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              The AI will create questions from your sections and content.
+            </p>
+          </div>
+          {/* Manual trigger by design — explicit user confirmation before firing an AI call. Consistent with ParseStep. */}
+          <Button
+            type="button"
+            onClick={handleGenerateQuiz}
+            className="min-h-[44px] min-w-[140px]"
+          >
+            <Wand2 className="mr-2 h-4 w-4" aria-hidden="true" />
+            Generate Quiz
+          </Button>
         </div>
-        <div>
-          <p className="text-sm font-medium">Ready to generate quiz</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            The AI will create questions from your sections and content.
-          </p>
-        </div>
-        {/* Manual trigger by design — explicit user confirmation before firing an AI call. Consistent with ParseStep. */}
-        <Button
-          type="button"
-          onClick={handleGenerateQuiz}
-          className="min-h-[44px] min-w-[140px]"
-        >
-          <Wand2 className="mr-2 h-4 w-4" aria-hidden="true" />
-          Generate Quiz
-        </Button>
+        {onBack && (
+          <div className="flex justify-start pt-2">
+            <Button type="button" variant="outline" onClick={() => void handleBack()}>
+              Back
+            </Button>
+          </div>
+        )}
       </div>
     );
   }
@@ -383,8 +409,20 @@ export function QuizStep({ talkId, onContinue }: QuizStepProps) {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Save & Continue */}
-      <div className="flex justify-end pt-2">
+      {/* Navigation */}
+      <div className="flex items-center justify-between pt-2">
+        {onBack ? (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleBack}
+            disabled={updateQuestionsMutation.isPending}
+          >
+            {updateQuestionsMutation.isPending ? 'Saving…' : 'Back'}
+          </Button>
+        ) : (
+          <div />
+        )}
         <Button
           type="button"
           onClick={handleContinue}
