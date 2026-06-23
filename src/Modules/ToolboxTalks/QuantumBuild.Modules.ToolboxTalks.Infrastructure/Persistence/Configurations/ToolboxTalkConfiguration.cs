@@ -232,7 +232,7 @@ public class ToolboxTalkConfiguration : IEntityTypeConfiguration<ToolboxTalk>
             .HasMaxLength(255);
 
         builder.Property(t => t.SourceFileType)
-            .HasMaxLength(64);
+            .HasMaxLength(255);
 
         builder.Property(t => t.InputMode)
             .IsRequired()
