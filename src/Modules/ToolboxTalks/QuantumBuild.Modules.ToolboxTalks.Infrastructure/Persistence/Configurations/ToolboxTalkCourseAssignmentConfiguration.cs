@@ -113,7 +113,5 @@ public class ToolboxTalkCourseAssignmentConfiguration : IEntityTypeConfiguration
         builder.HasIndex(x => new { x.CourseId, x.EmployeeId })
             .HasDatabaseName("ix_course_assignments_course_employee");
 
-        // Query filter for soft delete
-        builder.HasQueryFilter(x => !x.IsDeleted);
     }
 }

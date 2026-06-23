@@ -100,7 +100,5 @@ public class TranslationDeviationConfiguration : IEntityTypeConfiguration<Transl
         builder.HasIndex(d => new { d.TenantId, d.ValidationRunId })
             .HasDatabaseName("ix_translation_deviations_tenant_run");
 
-        // Tenant-scoped soft-delete query filter
-        builder.HasQueryFilter(d => !d.IsDeleted);
     }
 }

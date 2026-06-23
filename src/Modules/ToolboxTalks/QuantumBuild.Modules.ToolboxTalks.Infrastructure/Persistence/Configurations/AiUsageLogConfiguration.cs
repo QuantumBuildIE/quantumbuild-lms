@@ -66,7 +66,5 @@ public class AiUsageLogConfiguration : IEntityTypeConfiguration<AiUsageLog>
         builder.HasIndex(e => new { e.TenantId, e.CalledAt })
             .HasDatabaseName("ix_ai_usage_logs_tenant_called_at");
 
-        // Query filter for soft delete
-        builder.HasQueryFilter(e => !e.IsDeleted);
     }
 }

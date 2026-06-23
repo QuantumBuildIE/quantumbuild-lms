@@ -62,7 +62,5 @@ public class AiUsageSummaryConfiguration : IEntityTypeConfiguration<AiUsageSumma
             .IsUnique()
             .HasDatabaseName("ix_ai_usage_summaries_tenant_date_category_model");
 
-        // Query filter for soft delete
-        builder.HasQueryFilter(e => !e.IsDeleted);
     }
 }
