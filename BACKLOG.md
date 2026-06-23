@@ -146,7 +146,7 @@ Source: `CertifiedIQ_Translator_UAT_Brief_Ryans_Bakery_v3.pdf` (27 May 2026). Re
 
 - **Priority:** P2
 - **Origin:** `[UAT]`
-- **Status:** Open
+- **Status:** ✅ Done — 2026-06-23. New `IDocxExtractionService` + `DocxExtractionService` mirror the PDF service pattern; `ParseToolboxTalkContentCommandHandler` dispatches `InputMode.Docx` to a new `HandleDocxAsync`; both wizard variants (learning-wizard + create-wizard per §5.27) accept `.docx` uploads with MIME-OR-extension validation; slideshow toggle hidden in SettingsStep when `inputMode === 'Docx'` (DOCX has no page images for slideshow generation). New integration test `DocxMode_ValidFileUrl_Returns200WithSections` covers the parse path. Follow-up `fix(1.1.11): widen SourceFileType column to varchar(255)` closed a 64-char column constraint that the 71-char DOCX MIME type exceeded — surfaced after Option B Chunk 1 shipped when the previously-stale-binary test actually ran. Recon: `docs/1.1.11-docx-import-recon.md`.
 - **Description:** Customers maintain SOPs in Word; converting to PDF first is friction. Frontend rejects non-PDF in two places. Working `ExtractFromDocxAsync` already exists in LessonParser module — only wizard wiring missing.
 - **Files:** `InputConfigStep.tsx:220, 459`, `InputMode.cs:6-11`, `DocumentExtractorService.cs:99-130`
 - **Fix direction:** Add `Docx = 4` to InputMode enum. Allow `.docx` MIME in frontend allowedTypes. Branch in `ContentParserService` to call `ExtractFromDocxAsync`.
@@ -165,7 +165,7 @@ Source: `CertifiedIQ_Translator_UAT_Brief_Ryans_Bakery_v3.pdf` (27 May 2026). Re
 
 - **Priority:** P2
 - **Origin:** `[UAT]`
-- **Status:** Open
+- **Status:** ✅ Done — 2026-06-23. Added `diff@9.0.0` (jsdiff); `ValidationSectionCard.tsx` renders both back-translation columns through a `renderDiff()` helper using `diffWords()` against `displayText ?? originalText` (picks up reviewer source edits). Additions render as `<ins>` (green), removals as `<del>` (red strikethrough). "No differences detected" in muted italic when the diff is empty — distinguishes a clean match from a placeholder. Shared component picked up by both wizard variants automatically. No backend changes.
 - **Description:** Score 100% but reviewer can't see why (no differences) or what would have caused a lower score. Feels like rubber-stamping in the dark.
 - **Cause:** Back-translations rendered as plain text blocks.
 - **Files:** `ValidationSectionCard.tsx:437-475`
@@ -189,7 +189,7 @@ Source: `CertifiedIQ_Translator_UAT_Brief_Ryans_Bakery_v3.pdf` (27 May 2026). Re
 
 - **Priority:** P2
 - **Origin:** `[UAT]`
-- **Status:** Open
+- **Status:** ✅ Done — 2026-06-23. Two opposite bugs surfaced by the recon: the new learning-wizard silently undid deletions on back-nav (form state reinitialised from server on remount), the legacy create-wizard hard-deleted immediately via `ExecuteDeleteAsync` with no undo affordance. Each wizard got a targeted fix matching its architecture. **New wizard: save-on-Back** — `handleBack` saves the form state via the existing `PUT /questions` mutation when `form.formState.isDirty`, then navigates back regardless of save outcome (save failures show a toast.error). Back button relocated from `WizardLayout` into `QuizStep` so save logic, loading state, and button share a single component. **Legacy wizard: toast undo** — `handleDeleteQuestion` uses closure-capture pattern (each toast's undo closes over its own captured question, so rapid deletes don't clobber earlier toasts), 8-second duration, sort-by-sectionIndex on restore. Recon: `docs/1.1.16-quiz-delete-recon.md`. Out of scope: Validated-session back-nav data loss in the legacy wizard (pre-existing, separate concern).
 - **Description:** Deleted questions can't be restored. Immediate save, no soft-delete, no Undo.
 - **Cause:** `handleDeleteQuestion` filters out and immediately saves.
 - **Files:** `QuizStep.tsx:184-193`
@@ -271,7 +271,7 @@ Source: `CertifiedIQ_Translator_UAT_Brief_Ryans_Bakery_v3.pdf` (27 May 2026). Re
 
 - **Priority:** P2
 - **Origin:** `[Internal-QA]`
-- **Status:** Open
+- **Status:** ✅ Done — 2026-06-23. Recon surfaced a critical distinction the original framing missed: `RegulatoryCriteria` (scoring rubric) and `RegulatoryRequirement` (compliance checklist items, with Draft/Approved status) are different entities. Scoring works against `RegulatoryCriteria` even when requirements are Draft — what breaks silently is compliance mapping (the user thinks they're compliant when the mapping chain isn't connected). Backend: `RegulatoryApplicabilityDto` added; `RegulatoryScoreHistoryDto` extended with nullable `Applicability` field populated by `GetScoreHistoryAsync` from the run's `SectorKey`; new `GET /api/regulatory/applicability?sectorKey={key}` endpoint on `RegulatoryBrowseController` (returns same shape for unknown sector as for known-sector-no-profile, keeps frontend logic uniform). Frontend: `useRegulatoryApplicability(sectorKey)` hook; pre-flight amber banner on translate step (relocated from sector selection step in a follow-up commit per product intent — warn at point of commitment); four-state rendering in `RegulatoryScorePanel` for the Regulatory Translation column (No sector / No profile / Requirements pending / Ready or scored). Banner is non-blocking — scoring still works. Three new integration tests pass. Recon: `docs/1.2.2-regulatory-applicability-recon.md`. Follow-ups: §1.2.2 banner relocation commit + lint cleanup landed same day.
 - **Description:** Today the system silently processes whatever sector key is supplied. Users have no visibility into whether their content will actually be validated against regulatory documents.
 - **Fix direction:** (a) When tenant sector has regulatory profile but no Approved requirements loaded, show warning at translation time — "regulatory validation will be skipped" — let user proceed or cancel. (b) When tenant sector has no regulatory profile, run validation as today (language/quality/glossary), no warning. (c) On results screen, distinguish "regulatory validation passed" from "regulatory validation not attempted".
 
@@ -1427,6 +1427,40 @@ Out of scope for this entry: API keys in appsettings.json (separate finding — 
 - `docs/elevenlabs-model-error-recon.md`
 - `docs/option-b-multi-provider-recon.md`
 - CLAUDE.md Note 32
+
+## 5.33 — Frontend lint debt — React 19 / React Compiler rules
+
+- **Priority:** P3
+- **Origin:** `[Engineering]` `[Discovered during demo-week wrap-up 2026-06-23]`
+- **Status:** Open
+
+Running `npm run lint` produces 192 problems across the frontend codebase (88 errors, 104 warnings). The errors and warnings are pre-existing — most have been in the codebase since React 19 / React Compiler stricter lint rules became active — and the production build is unaffected (TypeScript checks gate the build, lint does not).
+
+**Category breakdown (errors only):**
+
+  - `react-hooks/set-state-in-effect` (~15) — `setState` called synchronously inside `useEffect`. Code smell; rarely a real bug. Cascading re-render, no functional issue.
+  - `react-hooks/refs` (~18, concentrated in two `SectionList.tsx` files) — refs accessed during render. The pattern (syncing ref-state with prop-state at render time) can produce inconsistent UI; the most serious category.
+  - `react-hooks/preserve-manual-memoization` (~15) — React Compiler skipping memoization due to dependency-array mismatches. Code works; optimisation skipped. Performance only.
+  - `react-hooks/incompatible-library` (~10) — `form.watch()` from React Hook Form can't be memoized by React Compiler. Same as above.
+  - `@typescript-eslint/no-explicit-any` (~20) — Type-safety issues, not runtime bugs.
+  - `react-hooks/rules-of-hooks` (1, **genuine bug**) — `usePermission` called conditionally in `web/src/app/(authenticated)/admin/toolbox-talks/schedules/[id]/page.tsx:126`. Violates React rules; can crash in some scenarios.
+  - `react-hooks/purity` (1, **genuine bug**) — `Date.now()` called in `useState` initializer at `web/src/features/toolbox-talks/components/SectionContent.tsx:34`. Should use lazy initializer `useState(() => Date.now())`. Produces unstable UI.
+  - Small ones — unescaped quotes, unused imports, `<a>` instead of `<Link>`, `<img>` instead of `<Image>`.
+
+**Triage approach:**
+
+The two genuine bugs (`usePermission` conditional, `Date.now()` in render) are five-minute fixes each and can land as quick follow-ups. The remaining categories are non-blocking lint debt that should be addressed in a dedicated cleanup pass — likely a multi-day chunk that triages by category and accepts/refactors each pattern.
+
+**Why deferred:** the production build is green (TypeScript gates, lint doesn't), the demo isn't blocked, and these warnings have been present for some time without producing user-visible issues. The structural rules-of-hooks bug is the genuine concern but the affected page is admin-only and rarely hit.
+
+**Recommended next steps when actioned:**
+
+  1. Fix the two genuine bugs first
+  2. Sweep the `react-hooks/refs` cluster (concentrated; two files)
+  3. Batch the `no-explicit-any` and unused-import cleanups (mechanical)
+  4. Decide policy on `preserve-manual-memoization` and `incompatible-library` — these will recur as long as the codebase uses React Hook Form's `watch()` API extensively. May warrant a documented exemption or a coding convention change.
+
+**Reference:** `npm run lint` output captured during §1.2.2 wrap-up on 2026-06-23.
 
 --- 
 
