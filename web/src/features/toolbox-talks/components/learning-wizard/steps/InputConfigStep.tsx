@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useCallback, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -54,6 +55,7 @@ import { useInitialiseToolboxTalk } from '../hooks/useInitialiseToolboxTalk';
 import { useUploadSourceFile } from '../hooks/useUploadSourceFile';
 import { inputConfigSchema, type InputConfigValues } from '../schemas/inputConfigSchema';
 import { getStepUrl } from '../lib/urlState';
+import { useRegulatoryApplicability } from '@/lib/api/toolbox-talks/use-content-creation';
 
 // ============================================
 // Constants
@@ -212,6 +214,10 @@ export function InputConfigStep() {
       }
     }
   }, [tenantSectors, tenantSectorsLoading, tenantSectorsError, form]);
+
+  // Regulatory applicability pre-flight check — fires when sector key changes
+  const selectedSectorKey = form.watch('sectorKey');
+  const { data: sectorApplicability } = useRegulatoryApplicability(selectedSectorKey);
 
   // Reset file state when mode changes
   const handleModeChange = useCallback(
@@ -865,6 +871,31 @@ export function InputConfigStep() {
         {/* ── 1d Sector ── */}
         <WizardSectionDivider number="1d" label="Sector" />
         {sectorField}
+        {sectorApplicability && sectorApplicability.approvedRequirementCount === 0 && (
+          <Alert className="border-amber-200 bg-amber-50">
+            <AlertTriangle className="h-4 w-4 text-amber-600" aria-hidden="true" />
+            <AlertDescription className="text-amber-800">
+              {sectorApplicability.hasRegulatoryProfile ? (
+                <>
+                  The regulatory requirements for{' '}
+                  <strong>{sectorApplicability.profileName ?? 'this sector'}</strong> haven&apos;t been
+                  approved yet. Translation and scoring will proceed, but the compliance checklist will
+                  be empty until requirements are reviewed in{' '}
+                  <Link href="/admin/regulatory/system" className="underline font-medium">
+                    Regulatory &rarr; System
+                  </Link>
+                  .
+                </>
+              ) : (
+                <>
+                  There is no regulatory profile configured for this sector. Translation and scoring
+                  will proceed against general criteria, but the compliance checklist will not be
+                  available.
+                </>
+              )}
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* ── 1e Audit Metadata ── */}
         <WizardSectionDivider number="1e" label="Audit Metadata" />

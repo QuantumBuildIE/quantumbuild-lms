@@ -305,11 +305,18 @@ export interface RegulatoryScoreResultDto {
   fullResponse: string;
 }
 
+export interface RegulatoryApplicabilityDto {
+  hasRegulatoryProfile: boolean;
+  approvedRequirementCount: number;
+  profileName: string | null;
+}
+
 export interface RegulatoryScoreHistoryDto {
   validationRunId: string;
   sourceScore: RegulatoryScoreResultDto | null;
   pureScore: RegulatoryScoreResultDto | null;
   regulatoryScores: RegulatoryScoreResultDto[];
+  applicability: RegulatoryApplicabilityDto | null;
 }
 
 // ============================================

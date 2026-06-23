@@ -65,4 +65,20 @@ public record RegulatoryScoreHistoryDto
     /// Ordered by RunNumber
     /// </summary>
     public List<RegulatoryScoreResultDto> RegulatoryScores { get; init; } = new();
+    /// <summary>
+    /// Null when the run has no SectorKey; populated when SectorKey is set so the
+    /// frontend can distinguish "no profile", "requirements pending", and "ready" states.
+    /// </summary>
+    public RegulatoryApplicabilityDto? Applicability { get; init; }
+}
+
+/// <summary>
+/// Whether a sector has an ingested regulatory profile with approved requirements.
+/// Used to surface pre-flight warnings before translation and on the results screen.
+/// </summary>
+public record RegulatoryApplicabilityDto
+{
+    public bool HasRegulatoryProfile { get; init; }
+    public int ApprovedRequirementCount { get; init; }
+    public string? ProfileName { get; init; }
 }

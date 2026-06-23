@@ -224,6 +224,45 @@ public class RegulatoryScoreService : IRegulatoryScoreService
 
         var allDtos = scores.Select((s, idx) => MapToDto(s, profile, scores)).ToList();
 
+        // Populate applicability when the run has a SectorKey
+        RegulatoryApplicabilityDto? applicability = null;
+        var run = await _dbContext.TranslationValidationRuns
+            .FirstOrDefaultAsync(r => r.Id == validationRunId, cancellationToken);
+
+        if (run?.SectorKey != null)
+        {
+            var profiles = await _dbContext.RegulatoryProfiles
+                .Where(p => p.SectorKey == run.SectorKey)
+                .ToListAsync(cancellationToken);
+
+            if (profiles.Count == 0)
+            {
+                applicability = new RegulatoryApplicabilityDto
+                {
+                    HasRegulatoryProfile = false,
+                    ApprovedRequirementCount = 0,
+                    ProfileName = null
+                };
+            }
+            else
+            {
+                var profileIds = profiles.Select(p => p.Id).ToList();
+                var approvedCount = await _dbContext.RegulatoryRequirements
+                    .IgnoreQueryFilters()
+                    .Where(r => !r.IsDeleted
+                             && r.IngestionStatus == RequirementIngestionStatus.Approved
+                             && profileIds.Contains(r.RegulatoryProfileId))
+                    .CountAsync(cancellationToken);
+
+                applicability = new RegulatoryApplicabilityDto
+                {
+                    HasRegulatoryProfile = true,
+                    ApprovedRequirementCount = approvedCount,
+                    ProfileName = profiles.Count == 1 ? profiles[0].ScoreLabel : null
+                };
+            }
+        }
+
         return new RegulatoryScoreHistoryDto
         {
             ValidationRunId = validationRunId,
@@ -232,7 +271,8 @@ public class RegulatoryScoreService : IRegulatoryScoreService
             RegulatoryScores = allDtos
                 .Where(d => d.ScoreType == ValidationScoreType.RegulatoryTranslation)
                 .OrderBy(d => d.RunNumber)
-                .ToList()
+                .ToList(),
+            Applicability = applicability
         };
     }
 

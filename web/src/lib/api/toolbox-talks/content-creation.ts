@@ -15,6 +15,7 @@ import type {
   ValidationScoreType,
   RegulatoryScoreResultDto,
   RegulatoryScoreHistoryDto,
+  RegulatoryApplicabilityDto,
 } from '@/types/content-creation';
 
 // ============================================
@@ -540,6 +541,20 @@ export async function getRegulatoryScoreHistory(
 ): Promise<RegulatoryScoreHistoryDto> {
   const response = await apiClient.get<RegulatoryScoreHistoryDto>(
     `/toolbox-talks/validation-runs/${runId}/regulatory-score/history`
+  );
+  return response.data;
+}
+
+/**
+ * Check whether a sector key has an ingested regulatory profile with approved requirements.
+ * Used for pre-flight warnings before starting translation and on the results screen.
+ */
+export async function getRegulatoryApplicability(
+  sectorKey: string
+): Promise<RegulatoryApplicabilityDto> {
+  const response = await apiClient.get<RegulatoryApplicabilityDto>(
+    '/regulatory/applicability',
+    { params: { sectorKey } }
   );
   return response.data;
 }

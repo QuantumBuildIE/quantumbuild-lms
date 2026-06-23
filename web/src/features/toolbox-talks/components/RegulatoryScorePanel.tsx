@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
+import Link from 'next/link';
 import { Loader2, ChevronDown, ChevronRight, ArrowUp, ArrowDown, ArrowRight, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -212,7 +213,48 @@ export function RegulatoryScorePanel({
               isScoring ||
               !hasCompletedSections ||
               (col.scoreType === 'RegulatoryTranslation' && !sectorKey) ||
-              (col.scoreType === 'RegulatoryTranslation' && isApproved);
+              (col.scoreType === 'RegulatoryTranslation' && isApproved) ||
+              (col.scoreType === 'RegulatoryTranslation' &&
+                !!sectorKey &&
+                history?.applicability != null &&
+                !history.applicability.hasRegulatoryProfile);
+
+            // Four-state callout for Regulatory Translation column
+            let regulatoryCallout: ReactNode = null;
+            if (col.scoreType === 'RegulatoryTranslation' && sectorKey && history?.applicability != null) {
+              const applicability = history.applicability;
+              if (!applicability.hasRegulatoryProfile) {
+                // State 2: sector key set but no profile exists — button is disabled
+                regulatoryCallout = (
+                  <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
+                    <span>
+                      No regulatory profile exists for this sector. Scoring is not available
+                      until a profile is configured in{' '}
+                      <Link href="/admin/regulatory/system" className="underline font-medium">
+                        Regulatory &rarr; System
+                      </Link>.
+                    </span>
+                  </div>
+                );
+              } else if (applicability.approvedRequirementCount === 0 && !score) {
+                // State 3: profile exists but no approved requirements yet, no prior score — button stays enabled
+                regulatoryCallout = (
+                  <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
+                    <span>
+                      Requirements for{' '}
+                      <strong>{applicability.profileName ?? 'this sector'}</strong> are pending
+                      approval. Scoring works, but the compliance checklist will be empty until
+                      requirements are reviewed in{' '}
+                      <Link href="/admin/regulatory/system" className="underline font-medium">
+                        Regulatory &rarr; System
+                      </Link>.
+                    </span>
+                  </div>
+                );
+              }
+            }
 
             // Use scoreLabel from history for regulatory column header
             const displayHeader =
@@ -241,6 +283,7 @@ export function RegulatoryScorePanel({
                 isDisabled={isDisabled}
                 buttonLabel={buttonLabel}
                 sectorKey={sectorKey}
+                callout={regulatoryCallout}
                 onScore={() => handleScore(col.scoreType)}
               />
             );
@@ -282,6 +325,7 @@ function ScoreColumn({
   isDisabled,
   buttonLabel,
   sectorKey,
+  callout,
   onScore,
 }: {
   config: ScoreColumnConfig;
@@ -291,6 +335,7 @@ function ScoreColumn({
   isDisabled: boolean;
   buttonLabel: string;
   sectorKey: string | null;
+  callout?: ReactNode;
   onScore: () => void;
 }) {
   const [showFindings, setShowFindings] = useState(false);
@@ -386,6 +431,9 @@ function ScoreColumn({
           </div>
         </div>
       )}
+
+      {/* Applicability callout (states 2 & 3 for Regulatory Translation) */}
+      {callout}
 
       {/* Trigger button */}
       {needsTooltip ? (
