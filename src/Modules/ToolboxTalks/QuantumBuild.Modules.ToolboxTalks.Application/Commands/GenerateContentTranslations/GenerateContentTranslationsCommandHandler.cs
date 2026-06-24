@@ -109,6 +109,7 @@ public class GenerateContentTranslationsCommandHandler
                 targetCode,
                 request.ConfirmOverwrite,
                 request.TriggeredBy,
+                explicitTenantId: request.TenantId,
                 ct: cancellationToken);
 
             if (!workflowGuard.Success)
@@ -197,6 +198,7 @@ public class GenerateContentTranslationsCommandHandler
                 request.ToolboxTalkId,
                 successfulResult.LanguageCode,
                 request.TriggeredBy,
+                explicitTenantId: request.TenantId,
                 ct: cancellationToken);
 
             if (!recordResult.Success)
