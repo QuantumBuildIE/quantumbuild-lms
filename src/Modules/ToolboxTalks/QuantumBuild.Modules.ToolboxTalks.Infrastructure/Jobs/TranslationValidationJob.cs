@@ -167,6 +167,30 @@ public class TranslationValidationJob
             // stay in Translating throughout and must not receive a second StartValidation call.
             if (run.ToolboxTalkId.HasValue && run.IsNewWizard)
             {
+                // On re-runs, LoadSectionsAsync returns cached translations without calling
+                // GenerateTranslationForSectionsAsync, so RecordTranslationCompleted is never
+                // called and state stays Translating. StartValidation's guard requires
+                // AIGenerated or Validating, so it fails silently — and RecordValidationCompleted
+                // subsequently fails too, leaving the workflow stuck. Advance state here before
+                // calling StartValidation so both guards pass on every run.
+                // RecordTranslationCompleted is idempotent: if state is already AIGenerated
+                // (first run, generation advanced it inline), it returns Ok() with no side effects.
+                var currentState = await _workflowService.GetState(
+                    run.ToolboxTalkId.Value, run.LanguageCode,
+                    explicitTenantId: tenantId, ct: cancellationToken);
+
+                if (currentState.State == TranslationWorkflowState.Translating)
+                {
+                    var tcResult = await _workflowService.RecordTranslationCompleted(
+                        run.ToolboxTalkId.Value, run.LanguageCode, TriggeredByType.System,
+                        explicitTenantId: tenantId, ct: cancellationToken);
+                    if (!tcResult.Success)
+                        _logger.LogWarning(
+                            "RecordTranslationCompleted (pre-StartValidation, re-run) returned failure for " +
+                            "talk {TalkId}, lang {Lang}: {Error}",
+                            run.ToolboxTalkId, run.LanguageCode, tcResult.Errors.FirstOrDefault());
+                }
+
                 var startValidationResult = await _workflowService.StartValidation(
                     run.ToolboxTalkId.Value,
                     run.LanguageCode,
