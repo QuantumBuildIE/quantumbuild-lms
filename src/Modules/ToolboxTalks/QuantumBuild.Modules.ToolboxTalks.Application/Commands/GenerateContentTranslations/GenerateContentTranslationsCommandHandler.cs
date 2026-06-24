@@ -142,6 +142,31 @@ public class GenerateContentTranslationsCommandHandler
             results.Add(result);
         }
 
+        // Append any successfully translated language codes to TargetLanguageCodes so the
+        // workflow-state endpoint and Detail-page TranslateStep can see this language.
+        var existingCodes = string.IsNullOrWhiteSpace(toolboxTalk.TargetLanguageCodes)
+            ? new List<string>()
+            : (JsonSerializer.Deserialize<List<string>>(toolboxTalk.TargetLanguageCodes)
+               ?? new List<string>());
+
+        var codesChanged = false;
+        foreach (var successfulResult in results.Where(r => r.Success))
+        {
+            if (!existingCodes.Contains(successfulResult.LanguageCode, StringComparer.OrdinalIgnoreCase))
+            {
+                existingCodes.Add(successfulResult.LanguageCode.ToLowerInvariant());
+                codesChanged = true;
+            }
+        }
+
+        if (codesChanged)
+        {
+            toolboxTalk.TargetLanguageCodes = JsonSerializer.Serialize(existingCodes);
+            _logger.LogInformation(
+                "TargetLanguageCodes updated for talk {ToolboxTalkId}: {Codes}",
+                request.ToolboxTalkId, toolboxTalk.TargetLanguageCodes);
+        }
+
         _logger.LogInformation(
             "All translations done. Saving translation entities to database...");
 

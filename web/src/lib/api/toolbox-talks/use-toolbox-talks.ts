@@ -161,6 +161,7 @@ export function useGenerateContentTranslations() {
       queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId] });
       queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId, 'translations'] });
       queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId, 'workflow-state'] });
+      queryClient.invalidateQueries({ queryKey: ['learnings', toolboxTalkId] });
     },
   });
 }
