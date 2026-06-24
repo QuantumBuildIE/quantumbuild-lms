@@ -170,6 +170,7 @@ export function TranslateStep({ talkId }: TranslateStepProps) {
                 workflowState={stateByCode[code] ?? null}
                 onStart={() => handleStart(code)}
                 isStarting={isPending && variables?.languageCode === code}
+                toolboxTalkId={talkId}
               />
             </div>
           ))}

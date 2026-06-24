@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { CheckCircle2, Loader2, AlertCircle, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -66,6 +67,7 @@ export interface WizardTranslationPanelProps {
   workflowState: TranslationWorkflowStateDto | null;
   onStart: () => void;
   isStarting: boolean;
+  toolboxTalkId: string;
 }
 
 export function WizardTranslationPanel({
@@ -73,7 +75,9 @@ export function WizardTranslationPanel({
   workflowState,
   onStart,
   isStarting,
+  toolboxTalkId,
 }: WizardTranslationPanelProps) {
+  const router = useRouter();
   const langName = LANG_NAMES[languageCode] ?? languageCode.toUpperCase();
   const state = workflowState?.state;
 
@@ -129,6 +133,21 @@ export function WizardTranslationPanel({
             ) : (
               'Start'
             )}
+          </Button>
+        )}
+
+        {state === 'Validated' && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() =>
+              router.push(
+                `/admin/toolbox-talks/talks/${toolboxTalkId}/translations/${languageCode}/review`
+              )
+            }
+            aria-label={`Review validation findings for ${langName}`}
+          >
+            Review
           </Button>
         )}
       </div>
