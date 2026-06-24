@@ -126,6 +126,27 @@ public class SupervisorAssignmentTests : IntegrationTestBase
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Test 5 — GetMyOperators returns 200 with empty list when caller has no employee record
+    // ─────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetMyOperators_WhenCallerHasNoEmployeeRecord_Returns200WithEmptyList()
+    {
+        // Arrange — AdminClient is authenticated as an Admin user who has no employee_id claim
+
+        // Act
+        var response = await AdminClient.GetAsync("/api/employees/my-operators");
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var result = await response.Content.ReadFromJsonAsync<ResultWrapper<List<object>>>();
+        result.Should().NotBeNull();
+        result!.Success.Should().BeTrue();
+        result.Data.Should().NotBeNull();
+        result.Data!.Should().BeEmpty();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Helpers
     // ─────────────────────────────────────────────────────────────────────────
 

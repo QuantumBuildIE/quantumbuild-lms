@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using QuantumBuild.Core.Application.Constants;
 using QuantumBuild.Core.Application.Features.Employees;
 using QuantumBuild.Core.Application.Features.Employees.DTOs;
+using QuantumBuild.Core.Application.Models;
 using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
@@ -370,7 +371,7 @@ public class EmployeesController : ControllerBase
     {
         var employeeId = GetCurrentEmployeeId();
         if (employeeId == null)
-            return BadRequest(new { message = "Current user is not linked to an employee" });
+            return Ok(Result.Ok(new List<SupervisorOperatorDto>()));
 
         var result = await _supervisorAssignmentService.GetAssignedOperatorsAsync(employeeId.Value);
 
