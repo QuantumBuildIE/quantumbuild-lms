@@ -19,7 +19,7 @@ const LANG_NAMES: Record<string, string> = {
 
 const STATE_LABELS: Record<TranslationWorkflowState, string> = {
   Initial: 'Not started',
-  AIGenerated: 'Ready to translate',
+  AIGenerated: 'Translated · awaiting validation',
   Translating: 'Translating…',
   Validating: 'Validating…',
   Validated: 'Validated',
@@ -36,6 +36,15 @@ function stateVariant(
   if (state === 'Validated' || state === 'ReviewerAccepted' || state === 'Accepted') return 'default';
   if (state === 'Translating' || state === 'Validating') return 'secondary';
   if (state === 'Stale') return 'destructive';
+  return 'outline';
+}
+
+function outcomeVariant(
+  outcome: string
+): 'default' | 'secondary' | 'destructive' | 'outline' {
+  if (outcome === 'Pass') return 'default';
+  if (outcome === 'Review') return 'secondary';
+  if (outcome === 'Fail') return 'destructive';
   return 'outline';
 }
 
@@ -94,6 +103,11 @@ export function WizardTranslationPanel({
             {STATE_LABELS[state] ?? state}
           </Badge>
         )}
+        {workflowState?.lastValidationOutcome && (
+          <Badge variant={outcomeVariant(workflowState.lastValidationOutcome)}>
+            {workflowState.lastValidationOutcome}
+          </Badge>
+        )}
 
         {(!state || canStart(state)) && (
           <Button
@@ -101,7 +115,7 @@ export function WizardTranslationPanel({
             variant="outline"
             onClick={onStart}
             disabled={isStarting}
-            aria-label={`Start translation for ${langName}`}
+            aria-label={`${state === 'AIGenerated' || state === 'Stale' ? 'Re-translate' : 'Start translation for'} ${langName}`}
           >
             {isStarting ? (
               <>
@@ -110,6 +124,8 @@ export function WizardTranslationPanel({
               </>
             ) : state === 'Stale' ? (
               'Retranslate'
+            ) : state === 'AIGenerated' ? (
+              'Re-translate'
             ) : (
               'Start'
             )}

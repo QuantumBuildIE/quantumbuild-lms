@@ -51,7 +51,7 @@ const stateConfig: Record<TranslationWorkflowState, StateConfig> = {
   },
   AIGenerated: {
     icon: <Sparkles className="h-3 w-3" />,
-    label: 'AI generated',
+    label: 'Translated · awaiting validation',
     tooltip: 'AI translation complete; awaiting validation',
     className: 'bg-blue-100 text-blue-800 hover:bg-blue-100',
   },
