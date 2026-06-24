@@ -106,10 +106,11 @@ public class TranslationValidationJob
             "TenantId: {TenantId}",
             validationRunId, tenantId);
 
+        Domain.Entities.TranslationValidationRun? run = null;
         try
         {
             // Load the validation run
-            var run = await _dbContext.TranslationValidationRuns
+            run = await _dbContext.TranslationValidationRuns
                 .IgnoreQueryFilters()
                 .FirstOrDefaultAsync(r => r.Id == validationRunId && r.TenantId == tenantId && !r.IsDeleted,
                     cancellationToken);
@@ -466,6 +467,40 @@ public class TranslationValidationJob
             await UpdateRunStatusAsync(validationRunId, tenantId, ValidationRunStatus.Cancelled);
             await SendCompletionAsync(validationRunId, false, "Validation was cancelled");
 
+            if (run?.ToolboxTalkId.HasValue == true && run.IsNewWizard)
+            {
+                try
+                {
+                    var currentState = await _workflowService.GetState(
+                        run.ToolboxTalkId.Value, run.LanguageCode,
+                        explicitTenantId: tenantId, ct: CancellationToken.None);
+
+                    if (currentState.State == TranslationWorkflowState.Translating)
+                    {
+                        await _workflowService.RecordTranslationCompleted(
+                            run.ToolboxTalkId.Value, run.LanguageCode, TriggeredByType.System,
+                            explicitTenantId: tenantId, ct: CancellationToken.None);
+                    }
+
+                    var vcResult = await _workflowService.RecordValidationCompleted(
+                        run.ToolboxTalkId.Value, run.LanguageCode, TriggeredByType.System,
+                        explicitTenantId: tenantId, ct: CancellationToken.None);
+
+                    if (!vcResult.Success)
+                        _logger.LogWarning(
+                            "RecordValidationCompleted (cancellation cleanup) returned failure for " +
+                            "talk {TalkId}, lang {Lang}: {Error}",
+                            run.ToolboxTalkId, run.LanguageCode, vcResult.Errors.FirstOrDefault());
+                }
+                catch (Exception cleanupEx)
+                {
+                    _logger.LogError(cleanupEx,
+                        "Failed to advance workflow state during cancellation cleanup for " +
+                        "talk {TalkId}, lang {Lang}",
+                        run.ToolboxTalkId, run.LanguageCode);
+                }
+            }
+
             throw;
         }
         catch (Exception ex)
@@ -517,6 +552,40 @@ public class TranslationValidationJob
             };
 
             await SendCompletionAsync(validationRunId, false, clientMessage);
+
+            if (run?.ToolboxTalkId.HasValue == true && run.IsNewWizard)
+            {
+                try
+                {
+                    var currentState = await _workflowService.GetState(
+                        run.ToolboxTalkId.Value, run.LanguageCode,
+                        explicitTenantId: tenantId, ct: CancellationToken.None);
+
+                    if (currentState.State == TranslationWorkflowState.Translating)
+                    {
+                        await _workflowService.RecordTranslationCompleted(
+                            run.ToolboxTalkId.Value, run.LanguageCode, TriggeredByType.System,
+                            explicitTenantId: tenantId, ct: CancellationToken.None);
+                    }
+
+                    var vcResult = await _workflowService.RecordValidationCompleted(
+                        run.ToolboxTalkId.Value, run.LanguageCode, TriggeredByType.System,
+                        explicitTenantId: tenantId, ct: CancellationToken.None);
+
+                    if (!vcResult.Success)
+                        _logger.LogWarning(
+                            "RecordValidationCompleted (exception cleanup) returned failure for " +
+                            "talk {TalkId}, lang {Lang}: {Error}",
+                            run.ToolboxTalkId, run.LanguageCode, vcResult.Errors.FirstOrDefault());
+                }
+                catch (Exception cleanupEx)
+                {
+                    _logger.LogError(cleanupEx,
+                        "Failed to advance workflow state during exception cleanup for " +
+                        "talk {TalkId}, lang {Lang}",
+                        run.ToolboxTalkId, run.LanguageCode);
+                }
+            }
 
             throw;
         }

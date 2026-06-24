@@ -63,19 +63,19 @@ const stateConfig: Record<TranslationWorkflowState, StateConfig> = {
   },
   ReviewerAccepted: {
     icon: <UserCheck className="h-3 w-3" />,
-    label: 'Reviewer accepted',
+    label: 'Internally reviewed',
     tooltip: 'Internal reviewer accepted; not yet final',
     className: 'bg-amber-100 text-amber-800 hover:bg-amber-100',
   },
   AwaitingThirdParty: {
     icon: <Clock className="h-3 w-3" />,
-    label: 'Awaiting external',
+    label: 'Awaiting external review',
     tooltip: 'External reviewer invitation pending',
     className: 'bg-blue-100 text-blue-800 hover:bg-blue-100',
   },
   ThirdPartyReviewed: {
     icon: <UserCheck className="h-3 w-3" />,
-    label: 'External reviewed',
+    label: 'External review complete',
     tooltip: 'External reviewer submitted; awaiting final accept',
     className: 'bg-amber-100 text-amber-800 hover:bg-amber-100',
   },
