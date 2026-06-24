@@ -60,7 +60,8 @@ public class MissingTranslationsJobTests : IntegrationTestBase
 
     /// <summary>
     /// Inserts a WorkflowEvent directly to pre-condition the workflow state for a language.
-    /// TenantId auto-stamps to Guid.Empty (non-HTTP scope) — consistent with the service.
+    /// TenantId must be set explicitly because ApplicationDbContext auto-stamps it from
+    /// ICurrentUserService which returns Guid.Empty in non-HTTP scope (Note 22).
     /// </summary>
     private async Task SeedEventAsync(Guid talkId, string languageCode, string eventType)
     {
@@ -68,6 +69,7 @@ public class MissingTranslationsJobTests : IntegrationTestBase
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         db.Set<WorkflowEvent>().Add(new WorkflowEvent
         {
+            TenantId = TestTenantConstants.TenantId,
             WorkflowType = WorkflowType.Translation,
             TargetEntityId = talkId,
             TargetEntitySubKey = languageCode,

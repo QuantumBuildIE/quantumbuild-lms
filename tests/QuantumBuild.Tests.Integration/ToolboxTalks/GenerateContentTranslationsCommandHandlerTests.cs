@@ -17,8 +17,10 @@ namespace QuantumBuild.Tests.Integration.ToolboxTalks;
 /// The handler uses IgnoreQueryFilters() + explicit TenantId for the ToolboxTalk lookup
 /// so HTTP context is not required.
 ///
-/// Workflow events are stamped with TenantId = Guid.Empty (ICurrentUserService.TenantId
-/// in a non-HTTP scope). Assertions use IgnoreQueryFilters() to find them regardless.
+/// Workflow events seeded in tests must have TenantId = TestTenantConstants.TenantId set
+/// explicitly (Note 22: auto-stamp returns Guid.Empty in non-HTTP scope). The production
+/// code also uses the real tenant ID (explicitTenantId from Fix C), so guard queries and
+/// seeded events share the same tenant. Assertions use IgnoreQueryFilters() to find them.
 ///
 /// Translation outcome is NOT tested here — the real IContentTranslationService is registered
 /// in the test host and will fail gracefully (no external API config) after the guard passes.
@@ -50,8 +52,8 @@ public class GenerateContentTranslationsCommandHandlerTests : IntegrationTestBas
 
     /// <summary>
     /// Inserts a WorkflowEvent directly to pre-condition the workflow state.
-    /// TenantId is left unset so it is auto-stamped to Guid.Empty — consistent with
-    /// how the service writes events from a non-HTTP scope (test environment).
+    /// TenantId must be set explicitly because ApplicationDbContext auto-stamps it from
+    /// ICurrentUserService which returns Guid.Empty in non-HTTP scope (Note 22).
     /// Uses a self-contained scope to avoid leaking DB connections.
     /// </summary>
     private async Task SeedEventAsync(Guid talkId, string languageCode, string eventType)
@@ -60,6 +62,7 @@ public class GenerateContentTranslationsCommandHandlerTests : IntegrationTestBas
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         db.Set<WorkflowEvent>().Add(new WorkflowEvent
         {
+            TenantId = TestTenantConstants.TenantId,
             WorkflowType = WorkflowType.Translation,
             TargetEntityId = talkId,
             TargetEntitySubKey = languageCode,
