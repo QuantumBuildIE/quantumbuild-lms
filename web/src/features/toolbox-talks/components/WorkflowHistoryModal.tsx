@@ -28,8 +28,6 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
   ExternalReviewInitiated: 'External review invited',
   ExternalReviewSubmitted: 'External review submitted',
   ExternalReviewRejected: 'External review rejected',
-  ConfirmExternalReviewAccepted: 'External review confirmed',
-  ConfirmExternalReviewRejected: 'External review rejection confirmed',
   AcceptedAsFinal: 'Accepted as final',
   MarkedStale: 'Marked stale',
 };

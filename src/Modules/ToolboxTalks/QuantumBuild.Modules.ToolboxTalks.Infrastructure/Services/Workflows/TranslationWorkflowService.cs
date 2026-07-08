@@ -833,7 +833,6 @@ public sealed class TranslationWorkflowService(
         WorkflowEventTypes.InternalReviewSubmitted => TranslationWorkflowState.ReviewerAccepted,
         WorkflowEventTypes.ExternalReviewInitiated => TranslationWorkflowState.AwaitingThirdParty,
         WorkflowEventTypes.ExternalReviewSubmitted => TranslationWorkflowState.ThirdPartyReviewed,
-        WorkflowEventTypes.ExternalReviewConfirmed => TranslationWorkflowState.Accepted,
         WorkflowEventTypes.ExternalReviewRejected   => TranslationWorkflowState.ReviewerAccepted,
         WorkflowEventTypes.ExternalReviewCancelled  => TranslationWorkflowState.ReviewerAccepted,
         WorkflowEventTypes.ExternalReviewDeclined   => TranslationWorkflowState.ReviewerAccepted,

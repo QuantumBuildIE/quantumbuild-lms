@@ -1779,6 +1779,9 @@ public class ToolboxTalksController : ControllerBase
     /// <summary>
     /// Marks a language's translation as accepted and final.
     /// Valid from states: Validated, ReviewerAccepted, ThirdPartyReviewed.
+    /// Under Option A, ThirdPartyReviewed means the external reviewer's edits have already been
+    /// merged into TranslatedSections on submission (see SubmitExternalReview auto-apply) — this
+    /// endpoint simply transitions the state to Accepted from there without moving any data.
     /// </summary>
     /// <param name="id">Toolbox talk ID</param>
     /// <param name="languageCode">Language code (e.g., "pl", "ro")</param>
