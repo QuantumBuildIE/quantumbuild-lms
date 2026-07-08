@@ -82,7 +82,7 @@ public class PublishToolboxTalkCommandHandler
 
         await _dbContext.SaveChangesAsync(ct);
 
-        return Result.Ok(new PublishTalkResult(talk.Id, "Published", publishedAt));
+        return Result.Ok(new PublishTalkResult(talk.Id, "Published", publishedAt, talk.GenerateSlidesFromPdf));
     }
 
     private static List<string> ParseTargetLanguageCodes(string? json)

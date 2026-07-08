@@ -91,6 +91,12 @@ public class InitialiseToolboxTalkCommandHandler : IRequestHandler<InitialiseToo
             SourceFileType = request.SourceFileType,
             SourceText = request.SourceText,
 
+            // PDF-specific fields — drives the Slideshow toggle visibility guard
+            // (SettingsStep.tsx) and SlideshowGenerationService.GenerateFromPdfAsync,
+            // both of which read PdfUrl rather than the generic SourceFileUrl.
+            PdfUrl = request.InputMode == InputMode.Pdf ? request.SourceFileUrl : null,
+            PdfFileName = request.InputMode == InputMode.Pdf ? request.SourceFileName : null,
+
             // Video URL
             VideoUrl = request.VideoUrl,
             VideoSource = request.VideoSource,

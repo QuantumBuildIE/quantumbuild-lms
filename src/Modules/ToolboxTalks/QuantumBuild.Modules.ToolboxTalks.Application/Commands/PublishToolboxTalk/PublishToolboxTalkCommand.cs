@@ -16,8 +16,13 @@ public record PublishToolboxTalkCommand(
 /// <summary>
 /// Minimal result returned by the publish endpoint.
 /// </summary>
+/// <param name="GenerateSlidesFromPdf">
+/// Carried through so the controller can decide whether to enqueue slideshow
+/// generation (Shape D) without a second DB read — see ToolboxTalksController.PublishByTalkId.
+/// </param>
 public record PublishTalkResult(
     Guid TalkId,
     string Status,
-    DateTime PublishedAt
+    DateTime PublishedAt,
+    bool GenerateSlidesFromPdf
 );

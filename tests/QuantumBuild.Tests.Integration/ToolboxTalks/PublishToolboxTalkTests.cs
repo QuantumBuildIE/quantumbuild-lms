@@ -1,3 +1,4 @@
+using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using QuantumBuild.Core.Infrastructure.Data;
@@ -98,6 +99,42 @@ public class PublishToolboxTalkTests : IntegrationTestBase
             .FirstOrDefaultAsync(t => t.Id == talkId && !t.IsDeleted);
         talk!.TargetLanguageCodes = $"""["{languageCode}"]""";
         await db.SaveChangesAsync();
+    }
+
+    /// <summary>Sets GenerateSlidesFromPdf on a talk directly via DbContext — mirrors
+    /// SetTargetLanguagesAsync's pattern for fields not exposed by the CRUD endpoint used here.</summary>
+    private async Task SetGenerateSlidesFromPdfAsync(Guid talkId, bool value)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var talk = await db.Set<ToolboxTalk>().IgnoreQueryFilters()
+            .FirstOrDefaultAsync(t => t.Id == talkId && !t.IsDeleted);
+        talk!.GenerateSlidesFromPdf = value;
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>Checks Hangfire's (in-memory, test-wide) job storage for a
+    /// ContentGenerationJob.GenerateSlideshowOnlyAsync call whose first argument is talkId.
+    /// The test host registers a real Hangfire server against the in-memory storage, so an
+    /// enqueued job is typically picked up and moved to Processing/Succeeded/Failed within
+    /// milliseconds — this checks every state the job could be in, not just Enqueued.
+    /// Filtering by talkId (a fresh Guid per test) keeps this safe despite storage
+    /// accumulating jobs across the whole test run.</summary>
+    private static bool SlideshowJobEnqueuedForTalk(Guid talkId)
+    {
+        var api = JobStorage.Current.GetMonitoringApi();
+
+        bool Matches(Hangfire.Common.Job? job) =>
+            job?.Method.Name == nameof(ContentGenerationJob.GenerateSlideshowOnlyAsync)
+            && job.Args.Count > 0
+            && job.Args[0] is Guid argTalkId
+            && argTalkId == talkId;
+
+        return api.EnqueuedJobs("content-generation", 0, 1000).Any(kvp => Matches(kvp.Value?.Job))
+            || api.FetchedJobs("content-generation", 0, 1000).Any(kvp => Matches(kvp.Value?.Job))
+            || api.ProcessingJobs(0, 1000).Any(kvp => Matches(kvp.Value?.Job))
+            || api.SucceededJobs(0, 1000).Any(kvp => Matches(kvp.Value?.Job))
+            || api.FailedJobs(0, 1000).Any(kvp => Matches(kvp.Value?.Job));
     }
 
     /// <summary>Seeds a completed TranslationValidationRun directly in the DB.</summary>
@@ -336,6 +373,43 @@ public class PublishToolboxTalkTests : IntegrationTestBase
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    // ── Shape D — slideshow generation enqueue on Publish ────────────────────
+
+    // 8a — GenerateSlidesFromPdf = true → slideshow job enqueued
+    [Fact]
+    public async Task PublishByTalkId_GenerateSlidesFromPdfTrue_EnqueuesSlideshowJob()
+    {
+        // Arrange
+        var talkId = await CreateTalkWithSectionsAsync();
+        await SetGenerateSlidesFromPdfAsync(talkId, true);
+
+        // Act
+        var response = await AdminClient.PostAsJsonAsync(
+            $"/api/toolbox-talks/{talkId}/publish", new { });
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        SlideshowJobEnqueuedForTalk(talkId).Should().BeTrue(
+            "publishing a talk with GenerateSlidesFromPdf=true should enqueue GenerateSlideshowOnlyAsync");
+    }
+
+    // 8b — GenerateSlidesFromPdf = false → no slideshow job enqueued
+    [Fact]
+    public async Task PublishByTalkId_GenerateSlidesFromPdfFalse_DoesNotEnqueueSlideshowJob()
+    {
+        // Arrange — default is false; no explicit patch needed
+        var talkId = await CreateTalkWithSectionsAsync();
+
+        // Act
+        var response = await AdminClient.PostAsJsonAsync(
+            $"/api/toolbox-talks/{talkId}/publish", new { });
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        SlideshowJobEnqueuedForTalk(talkId).Should().BeFalse(
+            "publishing a talk with GenerateSlidesFromPdf=false must not enqueue a slideshow job");
     }
 
     // ── Strict review gate (added for §23) ───────────────────────────────────

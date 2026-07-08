@@ -138,6 +138,98 @@ public class InitialiseToolboxTalkCommandHandlerTests : IntegrationTestBase
         result.SourceFileType.Should().Be("application/pdf");
     }
 
+    // 2a — Pdf mode also populates PdfUrl/PdfFileName (Fix 0 — new wizard slideshow toggle)
+    [Fact]
+    public async Task PdfMode_SetsPdfUrlAndPdfFileNameFromSourceFile()
+    {
+        var title = UniqueTitle("Fire Safety PDF Slideshow");
+        var request = new
+        {
+            Title = title,
+            InputMode = "Pdf",
+            SourceLanguageCode = "en",
+            SourceFileUrl = "https://pub-xxx.r2.dev/uploads/test/fire-safety.pdf",
+            SourceFileName = "fire-safety.pdf",
+            SourceFileType = "application/pdf",
+            TargetLanguageCodes = new[] { "es" },
+            AudienceRole = "Operator",
+            PreserveSourceWording = false,
+            IncludeQuiz = false,
+        };
+
+        var result = await InitialiseAsync(request);
+
+        var talk = await GetTalkFromDbAsync(result.Id);
+        talk.Should().NotBeNull();
+        talk!.PdfUrl.Should().Be("https://pub-xxx.r2.dev/uploads/test/fire-safety.pdf");
+        talk.PdfFileName.Should().Be("fire-safety.pdf");
+    }
+
+    // 2b — Video mode does NOT populate PdfUrl
+    [Fact]
+    public async Task VideoMode_DoesNotSetPdfUrl()
+    {
+        var title = UniqueTitle("Chemical Handling Video PdfUrl Check");
+        var request = new
+        {
+            Title = title,
+            InputMode = "Video",
+            SourceLanguageCode = "en",
+            VideoUrl = "https://example.com/video.mp4",
+            VideoSource = "DirectUrl",
+            TargetLanguageCodes = new[] { "fr" },
+            AudienceRole = "Supervisor",
+            PreserveSourceWording = false,
+            IncludeQuiz = true,
+        };
+
+        var result = await InitialiseAsync(request);
+
+        var talk = await GetTalkFromDbAsync(result.Id);
+        talk.Should().NotBeNull();
+        talk!.PdfUrl.Should().BeNull();
+        talk.PdfFileName.Should().BeNull();
+    }
+
+    // 2c — Docx mode does NOT populate PdfUrl
+    [Fact]
+    public async Task DocxMode_DoesNotSetPdfUrl()
+    {
+        var title = UniqueTitle("Docx PdfUrl Check");
+        var request = new
+        {
+            Title = title,
+            InputMode = "Docx",
+            SourceLanguageCode = "en",
+            SourceFileUrl = "https://pub-xxx.r2.dev/uploads/test/procedure.docx",
+            SourceFileName = "procedure.docx",
+            SourceFileType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            TargetLanguageCodes = new[] { "fr" },
+            AudienceRole = "Operator",
+            PreserveSourceWording = false,
+            IncludeQuiz = false,
+        };
+
+        var result = await InitialiseAsync(request);
+
+        var talk = await GetTalkFromDbAsync(result.Id);
+        talk.Should().NotBeNull();
+        talk!.PdfUrl.Should().BeNull();
+        talk.PdfFileName.Should().BeNull();
+    }
+
+    // 2d — Text mode does NOT populate PdfUrl
+    [Fact]
+    public async Task TextMode_DoesNotSetPdfUrl()
+    {
+        var result = await InitialiseAsync(MinimalRequest(UniqueTitle("Text Mode PdfUrl Check")));
+
+        var talk = await GetTalkFromDbAsync(result.Id);
+        talk.Should().NotBeNull();
+        talk!.PdfUrl.Should().BeNull();
+        talk.PdfFileName.Should().BeNull();
+    }
+
     // 3 — Happy path (Video mode with URL) → 201
     [Fact]
     public async Task VideoMode_WithUrl_CreatesTalk()

@@ -679,6 +679,24 @@ public class ToolboxTalksController : ControllerBase
         BackgroundJob.Enqueue<RequirementMappingJob>(job =>
             job.MapRequirementsAsync(tenantId, talkId, null, CancellationToken.None));
 
+        // Shape D — fire slideshow generation on Publish, mirroring the legacy wizard's
+        // ContentCreationSessionService.PublishAsync. Fire-and-forget: a failure here must
+        // never fail the publish, matching legacy's own swallow-and-log behaviour.
+        if (result.Data!.GenerateSlidesFromPdf)
+        {
+            try
+            {
+                BackgroundJob.Enqueue<ContentGenerationJob>(job =>
+                    job.GenerateSlideshowOnlyAsync(talkId, tenantId, "pdf", CancellationToken.None));
+            }
+            catch (Exception slideshowEx)
+            {
+                _logger.LogError(slideshowEx,
+                    "Failed to enqueue slideshow generation for talk {TalkId} in tenant {TenantId}. Publish succeeded.",
+                    talkId, tenantId);
+            }
+        }
+
         return Ok(result.Data);
     }
 
