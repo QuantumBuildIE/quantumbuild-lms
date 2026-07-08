@@ -118,6 +118,24 @@ public class UpdateToolboxTalkCommandHandlerTests : IntegrationTestBase
     }
 
     /// <summary>
+    /// Directly sets Frequency, RequiresRefresher, and RefresherIntervalMonths on a talk via DB,
+    /// bypassing the API — both wizards refuse to create Weekly-frequency talks, so this
+    /// simulates a pre-existing legacy row. Uses a self-contained scope + IgnoreQueryFilters
+    /// to bypass the tenant filter (no HTTP context in this scope) and to avoid leaking DB
+    /// connections.
+    /// </summary>
+    private async Task SetTalkFrequencyAndRefresherAsync(Guid talkId, ToolboxTalkFrequency frequency, bool requiresRefresher, int refresherIntervalMonths)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var talk = await db.Set<ToolboxTalk>().IgnoreQueryFilters().FirstAsync(t => t.Id == talkId);
+        talk.Frequency = frequency;
+        talk.RequiresRefresher = requiresRefresher;
+        talk.RefresherIntervalMonths = refresherIntervalMonths;
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
     /// Submits a PUT request for the given talk. Returns the HTTP response.
     /// </summary>
     private Task<HttpResponseMessage> PutTalkAsync(
@@ -432,6 +450,110 @@ public class UpdateToolboxTalkCommandHandlerTests : IntegrationTestBase
             .FirstAsync(t => t.Id == talk.Id);
         dbTalk.RequiresRefresher.Should().BeTrue();
         dbTalk.RefresherIntervalMonths.Should().Be(3, "explicit quarterly value must survive the Frequency=Monthly mapper");
+    }
+
+    // 11 — Legacy edit-form save on a pre-existing Weekly-frequency talk with an active
+    //      refresher must NOT silently disable it. Regression guard for
+    //      docs/weekly-refresher-silent-disable-recon.md.
+    [Fact]
+    public async Task Update_TalkWithWeeklyFrequencyAndRefresherEnabled_PreservesRefresherConfig()
+    {
+        var talkTitle = UniqueTitle("WeeklyRefresherEnabled");
+
+        // Arrange — create via API, then force it into the legacy Weekly + active-refresher
+        // state that neither wizard can produce directly.
+        var talk = await CreateTalkAsync(talkTitle,
+            new SectionCreateDto(1, "Section", "<p>Content</p>", true));
+        await SetTalkFrequencyAndRefresherAsync(talk.Id, ToolboxTalkFrequency.Weekly, requiresRefresher: true, refresherIntervalMonths: 6);
+
+        // Act — legacy form payload shape: sends Frequency but omits RequiresRefresher/
+        // RefresherIntervalMonths, which bind to their DTO defaults (false, 12).
+        var response = await AdminClient.PutAsJsonAsync($"/api/toolbox-talks/{talk.Id}", new
+        {
+            Id = talk.Id,
+            Title = talk.Title,
+            Frequency = ToolboxTalkFrequency.Weekly,
+            RequiresQuiz = false,
+            IsActive = true,
+            Sections = talk.Sections.Select(s => new { s.Id, s.SectionNumber, s.Title, s.Content, s.RequiresAcknowledgment }),
+            Questions = Array.Empty<object>()
+        });
+        response.StatusCode.Should().Be(System.Net.HttpStatusCode.OK);
+
+        // Assert — the guard preserved the existing refresher config instead of letting the
+        // mapper's Weekly branch silently disable it.
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var dbTalk = await db.Set<ToolboxTalk>().IgnoreQueryFilters().FirstAsync(t => t.Id == talk.Id);
+        dbTalk.RequiresRefresher.Should().BeTrue("the guard must preserve an active refresher on Weekly-frequency talks");
+        dbTalk.RefresherIntervalMonths.Should().Be(6, "the existing interval must survive the guard untouched");
+    }
+
+    // 12 — Weekly frequency with no active refresher is a genuine no-op: the mapper still
+    //      runs, but returns the same (false, existingInterval) that was already set.
+    [Fact]
+    public async Task Update_TalkWithWeeklyFrequencyAndRefresherDisabled_NoOp()
+    {
+        var talkTitle = UniqueTitle("WeeklyRefresherDisabled");
+
+        // Arrange
+        var talk = await CreateTalkAsync(talkTitle,
+            new SectionCreateDto(1, "Section", "<p>Content</p>", true));
+        await SetTalkFrequencyAndRefresherAsync(talk.Id, ToolboxTalkFrequency.Weekly, requiresRefresher: false, refresherIntervalMonths: 12);
+
+        // Act — same legacy-form payload shape
+        var response = await AdminClient.PutAsJsonAsync($"/api/toolbox-talks/{talk.Id}", new
+        {
+            Id = talk.Id,
+            Title = talk.Title,
+            Frequency = ToolboxTalkFrequency.Weekly,
+            RequiresQuiz = false,
+            IsActive = true,
+            Sections = talk.Sections.Select(s => new { s.Id, s.SectionNumber, s.Title, s.Content, s.RequiresAcknowledgment }),
+            Questions = Array.Empty<object>()
+        });
+        response.StatusCode.Should().Be(System.Net.HttpStatusCode.OK);
+
+        // Assert — nothing changed; the guard must not spuriously fire when there is no
+        // active refresher to protect.
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var dbTalk = await db.Set<ToolboxTalk>().IgnoreQueryFilters().FirstAsync(t => t.Id == talk.Id);
+        dbTalk.RequiresRefresher.Should().BeFalse();
+        dbTalk.RefresherIntervalMonths.Should().Be(12);
+    }
+
+    // 13 — Non-Weekly frequency (Monthly) must still run through the mapper exactly as
+    //      before the guard was introduced.
+    [Fact]
+    public async Task Update_TalkWithMonthlyFrequency_MapperRunsAsBefore()
+    {
+        var talkTitle = UniqueTitle("MonthlyMapperUnaffected");
+
+        // Arrange
+        var talk = await CreateTalkAsync(talkTitle,
+            new SectionCreateDto(1, "Section", "<p>Content</p>", true));
+        await SetTalkFrequencyAndRefresherAsync(talk.Id, ToolboxTalkFrequency.Monthly, requiresRefresher: true, refresherIntervalMonths: 1);
+
+        // Act — same legacy-form payload shape
+        var response = await AdminClient.PutAsJsonAsync($"/api/toolbox-talks/{talk.Id}", new
+        {
+            Id = talk.Id,
+            Title = talk.Title,
+            Frequency = ToolboxTalkFrequency.Monthly,
+            RequiresQuiz = false,
+            IsActive = true,
+            Sections = talk.Sections.Select(s => new { s.Id, s.SectionNumber, s.Title, s.Content, s.RequiresAcknowledgment }),
+            Questions = Array.Empty<object>()
+        });
+        response.StatusCode.Should().Be(System.Net.HttpStatusCode.OK);
+
+        // Assert — mapper output for Monthly is (true, 1); guard must not intercept non-Weekly paths.
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var dbTalk = await db.Set<ToolboxTalk>().IgnoreQueryFilters().FirstAsync(t => t.Id == talk.Id);
+        dbTalk.RequiresRefresher.Should().BeTrue();
+        dbTalk.RefresherIntervalMonths.Should().Be(1);
     }
 
     // ── local DTOs (private to this test class) ────────────────────────────────

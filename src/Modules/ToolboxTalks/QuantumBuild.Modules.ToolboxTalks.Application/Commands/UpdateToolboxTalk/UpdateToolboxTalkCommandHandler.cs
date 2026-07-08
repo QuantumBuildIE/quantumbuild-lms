@@ -143,8 +143,26 @@ public class UpdateToolboxTalkCommandHandler : IRequestHandler<UpdateToolboxTalk
             toolboxTalk.RequiresRefresher = request.RequiresRefresher;
             toolboxTalk.RefresherIntervalMonths = request.RefresherIntervalMonths;
         }
+        else if (request.Frequency == ToolboxTalkFrequency.Weekly && toolboxTalk.RequiresRefresher)
+        {
+            // Legacy edit-form save on a pre-existing Weekly-frequency talk. The mapper has no
+            // Weekly equivalent and would silently disable the refresher on every unrelated save
+            // (see docs/weekly-refresher-silent-disable-recon.md). Preserve the current refresher
+            // config instead of calling the mapper. Fresh writes cannot create Weekly talks, so
+            // this only guards pre-existing rows.
+            _logger.LogWarning(
+                "Refresh config preserved on save for talk with legacy Weekly frequency. TalkId: {TalkId}, TenantId: {TenantId}, UserId: {UserId}, PreservedIntervalMonths: {IntervalMonths}",
+                toolboxTalk.Id, toolboxTalk.TenantId, _currentUser.UserId, toolboxTalk.RefresherIntervalMonths);
+        }
         else
         {
+            if (request.Frequency == ToolboxTalkFrequency.Weekly)
+            {
+                _logger.LogInformation(
+                    "Save through legacy edit form encountered Weekly frequency with no active refresher. TalkId: {TalkId}, TenantId: {TenantId}",
+                    toolboxTalk.Id, toolboxTalk.TenantId);
+            }
+
             (toolboxTalk.RequiresRefresher, toolboxTalk.RefresherIntervalMonths) =
                 RefresherFrequencyMapper.ToCanonicalFields(request.Frequency, toolboxTalk.RefresherIntervalMonths);
         }
