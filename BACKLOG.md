@@ -2380,4 +2380,35 @@ A talk translated via the legacy path (`GenerateContentTranslationsCommand`) has
 
 ---
 
+#### §28 — ProcessToolboxTalkScheduleCommandHandler sends assignment emails before SaveChangesAsync
+
+- **Priority:** P2
+- **Origin:** `[Engineering]` `[Refresher-notification recon discovery 2026-07-08]`
+- **Status:** Open
+
+`ProcessToolboxTalkScheduleCommandHandler` sends assignment emails from
+inside its per-assignment `foreach` loop, before the batch's single
+`SaveChangesAsync` call fires. If `SaveChangesAsync` throws after emails
+have already gone out for some rows in the batch, those employees
+receive assignment emails for `ScheduledTalk` rows that never commit —
+they see "you've been assigned [talk]" in their inbox, but the talk
+never appears in their portal.
+
+Low-frequency in practice (the batch save rarely fails after the row
+`.Add()` calls succeed) but a real correctness gap. `AssignCourseCommandHandler`
+uses the opposite ordering — send-after-save — which is the safe pattern.
+
+Refs:
+- `src/Modules/ToolboxTalks/QuantumBuild.Modules.ToolboxTalks.Application/Commands/ProcessToolboxTalkSchedule/ProcessToolboxTalkScheduleCommandHandler.cs:121-146,191`
+- `AssignCourseCommandHandler.cs:177-203` (the correct pattern)
+- `docs/refresher-notification-recon.md` §2 (surfaced this)
+
+**Fix direction:** move the email loop to run after `SaveChangesAsync`,
+mirroring the course-assignment path. Requires holding the created
+`ScheduledTalk` rows in a local list (or querying them back post-save)
+so the loop has the objects to iterate. Small change but needs care
+around the try/catch-and-continue pattern being preserved.
+
+Estimated effort: half-day including tests.
+
 _End of BACKLOG.md._
