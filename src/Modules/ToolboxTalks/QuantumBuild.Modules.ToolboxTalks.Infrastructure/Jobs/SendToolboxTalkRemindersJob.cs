@@ -71,7 +71,7 @@ public class SendToolboxTalkRemindersJob
                     .IgnoreQueryFilters()
                     .Include(st => st.Employee)
                     .Include(st => st.ToolboxTalk)
-                    .Where(st => st.TenantId == tenant.Id && !st.IsDeleted)
+                    .Where(st => st.TenantId == tenant.Id && !st.IsDeleted && !st.Employee.IsDeleted)
                     .Where(st => st.Status != ScheduledTalkStatus.Completed &&
                                  st.Status != ScheduledTalkStatus.Cancelled)
                     .Where(st => st.DueDate.Date < today)

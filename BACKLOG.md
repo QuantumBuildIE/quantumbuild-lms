@@ -2411,4 +2411,46 @@ around the try/catch-and-continue pattern being preserved.
 
 Estimated effort: half-day including tests.
 
+---
+
+#### §29 — Employee.IsActive and User.IsActive not synced on edit-form deactivate path
+
+- **Priority:** P3
+- **Origin:** `[Engineering]` `[Reminder-scoping recon discovery 2026-07-08]`
+- **Status:** Open
+
+An admin flipping an employee's "Active" toggle off via the employee
+edit form updates `Employee.IsActive` but does not touch the linked
+`User.IsActive`. The delete path synchronises both flags (via
+`DeactivateLinkedUserAsync`), but the deactivate path does not.
+
+Result: an employee marked "Inactive" via the edit form is hidden from
+employee-picker dropdowns (per the form's own description) but can still
+log in and use the portal — `AuthService` checks `User.IsActive` for
+login/token-refresh, which stays true until the employee is actually
+deleted.
+
+Whether this is intentional ("Inactive" ≠ "locked out"; matches the
+form's stated purpose) or a defect (the label implies more than it
+delivers) depends on product intent. The form description does not
+mention login, so a strict reading suggests the current behaviour is
+by design. But an admin reasonably reading "Inactive" as "this person
+is out of the workforce" would expect login to fail, and the current
+behaviour surprises them.
+
+**Fix direction (if the decision is that IsActive should also gate
+login):** `EmployeeService.UpdateAsync` calls the same
+`DeactivateLinkedUserAsync` helper as the delete path when
+`IsActive` transitions from true to false, and re-enables the User
+when the reverse transition happens. Alternatively, the form's
+description could be updated to make the current behaviour explicit
+("won't appear in selection dropdowns; will still be able to log in").
+
+Refs:
+- `src/Core/QuantumBuild.Core.Application/Features/Employees/EmployeeService.cs:664` (edit-form path — sets IsActive without touching User)
+- `src/Core/QuantumBuild.Core.Application/Features/Employees/EmployeeService.cs:894-895, 972-973` (delete path — sets both)
+- `src/Core/QuantumBuild.Core.Application/Services/AuthService.cs:61, 169` (login checks User.IsActive)
+- `web/src/features/employees/components/employee-form.tsx:552-556` (form's stated purpose)
+- `docs/reminder-employee-scoping-recon.md` (surfaced this)
+
 _End of BACKLOG.md._
