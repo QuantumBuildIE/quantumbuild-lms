@@ -26,7 +26,7 @@ const STATE_LABELS: Record<TranslationWorkflowState, string> = {
   Validated: 'Validated',
   ReviewerAccepted: 'Internally reviewed',
   AwaitingThirdParty: 'Awaiting external review',
-  ThirdPartyReviewed: 'External review complete',
+  ThirdPartyReviewed: 'External review applied',
   Accepted: 'Accepted',
   Stale: 'Stale — needs retranslation',
 };

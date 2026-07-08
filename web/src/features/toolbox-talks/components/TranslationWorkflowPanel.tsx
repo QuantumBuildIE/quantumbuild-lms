@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
-import { Languages, History, ClipboardCheck, Send, X } from 'lucide-react';
+import { Languages, History, ClipboardCheck, Send, X, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
@@ -38,6 +38,7 @@ import {
   useValidateTranslation,
   useInitiateExternalReview,
   useCancelExternalReview,
+  useAcceptTranslation,
 } from '@/lib/api/toolbox-talks';
 import { SendExternalReviewDialog } from './SendExternalReviewDialog';
 import { CancelExternalReviewDialog } from './CancelExternalReviewDialog';
@@ -64,7 +65,11 @@ function canValidate(state: TranslationWorkflowState): boolean {
 }
 
 function canReview(state: TranslationWorkflowState): boolean {
-  return state === 'Validated' || state === 'ReviewerAccepted' || state === 'ThirdPartyReviewed';
+  return state === 'Validated' || state === 'ReviewerAccepted';
+}
+
+function canAcceptExternalReview(state: TranslationWorkflowState): boolean {
+  return state === 'ThirdPartyReviewed';
 }
 
 function canSendForExternalReview(state: TranslationWorkflowState): boolean {
@@ -86,12 +91,14 @@ export function TranslationWorkflowPanel({
   const validateMutation = useValidateTranslation();
   const initiateExternalReviewMutation = useInitiateExternalReview();
   const cancelExternalReviewMutation = useCancelExternalReview();
+  const acceptTranslationMutation = useAcceptTranslation();
 
   const [pendingByLanguage, setPendingByLanguage] = useState<
-    Record<string, 'translating' | 'validating' | null>
+    Record<string, 'translating' | 'validating' | 'accepting' | null>
   >({});
   const [overwriteLanguageCode, setOverwriteLanguageCode] = useState<string | null>(null);
   const [overwriteLanguageName, setOverwriteLanguageName] = useState<string | null>(null);
+  const [overwriteWasExternallyReviewed, setOverwriteWasExternallyReviewed] = useState(false);
   const [historyLanguageCode, setHistoryLanguageCode] = useState<string | null>(null);
   const [historyLanguageName, setHistoryLanguageName] = useState<string | null>(null);
   const [sendReviewLanguageCode, setSendReviewLanguageCode] = useState<string | null>(null);
@@ -163,6 +170,7 @@ export function TranslationWorkflowPanel({
     if (state === 'Accepted') {
       setOverwriteLanguageCode(languageCode);
       setOverwriteLanguageName(languageName);
+      setOverwriteWasExternallyReviewed(!!stateByCode.get(languageCode)?.lastExternalReviewedAt);
       return;
     }
     fireTranslateMutation(languageCode, languageName);
@@ -192,6 +200,18 @@ export function TranslationWorkflowPanel({
       setSendReviewLanguageCode(null);
     } catch {
       toast.error(`Failed to send invitation for ${sendReviewLanguageName}`);
+    }
+  };
+
+  const handleAcceptExternalReview = async (languageCode: string) => {
+    setPendingByLanguage((prev) => ({ ...prev, [languageCode]: 'accepting' }));
+    try {
+      await acceptTranslationMutation.mutateAsync({ toolboxTalkId, languageCode });
+      toast.success(`${languageCode.toUpperCase()} translation accepted as final`);
+    } catch {
+      toast.error('Failed to accept translation');
+    } finally {
+      setPendingByLanguage((prev) => ({ ...prev, [languageCode]: null }));
     }
   };
 
@@ -229,7 +249,8 @@ export function TranslationWorkflowPanel({
             const pending = pendingByLanguage[row.languageCode];
             const isTranslating = pending === 'translating';
             const isValidating = pending === 'validating';
-            const isBusy = isTranslating || isValidating;
+            const isAccepting = pending === 'accepting';
+            const isBusy = isTranslating || isValidating || isAccepting;
 
             return (
               <div
@@ -238,10 +259,18 @@ export function TranslationWorkflowPanel({
               >
                 {/* Language name */}
                 <div className="min-w-[120px]">
-                  <span className="font-medium text-sm">{row.languageName}</span>
-                  <span className="ml-1.5 text-xs text-muted-foreground">
-                    {row.languageCode}
-                  </span>
+                  <div>
+                    <span className="font-medium text-sm">{row.languageName}</span>
+                    <span className="ml-1.5 text-xs text-muted-foreground">
+                      {row.languageCode}
+                    </span>
+                  </div>
+                  {dto?.lastExternalReviewedAt && (
+                    <p className="text-xs text-muted-foreground">
+                      Externally reviewed by {dto.lastExternalReviewedBy} on{' '}
+                      {format(new Date(dto.lastExternalReviewedAt), 'd MMM yyyy')}
+                    </p>
+                  )}
                 </div>
 
                 {/* Workflow state badge */}
@@ -395,6 +424,24 @@ export function TranslationWorkflowPanel({
                     </Button>
                   )}
 
+                  {/* Accept as final — only when ThirdPartyReviewed */}
+                  {canAcceptExternalReview(row.state) && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={isBusy}
+                      onClick={() => handleAcceptExternalReview(row.languageCode)}
+                    >
+                      {isAccepting ? (
+                        <CheckCircle2 className="mr-1 h-3 w-3 animate-pulse" />
+                      ) : (
+                        <CheckCircle2 className="mr-1 h-3 w-3" />
+                      )}
+                      Accept this language as final
+                    </Button>
+                  )}
+
                   {/* View history */}
                   <TooltipProvider>
                     <Tooltip>
@@ -471,6 +518,7 @@ export function TranslationWorkflowPanel({
           if (!open) {
             setOverwriteLanguageCode(null);
             setOverwriteLanguageName(null);
+            setOverwriteWasExternallyReviewed(false);
           }
         }}
       >
@@ -478,9 +526,20 @@ export function TranslationWorkflowPanel({
           <AlertDialogHeader>
             <AlertDialogTitle>Overwrite accepted translation?</AlertDialogTitle>
             <AlertDialogDescription>
-              <span className="font-medium text-foreground">{overwriteLanguageName}</span>{' '}
-              has been accepted as final. Reviewer edits and validation results for this
-              language will be replaced with a fresh AI translation.
+              {overwriteWasExternallyReviewed ? (
+                <>
+                  <span className="font-medium text-foreground">{overwriteLanguageName}</span>{' '}
+                  was reviewed and edited by a trusted external reviewer. Re-translating will
+                  discard those edits. If you need the same trust level afterwards, a new
+                  external review round would be required. Continue?
+                </>
+              ) : (
+                <>
+                  <span className="font-medium text-foreground">{overwriteLanguageName}</span>{' '}
+                  has been accepted as final. Reviewer edits and validation results for this
+                  language will be replaced with a fresh AI translation.
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -493,6 +552,7 @@ export function TranslationWorkflowPanel({
                 }
                 setOverwriteLanguageCode(null);
                 setOverwriteLanguageName(null);
+                setOverwriteWasExternallyReviewed(false);
               }}
             >
               Overwrite and regenerate

@@ -75,8 +75,9 @@ const stateConfig: Record<TranslationWorkflowState, StateConfig> = {
   },
   ThirdPartyReviewed: {
     icon: <UserCheck className="h-3 w-3" />,
-    label: 'External review complete',
-    tooltip: 'External reviewer submitted; awaiting final accept',
+    label: 'External review applied',
+    tooltip:
+      "External reviewer's edits are live in this translation. Click Accept to finalise the language.",
     className: 'bg-amber-100 text-amber-800 hover:bg-amber-100',
   },
   Accepted: {
