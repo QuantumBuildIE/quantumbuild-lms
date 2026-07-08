@@ -1,9 +1,11 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using QuantumBuild.Core.Infrastructure.Data;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Workflows;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities.Workflows;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace QuantumBuild.Tests.Integration.ToolboxTalks;
@@ -69,6 +71,31 @@ public class ToolboxTalksControllerWorkflowActionsTests : IntegrationTestBase
             OccurredAt = DateTime.UtcNow
         });
         await db.SaveChangesAsync();
+    }
+
+    /// <summary>Seeds a ToolboxTalkTranslation for (talkId, languageCode) with the given JSON sections.</summary>
+    private async Task SeedTranslationAsync(Guid talkId, string languageCode, string translatedSectionsJson)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        db.Set<ToolboxTalkTranslation>().Add(new ToolboxTalkTranslation
+        {
+            TenantId = TestTenantConstants.TenantId,
+            ToolboxTalkId = talkId,
+            LanguageCode = languageCode,
+            TranslatedTitle = $"Test translation ({languageCode})",
+            TranslatedSections = translatedSectionsJson,
+            TranslatedAt = DateTime.UtcNow,
+            TranslationProvider = "test"
+        });
+        await db.SaveChangesAsync();
+    }
+
+    private sealed class TranslatedSectionSnapshot
+    {
+        public Guid SectionId { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public string Content { get; set; } = string.Empty;
     }
 
     // ── history tests ─────────────────────────────────────────────────────────
@@ -179,19 +206,77 @@ public class ToolboxTalksControllerWorkflowActionsTests : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    // 8 — State is ThirdPartyReviewed → 200
+    // 8 — State is ThirdPartyReviewed → 200. Under auto-apply (Option A — see
+    //     docs/external-review-auto-apply-recon.md), SubmitExternalReview already merged the
+    //     reviewer's edits into TranslatedSections and stamped provenance before Accept is ever
+    //     called; AcceptAsFinal only closes the state and must not touch that data.
     [Fact]
     public async Task AcceptAsFinal_FromThirdPartyReviewedState_Returns200()
     {
         var talkId = await CreateTalkAsync();
-        // ExternalReviewSubmitted → ThirdPartyReviewed (per EventTypeToState mapping)
-        await SeedEventAsync(talkId, "de", WorkflowEventTypes.ExternalReviewSubmitted);
+        const string lang = "de";
+        var sectionId = Guid.NewGuid();
+
+        await SeedTranslationAsync(talkId, lang, JsonSerializer.Serialize(new[]
+        {
+            new { SectionId = sectionId, Title = "Section 1", Content = "Original AI translation" }
+        }));
+
+        // Reach ReviewerAccepted so InitiateExternalReview is legal
+        await SeedEventAsync(talkId, lang, WorkflowEventTypes.TranslationCompleted);
+        await SeedEventAsync(talkId, lang, WorkflowEventTypes.ValidationCompleted);
+        await SeedEventAsync(talkId, lang, WorkflowEventTypes.InternalReviewSubmitted);
+
+        string rawToken;
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+            // explicitTenantId required: this scope has no HttpContext, so ICurrentUserService
+            // would otherwise resolve Guid.Empty and miss the TestTenantConstants.TenantId events
+            // seeded above (see CLAUDE.md Note 22 / the Hangfire-context pattern).
+            var initiate = await service.InitiateExternalReview(talkId, lang, "reviewer@example.com",
+                explicitTenantId: TestTenantConstants.TenantId);
+            initiate.Success.Should().BeTrue();
+            rawToken = initiate.Data!.Token;
+
+            var editsJson = JsonSerializer.Serialize(new[]
+            {
+                new { SectionIndex = 0, TranslatedText = "Reviewer edited translation" }
+            });
+            var submit = await service.SubmitExternalReview(rawToken, accepted: true, editedContent: editsJson);
+            submit.Success.Should().BeTrue();
+        }
+
+        // Auto-apply already happened before Accept is even called
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var translation = await db.Set<ToolboxTalkTranslation>()
+                .IgnoreQueryFilters()
+                .FirstAsync(t => t.ToolboxTalkId == talkId && t.LanguageCode == lang && !t.IsDeleted);
+            var sections = JsonSerializer.Deserialize<List<TranslatedSectionSnapshot>>(translation.TranslatedSections);
+            sections![0].Content.Should().Be("Reviewer edited translation");
+            translation.LastExternalReviewedAt.Should().NotBeNull();
+            translation.LastExternalReviewedBy.Should().Be("reviewer@example.com");
+        }
 
         var response = await AdminClient.PostAsync(
-            $"/api/toolbox-talks/{talkId}/translations/de/accept",
+            $"/api/toolbox-talks/{talkId}/translations/{lang}/accept",
             new StringContent(string.Empty));
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // Accept must not alter the already-applied edits — it only closes the state.
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var translation = await db.Set<ToolboxTalkTranslation>()
+                .IgnoreQueryFilters()
+                .FirstAsync(t => t.ToolboxTalkId == talkId && t.LanguageCode == lang && !t.IsDeleted);
+            var sections = JsonSerializer.Deserialize<List<TranslatedSectionSnapshot>>(translation.TranslatedSections);
+            sections![0].Content.Should().Be("Reviewer edited translation");
+        }
     }
 
     // 9 — State is Initial (no events seeded) → 409 Conflict

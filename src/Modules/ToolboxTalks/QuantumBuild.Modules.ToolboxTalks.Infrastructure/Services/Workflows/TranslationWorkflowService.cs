@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -121,7 +122,9 @@ public sealed class TranslationWorkflowService(
                 ? lastValidationRun.OverallOutcome
                 : null,
             LastValidationRunId = lastValidationRun?.Id,
-            FlaggedWordCount = flaggedWordCount
+            FlaggedWordCount = flaggedWordCount,
+            LastExternalReviewedAt = translation?.LastExternalReviewedAt,
+            LastExternalReviewedBy = translation?.LastExternalReviewedBy
         };
     }
 
@@ -455,8 +458,51 @@ public sealed class TranslationWorkflowService(
                 $"External review submission not accepted from state {currentState}; invitation may be stale.",
                 FailureCode.WorkflowInvalidState);
 
+        // Auto-apply: on the accept path, the reviewer's edits are validated and merged into the
+        // live translation right here — there is no separate admin confirmation step (see
+        // docs/external-review-auto-apply-recon.md). Reject/decline submissions are recorded but
+        // never touch TranslatedSections, mirroring the old Accepted-only propagation filter.
+        List<ExternalReviewEditedSectionDto> edits = new();
+        if (accepted)
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(editedContent))
+                    edits = JsonSerializer.Deserialize<List<ExternalReviewEditedSectionDto>>(editedContent) ?? new();
+            }
+            catch (JsonException)
+            {
+                edits = new();
+            }
+
+            var validationFailure = await ValidateExternalReviewSubmissionAsync(
+                invitation.TargetEntityId, invitation.TargetEntitySubKey ?? string.Empty, edits, ct);
+            if (validationFailure is not null)
+                return validationFailure;
+        }
+
         invitation.Status = InvitationStatus.Used;
         invitation.UsedAt = DateTime.UtcNow;
+
+        if (accepted)
+        {
+            // Gate above already confirmed this row exists and its sections deserialise cleanly
+            // with every submitted SectionIndex in range.
+            var translation = await context.ToolboxTalkTranslations
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(t => t.ToolboxTalkId == invitation.TargetEntityId
+                                       && t.LanguageCode == invitation.TargetEntitySubKey
+                                       && !t.IsDeleted, ct);
+
+            var sections = JsonSerializer.Deserialize<List<TranslatedSectionEntry>>(translation!.TranslatedSections)!;
+
+            foreach (var edit in edits)
+                sections[edit.SectionIndex].Content = edit.TranslatedText;
+
+            translation.TranslatedSections = JsonSerializer.Serialize(sections);
+            translation.LastExternalReviewedAt = DateTime.UtcNow;
+            translation.LastExternalReviewedBy = invitation.InvitedEmail;
+        }
 
         context.WorkflowReviews.Add(new WorkflowReview
         {
@@ -496,38 +542,6 @@ public sealed class TranslationWorkflowService(
         await notificationService.NotifyExternalReviewResponseAsync(
             invitation.TenantId, invitation.TargetEntityId, talkTitle, langName, accepted, ct);
 
-        return Result.Ok();
-    }
-
-    public async Task<Result> ConfirmExternalReview(
-        Guid talkId,
-        string languageCode,
-        bool accepted,
-        Guid? explicitTenantId = null,
-        CancellationToken ct = default)
-    {
-        var guard = ValidateExplicitTenantId(explicitTenantId);
-        if (guard is not null) return guard;
-
-        var tenantId = ResolveTenantId(explicitTenantId);
-        var stateDto = await GetState(talkId, languageCode, explicitTenantId, ct);
-        var state = stateDto.State;
-
-        if (state != TranslationWorkflowState.ThirdPartyReviewed)
-            return Result.Fail(
-                $"Cannot confirm external review from state {state}; requires ThirdPartyReviewed.",
-                FailureCode.WorkflowInvalidState);
-
-        if (accepted)
-        {
-            await PropagateExternalReviewEditsAsync(talkId, languageCode, ct);
-        }
-
-        AddEvent(talkId, languageCode, WorkflowEventTypes.ExternalReviewConfirmed,
-            Serialize(new { accepted }), TriggeredByType.User, tenantId);
-        await context.SaveChangesAsync(ct);
-
-        // TODO Phase 7: fire WorkflowNotificationTrigger
         return Result.Ok();
     }
 
@@ -967,49 +981,25 @@ public sealed class TranslationWorkflowService(
             .Length;
     }
 
-    private async Task PropagateExternalReviewEditsAsync(
+    /// <summary>
+    /// Validates an external reviewer's accept-path submission before anything is written.
+    /// Runs four gates in order, failing fast on the first violation. Only called when
+    /// <c>accepted == true</c> — the decline/reject path never propagates edits and has
+    /// no section content to validate.
+    /// </summary>
+    private async Task<Result?> ValidateExternalReviewSubmissionAsync(
         Guid talkId,
         string languageCode,
+        List<ExternalReviewEditedSectionDto> edits,
         CancellationToken ct)
     {
-        // (a) Find the most recent accepted external WorkflowReview for this talk + language
-        var review = await context.WorkflowReviews
-            .IgnoreQueryFilters()
-            .Where(r => r.WorkflowType == WorkflowType.Translation
-                     && r.TargetEntityId == talkId
-                     && r.TargetEntitySubKey == languageCode
-                     && r.ReviewerType == ReviewerType.External
-                     && r.Accepted
-                     && !r.IsDeleted)
-            .OrderByDescending(r => r.SubmittedAt)
-            .FirstOrDefaultAsync(ct);
+        // Gate 1 — non-empty submission
+        if (edits.Count == 0)
+            return Result.Fail(
+                "A submission must include at least one section.",
+                FailureCode.WorkflowSubmissionInvalid);
 
-        // (b) Nothing to propagate — defensive no-op
-        if (review is null)
-            return;
-
-        // (c) No edits to merge
-        if (string.IsNullOrWhiteSpace(review.EditedContent))
-            return;
-
-        // (d) Deserialise the reviewer's edit payload
-        List<ExternalReviewEditedSectionDto>? edits;
-        try
-        {
-            edits = JsonSerializer.Deserialize<List<ExternalReviewEditedSectionDto>>(review.EditedContent);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex,
-                "PropagateExternalReviewEdits: failed to deserialise EditedContent for talk {TalkId} language {LanguageCode}; skipping propagation",
-                talkId, languageCode);
-            return;
-        }
-
-        if (edits is null || edits.Count == 0)
-            return;
-
-        // (e) Load the translation row
+        // Gate 2 — every SectionIndex must be in range against the live translation
         var translation = await context.ToolboxTalkTranslations
             .IgnoreQueryFilters()
             .FirstOrDefaultAsync(t => t.ToolboxTalkId == talkId
@@ -1017,46 +1007,54 @@ public sealed class TranslationWorkflowService(
                                    && !t.IsDeleted, ct);
 
         if (translation is null)
-        {
-            logger.LogWarning(
-                "PropagateExternalReviewEdits: no translation found for talk {TalkId} language {LanguageCode}; skipping propagation",
-                talkId, languageCode);
-            return;
-        }
+            return Result.Fail(
+                "No translation exists for this language; cannot validate submission.",
+                FailureCode.WorkflowSubmissionInvalid);
 
-        // (f) Deserialise TranslatedSections
         List<TranslatedSectionEntry>? sections;
         try
         {
             sections = JsonSerializer.Deserialize<List<TranslatedSectionEntry>>(translation.TranslatedSections);
         }
-        catch (Exception ex)
+        catch (JsonException)
         {
-            logger.LogWarning(ex,
-                "PropagateExternalReviewEdits: failed to deserialise TranslatedSections for talk {TalkId} language {LanguageCode}; skipping propagation",
-                talkId, languageCode);
-            return;
+            sections = null;
         }
 
-        if (sections is null || sections.Count == 0)
-            return;
+        if (sections is null)
+            return Result.Fail(
+                "Existing translation content is malformed; cannot validate submission.",
+                FailureCode.WorkflowSubmissionInvalid);
 
-        // (g) Apply each edit; skip out-of-range indices
-        foreach (var edit in edits)
-        {
-            if (edit.SectionIndex < 0 || edit.SectionIndex >= sections.Count)
-            {
-                logger.LogWarning(
-                    "PropagateExternalReviewEdits: sectionIndex {SectionIndex} is out of range (count={Count}) for talk {TalkId} language {LanguageCode}; skipping entry",
-                    edit.SectionIndex, sections.Count, talkId, languageCode);
-                continue;
-            }
+        if (edits.Any(e => e.SectionIndex < 0 || e.SectionIndex >= sections.Count))
+            return Result.Fail(
+                "One or more sections do not match the current translation content. The reviewer's submission may be out of date.",
+                FailureCode.WorkflowSubmissionInvalid);
 
-            sections[edit.SectionIndex].Content = edit.TranslatedText;
-        }
+        // Gate 3 — every submitted section's text must be non-empty
+        if (edits.Any(e => string.IsNullOrWhiteSpace(e.TranslatedText)))
+            return Result.Fail(
+                "One or more sections cannot be left blank.",
+                FailureCode.WorkflowSubmissionInvalid);
 
-        // (h) Re-serialise and assign; caller's SaveChangesAsync persists this
-        translation.TranslatedSections = JsonSerializer.Serialize(sections);
+        // Gate 4 — coarse XSS denylist (not full HTML sanitisation)
+        if (edits.Any(e => ContainsDisallowedMarkup(e.TranslatedText)))
+            return Result.Fail(
+                "One or more sections contain disallowed markup.",
+                FailureCode.WorkflowSubmissionInvalid);
+
+        return null;
+    }
+
+    private static readonly Regex EventHandlerAttributePattern =
+        new(@"on\w+\s*=", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private static bool ContainsDisallowedMarkup(string text)
+    {
+        if (text.Contains("<script", StringComparison.OrdinalIgnoreCase)) return true;
+        if (text.Contains("javascript:", StringComparison.OrdinalIgnoreCase)) return true;
+        if (EventHandlerAttributePattern.IsMatch(text)) return true;
+        return false;
     }
 
     private sealed class TranslatedSectionEntry

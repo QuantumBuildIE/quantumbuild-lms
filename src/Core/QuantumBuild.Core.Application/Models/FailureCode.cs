@@ -8,6 +8,7 @@ public enum FailureCode
     WorkflowTokenAlreadyUsed,
     WorkflowTokenExpired,
     WorkflowInvalidState,
+    WorkflowSubmissionInvalid,
     WorkflowConfirmationRequired,
     WorkflowReasonRequired,
     TitleNotUnique,

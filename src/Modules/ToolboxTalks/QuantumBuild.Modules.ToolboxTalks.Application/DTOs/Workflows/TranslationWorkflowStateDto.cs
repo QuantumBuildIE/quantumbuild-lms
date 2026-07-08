@@ -15,4 +15,6 @@ public record TranslationWorkflowStateDto
     public ValidationOutcome? LastValidationOutcome { get; init; }
     public Guid? LastValidationRunId { get; init; }
     public int FlaggedWordCount { get; init; }
+    public DateTime? LastExternalReviewedAt { get; init; }
+    public string? LastExternalReviewedBy { get; init; }
 }

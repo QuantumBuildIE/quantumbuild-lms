@@ -28,6 +28,8 @@ export interface TranslationWorkflowStateDto {
   lastValidationOutcome: ValidationOutcome | null;
   lastValidationRunId: string | null;
   flaggedWordCount: number;
+  lastExternalReviewedAt: string | null;
+  lastExternalReviewedBy: string | null;
 }
 
 export interface WorkflowEventDto {

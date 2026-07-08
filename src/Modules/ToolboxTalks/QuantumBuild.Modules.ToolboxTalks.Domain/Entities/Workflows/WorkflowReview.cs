@@ -16,8 +16,8 @@ public class WorkflowReview : TenantEntity
     /// - Internal: a single section's edited text (paired with the
     ///   section that the WorkflowReview targets).
     /// - External: a JSON array of [{ sectionIndex, translatedText }]
-    ///   representing the whole session's edits. Propagated into
-    ///   TranslatedSections by ConfirmExternalReview when accepted.
+    ///   representing the whole session's edits. Auto-applied into
+    ///   TranslatedSections by SubmitExternalReview when accepted.
     /// </summary>
     public string? EditedContent { get; set; }
     public string? DeclineReason { get; set; }

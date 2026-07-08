@@ -207,6 +207,12 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
     [Fact]
     public async Task SubmitExternalReview_WithValidToken_WritesEventAndReview()
     {
+        var sectionId = Guid.NewGuid();
+        var originalSectionsJson = JsonSerializer.Serialize(new[]
+        {
+            new { SectionId = sectionId, Title = "Section Title", Content = "Original AI translation" }
+        });
+        await SeedToolboxTalkTranslationAsync(TalkId, "pl", originalSectionsJson);
         await SeedEventAsync(TalkId, "pl", WorkflowEventTypes.InternalReviewSubmitted);
 
         using var scope = Factory.Services.CreateScope();
@@ -218,8 +224,14 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
         var rawToken = initiateResult.Data!.Token;
         var invitationId = initiateResult.Data.InvitationId;
 
-        // Step 2: external reviewer submits via token (state is now AwaitingThirdParty)
-        var submitResult = await service.SubmitExternalReview(rawToken, accepted: true, editedContent: "external edit");
+        // Step 2: external reviewer submits via token (state is now AwaitingThirdParty).
+        // editedContent must be a valid [{SectionIndex, TranslatedText}] JSON array — auto-apply
+        // gates reject free-text content on the accept path (see validation gate tests).
+        var editsJson = JsonSerializer.Serialize(new[]
+        {
+            new { SectionIndex = 0, TranslatedText = "Reviewer edited translation" }
+        });
+        var submitResult = await service.SubmitExternalReview(rawToken, accepted: true, editedContent: editsJson);
         submitResult.Success.Should().BeTrue();
 
         var db = GetDbContext();
@@ -229,7 +241,7 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
             .FirstOrDefaultAsync(r => r.ExternalParticipantInvitationId == invitationId);
         review.Should().NotBeNull();
         review!.ReviewerType.Should().Be(ReviewerType.External);
-        review.EditedContent.Should().Be("external edit");
+        review.EditedContent.Should().Be(editsJson);
         review.Accepted.Should().BeTrue();
 
         var invitation = await db.Set<ExternalParticipantInvitation>()
@@ -237,6 +249,16 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
             .FirstAsync(i => i.Id == invitationId);
         invitation.Status.Should().Be(InvitationStatus.Used);
         invitation.UsedAt.Should().NotBeNull();
+
+        // Auto-apply: the reviewer's edit is already live in TranslatedSections and provenance
+        // is stamped — no separate admin confirmation step exists anymore.
+        var translation = await db.Set<ToolboxTalkTranslation>()
+            .IgnoreQueryFilters()
+            .FirstAsync(t => t.ToolboxTalkId == TalkId && t.LanguageCode == "pl" && !t.IsDeleted);
+        var sections = JsonSerializer.Deserialize<List<TranslatedSectionSnapshot>>(translation.TranslatedSections);
+        sections![0].Content.Should().Be("Reviewer edited translation");
+        translation.LastExternalReviewedAt.Should().NotBeNull();
+        translation.LastExternalReviewedBy.Should().Be("reviewer@example.com");
 
         var events = await db.Set<WorkflowEvent>()
             .IgnoreQueryFilters()
@@ -246,32 +268,6 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
             .ToListAsync();
         events.Should().Contain(e => e.EventType == WorkflowEventTypes.ExternalReviewInitiated);
         events.Should().Contain(e => e.EventType == WorkflowEventTypes.ExternalReviewSubmitted);
-    }
-
-    // 8 — ConfirmExternalReview with proper state setup
-    //     Updated: seeds ReviewerAccepted state so the full initiate→submit→confirm chain is legal.
-    [Fact]
-    public async Task ConfirmExternalReview_WritesEvent()
-    {
-        await SeedEventAsync(TalkId, "sv", WorkflowEventTypes.InternalReviewSubmitted);
-
-        using var scope = Factory.Services.CreateScope();
-        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
-
-        var initiateResult = await service.InitiateExternalReview(TalkId, "sv", "reviewer@example.com");
-        await service.SubmitExternalReview(initiateResult.Data!.Token, accepted: true, editedContent: null);
-
-        var result = await service.ConfirmExternalReview(TalkId, "sv", accepted: true);
-        result.Success.Should().BeTrue();
-
-        var db = GetDbContext();
-        var events = await db.Set<WorkflowEvent>()
-            .IgnoreQueryFilters()
-            .Where(e => e.WorkflowType == WorkflowType.Translation
-                     && e.TargetEntityId == TalkId
-                     && e.TargetEntitySubKey == "sv")
-            .ToListAsync();
-        events.Should().Contain(e => e.EventType == WorkflowEventTypes.ExternalReviewConfirmed);
     }
 
     // 9 — AcceptAsFinal from Initial → WorkflowInvalidState  [was: AcceptAsFinal_WritesEvent]
@@ -512,20 +508,6 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
         result.Success.Should().BeFalse();
         result.ErrorCode.Should().Be(FailureCode.WorkflowInvalidState);
         result.Errors.Should().ContainSingle(e => e.Contains("Validated") && e.Contains("stale"));
-    }
-
-    // 22 — ConfirmExternalReview from Initial → WorkflowInvalidState
-    [Fact]
-    public async Task ConfirmExternalReview_FromInitial_ReturnsInvalidState()
-    {
-        using var scope = Factory.Services.CreateScope();
-        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
-
-        var result = await service.ConfirmExternalReview(TalkId, "sk", accepted: true);
-
-        result.Success.Should().BeFalse();
-        result.ErrorCode.Should().Be(FailureCode.WorkflowInvalidState);
-        result.Errors.Should().ContainSingle(e => e.Contains("Initial") && e.Contains("ThirdPartyReviewed"));
     }
 
     // 23 — AcceptAsFinal from Validated (legal) → success
@@ -1010,12 +992,15 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
         await db.SaveChangesAsync();
     }
 
-    // ── Phase 4.5a — propagate external reviewer edits into TranslatedSections ─
+    // ── Phase 4.5a → auto-apply — SubmitExternalReview merges reviewer edits directly ─
+    // ConfirmExternalReview no longer exists (docs/external-review-auto-apply-recon.md, Option A):
+    // auto-apply happens inside SubmitExternalReview itself when accepted=true, gated by
+    // ValidateExternalReviewSubmissionAsync's four validation gates.
 
-    // 38 — ConfirmExternalReview with accepted=true propagates all edits into TranslatedSections,
-    //      preserving SectionId and Title on each section.
+    // 38 — SubmitExternalReview with accepted=true propagates all edits into TranslatedSections,
+    //      preserving SectionId and Title on each section, and stamps provenance fields.
     [Fact]
-    public async Task ConfirmExternalReview_WithAcceptedTrue_PropagatesEditedSectionsIntoTranslatedSections()
+    public async Task SubmitExternalReview_AcceptedTrue_AutoAppliesAllEditsAndSetsProvenance()
     {
         const string lang = "xk";
         var section1Id = Guid.NewGuid();
@@ -1041,9 +1026,7 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
             new { SectionIndex = 0, TranslatedText = "Edited section one" },
             new { SectionIndex = 1, TranslatedText = "Edited section two" }
         });
-        await service.SubmitExternalReview(initiateResult.Data!.Token, accepted: true, editedContent: editsJson);
-
-        var result = await service.ConfirmExternalReview(TalkId, lang, accepted: true);
+        var result = await service.SubmitExternalReview(initiateResult.Data!.Token, accepted: true, editedContent: editsJson);
 
         result.Success.Should().BeTrue();
 
@@ -1061,21 +1044,23 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
         sections[0].Title.Should().Be("Section 1 Title", "Title must be preserved");
         sections[1].SectionId.Should().Be(section2Id, "SectionId must be preserved");
         sections[1].Title.Should().Be("Section 2 Title", "Title must be preserved");
+        translation.LastExternalReviewedAt.Should().NotBeNull("auto-apply must stamp provenance");
+        translation.LastExternalReviewedBy.Should().Be("reviewer@example.com", "provenance is sourced from the invitation's InvitedEmail");
 
         var events = await db.Set<WorkflowEvent>()
             .IgnoreQueryFilters()
             .Where(e => e.WorkflowType == WorkflowType.Translation
                      && e.TargetEntityId == TalkId
                      && e.TargetEntitySubKey == lang
-                     && e.EventType == WorkflowEventTypes.ExternalReviewConfirmed)
+                     && e.EventType == WorkflowEventTypes.ExternalReviewSubmitted)
             .ToListAsync();
         events.Should().ContainSingle();
     }
 
-    // 39 — ConfirmExternalReview with accepted=false does NOT propagate edits;
-    //      TranslatedSections retains original content.
+    // 39 — SubmitExternalReview with accepted=false does NOT propagate edits or stamp provenance;
+    //      TranslatedSections retains original content. No validation gates run on this path.
     [Fact]
-    public async Task ConfirmExternalReview_WithAcceptedFalse_DoesNotPropagateEdits()
+    public async Task SubmitExternalReview_AcceptedFalse_DoesNotPropagateEditsOrStampProvenance()
     {
         const string lang = "so";
         var section1Id = Guid.NewGuid();
@@ -1095,17 +1080,11 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
 
         var initiateResult = await service.InitiateExternalReview(TalkId, lang, "reviewer@example.com");
 
-        var editsJson = JsonSerializer.Serialize(new[]
-        {
-            new { SectionIndex = 0, TranslatedText = "Edited section one" },
-            new { SectionIndex = 1, TranslatedText = "Edited section two" }
-        });
-        await service.SubmitExternalReview(initiateResult.Data!.Token, accepted: true, editedContent: editsJson);
+        // Reviewer rejects via the same submit form — not the free-text decline endpoint —
+        // so editedContent is not necessarily well-formed edit JSON.
+        var result = await service.SubmitExternalReview(initiateResult.Data!.Token, accepted: false, editedContent: "Not satisfied with this translation");
 
-        // Internal team rejects — no propagation should occur
-        var result = await service.ConfirmExternalReview(TalkId, lang, accepted: false);
-
-        result.Success.Should().BeTrue();
+        result.Success.Should().BeTrue("gates only run on the accept path");
 
         var db = GetDbContext();
         var translation = await db.Set<ToolboxTalkTranslation>()
@@ -1114,23 +1093,25 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
 
         translation.Should().NotBeNull();
         var sections = JsonSerializer.Deserialize<List<TranslatedSectionSnapshot>>(translation!.TranslatedSections);
-        sections![0].Content.Should().Be("Original section one content", "rejected edits must not be propagated");
-        sections[1].Content.Should().Be("Original section two content", "rejected edits must not be propagated");
+        sections![0].Content.Should().Be("Original section one content", "rejected submissions must not be propagated");
+        sections[1].Content.Should().Be("Original section two content", "rejected submissions must not be propagated");
+        translation.LastExternalReviewedAt.Should().BeNull("nothing was applied, so provenance must not be stamped");
+        translation.LastExternalReviewedBy.Should().BeNull();
 
         var events = await db.Set<WorkflowEvent>()
             .IgnoreQueryFilters()
             .Where(e => e.WorkflowType == WorkflowType.Translation
                      && e.TargetEntityId == TalkId
                      && e.TargetEntitySubKey == lang
-                     && e.EventType == WorkflowEventTypes.ExternalReviewConfirmed)
+                     && e.EventType == WorkflowEventTypes.ExternalReviewSubmitted)
             .ToListAsync();
         events.Should().ContainSingle();
     }
 
-    // 40 — ConfirmExternalReview with accepted=true and edits for only one of three sections
+    // 40 — SubmitExternalReview with accepted=true and edits for only one of three sections
     //      updates only the edited section; others are untouched.
     [Fact]
-    public async Task ConfirmExternalReview_WithAcceptedTrueAndPartialEdits_PropagatesOnlyEditedSections()
+    public async Task SubmitExternalReview_AcceptedTrue_PartialEdits_UpdatesOnlyEditedSections()
     {
         const string lang = "sq";
         var section1Id = Guid.NewGuid();
@@ -1152,14 +1133,13 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
 
         var initiateResult = await service.InitiateExternalReview(TalkId, lang, "reviewer@example.com");
 
-        // Reviewer only edited section index 1
+        // Reviewer only edited section index 1 — the portal always submits every section, but the
+        // gates only require the submitted entries to be well-formed, not exhaustive.
         var editsJson = JsonSerializer.Serialize(new[]
         {
             new { SectionIndex = 1, TranslatedText = "Only section two was edited" }
         });
-        await service.SubmitExternalReview(initiateResult.Data!.Token, accepted: true, editedContent: editsJson);
-
-        var result = await service.ConfirmExternalReview(TalkId, lang, accepted: true);
+        var result = await service.SubmitExternalReview(initiateResult.Data!.Token, accepted: true, editedContent: editsJson);
 
         result.Success.Should().BeTrue();
 
@@ -1175,97 +1155,149 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
         sections[2].Content.Should().Be("Original content three", "section 2 was not edited");
     }
 
-    // 41 — ConfirmExternalReview with malformed EditedContent logs a warning and
-    //      returns success without modifying TranslatedSections.
-    [Fact]
-    public async Task ConfirmExternalReview_WithMalformedEditedContent_DoesNotPropagateAndDoesNotFail()
-    {
-        const string lang = "sw";
-        var sectionId = Guid.NewGuid();
+    // ── Validation gates ───────────────────────────────────────────────────────
 
+    // Gate 1 — empty edited content on the accept path is rejected before any write.
+    [Fact]
+    public async Task SubmitExternalReview_EmptyEditedContent_Returns400WithSubmissionInvalid()
+    {
+        const string lang = "ha";
+        var sectionId = Guid.NewGuid();
         var originalSectionsJson = JsonSerializer.Serialize(new[]
         {
             new { SectionId = sectionId, Title = "Section Title", Content = "Original content" }
         });
         await SeedToolboxTalkTranslationAsync(TalkId, lang, originalSectionsJson);
-
         await SeedEventAsync(TalkId, lang, WorkflowEventTypes.InternalReviewSubmitted);
 
         using var scope = Factory.Services.CreateScope();
         var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
-
         var initiateResult = await service.InitiateExternalReview(TalkId, lang, "reviewer@example.com");
 
-        // Submit with malformed JSON — not a valid ExternalReviewEditedSectionDto array
-        await service.SubmitExternalReview(initiateResult.Data!.Token, accepted: true, editedContent: "this is not valid JSON");
+        var result = await service.SubmitExternalReview(initiateResult.Data!.Token, accepted: true, editedContent: null);
 
-        var result = await service.ConfirmExternalReview(TalkId, lang, accepted: true);
+        result.Success.Should().BeFalse();
+        result.ErrorCode.Should().Be(FailureCode.WorkflowSubmissionInvalid);
 
-        // Service must succeed despite unparseable content
-        result.Success.Should().BeTrue();
-
-        var db = GetDbContext();
-        var translation = await db.Set<ToolboxTalkTranslation>()
-            .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(t => t.ToolboxTalkId == TalkId && t.LanguageCode == lang && !t.IsDeleted);
-
-        var sections = JsonSerializer.Deserialize<List<TranslatedSectionSnapshot>>(translation!.TranslatedSections);
-        sections![0].Content.Should().Be("Original content", "malformed edits must not alter TranslatedSections");
-
-        var events = await db.Set<WorkflowEvent>()
-            .IgnoreQueryFilters()
-            .Where(e => e.WorkflowType == WorkflowType.Translation
-                     && e.TargetEntityId == TalkId
-                     && e.TargetEntitySubKey == lang
-                     && e.EventType == WorkflowEventTypes.ExternalReviewConfirmed)
-            .ToListAsync();
-        events.Should().ContainSingle();
+        await AssertNoWritesOccurred(TalkId, lang, "Original content");
     }
 
-    // 42 — ConfirmExternalReview with a sectionIndex that is out of range skips that entry
-    //      but still applies valid edits; result is success with no extra sections added.
+    // Gate 2 — a submitted SectionIndex outside the live translation's section count is rejected.
     [Fact]
-    public async Task ConfirmExternalReview_WithSectionIndexOutOfRange_SkipsThatEntryButPropagatesValidOnes()
+    public async Task SubmitExternalReview_SectionIndexOutOfRange_Returns400WithSubmissionInvalid()
     {
-        const string lang = "yo";
-        var section1Id = Guid.NewGuid();
-        var section2Id = Guid.NewGuid();
-
+        const string lang = "ig";
+        var sectionId = Guid.NewGuid();
         var originalSectionsJson = JsonSerializer.Serialize(new[]
         {
-            new { SectionId = section1Id, Title = "Section 0", Content = "Original section zero content" },
-            new { SectionId = section2Id, Title = "Section 1", Content = "Original section one content" }
+            new { SectionId = sectionId, Title = "Section Title", Content = "Original content" }
         });
         await SeedToolboxTalkTranslationAsync(TalkId, lang, originalSectionsJson);
-
         await SeedEventAsync(TalkId, lang, WorkflowEventTypes.InternalReviewSubmitted);
 
         using var scope = Factory.Services.CreateScope();
         var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
-
         var initiateResult = await service.InitiateExternalReview(TalkId, lang, "reviewer@example.com");
 
-        // Index 0 is valid; index 5 is out of range for a 2-section list
         var editsJson = JsonSerializer.Serialize(new[]
         {
-            new { SectionIndex = 0, TranslatedText = "Section zero was updated" },
             new { SectionIndex = 5, TranslatedText = "This index does not exist" }
         });
-        await service.SubmitExternalReview(initiateResult.Data!.Token, accepted: true, editedContent: editsJson);
+        var result = await service.SubmitExternalReview(initiateResult.Data!.Token, accepted: true, editedContent: editsJson);
 
-        var result = await service.ConfirmExternalReview(TalkId, lang, accepted: true);
+        result.Success.Should().BeFalse();
+        result.ErrorCode.Should().Be(FailureCode.WorkflowSubmissionInvalid);
 
-        result.Success.Should().BeTrue();
+        await AssertNoWritesOccurred(TalkId, lang, "Original content");
+    }
 
+    // Gate 3 — a submitted section with blank text is rejected.
+    [Fact]
+    public async Task SubmitExternalReview_SectionWithBlankText_Returns400WithSubmissionInvalid()
+    {
+        const string lang = "rw";
+        var sectionId = Guid.NewGuid();
+        var originalSectionsJson = JsonSerializer.Serialize(new[]
+        {
+            new { SectionId = sectionId, Title = "Section Title", Content = "Original content" }
+        });
+        await SeedToolboxTalkTranslationAsync(TalkId, lang, originalSectionsJson);
+        await SeedEventAsync(TalkId, lang, WorkflowEventTypes.InternalReviewSubmitted);
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+        var initiateResult = await service.InitiateExternalReview(TalkId, lang, "reviewer@example.com");
+
+        var editsJson = JsonSerializer.Serialize(new[]
+        {
+            new { SectionIndex = 0, TranslatedText = "   " }
+        });
+        var result = await service.SubmitExternalReview(initiateResult.Data!.Token, accepted: true, editedContent: editsJson);
+
+        result.Success.Should().BeFalse();
+        result.ErrorCode.Should().Be(FailureCode.WorkflowSubmissionInvalid);
+
+        await AssertNoWritesOccurred(TalkId, lang, "Original content");
+    }
+
+    // Gate 4 — a submitted section containing a <script> tag is rejected (coarse XSS denylist).
+    [Fact]
+    public async Task SubmitExternalReview_SectionWithScriptTag_Returns400WithSubmissionInvalid()
+    {
+        const string lang = "sn";
+        var sectionId = Guid.NewGuid();
+        var originalSectionsJson = JsonSerializer.Serialize(new[]
+        {
+            new { SectionId = sectionId, Title = "Section Title", Content = "Original content" }
+        });
+        await SeedToolboxTalkTranslationAsync(TalkId, lang, originalSectionsJson);
+        await SeedEventAsync(TalkId, lang, WorkflowEventTypes.InternalReviewSubmitted);
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+        var initiateResult = await service.InitiateExternalReview(TalkId, lang, "reviewer@example.com");
+
+        var editsJson = JsonSerializer.Serialize(new[]
+        {
+            new { SectionIndex = 0, TranslatedText = "Hello <script>alert(1)</script>" }
+        });
+        var result = await service.SubmitExternalReview(initiateResult.Data!.Token, accepted: true, editedContent: editsJson);
+
+        result.Success.Should().BeFalse();
+        result.ErrorCode.Should().Be(FailureCode.WorkflowSubmissionInvalid);
+
+        await AssertNoWritesOccurred(TalkId, lang, "Original content");
+    }
+
+    /// <summary>
+    /// Asserts a failed validation gate left no trace: TranslatedSections unchanged,
+    /// no WorkflowReview row, and no ExternalReviewSubmitted event written.
+    /// </summary>
+    private async Task AssertNoWritesOccurred(Guid talkId, string languageCode, string expectedOriginalContent)
+    {
         var db = GetDbContext();
+
         var translation = await db.Set<ToolboxTalkTranslation>()
             .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(t => t.ToolboxTalkId == TalkId && t.LanguageCode == lang && !t.IsDeleted);
+            .FirstAsync(t => t.ToolboxTalkId == talkId && t.LanguageCode == languageCode && !t.IsDeleted);
+        var sections = JsonSerializer.Deserialize<List<TranslatedSectionSnapshot>>(translation.TranslatedSections);
+        sections![0].Content.Should().Be(expectedOriginalContent, "a failed gate must not modify TranslatedSections");
+        translation.LastExternalReviewedAt.Should().BeNull("a failed gate must not stamp provenance");
 
-        var sections = JsonSerializer.Deserialize<List<TranslatedSectionSnapshot>>(translation!.TranslatedSections);
-        sections.Should().HaveCount(2, "no new sections should be appended for out-of-range indices");
-        sections![0].Content.Should().Be("Section zero was updated", "valid edit for index 0 must be applied");
-        sections[1].Content.Should().Be("Original section one content", "index 1 was not in the edits");
+        var hasReview = await db.Set<WorkflowReview>()
+            .IgnoreQueryFilters()
+            .AnyAsync(r => r.WorkflowType == WorkflowType.Translation
+                        && r.TargetEntityId == talkId
+                        && r.TargetEntitySubKey == languageCode);
+        hasReview.Should().BeFalse("a failed gate must not write a WorkflowReview row");
+
+        var hasSubmittedEvent = await db.Set<WorkflowEvent>()
+            .IgnoreQueryFilters()
+            .AnyAsync(e => e.WorkflowType == WorkflowType.Translation
+                        && e.TargetEntityId == talkId
+                        && e.TargetEntitySubKey == languageCode
+                        && e.EventType == WorkflowEventTypes.ExternalReviewSubmitted);
+        hasSubmittedEvent.Should().BeFalse("a failed gate must not write an ExternalReviewSubmitted event");
     }
 
     // ── Phase 4.6 — FlaggedWordCount in GetState ──────────────────────────────

@@ -64,10 +64,6 @@ public interface ITranslationWorkflowService
     /// </summary>
     Task<Result> SubmitExternalReview(string token, bool accepted, string? editedContent, CancellationToken ct = default);
 
-    /// <summary>Records an internal user's confirmation of the submitted external review.</summary>
-    /// <param name="explicitTenantId">See <see cref="GetState"/> for usage.</param>
-    Task<Result> ConfirmExternalReview(Guid talkId, string languageCode, bool accepted, Guid? explicitTenantId = null, CancellationToken ct = default);
-
     /// <summary>
     /// Cancels an outstanding external review invitation, revoking the pending invitation and
     /// reverting state from AwaitingThirdParty back to ReviewerAccepted.

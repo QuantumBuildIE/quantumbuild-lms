@@ -77,8 +77,9 @@ public class ExternalReviewController(
                     FailureCode.WorkflowTokenInvalid    => NotFound(new { error = result.Errors.FirstOrDefault() }),
                     FailureCode.WorkflowTokenAlreadyUsed => Conflict(new { error = result.Errors.FirstOrDefault() }),
                     FailureCode.WorkflowTokenExpired    => StatusCode(StatusCodes.Status410Gone, new { error = result.Errors.FirstOrDefault() }),
-                    FailureCode.WorkflowInvalidState    => Conflict(new { error = result.Errors.FirstOrDefault() }),
-                    _                                   => BadRequest(new { error = result.Errors.FirstOrDefault() })
+                    FailureCode.WorkflowInvalidState      => Conflict(new { error = result.Errors.FirstOrDefault() }),
+                    FailureCode.WorkflowSubmissionInvalid => BadRequest(new { error = result.Errors.FirstOrDefault() }),
+                    _                                     => BadRequest(new { error = result.Errors.FirstOrDefault() })
                 };
             }
 

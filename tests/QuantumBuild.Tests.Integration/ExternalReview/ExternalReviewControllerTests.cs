@@ -175,6 +175,31 @@ public class ExternalReviewControllerTests : IntegrationTestBase
         await db.SaveChangesAsync();
     }
 
+    /// <summary>Seeds a ToolboxTalkTranslation for (talkId, languageCode) with the given JSON sections.</summary>
+    private async Task SeedTranslationAsync(Guid talkId, string languageCode, string translatedSectionsJson)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        db.Set<ToolboxTalkTranslation>().Add(new ToolboxTalkTranslation
+        {
+            TenantId = TestTenantConstants.TenantId,
+            ToolboxTalkId = talkId,
+            LanguageCode = languageCode,
+            TranslatedTitle = $"Test translation ({languageCode})",
+            TranslatedSections = translatedSectionsJson,
+            TranslatedAt = DateTime.UtcNow,
+            TranslationProvider = "test"
+        });
+        await db.SaveChangesAsync();
+    }
+
+    private sealed class TranslatedSectionSnapshot
+    {
+        public Guid SectionId { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public string Content { get; set; } = string.Empty;
+    }
+
     // ── GET portal context tests ──────────────────────────────────────────────
 
     // 1 — Unknown token → 404
@@ -275,17 +300,29 @@ public class ExternalReviewControllerTests : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    // 7 — Active invitation, Accepted = true → 200, state transitions to ThirdPartyReviewed
+    // 7 — Active invitation, Accepted = true → 200, state transitions to ThirdPartyReviewed,
+    //     and the reviewer's edits are auto-applied into TranslatedSections with provenance
+    //     stamped (Option A auto-apply — see docs/external-review-auto-apply-recon.md).
     [Fact]
     public async Task Submit_ActiveInvitation_AcceptedTrue_Returns200AndTransitionsToThirdPartyReviewed()
     {
         var talkId = await CreateTalkAsync();
+        var sectionId = Guid.NewGuid();
+        await SeedTranslationAsync(talkId, "qb", JsonSerializer.Serialize(new[]
+        {
+            new { SectionId = sectionId, Title = "Section Title", Content = "Original AI translation" }
+        }));
         await SeedEventAsync(talkId, "qb", WorkflowEventTypes.ExternalReviewInitiated);
         var (rawToken, _) = await SeedInvitationAsync(talkId, "qb");
 
+        var editsJson = JsonSerializer.Serialize(new[]
+        {
+            new { SectionIndex = 0, TranslatedText = "Reviewer edited translation" }
+        });
+
         var response = await UnauthenticatedClient.PostAsJsonAsync(
             $"/api/external-review/{rawToken}/submit",
-            new { accepted = true, editedContent = (string?)null });
+            new { accepted = true, editedContent = editsJson });
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
@@ -294,6 +331,18 @@ public class ExternalReviewControllerTests : IntegrationTestBase
             $"/api/toolbox-talks/{talkId}/translations/qb/history");
         var events = await historyResponse.Content.ReadFromJsonAsync<List<WorkflowEventResponse>>();
         events!.Last().EventType.Should().Be(WorkflowEventTypes.ExternalReviewSubmitted);
+
+        // Verify the edit was auto-applied and provenance stamped — no separate admin
+        // confirmation step exists anymore.
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var translation = await db.Set<ToolboxTalkTranslation>()
+            .IgnoreQueryFilters()
+            .FirstAsync(t => t.ToolboxTalkId == talkId && t.LanguageCode == "qb" && !t.IsDeleted);
+        var sections = JsonSerializer.Deserialize<List<TranslatedSectionSnapshot>>(translation.TranslatedSections);
+        sections![0].Content.Should().Be("Reviewer edited translation");
+        translation.LastExternalReviewedAt.Should().NotBeNull();
+        translation.LastExternalReviewedBy.Should().Be("reviewer@example.com");
     }
 
     // 8 — Active invitation, Accepted = false → 200, ExternalReviewSubmitted event written
