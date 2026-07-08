@@ -11,6 +11,7 @@ import {
   ArrowLeft,
   Download,
   Share2,
+  Eye,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -25,6 +26,7 @@ interface CompletionSuccessProps {
   totalSections: number;
   hasQuiz: boolean;
   className?: string;
+  onReview?: () => void;
 }
 
 // Format seconds to human-readable duration
@@ -84,6 +86,7 @@ export function CompletionSuccess({
   totalSections,
   hasQuiz,
   className,
+  onReview,
 }: CompletionSuccessProps) {
   const completedDate = new Date(completion.completedAt);
 
@@ -214,13 +217,19 @@ export function CompletionSuccess({
           )}
         </CardContent>
 
-        <CardFooter className="border-t pt-4">
+        <CardFooter className="border-t pt-4 flex flex-col sm:flex-row gap-2">
           <Button asChild className="w-full gap-2">
             <Link href="/toolbox-talks">
               <ArrowLeft className="h-4 w-4" />
               Back to My Learnings
             </Link>
           </Button>
+          {onReview && (
+            <Button variant="outline" className="w-full gap-2" onClick={onReview}>
+              <Eye className="h-4 w-4" />
+              Review this learning
+            </Button>
+          )}
         </CardFooter>
       </Card>
 
