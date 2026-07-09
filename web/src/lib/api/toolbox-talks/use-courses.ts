@@ -5,14 +5,11 @@ import {
   createToolboxTalkCourse,
   updateToolboxTalkCourse,
   deleteToolboxTalkCourse,
-  addCourseItem,
-  removeCourseItem,
   updateCourseItems,
 } from './courses';
 import type {
   CreateToolboxTalkCourseDto,
   UpdateToolboxTalkCourseDto,
-  CreateToolboxTalkCourseItemDto,
   UpdateCourseItemsDto,
   GetToolboxTalkCoursesParams,
 } from './courses';
@@ -78,30 +75,6 @@ export function useDeleteToolboxTalkCourse() {
     mutationFn: (id: string) => deleteToolboxTalkCourse(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: TOOLBOX_TALK_COURSES_KEY });
-    },
-  });
-}
-
-export function useAddCourseItem() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ courseId, data }: { courseId: string; data: CreateToolboxTalkCourseItemDto }) =>
-      addCourseItem(courseId, data),
-    onSuccess: (_, { courseId }) => {
-      queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALK_COURSES_KEY, courseId] });
-    },
-  });
-}
-
-export function useRemoveCourseItem() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ courseId, talkId }: { courseId: string; talkId: string }) =>
-      removeCourseItem(courseId, talkId),
-    onSuccess: (_, { courseId }) => {
-      queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALK_COURSES_KEY, courseId] });
     },
   });
 }

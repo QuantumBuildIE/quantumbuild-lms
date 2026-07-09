@@ -152,27 +152,6 @@ export async function deleteToolboxTalkCourse(id: string): Promise<void> {
   await apiClient.delete(`/toolbox-talks/courses/${id}`);
 }
 
-export async function addCourseItem(
-  courseId: string,
-  data: CreateToolboxTalkCourseItemDto
-): Promise<ToolboxTalkCourseDto> {
-  const response = await apiClient.post<ToolboxTalkCourseDto>(
-    `/toolbox-talks/courses/${courseId}/items`,
-    data
-  );
-  return response.data;
-}
-
-export async function removeCourseItem(
-  courseId: string,
-  talkId: string
-): Promise<ToolboxTalkCourseDto> {
-  const response = await apiClient.delete<ToolboxTalkCourseDto>(
-    `/toolbox-talks/courses/${courseId}/items/${talkId}`
-  );
-  return response.data;
-}
-
 export async function updateCourseItems(
   courseId: string,
   data: UpdateCourseItemsDto
