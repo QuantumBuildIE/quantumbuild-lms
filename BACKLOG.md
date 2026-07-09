@@ -2453,4 +2453,57 @@ Refs:
 - `web/src/features/employees/components/employee-form.tsx:552-556` (form's stated purpose)
 - `docs/reminder-employee-scoping-recon.md` (surfaced this)
 
+---
+
+#### §30 — Legacy code cleanup sprint (post-cutover)
+
+- **Priority:** P2
+- **Origin:** `[Engineering]` `[Session 2026-07-16]`
+- **Status:** Deferred (scheduled after new-wizard + compose-existing
+  courses have bedded in on Production)
+
+Two dormant legacy systems remain in the codebase after the unified
+cutover, gated behind toggles as reversibility insurance:
+
+- **Legacy create-wizard** (gated by `UseNewWizard = false`; overridden
+  per-navigation by `?wizard=old`). Covers standalone talk creation
+  via the pre-Phase-5 flow.
+- **Legacy course creation** (gated by `UseNewCourseCreation = false`;
+  overridden per-navigation by `?coursemode=old`). Covers the
+  split-and-author course flow.
+
+Both include their own supporting infrastructure (dedicated services,
+handlers, controllers, frontend components) and known bugs that we
+have chosen not to fix on the dormant path (see the
+`ProcessToolboxTalkScheduleCommandHandler` send-before-save issue, the
+course quiz-scoping bug, and the course settings-drop bug, all
+tracked separately).
+
+Also in scope for the same sprint:
+
+- Any other dormant code identified at scheduling time. Possible
+  candidates: `§5.30` decorative `IsActive` on `ToolboxTalk`, other
+  fields or components identified through subsequent audit.
+
+**Trigger for scheduling:** Confidence-based, not time-based. Sprint
+is scheduled when the following have all been achieved on Production:
+
+- 10+ courses created and published via the new compose-existing flow
+- 20+ standalone talks created and published via the new wizard
+- 3+ external reviews completed end-to-end without regression
+- No admin has needed to fall back to a legacy path via URL override
+  in the preceding 4 weeks
+
+**Estimated sprint scope:** Unknown until scheduled. Rough shape:
+locate and delete legacy code paths, verify no shared infrastructure
+is affected, remove now-unused DB fields via migration if safe,
+update tests. Realistically 1-2 weeks depending on entanglement.
+
+**Rationale for not deleting at cutover:** Pragmatic reversibility.
+If any new-path issue surfaces on Production that we can't fix
+quickly, the URL override provides an immediate workaround for
+affected admins while we investigate. Deleting the legacy code
+removes that safety net. Once confidence-based triggers are met, the
+safety net is no longer worth the maintenance burden.
+
 _End of BACKLOG.md._
