@@ -42,6 +42,7 @@ import {
 } from '@/lib/api/toolbox-talks';
 import { SendExternalReviewDialog } from './SendExternalReviewDialog';
 import { CancelExternalReviewDialog } from './CancelExternalReviewDialog';
+import { computeReviewCoverage } from '../lib/reviewCoverage';
 import type { ToolboxTalkSection, ToolboxTalkTranslation } from '@/types/toolbox-talks';
 import type { TranslationWorkflowState, ValidationOutcome } from '@/types/workflows';
 
@@ -100,7 +101,6 @@ export function TranslationWorkflowPanel({
   >({});
   const [overwriteLanguageCode, setOverwriteLanguageCode] = useState<string | null>(null);
   const [overwriteLanguageName, setOverwriteLanguageName] = useState<string | null>(null);
-  const [overwriteWasExternallyReviewed, setOverwriteWasExternallyReviewed] = useState(false);
   const [historyLanguageCode, setHistoryLanguageCode] = useState<string | null>(null);
   const [historyLanguageName, setHistoryLanguageName] = useState<string | null>(null);
   const [sendReviewLanguageCode, setSendReviewLanguageCode] = useState<string | null>(null);
@@ -176,7 +176,6 @@ export function TranslationWorkflowPanel({
     if (state === 'Accepted') {
       setOverwriteLanguageCode(languageCode);
       setOverwriteLanguageName(languageName);
-      setOverwriteWasExternallyReviewed(!!stateByCode.get(languageCode)?.lastExternalReviewedAt);
       return;
     }
     fireTranslateMutation(languageCode, languageName);
@@ -272,12 +271,25 @@ export function TranslationWorkflowPanel({
                       {row.languageCode}
                     </span>
                   </div>
-                  {dto?.lastExternalReviewedAt && (
-                    <p className="text-xs text-muted-foreground">
-                      Externally reviewed by {dto.lastExternalReviewedBy} on{' '}
-                      {format(new Date(dto.lastExternalReviewedAt), 'd MMM yyyy')}
-                    </p>
-                  )}
+                  {(() => {
+                    const coverage = computeReviewCoverage(dto?.sectionReviewStatuses ?? []);
+                    if (coverage.reviewedCount === 0) return null;
+                    if (coverage.isFullScope) {
+                      return (
+                        <p className="text-xs text-muted-foreground">
+                          Externally reviewed by {coverage.mostRecentReviewedBy} on{' '}
+                          {format(new Date(coverage.mostRecentReviewedAt as string), 'd MMM yyyy')}
+                        </p>
+                      );
+                    }
+                    return (
+                      <p className="text-xs text-muted-foreground">
+                        {coverage.reviewedCount} of {coverage.totalCount} sections externally
+                        reviewed on{' '}
+                        {format(new Date(coverage.mostRecentReviewedAt as string), 'd MMM yyyy')}
+                      </p>
+                    );
+                  })()}
                 </div>
 
                 {/* Workflow state badge */}
@@ -520,54 +532,71 @@ export function TranslationWorkflowPanel({
       />
 
       {/* Overwrite confirmation for Accepted state */}
-      <AlertDialog
-        open={overwriteLanguageCode !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setOverwriteLanguageCode(null);
-            setOverwriteLanguageName(null);
-            setOverwriteWasExternallyReviewed(false);
-          }
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Overwrite accepted translation?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {overwriteWasExternallyReviewed ? (
-                <>
-                  <span className="font-medium text-foreground">{overwriteLanguageName}</span>{' '}
-                  was reviewed and edited by a trusted external reviewer. Re-translating will
-                  discard those edits. If you need the same trust level afterwards, a new
-                  external review round would be required. Continue?
-                </>
-              ) : (
-                <>
-                  <span className="font-medium text-foreground">{overwriteLanguageName}</span>{' '}
-                  has been accepted as final. Reviewer edits and validation results for this
-                  language will be replaced with a fresh AI translation.
-                </>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => {
-                if (overwriteLanguageCode && overwriteLanguageName) {
-                  fireTranslateMutation(overwriteLanguageCode, overwriteLanguageName);
-                }
+      {(() => {
+        const overwriteCoverage = computeReviewCoverage(
+          (overwriteLanguageCode ? stateByCode.get(overwriteLanguageCode)?.sectionReviewStatuses : undefined) ?? []
+        );
+        return (
+          <AlertDialog
+            open={overwriteLanguageCode !== null}
+            onOpenChange={(open) => {
+              if (!open) {
                 setOverwriteLanguageCode(null);
                 setOverwriteLanguageName(null);
-                setOverwriteWasExternallyReviewed(false);
-              }}
-            >
-              Overwrite and regenerate
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+              }
+            }}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Overwrite accepted translation?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {overwriteCoverage.reviewedCount === 0 ? (
+                    <>
+                      <span className="font-medium text-foreground">{overwriteLanguageName}</span>{' '}
+                      has been accepted as final. Reviewer edits and validation results for this
+                      language will be replaced with a fresh AI translation.
+                    </>
+                  ) : overwriteCoverage.isFullScope ? (
+                    <>
+                      <span className="font-medium text-foreground">{overwriteLanguageName}</span>{' '}
+                      was reviewed and edited by a trusted external reviewer. Re-translating will
+                      discard those edits. If you need the same trust level afterwards, a new
+                      external review round would be required. Continue?
+                    </>
+                  ) : (
+                    <>
+                      {overwriteCoverage.reviewedCount} of the {overwriteCoverage.totalCount}{' '}
+                      sections you&apos;re about to overwrite were externally reviewed by{' '}
+                      <span className="font-medium text-foreground">
+                        {overwriteCoverage.mostRecentReviewedBy}
+                      </span>{' '}
+                      on{' '}
+                      {format(new Date(overwriteCoverage.mostRecentReviewedAt as string), 'd MMM yyyy')}.
+                      Re-translating will discard those edits and require a new external review
+                      round for those sections to restore trust.
+                    </>
+                  )}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  onClick={() => {
+                    if (overwriteLanguageCode && overwriteLanguageName) {
+                      fireTranslateMutation(overwriteLanguageCode, overwriteLanguageName);
+                    }
+                    setOverwriteLanguageCode(null);
+                    setOverwriteLanguageName(null);
+                  }}
+                >
+                  Overwrite and regenerate
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        );
+      })()}
     </>
   );
 }

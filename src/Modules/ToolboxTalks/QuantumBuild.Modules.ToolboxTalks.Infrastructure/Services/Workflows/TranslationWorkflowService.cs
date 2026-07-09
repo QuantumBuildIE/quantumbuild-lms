@@ -125,8 +125,42 @@ public sealed class TranslationWorkflowService(
             LastValidationRunId = lastValidationRun?.Id,
             FlaggedWordCount = flaggedWordCount,
             LastExternalReviewedAt = translation?.LastExternalReviewedAt,
-            LastExternalReviewedBy = translation?.LastExternalReviewedBy
+            LastExternalReviewedBy = translation?.LastExternalReviewedBy,
+            SectionReviewStatuses = ParseSectionReviewStatuses(translation?.TranslatedSections)
         };
+    }
+
+    /// <summary>
+    /// Projects per-section ReviewedAt/ReviewedBy out of the TranslatedSections JSON blob for
+    /// read-side consumers (badge, re-translate warning). Returns an empty list rather than
+    /// throwing on malformed/absent JSON — this is a display concern, not a write-path guard.
+    /// </summary>
+    private static IReadOnlyList<SectionReviewStatusDto> ParseSectionReviewStatuses(string? translatedSectionsJson)
+    {
+        if (string.IsNullOrWhiteSpace(translatedSectionsJson))
+            return Array.Empty<SectionReviewStatusDto>();
+
+        List<TranslatedSectionEntry>? sections;
+        try
+        {
+            sections = JsonSerializer.Deserialize<List<TranslatedSectionEntry>>(translatedSectionsJson);
+        }
+        catch (JsonException)
+        {
+            return Array.Empty<SectionReviewStatusDto>();
+        }
+
+        if (sections is null)
+            return Array.Empty<SectionReviewStatusDto>();
+
+        return sections
+            .Select((s, index) => new SectionReviewStatusDto
+            {
+                SectionIndex = index,
+                ReviewedAt = s.ReviewedAt,
+                ReviewedBy = s.ReviewedBy
+            })
+            .ToList();
     }
 
     public async Task<IReadOnlyList<WorkflowEventDto>> GetHistory(
@@ -516,8 +550,21 @@ public sealed class TranslationWorkflowService(
             }
 
             translation.TranslatedSections = JsonSerializer.Serialize(sections);
-            translation.LastExternalReviewedAt = reviewedAt;
-            translation.LastExternalReviewedBy = invitation.InvitedEmail;
+
+            // Chunk E: the whole-translation columns are a derived aggregate, not an
+            // independent write — they reflect the most recent ReviewedAt across ALL
+            // sections (not just this submission's edits), so a scoped round-two submit
+            // correctly keeps an earlier round's reviewer as the aggregate if it's still
+            // the most recent. Sections without provenance are excluded from the max.
+            var mostRecentReviewedSection = sections
+                .Where(s => s.ReviewedAt.HasValue)
+                .OrderByDescending(s => s.ReviewedAt!.Value)
+                .FirstOrDefault();
+            if (mostRecentReviewedSection is not null)
+            {
+                translation.LastExternalReviewedAt = mostRecentReviewedSection.ReviewedAt;
+                translation.LastExternalReviewedBy = mostRecentReviewedSection.ReviewedBy;
+            }
         }
 
         context.WorkflowReviews.Add(new WorkflowReview

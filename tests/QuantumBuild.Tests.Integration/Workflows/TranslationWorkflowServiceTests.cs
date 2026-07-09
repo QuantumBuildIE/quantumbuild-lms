@@ -1480,11 +1480,13 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
         sections[4].ReviewedBy.Should().Be(secondReviewerEmail);
     }
 
-    // d-e — whole-translation LastExternalReviewedAt/By are still written on the accept path
-    //       when the invitation is scoped to a subset (existing Chunk-1-refactor behaviour,
-    //       unchanged by Chunk D; Chunk E will convert these to derived aggregates).
+    // d-e / Chunk E — whole-translation LastExternalReviewedAt/By are a derived aggregate,
+    //       computed at write time from the most recent ReviewedAt across ALL sections (not
+    //       just the sections in this submission). A scoped submission still updates the
+    //       aggregate here because the sections it touches (1, 3) are the only ones with any
+    //       provenance at all, so they trivially hold the max.
     [Fact]
-    public async Task Submit_WithScopedInvitation_UpdatesWholeTranslationFlags()
+    public async Task Submit_WithScopedInvitation_DerivesWholeTranslationFlagsFromSections()
     {
         const string lang = "d5";
         var sectionIds = Enumerable.Range(0, 5).Select(_ => Guid.NewGuid()).ToArray();
@@ -1514,10 +1516,85 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
         var translation = await db.Set<ToolboxTalkTranslation>()
             .IgnoreQueryFilters()
             .FirstAsync(t => t.ToolboxTalkId == TalkId && t.LanguageCode == lang && !t.IsDeleted);
+        var sections = JsonSerializer.Deserialize<List<TranslatedSectionSnapshot>>(translation.TranslatedSections)!;
+
+        var maxReviewedAtOnSections = sections
+            .Where(s => s.ReviewedAt.HasValue)
+            .Max(s => s.ReviewedAt!.Value);
+        var sectionWithMaxReviewedAt = sections.First(s => s.ReviewedAt == maxReviewedAtOnSections);
 
         translation.LastExternalReviewedAt.Should().NotBeNull();
         translation.LastExternalReviewedAt!.Value.Should().BeOnOrAfter(beforeSubmit);
+        translation.LastExternalReviewedAt.Should().Be(maxReviewedAtOnSections,
+            "the whole-translation flag is derived from the max ReviewedAt across sections, not written independently");
+        translation.LastExternalReviewedBy.Should().Be(sectionWithMaxReviewedAt.ReviewedBy);
         translation.LastExternalReviewedBy.Should().Be("reviewer@example.com");
+    }
+
+    // Chunk E — a scoped second round only touches sections outside round one's provenance
+    // (sections 2 and 4), but because round two's ReviewedAt is later than round one's, the
+    // derived whole-translation aggregate must reflect round two's reviewer/timestamp — not
+    // round one's, even though round one's section (0) still carries its own untouched
+    // provenance in the per-section list.
+    [Fact]
+    public async Task Submit_MultiRoundScoped_UsesMostRecentAsAggregate()
+    {
+        const string lang = "d6";
+        var sectionIds = Enumerable.Range(0, 5).Select(_ => Guid.NewGuid()).ToArray();
+        var firstRoundReviewedAt = DateTime.UtcNow.AddDays(-3);
+        const string firstReviewerEmail = "first-reviewer@example.com";
+
+        var originalSectionsJson = JsonSerializer.Serialize(new object[]
+        {
+            new
+            {
+                SectionId = sectionIds[0], Title = "Section 0", Content = "First-round edited content",
+                ReviewedAt = firstRoundReviewedAt, ReviewedBy = firstReviewerEmail
+            },
+            new { SectionId = sectionIds[1], Title = "Section 1", Content = "Original content 1" },
+            new { SectionId = sectionIds[2], Title = "Section 2", Content = "Original content 2" },
+            new { SectionId = sectionIds[3], Title = "Section 3", Content = "Original content 3" },
+            new { SectionId = sectionIds[4], Title = "Section 4", Content = "Original content 4" }
+        });
+        await SeedToolboxTalkTranslationAsync(TalkId, lang, originalSectionsJson);
+
+        // Seed the whole-translation columns as round one would have left them, so the test
+        // proves round two's derivation overwrites a stale aggregate rather than happening to
+        // already hold the right value.
+        var db = GetDbContext();
+        var seededTranslation = await db.Set<ToolboxTalkTranslation>()
+            .IgnoreQueryFilters()
+            .FirstAsync(t => t.ToolboxTalkId == TalkId && t.LanguageCode == lang && !t.IsDeleted);
+        seededTranslation.LastExternalReviewedAt = firstRoundReviewedAt;
+        seededTranslation.LastExternalReviewedBy = firstReviewerEmail;
+        await db.SaveChangesAsync();
+
+        await SeedEventAsync(TalkId, lang, WorkflowEventTypes.ExternalReviewInitiated);
+        const string secondReviewerEmail = "second-reviewer@example.com";
+        var rawToken = await SeedInvitationAsync(
+            TalkId, lang, secondReviewerEmail, new List<int> { 2, 4 });
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var editsJson = JsonSerializer.Serialize(new[]
+        {
+            new { SectionIndex = 2, TranslatedText = "Second-round edited content" },
+            new { SectionIndex = 4, TranslatedText = "Second-round edited content two" }
+        });
+        var beforeSubmit = DateTime.UtcNow;
+        var result = await service.SubmitExternalReview(rawToken, accepted: true, editedContent: editsJson);
+
+        result.Success.Should().BeTrue();
+
+        var translation = await GetDbContext().Set<ToolboxTalkTranslation>()
+            .IgnoreQueryFilters()
+            .FirstAsync(t => t.ToolboxTalkId == TalkId && t.LanguageCode == lang && !t.IsDeleted);
+
+        translation.LastExternalReviewedAt.Should().NotBeNull();
+        translation.LastExternalReviewedAt!.Value.Should().BeOnOrAfter(beforeSubmit,
+            "round two's ReviewedAt is more recent than round one's and must win the aggregate");
+        translation.LastExternalReviewedBy.Should().Be(secondReviewerEmail);
     }
 
     // ── Validation gates ───────────────────────────────────────────────────────

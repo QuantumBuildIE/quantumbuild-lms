@@ -16,6 +16,12 @@ export type TranslationWorkflowState =
 
 export type TriggeredByType = 'User' | 'System';
 
+export interface SectionReviewStatusDto {
+  sectionIndex: number;
+  reviewedAt: string | null;
+  reviewedBy: string | null;
+}
+
 export interface TranslationWorkflowStateDto {
   talkId: string;
   languageCode: string;
@@ -30,6 +36,7 @@ export interface TranslationWorkflowStateDto {
   flaggedWordCount: number;
   lastExternalReviewedAt: string | null;
   lastExternalReviewedBy: string | null;
+  sectionReviewStatuses: SectionReviewStatusDto[];
 }
 
 export interface WorkflowEventDto {
