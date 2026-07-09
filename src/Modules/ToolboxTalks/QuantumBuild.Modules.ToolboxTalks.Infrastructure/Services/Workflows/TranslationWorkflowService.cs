@@ -543,7 +543,17 @@ public sealed class TranslationWorkflowService(
 
             var sections = JsonSerializer.Deserialize<List<TranslatedSectionEntry>>(translation!.TranslatedSections)!;
 
-            var reviewedAt = DateTime.UtcNow;
+            // Truncate to microsecond precision once, up front, and reuse the same value for
+            // both the per-section provenance write (which round-trips through the
+            // TranslatedSections JSON blob) and the whole-translation aggregate derivation
+            // below. System.Text.Json preserves full tick (100ns) precision on round-trip, but
+            // the LastExternalReviewedAt column is a Postgres timestamp, which only stores
+            // microsecond precision — without truncating up front, the two values diverge by a
+            // sub-microsecond amount after a save/reload, causing flaky equality failures.
+            var rawNow = DateTime.UtcNow;
+            var reviewedAt = new DateTime(
+                rawNow.Ticks - (rawNow.Ticks % TimeSpan.TicksPerMicrosecond),
+                DateTimeKind.Utc);
             foreach (var edit in edits)
             {
                 sections[edit.SectionIndex].Content = edit.TranslatedText;

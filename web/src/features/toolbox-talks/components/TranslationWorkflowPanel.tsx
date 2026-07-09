@@ -75,7 +75,7 @@ function canAcceptExternalReview(state: TranslationWorkflowState): boolean {
 }
 
 function canSendForExternalReview(state: TranslationWorkflowState): boolean {
-  return state === 'Validated' || state === 'ReviewerAccepted';
+  return state === 'Validated' || state === 'ReviewerAccepted' || state === 'ThirdPartyReviewed';
 }
 
 function canCancelExternalReview(state: TranslationWorkflowState): boolean {
