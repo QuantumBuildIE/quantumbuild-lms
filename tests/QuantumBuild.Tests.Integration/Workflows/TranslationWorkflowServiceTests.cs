@@ -622,6 +622,71 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
         events.Should().ContainSingle();
     }
 
+    // ── Chunk F — second-round external review from ThirdPartyReviewed ───────
+
+    // F1 — InitiateExternalReview from ThirdPartyReviewed (legal, Chunk F) → writes a new event
+    //      and a fresh invitation, transitions state back to AwaitingThirdParty.
+    [Fact]
+    public async Task InitiateExternalReview_FromThirdPartyReviewed_TransitionsToAwaitingThirdParty()
+    {
+        const string lang = "f1";
+        var originalSectionsJson = JsonSerializer.Serialize(new[]
+        {
+            new { SectionId = Guid.NewGuid(), Title = "Section 1", Content = "Content one" },
+            new { SectionId = Guid.NewGuid(), Title = "Section 2", Content = "Content two" }
+        });
+        await SeedToolboxTalkTranslationAsync(TalkId, lang, originalSectionsJson);
+        await SeedEventAsync(TalkId, lang, WorkflowEventTypes.ExternalReviewSubmitted); // state = ThirdPartyReviewed
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var result = await service.InitiateExternalReview(
+            TalkId, lang, "second-round@example.com", new List<int> { 1 });
+
+        result.Success.Should().BeTrue();
+        result.Data!.Token.Should().NotBeNullOrEmpty();
+
+        var stateAfter = await service.GetState(TalkId, lang);
+        stateAfter.State.Should().Be(TranslationWorkflowState.AwaitingThirdParty);
+
+        var db = GetDbContext();
+        var invitation = await db.Set<ExternalParticipantInvitation>()
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(i => i.Id == result.Data.InvitationId);
+        invitation.Should().NotBeNull();
+        invitation!.Status.Should().Be(InvitationStatus.Pending);
+        invitation.InvitedEmail.Should().Be("second-round@example.com");
+        invitation.EditableSectionIndices.Should().BeEquivalentTo(new List<int> { 1 });
+
+        var events = await db.Set<WorkflowEvent>()
+            .IgnoreQueryFilters()
+            .Where(e => e.WorkflowType == WorkflowType.Translation
+                     && e.TargetEntityId == TalkId
+                     && e.TargetEntitySubKey == lang
+                     && e.EventType == WorkflowEventTypes.ExternalReviewInitiated)
+            .ToListAsync();
+        events.Should().ContainSingle();
+    }
+
+    // F2 — InitiateExternalReview from Accepted (terminal, Chunk F) → rejected, WorkflowInvalidState.
+    //      Accepted stays terminal by design — admin must delete-and-recreate the talk to reset.
+    [Fact]
+    public async Task InitiateExternalReview_FromAccepted_ReturnsFailure()
+    {
+        const string lang = "f2";
+        await SeedEventAsync(TalkId, lang, WorkflowEventTypes.AcceptedAsFinal);
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var result = await service.InitiateExternalReview(TalkId, lang, "reviewer@example.com");
+
+        result.Success.Should().BeFalse();
+        result.ErrorCode.Should().Be(FailureCode.WorkflowInvalidState);
+        result.Errors.Should().ContainSingle(e => e.Contains("Accepted"));
+    }
+
     // 21 — SubmitExternalReview with valid token but state not AwaitingThirdParty → WorkflowInvalidState
     //      Seeds an invitation directly (bypassing the service guard) so the token is valid,
     //      but the workflow state is Validated — not AwaitingThirdParty.
@@ -1417,50 +1482,57 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
     //       round that doesn't include it in its submission; only the sections in the later
     //       round's (differently-scoped) submission gain new provenance.
     //
-    //       Note: a genuine second InitiateExternalReview/SubmitExternalReview round is blocked
-    //       by the AwaitingThirdParty→ThirdPartyReviewed state guard (relaxing that is Chunk F,
-    //       out of scope here). This test simulates "round two" by seeding the translation with
-    //       section 0 already carrying first-round provenance, then seeding a second invitation
-    //       directly (SeedInvitationAsync) with the ExternalReviewInitiated event required to put
-    //       the workflow back in AwaitingThirdParty for the submit call.
+    //       Chunk F: now drives a genuine second InitiateExternalReview/SubmitExternalReview
+    //       round through the real service flow (the AwaitingThirdParty→ThirdPartyReviewed
+    //       state guard that previously blocked this has been relaxed).
     [Fact]
     public async Task Submit_SecondRound_PreservesFirstRoundProvenance()
     {
         const string lang = "d4";
         var sectionIds = Enumerable.Range(0, 5).Select(_ => Guid.NewGuid()).ToArray();
-        var firstRoundReviewedAt = DateTime.UtcNow.AddDays(-3);
-        const string firstReviewerEmail = "first-reviewer@example.com";
-
-        var originalSectionsJson = JsonSerializer.Serialize(new object[]
-        {
-            new
-            {
-                SectionId = sectionIds[0], Title = "Section 0", Content = "First-round edited content",
-                ReviewedAt = firstRoundReviewedAt, ReviewedBy = firstReviewerEmail
-            },
-            new { SectionId = sectionIds[1], Title = "Section 1", Content = "Original content 1" },
-            new { SectionId = sectionIds[2], Title = "Section 2", Content = "Original content 2" },
-            new { SectionId = sectionIds[3], Title = "Section 3", Content = "Original content 3" },
-            new { SectionId = sectionIds[4], Title = "Section 4", Content = "Original content 4" }
-        });
+        var originalSectionsJson = JsonSerializer.Serialize(sectionIds.Select((id, i) =>
+            new { SectionId = id, Title = $"Section {i}", Content = $"Original content {i}" }));
         await SeedToolboxTalkTranslationAsync(TalkId, lang, originalSectionsJson);
-
-        // Second round: a fresh invitation scoped to sections 2 and 4, workflow state put back
-        // into AwaitingThirdParty via a directly-seeded ExternalReviewInitiated event.
-        await SeedEventAsync(TalkId, lang, WorkflowEventTypes.ExternalReviewInitiated);
-        const string secondReviewerEmail = "second-reviewer@example.com";
-        var rawToken = await SeedInvitationAsync(
-            TalkId, lang, secondReviewerEmail, new List<int> { 2, 4 });
+        await SeedEventAsync(TalkId, lang, WorkflowEventTypes.InternalReviewSubmitted);
 
         using var scope = Factory.Services.CreateScope();
         var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        // Round one: scoped to section 0 only.
+        const string firstReviewerEmail = "first-reviewer@example.com";
+        var firstInitiate = await service.InitiateExternalReview(
+            TalkId, lang, firstReviewerEmail, new List<int> { 0 });
+        firstInitiate.Success.Should().BeTrue();
+
+        var firstEditsJson = JsonSerializer.Serialize(new[]
+        {
+            new { SectionIndex = 0, TranslatedText = "First-round edited content" }
+        });
+        var firstSubmit = await service.SubmitExternalReview(
+            firstInitiate.Data!.Token, accepted: true, editedContent: firstEditsJson);
+        firstSubmit.Success.Should().BeTrue();
+
+        var stateAfterFirstRound = await service.GetState(TalkId, lang);
+        stateAfterFirstRound.State.Should().Be(TranslationWorkflowState.ThirdPartyReviewed);
+
+        var firstRoundReviewedAt = JsonSerializer
+            .Deserialize<List<TranslatedSectionSnapshot>>(
+                (await GetDbContext().Set<ToolboxTalkTranslation>().IgnoreQueryFilters()
+                    .FirstAsync(t => t.ToolboxTalkId == TalkId && t.LanguageCode == lang && !t.IsDeleted))
+                .TranslatedSections)![0].ReviewedAt!.Value;
+
+        // Round two: real InitiateExternalReview from ThirdPartyReviewed, scoped to sections 2 and 4.
+        const string secondReviewerEmail = "second-reviewer@example.com";
+        var secondInitiate = await service.InitiateExternalReview(
+            TalkId, lang, secondReviewerEmail, new List<int> { 2, 4 });
+        secondInitiate.Success.Should().BeTrue();
 
         var editsJson = JsonSerializer.Serialize(new[]
         {
             new { SectionIndex = 2, TranslatedText = "Second-round edited content" },
             new { SectionIndex = 4, TranslatedText = "Second-round edited content two" }
         });
-        var result = await service.SubmitExternalReview(rawToken, accepted: true, editedContent: editsJson);
+        var result = await service.SubmitExternalReview(secondInitiate.Data!.Token, accepted: true, editedContent: editsJson);
 
         result.Success.Should().BeTrue();
 
@@ -1471,13 +1543,28 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
         var sections = JsonSerializer.Deserialize<List<TranslatedSectionSnapshot>>(translation.TranslatedSections)!;
 
         sections[0].Content.Should().Be("First-round edited content", "section 0 was not part of round two's submission");
-        sections[0].ReviewedAt.Should().BeCloseTo(firstRoundReviewedAt, TimeSpan.FromSeconds(1), "round two must not touch round one's provenance");
+        sections[0].ReviewedAt.Should().Be(firstRoundReviewedAt, "round two must not touch round one's provenance");
         sections[0].ReviewedBy.Should().Be(firstReviewerEmail);
 
         sections[2].Content.Should().Be("Second-round edited content");
         sections[2].ReviewedBy.Should().Be(secondReviewerEmail);
         sections[4].Content.Should().Be("Second-round edited content two");
         sections[4].ReviewedBy.Should().Be(secondReviewerEmail);
+
+        // Prior-invitation lifecycle: round one's invitation is marked Used on submit and its
+        // token cannot be replayed to reopen a round; round two got its own fresh invitation row.
+        var firstInvitation = await db.Set<ExternalParticipantInvitation>()
+            .IgnoreQueryFilters()
+            .FirstAsync(i => i.Id == firstInitiate.Data.InvitationId);
+        firstInvitation.Status.Should().Be(InvitationStatus.Used);
+
+        var secondInvitationId = secondInitiate.Data!.InvitationId;
+        secondInvitationId.Should().NotBe(firstInitiate.Data.InvitationId);
+
+        var replayAttempt = await service.SubmitExternalReview(
+            firstInitiate.Data.Token, accepted: true, editedContent: firstEditsJson);
+        replayAttempt.Success.Should().BeFalse();
+        replayAttempt.ErrorCode.Should().Be(FailureCode.WorkflowTokenAlreadyUsed);
     }
 
     // d-e / Chunk E — whole-translation LastExternalReviewedAt/By are a derived aggregate,

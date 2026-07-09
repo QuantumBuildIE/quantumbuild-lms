@@ -386,9 +386,11 @@ public sealed class TranslationWorkflowService(
         var stateDto = await GetState(talkId, languageCode, explicitTenantId, ct);
         var state = stateDto.State;
 
-        if (state != TranslationWorkflowState.Validated && state != TranslationWorkflowState.ReviewerAccepted)
+        if (state is not (TranslationWorkflowState.Validated
+                       or TranslationWorkflowState.ReviewerAccepted
+                       or TranslationWorkflowState.ThirdPartyReviewed))
             return Result.Fail<InitiateExternalReviewResult>(
-                $"Cannot initiate external review from state {state}; requires Validated or ReviewerAccepted.",
+                $"Cannot initiate external review from state {state}; requires Validated, ReviewerAccepted, or ThirdPartyReviewed.",
                 FailureCode.WorkflowInvalidState);
 
         var sectionGuard = await ValidateEditableSectionIndicesAsync(talkId, languageCode, editableSectionIndices, ct);
