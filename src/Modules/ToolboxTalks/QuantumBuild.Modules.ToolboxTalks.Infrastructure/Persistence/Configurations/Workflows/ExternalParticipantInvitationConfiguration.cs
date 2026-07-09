@@ -43,6 +43,8 @@ public class ExternalParticipantInvitationConfiguration : IEntityTypeConfigurati
 
         builder.Property(e => e.ContextPayload);
 
+        builder.Property(e => e.EditableSectionIndicesJson);
+
         builder.Property(e => e.RequesterUserId)
             .IsRequired();
 

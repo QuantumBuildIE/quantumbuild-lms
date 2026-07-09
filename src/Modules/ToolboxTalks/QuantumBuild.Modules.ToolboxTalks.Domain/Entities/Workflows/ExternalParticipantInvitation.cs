@@ -14,6 +14,14 @@ public class ExternalParticipantInvitation : TenantEntity
     public InvitationStatus Status { get; set; }
     public string ContextType { get; set; } = string.Empty;
     public string? ContextPayload { get; set; }
+
+    /// <summary>
+    /// JSON-serialized <c>List&lt;int&gt;</c> of section indices this invitation may edit.
+    /// Null means "no restriction, all sections editable" — the default that preserves
+    /// full-scope review behaviour on every existing/legacy invitation row.
+    /// </summary>
+    public string? EditableSectionIndicesJson { get; set; }
+
     public Guid RequesterUserId { get; set; }
     public DateTime InvitedAt { get; set; }
     public DateTime? UsedAt { get; set; }

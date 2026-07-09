@@ -10,6 +10,7 @@ using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Core.Application.Models;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Workflows;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Translation;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Workflows;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services.Subtitles;
@@ -1054,12 +1055,5 @@ public sealed class TranslationWorkflowService(
         if (text.Contains("javascript:", StringComparison.OrdinalIgnoreCase)) return true;
         if (EventHandlerAttributePattern.IsMatch(text)) return true;
         return false;
-    }
-
-    private sealed class TranslatedSectionEntry
-    {
-        public Guid SectionId { get; set; }
-        public string Title { get; set; } = string.Empty;
-        public string Content { get; set; } = string.Empty;
     }
 }

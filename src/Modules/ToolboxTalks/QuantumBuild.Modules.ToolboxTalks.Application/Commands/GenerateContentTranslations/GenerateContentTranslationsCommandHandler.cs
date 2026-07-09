@@ -8,6 +8,7 @@ using QuantumBuild.Core.Application.Models;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Translations;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Workflows;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Translation;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services.Subtitles;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
@@ -298,7 +299,7 @@ public class GenerateContentTranslationsCommandHandler
 
             // Translate sections
             var sectionsTranslated = 0;
-            var translatedSections = new List<TranslatedSectionData>();
+            var translatedSections = new List<TranslatedSectionEntry>();
 
             foreach (var section in toolboxTalk.Sections)
             {
@@ -314,7 +315,9 @@ public class GenerateContentTranslationsCommandHandler
 
                 if (sectionTitleResult.Success && sectionContentResult.Success)
                 {
-                    translatedSections.Add(new TranslatedSectionData
+                    // Explicit construction (not deserialization) — ReviewedAt/ReviewedBy default
+                    // to null, correct for a regenerated translation that has never been reviewed.
+                    translatedSections.Add(new TranslatedSectionEntry
                     {
                         SectionId = section.Id,
                         Title = sectionTitleResult.TranslatedContent,
@@ -857,14 +860,7 @@ public class GenerateContentTranslationsCommandHandler
             .Replace("\t", "\\t");
     }
 
-    // Internal DTOs for JSON serialization (matching existing structure)
-    private class TranslatedSectionData
-    {
-        public Guid SectionId { get; set; }
-        public string Title { get; set; } = string.Empty;
-        public string Content { get; set; } = string.Empty;
-    }
-
+    // Internal DTO for JSON serialization (matching existing structure)
     private class TranslatedQuestionData
     {
         public Guid QuestionId { get; set; }

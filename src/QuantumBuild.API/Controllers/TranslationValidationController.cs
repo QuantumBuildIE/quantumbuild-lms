@@ -8,6 +8,7 @@ using QuantumBuild.Core.Application.Models;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.PreFlightScan;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Storage;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Translation;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
@@ -712,8 +713,6 @@ public class TranslationValidationController : ControllerBase
     }
 
     #region Private Helpers
-
-    private record TranslatedSectionEntry(Guid SectionId, string Title, string Content);
 
     private async Task PropagateEditedTranslationAsync(
         Guid toolboxTalkId, string languageCode, int sectionIndex,

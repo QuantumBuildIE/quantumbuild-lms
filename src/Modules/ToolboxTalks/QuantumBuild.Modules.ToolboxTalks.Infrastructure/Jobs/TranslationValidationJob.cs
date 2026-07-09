@@ -10,6 +10,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Translations;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Workflows;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Translation;
 using QuantumBuild.Modules.ToolboxTalks.Application.Prompts;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services.Subtitles;
@@ -1018,7 +1019,7 @@ public class TranslationValidationJob
                     glossaryInstructions.Count, sectorKey, languageCode);
             }
 
-            var translatedSections = new List<object>();
+            var translatedSections = new List<TranslatedSectionEntry>();
 
             foreach (var section in originalSections)
             {
@@ -1059,7 +1060,9 @@ public class TranslationValidationJob
 
                 if (titleResult.Success && contentResult.Success)
                 {
-                    translatedSections.Add(new
+                    // Explicit construction (not deserialization) — ReviewedAt/ReviewedBy default
+                    // to null, correct for a section that has never been externally reviewed.
+                    translatedSections.Add(new TranslatedSectionEntry
                     {
                         SectionId = sectionId,
                         Title = titleResult.TranslatedContent,
