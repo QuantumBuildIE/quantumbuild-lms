@@ -485,7 +485,8 @@ public sealed class TranslationWorkflowService(
             }
 
             var validationFailure = await ValidateExternalReviewSubmissionAsync(
-                invitation.TargetEntityId, invitation.TargetEntitySubKey ?? string.Empty, edits, ct);
+                invitation.TargetEntityId, invitation.TargetEntitySubKey ?? string.Empty, edits,
+                invitation.EditableSectionIndices, ct);
             if (validationFailure is not null)
                 return validationFailure;
         }
@@ -495,8 +496,9 @@ public sealed class TranslationWorkflowService(
 
         if (accepted)
         {
-            // Gate above already confirmed this row exists and its sections deserialise cleanly
-            // with every submitted SectionIndex in range.
+            // Gate above already confirmed this row exists, its sections deserialise cleanly, and
+            // every submitted SectionIndex is within the invitation's editable scope (or in range,
+            // if the invitation carries no restriction).
             var translation = await context.ToolboxTalkTranslations
                 .IgnoreQueryFilters()
                 .FirstOrDefaultAsync(t => t.ToolboxTalkId == invitation.TargetEntityId
@@ -505,11 +507,16 @@ public sealed class TranslationWorkflowService(
 
             var sections = JsonSerializer.Deserialize<List<TranslatedSectionEntry>>(translation!.TranslatedSections)!;
 
+            var reviewedAt = DateTime.UtcNow;
             foreach (var edit in edits)
+            {
                 sections[edit.SectionIndex].Content = edit.TranslatedText;
+                sections[edit.SectionIndex].ReviewedAt = reviewedAt;
+                sections[edit.SectionIndex].ReviewedBy = invitation.InvitedEmail;
+            }
 
             translation.TranslatedSections = JsonSerializer.Serialize(sections);
-            translation.LastExternalReviewedAt = DateTime.UtcNow;
+            translation.LastExternalReviewedAt = reviewedAt;
             translation.LastExternalReviewedBy = invitation.InvitedEmail;
         }
 
@@ -995,10 +1002,18 @@ public sealed class TranslationWorkflowService(
     /// <c>accepted == true</c> — the decline/reject path never propagates edits and has
     /// no section content to validate.
     /// </summary>
+    /// <param name="editableSectionIndices">
+    /// The invitation's <see cref="ExternalParticipantInvitation.EditableSectionIndices"/>. Null
+    /// means the invitation carries no restriction (full-scope review, including every legacy
+    /// invitation row) — Gate 2 falls back to validating submitted indices are merely in range
+    /// against the live translation. Non-null means every submitted index must be a member of
+    /// this set.
+    /// </param>
     private async Task<Result?> ValidateExternalReviewSubmissionAsync(
         Guid talkId,
         string languageCode,
         List<ExternalReviewEditedSectionDto> edits,
+        List<int>? editableSectionIndices,
         CancellationToken ct)
     {
         // Gate 1 — non-empty submission
@@ -1007,7 +1022,8 @@ public sealed class TranslationWorkflowService(
                 "A submission must include at least one section.",
                 FailureCode.WorkflowSubmissionInvalid);
 
-        // Gate 2 — every SectionIndex must be in range against the live translation
+        // Gate 2 — every SectionIndex must be within the invitation's editable scope. Loads the
+        // live translation regardless of scope, since range/malformed checks apply either way.
         var translation = await context.ToolboxTalkTranslations
             .IgnoreQueryFilters()
             .FirstOrDefaultAsync(t => t.ToolboxTalkId == talkId
@@ -1034,10 +1050,21 @@ public sealed class TranslationWorkflowService(
                 "Existing translation content is malformed; cannot validate submission.",
                 FailureCode.WorkflowSubmissionInvalid);
 
-        if (edits.Any(e => e.SectionIndex < 0 || e.SectionIndex >= sections.Count))
-            return Result.Fail(
-                "One or more sections do not match the current translation content. The reviewer's submission may be out of date.",
-                FailureCode.WorkflowSubmissionInvalid);
+        if (editableSectionIndices is null)
+        {
+            if (edits.Any(e => e.SectionIndex < 0 || e.SectionIndex >= sections.Count))
+                return Result.Fail(
+                    "One or more sections do not match the current translation content. The reviewer's submission may be out of date.",
+                    FailureCode.WorkflowSubmissionInvalid);
+        }
+        else
+        {
+            var editableSet = editableSectionIndices.ToHashSet();
+            if (edits.Any(e => !editableSet.Contains(e.SectionIndex)))
+                return Result.Fail(
+                    "One or more edits were submitted for sections not selected for review.",
+                    FailureCode.WorkflowSubmissionInvalid);
+        }
 
         // Gate 3 — every submitted section's text must be non-empty
         if (edits.Any(e => string.IsNullOrWhiteSpace(e.TranslatedText)))

@@ -48,7 +48,9 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
     /// Used to set up SubmitExternalReview tests where the preceding InitiateExternalReview guard
     /// would otherwise block valid state-machine test scenarios.
     /// </summary>
-    private async Task<string> SeedInvitationAsync(Guid talkId, string languageCode)
+    private async Task<string> SeedInvitationAsync(
+        Guid talkId, string languageCode, string invitedEmail = "test@example.com",
+        List<int>? editableSectionIndices = null)
     {
         var rawToken = Guid.NewGuid().ToString("N");
         var tokenHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(rawToken))).ToLowerInvariant();
@@ -59,10 +61,11 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
             WorkflowType = WorkflowType.Translation,
             TargetEntityId = talkId,
             TargetEntitySubKey = languageCode,
-            InvitedEmail = "test@example.com",
+            InvitedEmail = invitedEmail,
             TokenHash = tokenHash,
             ExpiresAt = DateTime.UtcNow.AddDays(30),
             Status = InvitationStatus.Pending,
+            EditableSectionIndices = editableSectionIndices,
             RequesterUserId = Guid.Empty,
             InvitedAt = DateTime.UtcNow
         });
@@ -1283,6 +1286,240 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
         sections[2].Content.Should().Be("Original content three", "section 2 was not edited");
     }
 
+    // ── Chunk D — Gate 2 tightening: invitation-scoped editable indices ─────────
+
+    // d-a — invitation scoped to a subset of sections: edits within the set are accepted,
+    //       and only the edited sections receive Content + ReviewedAt/ReviewedBy provenance.
+    [Fact]
+    public async Task Submit_WithInvitationScopedToSubset_AcceptsInScopeIndices()
+    {
+        const string lang = "d1";
+        var sectionIds = Enumerable.Range(0, 5).Select(_ => Guid.NewGuid()).ToArray();
+        var originalSectionsJson = JsonSerializer.Serialize(sectionIds.Select((id, i) =>
+            new { SectionId = id, Title = $"Section {i}", Content = $"Original content {i}" }));
+        await SeedToolboxTalkTranslationAsync(TalkId, lang, originalSectionsJson);
+        await SeedEventAsync(TalkId, lang, WorkflowEventTypes.InternalReviewSubmitted);
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var initiateResult = await service.InitiateExternalReview(
+            TalkId, lang, "reviewer@example.com", new List<int> { 1, 3 });
+        initiateResult.Success.Should().BeTrue();
+
+        var editsJson = JsonSerializer.Serialize(new[]
+        {
+            new { SectionIndex = 1, TranslatedText = "Edited section one" },
+            new { SectionIndex = 3, TranslatedText = "Edited section three" }
+        });
+        var result = await service.SubmitExternalReview(initiateResult.Data!.Token, accepted: true, editedContent: editsJson);
+
+        result.Success.Should().BeTrue();
+
+        var db = GetDbContext();
+        var translation = await db.Set<ToolboxTalkTranslation>()
+            .IgnoreQueryFilters()
+            .FirstAsync(t => t.ToolboxTalkId == TalkId && t.LanguageCode == lang && !t.IsDeleted);
+        var sections = JsonSerializer.Deserialize<List<TranslatedSectionSnapshot>>(translation.TranslatedSections)!;
+
+        sections[1].Content.Should().Be("Edited section one");
+        sections[3].Content.Should().Be("Edited section three");
+        sections[1].ReviewedAt.Should().NotBeNull();
+        sections[1].ReviewedBy.Should().Be("reviewer@example.com");
+        sections[3].ReviewedAt.Should().NotBeNull();
+        sections[3].ReviewedBy.Should().Be("reviewer@example.com");
+
+        foreach (var i in new[] { 0, 2, 4 })
+        {
+            sections[i].Content.Should().Be($"Original content {i}", "sections outside the submission are untouched");
+            sections[i].ReviewedAt.Should().BeNull("sections not part of this submission must not gain provenance");
+            sections[i].ReviewedBy.Should().BeNull();
+        }
+    }
+
+    // d-b — invitation scoped to a subset of sections: an edit for an index outside the set is
+    //       rejected before any write (Gate 2), even though the index is in range against the
+    //       live translation.
+    [Fact]
+    public async Task Submit_WithInvitationScopedToSubset_RejectsOutOfScopeIndex()
+    {
+        const string lang = "d2";
+        var sectionIds = Enumerable.Range(0, 5).Select(_ => Guid.NewGuid()).ToArray();
+        var originalSectionsJson = JsonSerializer.Serialize(sectionIds.Select((id, i) =>
+            new { SectionId = id, Title = $"Section {i}", Content = $"Original content {i}" }));
+        await SeedToolboxTalkTranslationAsync(TalkId, lang, originalSectionsJson);
+        await SeedEventAsync(TalkId, lang, WorkflowEventTypes.InternalReviewSubmitted);
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var initiateResult = await service.InitiateExternalReview(
+            TalkId, lang, "reviewer@example.com", new List<int> { 1, 3 });
+        initiateResult.Success.Should().BeTrue();
+
+        // Section 2 is in range against the translation (5 sections) but not in the editable set.
+        var editsJson = JsonSerializer.Serialize(new[]
+        {
+            new { SectionIndex = 1, TranslatedText = "Edited section one" },
+            new { SectionIndex = 2, TranslatedText = "Not selected for review" }
+        });
+        var result = await service.SubmitExternalReview(initiateResult.Data!.Token, accepted: true, editedContent: editsJson);
+
+        result.Success.Should().BeFalse();
+        result.ErrorCode.Should().Be(FailureCode.WorkflowSubmissionInvalid);
+
+        await AssertNoWritesOccurred(TalkId, lang, "Original content 0");
+    }
+
+    // d-c — invitation with null EditableSectionIndices (pre-Chunk-B / explicit full-scope)
+    //       behaves exactly as before: any in-range index is accepted.
+    [Fact]
+    public async Task Submit_WithInvitationNullEditableIndices_BehavesAsFullScope()
+    {
+        const string lang = "d3";
+        var sectionIds = Enumerable.Range(0, 3).Select(_ => Guid.NewGuid()).ToArray();
+        var originalSectionsJson = JsonSerializer.Serialize(sectionIds.Select((id, i) =>
+            new { SectionId = id, Title = $"Section {i}", Content = $"Original content {i}" }));
+        await SeedToolboxTalkTranslationAsync(TalkId, lang, originalSectionsJson);
+        await SeedEventAsync(TalkId, lang, WorkflowEventTypes.InternalReviewSubmitted);
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        // No editableSectionIndices passed → invitation persists EditableSectionIndices = null.
+        var initiateResult = await service.InitiateExternalReview(TalkId, lang, "reviewer@example.com");
+        initiateResult.Success.Should().BeTrue();
+
+        var editsJson = JsonSerializer.Serialize(new[]
+        {
+            new { SectionIndex = 0, TranslatedText = "Edited section zero" },
+            new { SectionIndex = 2, TranslatedText = "Edited section two" }
+        });
+        var result = await service.SubmitExternalReview(initiateResult.Data!.Token, accepted: true, editedContent: editsJson);
+
+        result.Success.Should().BeTrue();
+
+        var db = GetDbContext();
+        var translation = await db.Set<ToolboxTalkTranslation>()
+            .IgnoreQueryFilters()
+            .FirstAsync(t => t.ToolboxTalkId == TalkId && t.LanguageCode == lang && !t.IsDeleted);
+        var sections = JsonSerializer.Deserialize<List<TranslatedSectionSnapshot>>(translation.TranslatedSections)!;
+
+        sections[0].Content.Should().Be("Edited section zero");
+        sections[0].ReviewedAt.Should().NotBeNull();
+        sections[0].ReviewedBy.Should().Be("reviewer@example.com");
+        sections[2].Content.Should().Be("Edited section two");
+        sections[2].ReviewedAt.Should().NotBeNull();
+        sections[2].ReviewedBy.Should().Be("reviewer@example.com");
+    }
+
+    // d-d — a section carrying provenance from an earlier review round is untouched by a later
+    //       round that doesn't include it in its submission; only the sections in the later
+    //       round's (differently-scoped) submission gain new provenance.
+    //
+    //       Note: a genuine second InitiateExternalReview/SubmitExternalReview round is blocked
+    //       by the AwaitingThirdParty→ThirdPartyReviewed state guard (relaxing that is Chunk F,
+    //       out of scope here). This test simulates "round two" by seeding the translation with
+    //       section 0 already carrying first-round provenance, then seeding a second invitation
+    //       directly (SeedInvitationAsync) with the ExternalReviewInitiated event required to put
+    //       the workflow back in AwaitingThirdParty for the submit call.
+    [Fact]
+    public async Task Submit_SecondRound_PreservesFirstRoundProvenance()
+    {
+        const string lang = "d4";
+        var sectionIds = Enumerable.Range(0, 5).Select(_ => Guid.NewGuid()).ToArray();
+        var firstRoundReviewedAt = DateTime.UtcNow.AddDays(-3);
+        const string firstReviewerEmail = "first-reviewer@example.com";
+
+        var originalSectionsJson = JsonSerializer.Serialize(new object[]
+        {
+            new
+            {
+                SectionId = sectionIds[0], Title = "Section 0", Content = "First-round edited content",
+                ReviewedAt = firstRoundReviewedAt, ReviewedBy = firstReviewerEmail
+            },
+            new { SectionId = sectionIds[1], Title = "Section 1", Content = "Original content 1" },
+            new { SectionId = sectionIds[2], Title = "Section 2", Content = "Original content 2" },
+            new { SectionId = sectionIds[3], Title = "Section 3", Content = "Original content 3" },
+            new { SectionId = sectionIds[4], Title = "Section 4", Content = "Original content 4" }
+        });
+        await SeedToolboxTalkTranslationAsync(TalkId, lang, originalSectionsJson);
+
+        // Second round: a fresh invitation scoped to sections 2 and 4, workflow state put back
+        // into AwaitingThirdParty via a directly-seeded ExternalReviewInitiated event.
+        await SeedEventAsync(TalkId, lang, WorkflowEventTypes.ExternalReviewInitiated);
+        const string secondReviewerEmail = "second-reviewer@example.com";
+        var rawToken = await SeedInvitationAsync(
+            TalkId, lang, secondReviewerEmail, new List<int> { 2, 4 });
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var editsJson = JsonSerializer.Serialize(new[]
+        {
+            new { SectionIndex = 2, TranslatedText = "Second-round edited content" },
+            new { SectionIndex = 4, TranslatedText = "Second-round edited content two" }
+        });
+        var result = await service.SubmitExternalReview(rawToken, accepted: true, editedContent: editsJson);
+
+        result.Success.Should().BeTrue();
+
+        var db = GetDbContext();
+        var translation = await db.Set<ToolboxTalkTranslation>()
+            .IgnoreQueryFilters()
+            .FirstAsync(t => t.ToolboxTalkId == TalkId && t.LanguageCode == lang && !t.IsDeleted);
+        var sections = JsonSerializer.Deserialize<List<TranslatedSectionSnapshot>>(translation.TranslatedSections)!;
+
+        sections[0].Content.Should().Be("First-round edited content", "section 0 was not part of round two's submission");
+        sections[0].ReviewedAt.Should().BeCloseTo(firstRoundReviewedAt, TimeSpan.FromSeconds(1), "round two must not touch round one's provenance");
+        sections[0].ReviewedBy.Should().Be(firstReviewerEmail);
+
+        sections[2].Content.Should().Be("Second-round edited content");
+        sections[2].ReviewedBy.Should().Be(secondReviewerEmail);
+        sections[4].Content.Should().Be("Second-round edited content two");
+        sections[4].ReviewedBy.Should().Be(secondReviewerEmail);
+    }
+
+    // d-e — whole-translation LastExternalReviewedAt/By are still written on the accept path
+    //       when the invitation is scoped to a subset (existing Chunk-1-refactor behaviour,
+    //       unchanged by Chunk D; Chunk E will convert these to derived aggregates).
+    [Fact]
+    public async Task Submit_WithScopedInvitation_UpdatesWholeTranslationFlags()
+    {
+        const string lang = "d5";
+        var sectionIds = Enumerable.Range(0, 5).Select(_ => Guid.NewGuid()).ToArray();
+        var originalSectionsJson = JsonSerializer.Serialize(sectionIds.Select((id, i) =>
+            new { SectionId = id, Title = $"Section {i}", Content = $"Original content {i}" }));
+        await SeedToolboxTalkTranslationAsync(TalkId, lang, originalSectionsJson);
+        await SeedEventAsync(TalkId, lang, WorkflowEventTypes.InternalReviewSubmitted);
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var initiateResult = await service.InitiateExternalReview(
+            TalkId, lang, "reviewer@example.com", new List<int> { 1, 3 });
+        initiateResult.Success.Should().BeTrue();
+
+        var editsJson = JsonSerializer.Serialize(new[]
+        {
+            new { SectionIndex = 1, TranslatedText = "Edited section one" },
+            new { SectionIndex = 3, TranslatedText = "Edited section three" }
+        });
+        var beforeSubmit = DateTime.UtcNow;
+        var result = await service.SubmitExternalReview(initiateResult.Data!.Token, accepted: true, editedContent: editsJson);
+
+        result.Success.Should().BeTrue();
+
+        var db = GetDbContext();
+        var translation = await db.Set<ToolboxTalkTranslation>()
+            .IgnoreQueryFilters()
+            .FirstAsync(t => t.ToolboxTalkId == TalkId && t.LanguageCode == lang && !t.IsDeleted);
+
+        translation.LastExternalReviewedAt.Should().NotBeNull();
+        translation.LastExternalReviewedAt!.Value.Should().BeOnOrAfter(beforeSubmit);
+        translation.LastExternalReviewedBy.Should().Be("reviewer@example.com");
+    }
+
     // ── Validation gates ───────────────────────────────────────────────────────
 
     // Gate 1 — empty edited content on the accept path is rejected before any write.
@@ -1763,5 +2000,7 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
         public Guid SectionId { get; set; }
         public string Title { get; set; } = string.Empty;
         public string Content { get; set; } = string.Empty;
+        public DateTime? ReviewedAt { get; set; }
+        public string? ReviewedBy { get; set; }
     }
 }
