@@ -11,6 +11,8 @@ public record ExternalReviewPortalDto
     public string ContextType { get; init; } = string.Empty;
     public int FlaggedWordCount { get; init; }
     public IReadOnlyList<ExternalReviewSectionDto> Sections { get; init; } = [];
+    /// <summary>Null = no restriction, all sections are editable. Non-null = only these section indices are editable.</summary>
+    public IReadOnlyList<int>? EditableSectionIndices { get; init; }
 }
 
 public record ExternalReviewSectionDto

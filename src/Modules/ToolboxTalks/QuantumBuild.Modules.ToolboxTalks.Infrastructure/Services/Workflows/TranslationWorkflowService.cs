@@ -756,7 +756,8 @@ public sealed class TranslationWorkflowService(
             PortalStatus = portalStatus,
             ContextType = invitation.ContextType,
             FlaggedWordCount = flaggedWordCount,
-            Sections = sections
+            Sections = sections,
+            EditableSectionIndices = invitation.EditableSectionIndices
         };
 
         return Result.Ok<ExternalReviewPortalDto?>(dto);

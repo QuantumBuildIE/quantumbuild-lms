@@ -22,6 +22,8 @@ export interface ExternalReviewPortalDto {
   contextType: string;
   flaggedWordCount: number;
   sections: ExternalReviewSectionDto[];
+  /** Null = no restriction, all sections are editable. Non-null = only these section indices are editable. */
+  editableSectionIndices: number[] | null;
 }
 
 export interface ExternalReviewEditedSectionDto {

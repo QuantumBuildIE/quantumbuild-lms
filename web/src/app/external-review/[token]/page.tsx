@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -14,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 import { FlaggedText } from "@/features/toolbox-talks/components/create-wizard/steps/validate/FlaggedText";
 import { FlagSeverity } from "@/types/content-creation";
 import type { TranslationFlag } from "@/types/content-creation";
@@ -63,6 +66,32 @@ function adaptFlags(flags: ExternalReviewFlagDto[]): TranslationFlag[] {
     reason: f.reason,
     createdAt: new Date().toISOString(),
   }));
+}
+
+/**
+ * Null editableSectionIndices means "no restriction" — every section is editable
+ * (backward compat with pre-Chunk-C / full-scope invitations).
+ */
+export function isSectionEditable(
+  sectionIndex: number,
+  editableSectionIndices: number[] | null | undefined
+): boolean {
+  if (editableSectionIndices === null || editableSectionIndices === undefined) return true;
+  return editableSectionIndices.includes(sectionIndex);
+}
+
+/**
+ * Filters the reviewer's locally-tracked edits down to only the sections that
+ * are actually editable, so a read-only section's untouched text is never
+ * submitted as an "edit". Backend Gate 2 also enforces this scope.
+ */
+export function filterEditableSections(
+  editedSections: Record<number, string>,
+  editableSectionIndices: number[] | null | undefined
+): ExternalReviewEditedSectionDto[] {
+  return Object.entries(editedSections)
+    .map(([idx, text]) => ({ sectionIndex: parseInt(idx, 10), translatedText: text }))
+    .filter((s) => isSectionEditable(s.sectionIndex, editableSectionIndices));
 }
 
 function LoadingSpinner({ className }: { className?: string }) {
@@ -131,11 +160,9 @@ export default function ExternalReviewPage() {
     if (!portalData) return;
     setIsSubmitting(true);
     try {
-      const editedArray: ExternalReviewEditedSectionDto[] = Object.entries(editedSections).map(
-        ([idx, text]) => ({
-          sectionIndex: parseInt(idx, 10),
-          translatedText: text,
-        })
+      const editedArray = filterEditableSections(
+        editedSections,
+        portalData.editableSectionIndices
       );
       const editedContent = JSON.stringify(editedArray);
       const { status } = await submitExternalReview(token, { accepted: true, editedContent });
@@ -325,43 +352,64 @@ export default function ExternalReviewPage() {
               </div>
 
               {/* Sections */}
-              {portalData.sections.map((section) => (
-                <div key={section.sectionIndex} className="bg-white rounded-xl shadow p-6">
-                  <h2 className="text-base font-semibold text-gray-900 mb-4">
-                    {section.sectionTitle}
-                  </h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Source panel — read-only with flag highlighting */}
-                    <div>
-                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-                        Source
-                      </p>
-                      <div className="text-sm text-gray-700 leading-relaxed border rounded-md p-3 bg-gray-50 min-h-[150px]">
-                        <FlaggedText
-                          text={section.originalText}
-                          flags={adaptFlags(section.flags)}
+              {portalData.sections.map((section) => {
+                const editable = isSectionEditable(
+                  section.sectionIndex,
+                  portalData.editableSectionIndices
+                );
+                return (
+                  <div key={section.sectionIndex} className="bg-white rounded-xl shadow p-6">
+                    <h2 className="text-base font-semibold text-gray-900 mb-4">
+                      {section.sectionTitle}
+                    </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Source panel — read-only with flag highlighting */}
+                      <div>
+                        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                          Source
+                        </p>
+                        <div className="text-sm text-gray-700 leading-relaxed border rounded-md p-3 bg-gray-50 min-h-[150px]">
+                          <FlaggedText
+                            text={section.originalText}
+                            flags={adaptFlags(section.flags)}
+                          />
+                        </div>
+                      </div>
+                      {/* Translation panel — editable, unless scoped out of this review */}
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                            Translation
+                          </p>
+                          {!editable && (
+                            <Badge
+                              variant="outline"
+                              className="gap-1 text-muted-foreground"
+                              data-testid={`readonly-badge-${section.sectionIndex}`}
+                            >
+                              <Lock className="h-3 w-3" />
+                              Context only
+                            </Badge>
+                          )}
+                        </div>
+                        <Textarea
+                          value={editedSections[section.sectionIndex] ?? ""}
+                          onChange={(e) =>
+                            editable &&
+                            setEditedSections((prev) => ({
+                              ...prev,
+                              [section.sectionIndex]: e.target.value,
+                            }))
+                          }
+                          disabled={!editable}
+                          aria-label={`Translation for ${section.sectionTitle}`}
+                          className={cn("min-h-[150px] text-sm", !editable && "bg-muted")}
                         />
                       </div>
                     </div>
-                    {/* Translation panel — editable */}
-                    <div>
-                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-                        Translation
-                      </p>
-                      <Textarea
-                        value={editedSections[section.sectionIndex] ?? ""}
-                        onChange={(e) =>
-                          setEditedSections((prev) => ({
-                            ...prev,
-                            [section.sectionIndex]: e.target.value,
-                          }))
-                        }
-                        className="min-h-[150px] text-sm"
-                      />
-                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
 
               {/* Action buttons */}
               <div className="flex flex-col sm:flex-row gap-3 justify-end pb-8">
