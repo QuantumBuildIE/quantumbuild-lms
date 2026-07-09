@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Features.Courses.DTOs;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
+using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Application.Features.Courses.Commands;
 
@@ -70,6 +71,14 @@ public class CreateToolboxTalkCourseCommandHandler : IRequestHandler<CreateToolb
             if (duplicateTalkIds.Any())
             {
                 throw new InvalidOperationException("A talk cannot be added to the same course more than once.");
+            }
+
+            // Only Published talks may be composed into a course
+            var nonPublishedTalks = talks.Where(t => t.Status != ToolboxTalkStatus.Published).ToList();
+            if (nonPublishedTalks.Count > 0)
+            {
+                var titles = string.Join(", ", nonPublishedTalks.Select(t => t.Title));
+                throw new InvalidOperationException($"Only published learnings can be added to a course. Not published: {titles}");
             }
 
             foreach (var itemDto in dto.Items)

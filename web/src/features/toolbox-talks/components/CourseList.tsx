@@ -24,6 +24,7 @@ import { DataTable, type Column } from '@/components/shared/data-table';
 import { DeleteConfirmationDialog } from '@/components/shared/delete-confirmation-dialog';
 import { useToolboxTalkCourses, useDeleteToolboxTalkCourse } from '@/lib/api/toolbox-talks/use-courses';
 import { usePermission } from '@/lib/auth/use-auth';
+import { useCoursePreference } from '@/features/toolbox-talks/hooks/useCoursePreference';
 import type { ToolboxTalkCourseListDto } from '@/lib/api/toolbox-talks/courses';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -38,6 +39,7 @@ export function CourseList() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const canManage = usePermission('Learnings.Manage');
+  const useNewCourse = useCoursePreference();
 
   const searchTerm = searchParams.get('search') || '';
   const activeFilter = searchParams.get('active');
@@ -254,7 +256,13 @@ export function CourseList() {
         </div>
 
         {canManage && (
-          <Button onClick={() => router.push('/admin/toolbox-talks/create')}>
+          <Button
+            onClick={() =>
+              router.push(
+                useNewCourse ? '/admin/toolbox-talks/courses/new' : '/admin/toolbox-talks/create'
+              )
+            }
+          >
             <PlusIcon className="mr-2 h-4 w-4" />
             Create New
           </Button>

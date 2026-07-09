@@ -30,6 +30,7 @@ export function AddTalksDialog({ open, onOpenChange, excludeTalkIds, onAdd }: Ad
 
   const { data, isLoading } = useToolboxTalks({
     isActive: true,
+    status: 'Published',
     pageSize: 100,
   });
 

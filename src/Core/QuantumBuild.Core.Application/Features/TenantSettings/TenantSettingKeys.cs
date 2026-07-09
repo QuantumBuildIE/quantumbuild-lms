@@ -11,11 +11,13 @@ public static class TenantSettingKeys
     public const string QrLocationTrainingEnabled = "QrLocationTrainingEnabled";
     public const string ExternalParticipantTokenLifetimeDays = "ExternalParticipantTokenLifetimeDays";
     public const string UseNewWizard = "UseNewWizard";
+    public const string UseNewCourseCreation = "UseNewCourseCreation";
 
     public static class Defaults
     {
         public const string EmailTeamName = "Training Team";
         public const string TalkCertificatePrefix = "LRN";
         public const string CourseCertificatePrefix = "TBC";
+        public const string UseNewCourseCreation = "true";
     }
 }
