@@ -42,12 +42,13 @@ import {
 } from '@/lib/api/toolbox-talks';
 import { SendExternalReviewDialog } from './SendExternalReviewDialog';
 import { CancelExternalReviewDialog } from './CancelExternalReviewDialog';
-import type { ToolboxTalkTranslation } from '@/types/toolbox-talks';
+import type { ToolboxTalkSection, ToolboxTalkTranslation } from '@/types/toolbox-talks';
 import type { TranslationWorkflowState, ValidationOutcome } from '@/types/workflows';
 
 interface TranslationWorkflowPanelProps {
   toolboxTalkId: string;
   existingTranslations: ToolboxTalkTranslation[];
+  sections: ToolboxTalkSection[];
 }
 
 const outcomePillClass: Record<ValidationOutcome, string> = {
@@ -83,6 +84,7 @@ function canCancelExternalReview(state: TranslationWorkflowState): boolean {
 export function TranslationWorkflowPanel({
   toolboxTalkId,
   existingTranslations,
+  sections,
 }: TranslationWorkflowPanelProps) {
   const router = useRouter();
   const { data: languagesData } = useAvailableLanguages();
@@ -107,6 +109,10 @@ export function TranslationWorkflowPanel({
   const [cancelReviewLanguageCode, setCancelReviewLanguageCode] = useState<string | null>(null);
 
   const existingCodes = new Set(existingTranslations.map((t) => t.languageCode));
+
+  // Sorted by sectionNumber — array index is the SectionIndex the backend validates against
+  // (translated sections are generated from these in the same order).
+  const sortedSections = [...sections].sort((a, b) => a.sectionNumber - b.sectionNumber);
 
   // Language code → state dto lookup
   const stateByCode = new Map(
@@ -188,13 +194,14 @@ export function TranslationWorkflowPanel({
     }
   };
 
-  const handleSendForExternalReview = async (email: string) => {
+  const handleSendForExternalReview = async (email: string, editableSectionIndices: number[]) => {
     if (!sendReviewLanguageCode || !sendReviewLanguageName) return;
     try {
       await initiateExternalReviewMutation.mutateAsync({
         toolboxTalkId,
         languageCode: sendReviewLanguageCode,
         reviewerEmail: email,
+        editableSectionIndices,
       });
       toast.success(`Invitation sent to ${email}`);
       setSendReviewLanguageCode(null);
@@ -499,6 +506,7 @@ export function TranslationWorkflowPanel({
         isLoading={initiateExternalReviewMutation.isPending}
         flaggedWordCount={sendReviewFlaggedCount}
         languageName={sendReviewLanguageName ?? ''}
+        sections={sortedSections.map((s) => ({ title: s.title }))}
       />
 
       {/* Cancel external review dialog */}

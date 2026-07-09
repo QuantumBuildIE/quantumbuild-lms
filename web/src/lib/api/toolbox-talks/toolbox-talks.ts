@@ -663,11 +663,12 @@ export async function validateTranslation(
 export async function initiateExternalReview(
   toolboxTalkId: string,
   languageCode: string,
-  reviewerEmail: string
+  reviewerEmail: string,
+  editableSectionIndices?: number[] | null
 ): Promise<void> {
   await apiClient.post(
     `/toolbox-talks/${toolboxTalkId}/translations/${languageCode}/initiate-external-review`,
-    { reviewerEmail }
+    { reviewerEmail, editableSectionIndices: editableSectionIndices ?? null }
   );
 }
 

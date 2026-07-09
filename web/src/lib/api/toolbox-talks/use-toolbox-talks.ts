@@ -253,8 +253,18 @@ export function useValidateTranslation() {
 export function useInitiateExternalReview() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ toolboxTalkId, languageCode, reviewerEmail }: { toolboxTalkId: string; languageCode: string; reviewerEmail: string }) =>
-      initiateExternalReview(toolboxTalkId, languageCode, reviewerEmail),
+    mutationFn: ({
+      toolboxTalkId,
+      languageCode,
+      reviewerEmail,
+      editableSectionIndices,
+    }: {
+      toolboxTalkId: string;
+      languageCode: string;
+      reviewerEmail: string;
+      editableSectionIndices?: number[] | null;
+    }) =>
+      initiateExternalReview(toolboxTalkId, languageCode, reviewerEmail, editableSectionIndices),
     onSuccess: (_, { toolboxTalkId, languageCode }) => {
       queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId, 'workflow-state'] });
       queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId, 'workflow-history', languageCode] });

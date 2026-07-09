@@ -201,6 +201,134 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
         result.Errors.Should().ContainSingle(e => e.Contains("Initial") && e.Contains("ReviewerAccepted"));
     }
 
+    // ── Chunk B — editableSectionIndices selection at initiation time ────────
+
+    // 6a — null editableSectionIndices → full-scope review, persists null (pre-Chunk-B behaviour)
+    [Fact]
+    public async Task InitiateExternalReview_WithNoEditableIndices_UsesFullScope()
+    {
+        const string lang = "b1";
+        var originalSectionsJson = JsonSerializer.Serialize(new[]
+        {
+            new { SectionId = Guid.NewGuid(), Title = "Section 1", Content = "Content one" },
+            new { SectionId = Guid.NewGuid(), Title = "Section 2", Content = "Content two" }
+        });
+        await SeedToolboxTalkTranslationAsync(TalkId, lang, originalSectionsJson);
+        await SeedEventAsync(TalkId, lang, WorkflowEventTypes.InternalReviewSubmitted);
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var result = await service.InitiateExternalReview(TalkId, lang, "reviewer@example.com");
+
+        result.Success.Should().BeTrue();
+
+        var db = GetDbContext();
+        var invitation = await db.Set<ExternalParticipantInvitation>()
+            .IgnoreQueryFilters()
+            .FirstAsync(i => i.Id == result.Data!.InvitationId);
+
+        invitation.EditableSectionIndicesJson.Should().BeNull();
+        invitation.EditableSectionIndices.Should().BeNull();
+    }
+
+    // 6b — valid non-null list → persists and round-trips via the entity helper
+    [Fact]
+    public async Task InitiateExternalReview_WithValidEditableIndices_PersistsList()
+    {
+        const string lang = "b2";
+        var originalSectionsJson = JsonSerializer.Serialize(new[]
+        {
+            new { SectionId = Guid.NewGuid(), Title = "Section 1", Content = "Content one" },
+            new { SectionId = Guid.NewGuid(), Title = "Section 2", Content = "Content two" },
+            new { SectionId = Guid.NewGuid(), Title = "Section 3", Content = "Content three" }
+        });
+        await SeedToolboxTalkTranslationAsync(TalkId, lang, originalSectionsJson);
+        await SeedEventAsync(TalkId, lang, WorkflowEventTypes.InternalReviewSubmitted);
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var result = await service.InitiateExternalReview(
+            TalkId, lang, "reviewer@example.com", new List<int> { 0, 2 });
+
+        result.Success.Should().BeTrue();
+
+        var db = GetDbContext();
+        var invitation = await db.Set<ExternalParticipantInvitation>()
+            .IgnoreQueryFilters()
+            .FirstAsync(i => i.Id == result.Data!.InvitationId);
+
+        invitation.EditableSectionIndices.Should().BeEquivalentTo(new List<int> { 0, 2 });
+    }
+
+    // 6c — empty list → rejected (at least one section must be selected)
+    [Fact]
+    public async Task InitiateExternalReview_WithEmptyList_ReturnsFailure()
+    {
+        const string lang = "b3";
+        var originalSectionsJson = JsonSerializer.Serialize(new[]
+        {
+            new { SectionId = Guid.NewGuid(), Title = "Section 1", Content = "Content one" }
+        });
+        await SeedToolboxTalkTranslationAsync(TalkId, lang, originalSectionsJson);
+        await SeedEventAsync(TalkId, lang, WorkflowEventTypes.InternalReviewSubmitted);
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var result = await service.InitiateExternalReview(
+            TalkId, lang, "reviewer@example.com", new List<int>());
+
+        result.Success.Should().BeFalse();
+        result.ErrorCode.Should().Be(FailureCode.WorkflowInitiationInvalid);
+    }
+
+    // 6d — index >= section count → rejected
+    [Fact]
+    public async Task InitiateExternalReview_WithOutOfRangeIndex_ReturnsFailure()
+    {
+        const string lang = "b4";
+        var originalSectionsJson = JsonSerializer.Serialize(new[]
+        {
+            new { SectionId = Guid.NewGuid(), Title = "Section 1", Content = "Content one" }
+        });
+        await SeedToolboxTalkTranslationAsync(TalkId, lang, originalSectionsJson);
+        await SeedEventAsync(TalkId, lang, WorkflowEventTypes.InternalReviewSubmitted);
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var result = await service.InitiateExternalReview(
+            TalkId, lang, "reviewer@example.com", new List<int> { 5 });
+
+        result.Success.Should().BeFalse();
+        result.ErrorCode.Should().Be(FailureCode.WorkflowInitiationInvalid);
+    }
+
+    // 6e — duplicate indices → rejected
+    [Fact]
+    public async Task InitiateExternalReview_WithDuplicateIndices_ReturnsFailure()
+    {
+        const string lang = "b5";
+        var originalSectionsJson = JsonSerializer.Serialize(new[]
+        {
+            new { SectionId = Guid.NewGuid(), Title = "Section 1", Content = "Content one" },
+            new { SectionId = Guid.NewGuid(), Title = "Section 2", Content = "Content two" }
+        });
+        await SeedToolboxTalkTranslationAsync(TalkId, lang, originalSectionsJson);
+        await SeedEventAsync(TalkId, lang, WorkflowEventTypes.InternalReviewSubmitted);
+
+        using var scope = Factory.Services.CreateScope();
+        var service = scope.ServiceProvider.GetRequiredService<ITranslationWorkflowService>();
+
+        var result = await service.InitiateExternalReview(
+            TalkId, lang, "reviewer@example.com", new List<int> { 0, 0 });
+
+        result.Success.Should().BeFalse();
+        result.ErrorCode.Should().Be(FailureCode.WorkflowInitiationInvalid);
+    }
+
     // 7 — SubmitExternalReview full token round-trip with proper state setup
     //     Updated: seeds ReviewerAccepted state first so InitiateExternalReview is legal,
     //     then verifies the complete external review submission flow end-to-end.

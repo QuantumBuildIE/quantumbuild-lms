@@ -159,13 +159,14 @@ export function ValidateStep({ talkId }: ValidateStepProps) {
     activeWorkflowState?.state === 'Validated' || activeWorkflowState?.state === 'ReviewerAccepted';
 
   const handleSendForExternalReview = useCallback(
-    async (email: string) => {
+    async (email: string, editableSectionIndices: number[]) => {
       if (!sendReviewLang) return;
       try {
         await initiateReviewMutation.mutateAsync({
           toolboxTalkId: talkId,
           languageCode: sendReviewLang.code,
           reviewerEmail: email,
+          editableSectionIndices,
         });
         toast.success(`Invitation sent to ${email}`);
         setSendReviewLang(null);
@@ -220,6 +221,7 @@ export function ValidateStep({ talkId }: ValidateStepProps) {
             ? (LANG_NAMES[sendReviewLang.code] ?? sendReviewLang.code.toUpperCase())
             : ''
         }
+        sections={mergedSections.map((s) => ({ title: s.title }))}
       />
 
       <div className="space-y-6">

@@ -55,8 +55,15 @@ public interface ITranslationWorkflowService
     /// Creates an external participant invitation and records the event.
     /// Returns the raw token (for the invitation URL) and the invitation metadata.
     /// </summary>
+    /// <param name="editableSectionIndices">
+    /// Section indices the reviewer may edit. Null means full-scope review (all sections
+    /// editable) — the default that preserves pre-Chunk-B behaviour. When non-null, must be
+    /// non-empty, contain no duplicates, and every index must be in range against the current
+    /// translation's section count, or a <see cref="FailureCode.WorkflowInitiationInvalid"/>
+    /// result is returned.
+    /// </param>
     /// <param name="explicitTenantId">See <see cref="GetState"/> for usage.</param>
-    Task<Result<InitiateExternalReviewResult>> InitiateExternalReview(Guid talkId, string languageCode, string invitedEmail, Guid? explicitTenantId = null, CancellationToken ct = default);
+    Task<Result<InitiateExternalReviewResult>> InitiateExternalReview(Guid talkId, string languageCode, string invitedEmail, List<int>? editableSectionIndices = null, Guid? explicitTenantId = null, CancellationToken ct = default);
 
     /// <summary>
     /// Handles a submission from an external reviewer via their invitation token.

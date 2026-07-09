@@ -1918,12 +1918,16 @@ public class ToolboxTalksController : ControllerBase
             if (toolboxTalk == null)
                 return NotFound(new { error = "Learning not found" });
 
-            var result = await _workflowService.InitiateExternalReview(id, languageCode, request.ReviewerEmail, ct: ct);
+            var result = await _workflowService.InitiateExternalReview(
+                id, languageCode, request.ReviewerEmail, request.EditableSectionIndices, ct: ct);
             if (!result.Success)
             {
-                if (result.ErrorCode == FailureCode.WorkflowInvalidState)
-                    return Conflict(new { error = result.Errors.FirstOrDefault() });
-                return BadRequest(new { error = result.Errors.FirstOrDefault() });
+                return result.ErrorCode switch
+                {
+                    FailureCode.WorkflowInvalidState => Conflict(new { error = result.Errors.FirstOrDefault() }),
+                    FailureCode.WorkflowInitiationInvalid => BadRequest(new { error = result.Errors.FirstOrDefault() }),
+                    _ => BadRequest(new { error = result.Errors.FirstOrDefault() })
+                };
             }
 
             return Ok(new { message = "External review invitation sent" });
@@ -2826,6 +2830,13 @@ public record SmartGenerateContentResponse
 public record InitiateExternalReviewRequest
 {
     public string ReviewerEmail { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Section indices the reviewer may edit. Null means full-scope review (all sections
+    /// editable). When provided, must be non-empty with no duplicates and every index in
+    /// range against the translation's section count.
+    /// </summary>
+    public List<int>? EditableSectionIndices { get; init; }
 }
 
 public record StartTalkTranslationRequest

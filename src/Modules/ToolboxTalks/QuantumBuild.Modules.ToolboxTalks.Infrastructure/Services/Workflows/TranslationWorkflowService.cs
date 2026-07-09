@@ -341,6 +341,7 @@ public sealed class TranslationWorkflowService(
         Guid talkId,
         string languageCode,
         string invitedEmail,
+        List<int>? editableSectionIndices = null,
         Guid? explicitTenantId = null,
         CancellationToken ct = default)
     {
@@ -355,6 +356,12 @@ public sealed class TranslationWorkflowService(
             return Result.Fail<InitiateExternalReviewResult>(
                 $"Cannot initiate external review from state {state}; requires Validated or ReviewerAccepted.",
                 FailureCode.WorkflowInvalidState);
+
+        var sectionGuard = await ValidateEditableSectionIndicesAsync(talkId, languageCode, editableSectionIndices, ct);
+        if (sectionGuard is not null)
+            return Result.Fail<InitiateExternalReviewResult>(
+                sectionGuard.Errors.FirstOrDefault() ?? "Invalid section selection.",
+                sectionGuard.ErrorCode.GetValueOrDefault());
 
         var rawToken = Guid.NewGuid().ToString("N");
         var tokenHash = HashToken(rawToken);
@@ -380,6 +387,7 @@ public sealed class TranslationWorkflowService(
             Status = InvitationStatus.Pending,
             ContextType = "TranslationReview",
             ContextPayload = JsonSerializer.Serialize(new { contextType = "TranslationReview", flaggedWordCount }),
+            EditableSectionIndices = editableSectionIndices,
             RequesterUserId = currentUser.UserIdGuid,
             InvitedAt = DateTime.UtcNow
         };
@@ -1042,6 +1050,65 @@ public sealed class TranslationWorkflowService(
             return Result.Fail(
                 "One or more sections contain disallowed markup.",
                 FailureCode.WorkflowSubmissionInvalid);
+
+        return null;
+    }
+
+    /// <summary>
+    /// Validates the admin's section selection at initiation time. Null is always legal
+    /// (full-scope review, no gates run). Non-null must be non-empty, contain no duplicate
+    /// indices, and every index must be in range against the current translation's section
+    /// count.
+    /// </summary>
+    private async Task<Result?> ValidateEditableSectionIndicesAsync(
+        Guid talkId,
+        string languageCode,
+        List<int>? editableSectionIndices,
+        CancellationToken ct)
+    {
+        if (editableSectionIndices is null)
+            return null;
+
+        if (editableSectionIndices.Count == 0)
+            return Result.Fail(
+                "At least one section must be selected for review.",
+                FailureCode.WorkflowInitiationInvalid);
+
+        if (editableSectionIndices.Count != editableSectionIndices.Distinct().Count())
+            return Result.Fail(
+                "Section selection contains duplicate indices.",
+                FailureCode.WorkflowInitiationInvalid);
+
+        var translation = await context.ToolboxTalkTranslations
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(t => t.ToolboxTalkId == talkId
+                                   && t.LanguageCode == languageCode
+                                   && !t.IsDeleted, ct);
+
+        if (translation is null)
+            return Result.Fail(
+                "No translation exists for this language; cannot select sections for review.",
+                FailureCode.WorkflowInitiationInvalid);
+
+        List<TranslatedSectionEntry>? sections;
+        try
+        {
+            sections = JsonSerializer.Deserialize<List<TranslatedSectionEntry>>(translation.TranslatedSections);
+        }
+        catch (JsonException)
+        {
+            sections = null;
+        }
+
+        if (sections is null)
+            return Result.Fail(
+                "Existing translation content is malformed; cannot select sections for review.",
+                FailureCode.WorkflowInitiationInvalid);
+
+        if (editableSectionIndices.Any(i => i < 0 || i >= sections.Count))
+            return Result.Fail(
+                "One or more selected sections do not match the current translation content.",
+                FailureCode.WorkflowInitiationInvalid);
 
         return null;
     }

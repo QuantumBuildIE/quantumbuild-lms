@@ -1061,6 +1061,7 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
               <TranslationWorkflowPanel
                 toolboxTalkId={talk.id}
                 existingTranslations={talk.translations}
+                sections={talk.sections}
               />
             )}
           </>
