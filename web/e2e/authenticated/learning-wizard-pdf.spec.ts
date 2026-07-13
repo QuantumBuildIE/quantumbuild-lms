@@ -18,16 +18,34 @@
  * - docs/playwright-wizard-manual-run-observations.md — real timing, gotchas
  *   (isVisible vs expect().toBeVisible, listitem/button collisions, the
  *   SuperUser active-tenant prerequisite below)
+ *
+ * Diagnostics: this test logs step boundaries (▶/✓/⏳/❌ prefixes), every
+ * request/response to /api/* and to the Cloudflare R2 upload host, and
+ * browser console errors/warnings + uncaught page errors. This is deliberate
+ * — a prior run hung for 15 minutes at the Step 1 `waitForResponse` with zero
+ * diagnostic output, because that call had no explicit timeout and the
+ * network listeners needed to see *why* it hung didn't exist yet. See the
+ * end-of-chunk report for the leading hypothesis (the real-network Cloudflare
+ * R2 upload PUT, which the manual-run doc explicitly never exercised — that
+ * session's sandbox had no route to r2.cloudflarestorage.com).
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import path from 'path';
 
 // Timeout values below are set to the manual run's observed range plus a
 // buffer for provider variance — not aspirational round numbers. If a step
 // times out in practice, treat that as a real signal, not a config problem.
 const TIMEOUTS = {
-  submitStep1: 20_000, // observed 0.36s-2.2s (text mode) + small PDF upload latency
+  // 20s -> 30s: the manual-run doc's "15s" and this file's original "20s"
+  // both came from Text-mode timing (POST /initialise only). The real Pdf
+  // path additionally does a full client-side upload (getPresignedUrl POST +
+  // a real R2 PUT) inside onSubmit *before* /initialise ever fires — see
+  // InputConfigStep.tsx:304-314 and useUploadSourceFile.ts. That upload was
+  // never exercised in the manual-run session (no R2 network route in that
+  // sandbox), so its real latency is unconfirmed. 30s buys margin for that
+  // extra network round trip without masking a genuine hang for long.
+  submitStep1: 30_000,
   parse: 60_000, // observed 12.3s-20.6s, synchronous for PDF/Text mode
   quizGenerate: 90_000, // observed 22.0s-26.2s, synchronous (confirmed non-Processing for PDF/Text)
   settingsSubmit: 15_000, // observed ~1.5s
@@ -36,11 +54,81 @@ const TIMEOUTS = {
   publish: 15_000, // single request/response
 };
 
+// ── Diagnostics ──────────────────────────────────────────────────────────
+// Local logging helpers — kept inline in this one spec file, not extracted
+// to a shared module (out of scope for this chunk).
+const step = (msg: string) => console.log(`▶ ${msg}`);
+const ok = (msg: string) => console.log(`✓ ${msg}`);
+const waiting = (msg: string) => console.log(`⏳ ${msg}`);
+const logUrl = (page: Page) => console.log('URL:', page.url());
+
+// Include: page navigations, anything under /api/, and the Cloudflare R2
+// upload host (public *.r2.dev and the presigned-PUT *.r2.cloudflarestorage.com
+// host — see CLAUDE.md's R2 config block). Excludes _next/ assets, fonts,
+// images, etc. by simply not matching any of the above.
+function isSignalRequest(url: URL, resourceType: string): boolean {
+  if (resourceType === 'document') return true;
+  if (url.pathname.startsWith('/api/')) return true;
+  if (/\.r2\.(cloudflarestorage\.com|dev)$/i.test(url.hostname)) return true;
+  return false;
+}
+
+function attachDiagnostics(page: Page) {
+  page.on('request', (req) => {
+    let url: URL;
+    try {
+      url = new URL(req.url());
+    } catch {
+      return;
+    }
+    if (!isSignalRequest(url, req.resourceType())) return;
+    console.log('→', req.method(), url.hostname + url.pathname);
+  });
+
+  page.on('response', async (res) => {
+    let url: URL;
+    try {
+      url = new URL(res.url());
+    } catch {
+      return;
+    }
+    if (!isSignalRequest(url, res.request().resourceType())) return;
+    console.log('←', res.status(), url.hostname + url.pathname);
+
+    if (res.status() >= 400) {
+      try {
+        const body = await res.text();
+        console.error(
+          `❌ [${res.status()}] ${url.hostname}${url.pathname} response body:`,
+          body.slice(0, 2000)
+        );
+      } catch (err) {
+        console.error(
+          `❌ [${res.status()}] ${url.hostname}${url.pathname} — could not read response body:`,
+          err instanceof Error ? err.message : String(err)
+        );
+      }
+    }
+  });
+
+  page.on('pageerror', (error) => {
+    console.error('❌ Client error:', error.message);
+  });
+
+  page.on('console', (msg) => {
+    if (msg.type() === 'error' || msg.type() === 'warning') {
+      console.log(`[browser ${msg.type()}]`, msg.text());
+    }
+  });
+}
+
 test.describe('Learning wizard — PDF happy path', () => {
   test('admin can create, translate, validate, and publish a PDF-based learning via the new wizard', async ({
     page,
   }) => {
     test.setTimeout(15 * 60 * 1000);
+
+    attachDiagnostics(page);
 
     const ts = Date.now();
     const title = `E2E PDF Learning ${ts}`;
@@ -51,6 +139,7 @@ test.describe('Learning wizard — PDF happy path', () => {
       // selected. This isn't documented in the recon; it was only discovered
       // during the manual run. Select the first real tenant via the
       // TenantSwitcher in the top nav before navigating anywhere else.
+      step('Navigating to /admin/tenants to select an active tenant');
       await page.goto('/admin/tenants');
       await page.locator('header').getByRole('combobox').click();
       await page
@@ -58,11 +147,13 @@ test.describe('Learning wizard — PDF happy path', () => {
         .filter({ hasNotText: 'All Tenants' })
         .first()
         .click();
+      ok('Active tenant selected');
     });
 
     await test.step('Navigate to wizard Step 1 — Input & Config', async () => {
       // ?wizard=new is a one-shot URL override (CLAUDE.md Note 29) — avoids
       // depending on the tenant's UseNewWizard setting.
+      step('Navigating to wizard Step 1 (?wizard=new)');
       await page.goto('/admin/toolbox-talks/learnings/new?wizard=new');
 
       // The form's aria-label is unambiguous to Step 1 specifically (the
@@ -73,11 +164,14 @@ test.describe('Learning wizard — PDF happy path', () => {
           name: 'Learning wizard step 1 — input and configuration',
         })
       ).toBeVisible();
+      ok('Step 1 form visible');
+      logUrl(page);
     });
 
     let talkId = '';
 
     await test.step('Step 1 — Input & Config', async () => {
+      step('Filling Title');
       await page.getByRole('textbox', { name: 'Title' }).fill(title);
 
       // Pdf input mode is labelled "Document" in the UI. Its accessible name is
@@ -88,19 +182,23 @@ test.describe('Learning wizard — PDF happy path', () => {
       // Upload a Word document (.docx)") since "Document" is a substring of
       // "Word Document...". Anchor to the start of the name so only the Pdf
       // mode button (whose name *starts* with "Document") matches.
+      step('Selecting input mode: Document (Pdf)');
       await page.getByRole('button', { name: /^Document\b/ }).click();
 
       const fixturePath = path.join(
         __dirname,
         '../fixtures/sample-toolbox-talk.pdf'
       );
+      step(`Selecting PDF file: ${fixturePath}`);
       await page.getByLabel('Select PDF file').setInputFiles(fixturePath);
+      ok('PDF file attached (client-side — not yet uploaded to R2; that happens on submit)');
 
       // Target languages: the trigger button carries aria-label="Target
       // languages" directly (not via FormLabel's htmlFor, which can't reach
       // the nested Popover/Button — see multi-select-combobox.tsx's own
       // comment). getByRole with that name is the reliable selector;
       // getByLabel does not find it (confirmed in the manual run).
+      step('Opening Target languages combobox');
       await page
         .getByRole('combobox', { name: 'Target languages' })
         .click();
@@ -111,28 +209,83 @@ test.describe('Learning wizard — PDF happy path', () => {
       // task requires a manual, not auto-derived, selection.
       const clearAllButton = page.getByRole('button', { name: /^Clear all/ });
       if ((await clearAllButton.count()) > 0) {
+        step('Clearing auto-derived target languages');
         await clearAllButton.click();
       }
       await page.getByRole('option').first().click();
       await page.keyboard.press('Escape'); // close the popover
+      ok('Target language selected');
+
+      // Sector — NOT required by validation (inputConfigSchema.ts's
+      // `sectorKey: z.string().optional()`, no superRefine rule; backend
+      // InitialiseToolboxTalkCommandValidator has no rule for it either).
+      // The manual-run doc confirms this empirically: "Sector is optional in
+      // inputConfigSchema.ts, so this didn't block anything" even when the
+      // tenant had zero sectors configured. Filled here anyway for realism —
+      // a real admin would pick one — but this is defensive, not a fix for a
+      // confirmed blocker. Its rendered state depends on tenant sector count
+      // (0 -> optional Select + alert, 1 -> static auto-selected card with NO
+      // interactive control, >1 -> Select, possibly pre-filled with a tenant
+      // default). The unselected placeholder text "Select a sector" is the
+      // only accessible name available (SelectTrigger has no aria-label, and
+      // FormControl's id/aria-describedby land on the non-DOM Radix
+      // Select.Root and never reach the actual trigger button — same
+      // accessible-name gap already documented for MultiSelectCombobox in
+      // the recon doc). If no such combobox is found, the field is either
+      // already auto-selected (1 sector, or a tenant default among >1) or
+      // this is the single-sector static-card state — either way there is
+      // nothing to click.
+      step('Checking for an interactive Sector selector');
+      const sectorTrigger = page.getByRole('combobox', { name: /select a sector/i });
+      if ((await sectorTrigger.count()) > 0) {
+        await sectorTrigger.click();
+        await page.getByRole('option').first().click();
+        ok('Sector selected');
+      } else {
+        ok('Sector already auto-selected or not interactive for this tenant — skipped');
+      }
+
+      // Audit purpose — also NOT required by validation (same schema file,
+      // `auditPurpose: z.string().max(500).optional()`). Filled for realism;
+      // always empty at form-init (no auto-populate effect), so this
+      // selector should always be present, unlike Sector.
+      step('Selecting Audit Purpose');
+      await page.getByRole('combobox', { name: /select purpose/i }).click();
+      await page.getByRole('option').first().click();
+      ok('Audit Purpose selected');
+
+      // Reviewer Name / Role are pre-populated from the JWT user profile
+      // (InputConfigStep.tsx:178-188) and are optional in validation — left
+      // untouched per the chunk brief. Client and Document reference are
+      // also optional in validation (confirmed: Client has no
+      // company-existence-based requirement in the schema either way) — left
+      // untouched; Client's SelectTrigger has the same missing-accessible-
+      // name gap as Sector if a future chunk wants to fill it
+      // (getByRole('combobox', { name: /select client/i })).
 
       const initialisePromise = page.waitForResponse(
         (resp) =>
           resp.url().includes('/initialise') &&
-          resp.request().method() === 'POST'
+          resp.request().method() === 'POST',
+        { timeout: TIMEOUTS.submitStep1 }
       );
+      step('Clicking Continue (submits Step 1 — may first upload the PDF to R2)');
       await page.getByRole('button', { name: 'Continue', exact: true }).click();
+      waiting(`waiting for POST .../initialise (timeout ${TIMEOUTS.submitStep1}ms)`);
       await initialisePromise;
+      ok('POST /initialise resolved');
 
       await page.waitForURL(/\/admin\/toolbox-talks\/learnings\/[^/]+\/parse$/, {
         timeout: TIMEOUTS.submitStep1,
       });
+      logUrl(page);
 
       const match = new URL(page.url()).pathname.match(
         /\/learnings\/([^/]+)\/parse$/
       );
       talkId = match![1];
       expect(talkId).toBeTruthy();
+      ok(`Talk created: ${talkId}`);
     });
 
     await test.step('Step 2 — Parse (synchronous for PDF mode)', async () => {
@@ -143,14 +296,18 @@ test.describe('Learning wizard — PDF happy path', () => {
       const sectionTitleButtons = page.getByRole('button', {
         name: /^Edit section \d+ title:/,
       });
+      waiting(`waiting for parsed sections (timeout ${TIMEOUTS.parse}ms)`);
       await expect(sectionTitleButtons.first()).toBeVisible({
         timeout: TIMEOUTS.parse,
       });
       const sectionCount = await sectionTitleButtons.count();
+      ok(`Parse complete — ${sectionCount} sections found`);
       expect(sectionCount).toBeGreaterThanOrEqual(2);
 
+      step('Clicking Save & Continue');
       await page.getByRole('button', { name: 'Save & Continue' }).click();
       await page.waitForURL(/\/quiz$/, { timeout: TIMEOUTS.submitStep1 });
+      logUrl(page);
     });
 
     await test.step('Step 3 — Quiz', async () => {
@@ -159,24 +316,33 @@ test.describe('Learning wizard — PDF happy path', () => {
       const editQuestionButtons = page.getByRole('button', {
         name: 'Edit question',
       });
+      waiting(`waiting for generated quiz questions (timeout ${TIMEOUTS.quizGenerate}ms)`);
       await expect(editQuestionButtons.first()).toBeVisible({
         timeout: TIMEOUTS.quizGenerate,
       });
       const questionCount = await editQuestionButtons.count();
+      ok(`Quiz generation complete — ${questionCount} questions found`);
       expect(questionCount).toBeGreaterThan(0);
 
+      step('Clicking Save & Continue');
       await page.getByRole('button', { name: 'Save & Continue' }).click();
       await page.waitForURL(/\/settings$/, { timeout: TIMEOUTS.submitStep1 });
+      logUrl(page);
     });
 
     await test.step('Step 4 — Settings (accept defaults)', async () => {
+      step('Clicking Continue (accepting default settings)');
       await page.getByRole('button', { name: 'Continue', exact: true }).click();
+      waiting(`waiting for navigation to /translate (timeout ${TIMEOUTS.settingsSubmit}ms)`);
       await page.waitForURL(/\/translate$/, {
         timeout: TIMEOUTS.settingsSubmit,
       });
+      ok('Settings saved');
+      logUrl(page);
     });
 
     await test.step('Step 5 — Translate', async () => {
+      step('Clicking Start All');
       await page.getByRole('button', { name: 'Start All' }).click();
 
       // Single target language selected in Step 1, so a page-wide search for
@@ -185,12 +351,18 @@ test.describe('Learning wizard — PDF happy path', () => {
       // locator.isVisible({ timeout }), which does a single immediate check
       // and does not wait. This exact mistake cost 25+ minutes in the manual
       // run session.
+      waiting(
+        `waiting for target language to reach "Validated" (timeout ${TIMEOUTS.translateValidated}ms — this is a real multi-round back-translation consensus run, not a fixed wait)`
+      );
       await expect(page.getByText('Validated', { exact: true })).toBeVisible({
         timeout: TIMEOUTS.translateValidated,
       });
+      ok('Target language: Validated');
 
+      step('Clicking Continue');
       await page.getByRole('button', { name: 'Continue', exact: true }).click();
       await page.waitForURL(/\/validate$/, { timeout: TIMEOUTS.submitStep1 });
+      logUrl(page);
     });
 
     await test.step('Step 6 — Validate', async () => {
@@ -200,16 +372,19 @@ test.describe('Learning wizard — PDF happy path', () => {
       // for all of them to be enabled is a genuine "every section has a
       // validation result" signal.
       const sectionHeaders = page.getByRole('button', { name: /^L\d{2}/ });
+      waiting('waiting for validation section headers to appear');
       await expect(sectionHeaders.first()).toBeVisible({
         timeout: TIMEOUTS.sectionAccept,
       });
       const sectionCount = await sectionHeaders.count();
+      ok(`${sectionCount} validation section headers found`);
       expect(sectionCount).toBeGreaterThanOrEqual(2);
       for (let i = 0; i < sectionCount; i++) {
         await expect(sectionHeaders.nth(i)).toBeEnabled({
           timeout: TIMEOUTS.sectionAccept,
         });
       }
+      ok('All sections have a validation result (headers enabled)');
 
       // Structural check: one outcome pill (Pass/Review/Fail) per section —
       // not asserting a specific mix, since that varies run to run.
@@ -226,32 +401,41 @@ test.describe('Learning wizard — PDF happy path', () => {
       for (let i = 0; i < sectionCount; i++) {
         const header = sectionHeaders.nth(i);
         const card = header.locator('xpath=..');
+        step(`Accepting section ${i + 1}/${sectionCount}`);
         await header.click();
         await card.getByRole('button', { name: 'Accept' }).click();
         await expect(card.getByText('Accepted', { exact: true })).toBeVisible({
           timeout: TIMEOUTS.sectionAccept,
         });
+        ok(`Section ${i + 1}/${sectionCount} accepted`);
       }
 
       await expect(page.getByText('Ready to publish')).toBeVisible({
         timeout: TIMEOUTS.sectionAccept,
       });
+      ok('Ready to publish');
 
+      step('Clicking Continue');
       await page.getByRole('button', { name: 'Continue', exact: true }).click();
       await page.waitForURL(/\/publish$/, { timeout: TIMEOUTS.submitStep1 });
+      logUrl(page);
     });
 
     await test.step('Step 7 — Publish', async () => {
+      step('Clicking Publish');
       await page.getByRole('button', { name: 'Publish', exact: true }).click();
 
       // Success signal, per established codebase convention: URL navigation
       // to the talk detail page, not a toast (toast.success() and
       // router.push() fire in the same tick — the page may unmount before
       // Playwright observes the toast).
+      waiting(`waiting for navigation to talk detail page (timeout ${TIMEOUTS.publish}ms)`);
       await page.waitForURL(/\/admin\/toolbox-talks\/talks\/[^/]+$/, {
         timeout: TIMEOUTS.publish,
       });
+      logUrl(page);
       expect(page.url()).toContain(talkId);
+      ok('Navigated to talk detail page');
 
       // The detail page does not render the talk's Draft/Processing/
       // ReadyForReview/Published status as visible text anywhere (confirmed
@@ -262,6 +446,7 @@ test.describe('Learning wizard — PDF happy path', () => {
       // loaded, not a 404/error state) — not a status badge that doesn't
       // exist in the UI.
       await expect(page.getByRole('heading', { name: title })).toBeVisible();
+      ok(`Published — "${title}" heading visible on detail page`);
     });
   });
 });
