@@ -99,7 +99,8 @@ builder.Services.AddHttpClient("ClaudeApi", client =>
     client.Timeout = TimeSpan.FromSeconds(30);
 })
 .AddPolicyHandler((sp, _) => ResiliencePolicies.GetClaudePolicy(
-    sp.GetRequiredService<ILogger<Program>>()));
+    sp.GetRequiredService<ILogger<Program>>()))
+.AddPolicyHandler((sp, _) => sp.GetRequiredService<ProviderBulkheadPolicies>().Anthropic);
 
 // Register Infrastructure services
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
@@ -117,6 +118,12 @@ builder.Services.AddOptions<AIProviderOptions>()
     .BindConfiguration(AIProviderOptions.SectionName)
     .ValidateOnStart();
 builder.Services.AddSingleton<IValidateOptions<AIProviderOptions>, AIProviderOptionsValidator>();
+
+builder.Services.AddOptions<ProviderConcurrencyOptions>()
+    .BindConfiguration(ProviderConcurrencyOptions.SectionName)
+    .ValidateOnStart();
+builder.Services.AddSingleton<IValidateOptions<ProviderConcurrencyOptions>, ProviderConcurrencyOptionsValidator>();
+builder.Services.AddSingleton<ProviderBulkheadPolicies>();
 
 var emailProvider = builder.Configuration.GetValue<string>("EmailProvider:Provider");
 if (string.Equals(emailProvider, "MailerSend", StringComparison.OrdinalIgnoreCase))
