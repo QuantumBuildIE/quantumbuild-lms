@@ -74,16 +74,26 @@ export function isStepReachable(
       // No target languages declared — English-only path, no translation gate
       if (codes.length === 0) return true;
 
-      // Target languages declared — explicit handling of validation runs state
+      // Target languages declared — every one of them must have a resolved run, not
+      // just "at least one" (the backend's own publish gate only requires one completed,
+      // decision-free run across all languages — this frontend gate is intentionally
+      // stricter so users aren't led to publish while other declared languages were
+      // never even started).
       const runs = validationRuns ?? [];
       if (runs.length === 0) return false; // none exist (not fetched yet, or no runs created)
 
-      const completedRuns = runs.filter((r) => r.status === 'Completed');
-      if (completedRuns.length === 0) return false;
-
-      // Strict review gate: every completed run must have no pending non-Pass decisions.
-      // Pass sections are auto-accepted by the backend on validation completion.
-      return !completedRuns.some((r) => r.hasPendingDecisions);
+      return codes.every((code) => {
+        const languageRuns = runs.filter((r) => r.languageCode === code);
+        return languageRuns.some((r) =>
+          // Completed with no pending reviewer decision is the normal resolved path.
+          (r.status === 'Completed' && !r.hasPendingDecisions) ||
+          // Failed/Cancelled are terminal too — a language stuck here would otherwise
+          // never become reachable again without a fresh run, so treat it as resolved
+          // rather than a permanent dead-end.
+          r.status === 'Failed' ||
+          r.status === 'Cancelled'
+        );
+      });
     }
     default:
       return false;

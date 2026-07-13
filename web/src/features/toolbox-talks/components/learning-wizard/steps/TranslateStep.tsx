@@ -35,6 +35,7 @@ export function TranslateStep({ talkId }: TranslateStepProps) {
     activeRunIds,
     onValidationComplete,
     onSectionCompleted,
+    markStarted,
   } = useWorkflowSubscription(talkId);
   const { mutate: startTranslation, isPending, variables } = useStartTalkTranslation();
   const [isStartingAll, setIsStartingAll] = useState(false);
@@ -74,6 +75,7 @@ export function TranslateStep({ talkId }: TranslateStepProps) {
   const handleStart = (languageCode: string) => {
     const current = stateByCode[languageCode]?.state;
     const confirmOverwrite = current === 'Stale';
+    markStarted(languageCode, current);
     startTranslation(
       { talkId, languageCode, confirmOverwrite },
       {
@@ -91,6 +93,7 @@ export function TranslateStep({ talkId }: TranslateStepProps) {
       for (const code of startable) {
         const current = stateByCode[code]?.state;
         const confirmOverwrite = current === 'Stale';
+        markStarted(code, current);
         startTranslation({ talkId, languageCode: code, confirmOverwrite });
         // Stagger initiation to reduce API rate pressure
         await new Promise((resolve) => setTimeout(resolve, 1000));

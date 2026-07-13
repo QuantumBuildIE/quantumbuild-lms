@@ -47,6 +47,8 @@ interface MultiSelectComboboxProps {
   renderOption?: (option: MultiSelectOption) => React.ReactNode;
   showSelectAll?: boolean;
   renderTriggerContent?: (selectedOptions: MultiSelectOption[]) => React.ReactNode;
+  /** Accessible name for the trigger button — FormLabel's htmlFor can't reach the nested Popover/Button. */
+  ariaLabel?: string;
 }
 
 export function MultiSelectCombobox({
@@ -65,6 +67,7 @@ export function MultiSelectCombobox({
   renderOption,
   showSelectAll = false,
   renderTriggerContent,
+  ariaLabel,
 }: MultiSelectComboboxProps) {
   const [open, setOpen] = React.useState(false);
   const [inputValue, setInputValue] = React.useState("");
@@ -168,6 +171,7 @@ export function MultiSelectCombobox({
           variant="outline"
           role="combobox"
           aria-expanded={open}
+          aria-label={ariaLabel}
           disabled={disabled}
           className={cn(
             "w-full min-h-[2.5rem] h-auto justify-between font-normal",

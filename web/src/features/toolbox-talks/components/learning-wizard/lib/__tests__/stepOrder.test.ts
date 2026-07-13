@@ -132,4 +132,48 @@ describe('isStepReachable - case 7 (Publish step)', () => {
     const talk = makeTalk({ targetLanguageCodes: '["fr"]' });
     expect(isStepReachable(7, talk, undefined)).toBe(false);
   });
+
+  it('returns false when one of several target languages was never started (no run at all)', () => {
+    const talk = makeTalk({ targetLanguageCodes: '["fr","af"]' });
+    // Only 'fr' has a run; 'af' has none — this is the exact bug scenario: reaching
+    // Publish with an untranslated language present would guarantee a 409.
+    const runs: ValidationRunSummary[] = [makeCompletedRun(false)];
+    expect(isStepReachable(7, talk, runs)).toBe(false);
+  });
+
+  it('returns true when every target language has a completed run with no pending decisions', () => {
+    const talk = makeTalk({ targetLanguageCodes: '["fr","af"]' });
+    const runs: ValidationRunSummary[] = [
+      makeCompletedRun(false),
+      { ...makeCompletedRun(false), id: 'run-2', languageCode: 'af' },
+    ];
+    expect(isStepReachable(7, talk, runs)).toBe(true);
+  });
+
+  it('returns false when one target language is still Running (not yet resolved)', () => {
+    const talk = makeTalk({ targetLanguageCodes: '["fr","af"]' });
+    const runs: ValidationRunSummary[] = [
+      makeCompletedRun(false),
+      { ...makeCompletedRun(false), id: 'run-2', languageCode: 'af', status: 'Running' },
+    ];
+    expect(isStepReachable(7, talk, runs)).toBe(false);
+  });
+
+  it('treats a Failed run as resolved (not a permanent dead-end)', () => {
+    const talk = makeTalk({ targetLanguageCodes: '["fr","af"]' });
+    const runs: ValidationRunSummary[] = [
+      makeCompletedRun(false),
+      { ...makeCompletedRun(false), id: 'run-2', languageCode: 'af', status: 'Failed' },
+    ];
+    expect(isStepReachable(7, talk, runs)).toBe(true);
+  });
+
+  it('returns false when a non-Pass section on one language is still pending review, even if another language is fully resolved', () => {
+    const talk = makeTalk({ targetLanguageCodes: '["fr","af"]' });
+    const runs: ValidationRunSummary[] = [
+      makeCompletedRun(false),
+      { ...makeCompletedRun(true), id: 'run-2', languageCode: 'af' },
+    ];
+    expect(isStepReachable(7, talk, runs)).toBe(false);
+  });
 });

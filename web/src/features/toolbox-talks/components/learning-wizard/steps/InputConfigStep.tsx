@@ -734,6 +734,7 @@ export function InputConfigStep() {
                       selectedValues={field.value}
                       onValuesChange={(values) => field.onChange(values)}
                       placeholder={languagesLoading ? 'Loading languages…' : 'Select target languages'}
+                      ariaLabel="Target languages"
                     />
                   </FormControl>
                   <p className="text-xs text-muted-foreground">
