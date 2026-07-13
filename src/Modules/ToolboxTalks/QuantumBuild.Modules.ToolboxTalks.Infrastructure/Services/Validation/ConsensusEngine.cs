@@ -61,11 +61,30 @@ public class ConsensusEngine : IConsensusEngine
         // ── Round 1: Claude Haiku (A) + DeepL (B) ──
         result.RoundsUsed = 1;
 
-        var resultA = await _claudeHaiku.BackTranslateAsync(
-            translatedText, sourceLanguage, targetLanguage, cancellationToken,
-            tenantId: tenantId, toolboxTalkId: toolboxTalkId);
-        var resultB = await _deepL.BackTranslateAsync(
-            translatedText, sourceLanguage, targetLanguage, cancellationToken);
+        BackTranslationResult? resultA;
+        BackTranslationResult? resultB;
+
+        if (string.Equals(_settings.ProcessingMode, "Parallel", StringComparison.OrdinalIgnoreCase))
+        {
+            var taskA = _claudeHaiku.BackTranslateAsync(
+                translatedText, sourceLanguage, targetLanguage, cancellationToken,
+                tenantId: tenantId, toolboxTalkId: toolboxTalkId);
+            var taskB = _deepL.BackTranslateAsync(
+                translatedText, sourceLanguage, targetLanguage, cancellationToken);
+
+            await Task.WhenAll(taskA, taskB);
+
+            resultA = taskA.Result;
+            resultB = taskB.Result;
+        }
+        else
+        {
+            resultA = await _claudeHaiku.BackTranslateAsync(
+                translatedText, sourceLanguage, targetLanguage, cancellationToken,
+                tenantId: tenantId, toolboxTalkId: toolboxTalkId);
+            resultB = await _deepL.BackTranslateAsync(
+                translatedText, sourceLanguage, targetLanguage, cancellationToken);
+        }
 
         ApplyBackTranslation(result, 'A', resultA, originalText);
         ApplyBackTranslation(result, 'B', resultB, originalText);
