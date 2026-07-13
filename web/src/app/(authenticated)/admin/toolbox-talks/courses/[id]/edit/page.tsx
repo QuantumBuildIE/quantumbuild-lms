@@ -4,12 +4,15 @@ import { use } from 'react';
 import { CourseForm } from '@/features/toolbox-talks/components/CourseForm';
 import { ValidationHistoryTab } from '@/features/toolbox-talks/components/ValidationHistoryTab';
 import { useToolboxTalkCourse } from '@/lib/api/toolbox-talks/use-courses';
+import { useCourseValidationRuns } from '@/lib/api/toolbox-talks/use-content-creation';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export default function EditCoursePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { data: course, isLoading, error } = useToolboxTalkCourse(id);
+  const { data: validationRuns, isLoading: isValidationLoading } = useCourseValidationRuns(id);
+  const hasValidationRuns = !isValidationLoading && !!validationRuns && validationRuns.length > 0;
 
   if (isLoading) {
     return (
@@ -45,19 +48,21 @@ export default function EditCoursePage({ params }: { params: Promise<{ id: strin
     <Tabs defaultValue="details">
       <TabsList>
         <TabsTrigger value="details">Details</TabsTrigger>
-        <TabsTrigger value="validation">Validation</TabsTrigger>
+        {hasValidationRuns && <TabsTrigger value="validation">Validation</TabsTrigger>}
       </TabsList>
 
       <TabsContent value="details" className="mt-4">
         <CourseForm course={course} />
       </TabsContent>
 
-      <TabsContent value="validation" className="mt-4">
-        <ValidationHistoryTab
-          courseId={id}
-          basePath="/admin/toolbox-talks/courses"
-        />
-      </TabsContent>
+      {hasValidationRuns && (
+        <TabsContent value="validation" className="mt-4">
+          <ValidationHistoryTab
+            courseId={id}
+            basePath="/admin/toolbox-talks/courses"
+          />
+        </TabsContent>
+      )}
     </Tabs>
   );
 }
