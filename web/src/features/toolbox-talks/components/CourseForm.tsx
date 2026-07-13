@@ -34,6 +34,7 @@ import {
   UsersIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
@@ -390,258 +391,270 @@ export function CourseForm({ course }: CourseFormProps) {
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
           {/* Course Details */}
-          <div className="space-y-4 rounded-lg border p-6">
-            <h2 className="text-lg font-medium">Course Details</h2>
+          <Card>
+            <CardHeader>
+              <CardTitle>Course Details</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <FormField
+                control={form.control}
+                name="title"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Title</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. Construction Safety Fundamentals" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-            <FormField
-              control={form.control}
-              name="title"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Title</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g. Construction Safety Fundamentals" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Describe the purpose and contents of this course..."
-                      rows={3}
-                      {...field}
-                      value={field.value ?? ''}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Describe the purpose and contents of this course..."
+                        rows={3}
+                        {...field}
+                        value={field.value ?? ''}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
 
           {/* Course Settings */}
-          <div className="space-y-4 rounded-lg border p-6">
-            <h2 className="text-lg font-medium">Settings</h2>
-
-            <FormField
-              control={form.control}
-              name="isActive"
-              render={({ field }) => (
-                <FormItem className="flex items-center justify-between rounded-lg border p-3">
-                  <div className="space-y-0.5">
-                    <FormLabel>Active</FormLabel>
-                    <FormDescription>
-                      Active courses can be assigned to employees.
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch checked={field.value} onCheckedChange={field.onChange} />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="requireSequentialCompletion"
-              render={({ field }) => (
-                <FormItem className="flex items-center justify-between rounded-lg border p-3">
-                  <div className="space-y-0.5">
-                    <FormLabel>Sequential Completion</FormLabel>
-                    <FormDescription>
-                      Employees must complete talks in order. They cannot skip ahead.
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch checked={field.value} onCheckedChange={field.onChange} />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="generateCertificate"
-              render={({ field }) => (
-                <FormItem className="flex items-center justify-between rounded-lg border p-3">
-                  <div className="space-y-0.5">
-                    <FormLabel>Generate Certificate</FormLabel>
-                    <FormDescription>
-                      Issue a completion certificate when an employee finishes all talks.
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch checked={field.value} onCheckedChange={field.onChange} />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="requiresRefresher"
-              render={({ field }) => (
-                <FormItem className="flex items-center justify-between rounded-lg border p-3">
-                  <div className="space-y-0.5">
-                    <FormLabel>Requires Refresher</FormLabel>
-                    <FormDescription>
-                      Employees must retake this course after a set period.
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch checked={field.value} onCheckedChange={field.onChange} />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-
-            {requiresRefresher && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Settings</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
               <FormField
                 control={form.control}
-                name="refresherIntervalMonths"
+                name="isActive"
                 render={({ field }) => (
-                  <FormItem className="ml-4">
-                    <FormLabel>Refresher Interval (months)</FormLabel>
+                  <FormItem className="flex items-center justify-between rounded-lg border p-3">
+                    <div className="space-y-0.5">
+                      <FormLabel>Active</FormLabel>
+                      <FormDescription>
+                        Active courses can be assigned to employees.
+                      </FormDescription>
+                    </div>
                     <FormControl>
-                      <Input
-                        type="number"
-                        min={1}
-                        max={120}
-                        className="w-32"
-                        {...field}
-                        onChange={(e) => field.onChange(Number(e.target.value))}
-                      />
+                      <Switch checked={field.value} onCheckedChange={field.onChange} />
                     </FormControl>
-                    <FormDescription>
-                      How many months before the course must be retaken.
-                    </FormDescription>
-                    <FormMessage />
                   </FormItem>
                 )}
               />
-            )}
 
-            <FormField
-              control={form.control}
-              name="autoAssignToNewEmployees"
-              render={({ field }) => (
-                <FormItem className="flex items-center justify-between rounded-lg border p-3">
-                  <div className="space-y-0.5">
-                    <FormLabel>Auto-Assign to New Employees</FormLabel>
-                    <FormDescription>
-                      Automatically assign this course when a new employee is created.
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch checked={field.value} onCheckedChange={field.onChange} />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-
-            {autoAssignToNewEmployees && (
               <FormField
                 control={form.control}
-                name="autoAssignDueDays"
+                name="requireSequentialCompletion"
                 render={({ field }) => (
-                  <FormItem className="ml-4">
-                    <FormLabel>Due Days</FormLabel>
+                  <FormItem className="flex items-center justify-between rounded-lg border p-3">
+                    <div className="space-y-0.5">
+                      <FormLabel>Sequential Completion</FormLabel>
+                      <FormDescription>
+                        Employees must complete talks in order. They cannot skip ahead.
+                      </FormDescription>
+                    </div>
                     <FormControl>
-                      <Input
-                        type="number"
-                        min={1}
-                        max={365}
-                        className="w-32"
-                        {...field}
-                        onChange={(e) => field.onChange(Number(e.target.value))}
-                      />
+                      <Switch checked={field.value} onCheckedChange={field.onChange} />
                     </FormControl>
-                    <FormDescription>
-                      Number of days after employee start date for the course to be due.
-                    </FormDescription>
-                    <FormMessage />
                   </FormItem>
                 )}
               />
-            )}
-          </div>
+
+              <FormField
+                control={form.control}
+                name="generateCertificate"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between rounded-lg border p-3">
+                    <div className="space-y-0.5">
+                      <FormLabel>Generate Certificate</FormLabel>
+                      <FormDescription>
+                        Issue a completion certificate when an employee finishes all talks.
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch checked={field.value} onCheckedChange={field.onChange} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="requiresRefresher"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between rounded-lg border p-3">
+                    <div className="space-y-0.5">
+                      <FormLabel>Requires Refresher</FormLabel>
+                      <FormDescription>
+                        Employees must retake this course after a set period.
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch checked={field.value} onCheckedChange={field.onChange} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              {requiresRefresher && (
+                <FormField
+                  control={form.control}
+                  name="refresherIntervalMonths"
+                  render={({ field }) => (
+                    <FormItem className="ml-4">
+                      <FormLabel>Refresher Interval (months)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={120}
+                          className="w-32"
+                          {...field}
+                          onChange={(e) => field.onChange(Number(e.target.value))}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        How many months before the course must be retaken.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              <FormField
+                control={form.control}
+                name="autoAssignToNewEmployees"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between rounded-lg border p-3">
+                    <div className="space-y-0.5">
+                      <FormLabel>Auto-Assign to New Employees</FormLabel>
+                      <FormDescription>
+                        Automatically assign this course when a new employee is created.
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch checked={field.value} onCheckedChange={field.onChange} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              {autoAssignToNewEmployees && (
+                <FormField
+                  control={form.control}
+                  name="autoAssignDueDays"
+                  render={({ field }) => (
+                    <FormItem className="ml-4">
+                      <FormLabel>Due Days</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={365}
+                          className="w-32"
+                          {...field}
+                          onChange={(e) => field.onChange(Number(e.target.value))}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Number of days after employee start date for the course to be due.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+            </CardContent>
+          </Card>
 
           {/* Course Talks */}
-          <div className="space-y-4 rounded-lg border p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-medium">Learnings</h2>
-                <p className="text-sm text-muted-foreground">
-                  {courseItems.length === 0
-                    ? 'Add learnings to this course.'
-                    : `${courseItems.length} learning${courseItems.length !== 1 ? 's' : ''} in this course. Drag to reorder.`}
-                </p>
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Learnings</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    {courseItems.length === 0
+                      ? 'Add learnings to this course.'
+                      : `${courseItems.length} learning${courseItems.length !== 1 ? 's' : ''} in this course. Drag to reorder.`}
+                  </p>
+                </div>
+                <Button type="button" variant="outline" onClick={() => setAddTalksOpen(true)}>
+                  <PlusIcon className="mr-2 h-4 w-4" />
+                  Add Learnings
+                </Button>
               </div>
-              <Button type="button" variant="outline" onClick={() => setAddTalksOpen(true)}>
-                <PlusIcon className="mr-2 h-4 w-4" />
-                Add Learnings
-              </Button>
-            </div>
-
-            {courseItems.length > 0 ? (
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                modifiers={[restrictToVerticalAxis]}
-                onDragEnd={handleDragEnd}
-              >
-                <SortableContext
-                  items={courseItems.map((i) => i.toolboxTalkId)}
-                  strategy={verticalListSortingStrategy}
+            </CardHeader>
+            <CardContent>
+              {courseItems.length > 0 ? (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  modifiers={[restrictToVerticalAxis]}
+                  onDragEnd={handleDragEnd}
                 >
-                  <div className="space-y-2">
-                    {courseItems.map((item, index) => (
-                      <SortableItem
-                        key={item.toolboxTalkId}
-                        item={item}
-                        index={index}
-                        onToggleRequired={handleToggleRequired}
-                        onRemove={handleRemoveItem}
-                      />
-                    ))}
-                  </div>
-                </SortableContext>
-              </DndContext>
-            ) : (
-              <div className="rounded-md border border-dashed p-8 text-center">
-                <p className="text-sm text-muted-foreground">
-                  No talks added yet. Click &quot;Add Learnings&quot; to select learnings for this course.
-                </p>
-              </div>
-            )}
-          </div>
+                  <SortableContext
+                    items={courseItems.map((i) => i.toolboxTalkId)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="space-y-2">
+                      {courseItems.map((item, index) => (
+                        <SortableItem
+                          key={item.toolboxTalkId}
+                          item={item}
+                          index={index}
+                          onToggleRequired={handleToggleRequired}
+                          onRemove={handleRemoveItem}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              ) : (
+                <div className="rounded-md border border-dashed p-8 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    No talks added yet. Click &quot;Add Learnings&quot; to select learnings for this course.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Course Assignments (only when editing) */}
           {isEditing && course && (
-            <div className="space-y-4 rounded-lg border p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-lg font-medium">Assignments</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Manage employee assignments for this course.
-                  </p>
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Assignments</CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      Manage employee assignments for this course.
+                    </p>
+                  </div>
+                  <Button type="button" variant="outline" onClick={() => setAssignDialogOpen(true)}>
+                    <UsersIcon className="mr-2 h-4 w-4" />
+                    Assign Employees
+                  </Button>
                 </div>
-                <Button type="button" variant="outline" onClick={() => setAssignDialogOpen(true)}>
-                  <UsersIcon className="mr-2 h-4 w-4" />
-                  Assign Employees
-                </Button>
-              </div>
-
-              <CourseAssignmentsList courseId={course.id} />
-            </div>
+              </CardHeader>
+              <CardContent>
+                <CourseAssignmentsList courseId={course.id} />
+              </CardContent>
+            </Card>
           )}
 
           {/* Form Actions */}
