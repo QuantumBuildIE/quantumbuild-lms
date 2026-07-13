@@ -239,22 +239,48 @@ test.describe('Learning wizard — PDF happy path', () => {
       // Sector — NOT required by validation (inputConfigSchema.ts's
       // `sectorKey: z.string().optional()`, no superRefine rule; backend
       // InitialiseToolboxTalkCommandValidator has no rule for it either).
-      // Rendered state depends on tenant sector count: 0 -> optional Select
-      // + alert (FormLabel text "Sector (optional)"), 1 -> static
-      // auto-selected card with NO FormItem/label at all (no combobox can
-      // ever exist in this state), >1 -> required Select (FormLabel text
-      // "Sector *"). The label always *starts* with "Sector" but the
-      // trailing suffix differs, so match a leading substring rather than
-      // the full label text — an exact match would fail both real cases.
-      step('Checking for an interactive Sector selector');
+      // Rendered state depends on tenant sector count (InputConfigStep.tsx's
+      // `sectorField` IIFE, ~line 369):
+      //   0 sectors  -> Alert ("No sectors configured for this tenant...") +
+      //                 an OPTIONAL shadcn/Radix Select (FormLabel "Sector
+      //                 (optional)"), options sourced from useAvailableSectors()
+      //   1 sector   -> static auto-selected card, no FormItem/label/combobox
+      //                 at all
+      //   >1 sectors -> a REQUIRED shadcn/Radix Select (FormLabel "Sector *"),
+      //                 options sourced from useTenantSectors()
+      // Read against source directly (not inferred from an earlier failure
+      // screenshot): all three branches share the exact same
+      // Select/SelectTrigger/SelectContent stack from components/ui/select.tsx
+      // (a thin wrapper over @radix-ui/react-select) — there is no native
+      // <select> anywhere in this file. SelectTrigger always renders a real
+      // <button role="combobox" aria-expanded="...">, so the container-scoped
+      // combobox pattern below is correct for BOTH interactive branches
+      // without a separate code path. The label always *starts* with
+      // "Sector" but the trailing suffix differs, so match a leading
+      // substring rather than the full label text — an exact match would
+      // fail both real cases.
+      step('Checking Sector selector state');
+      const sectorAlert = page.getByText(/No sectors configured for this tenant/i);
+      const isZeroSectorState = (await sectorAlert.count()) > 0;
       const sectorGroup = groupByLabel(/^Sector\b/);
       const sectorTrigger = sectorGroup.getByRole('combobox');
-      if ((await sectorTrigger.count()) > 0) {
+      const sectorTriggerCount = await sectorTrigger.count();
+
+      if (isZeroSectorState) {
+        ok('Sector branch observed: zero-sector (Alert + optional Select, options from allSectors)');
+      } else if (sectorTriggerCount > 0) {
+        ok('Sector branch observed: many-sector (required Select, options from tenantSectors)');
+      } else {
+        ok('Sector branch observed: one-sector (static auto-selected card, no interactive control)');
+      }
+
+      if (sectorTriggerCount > 0) {
         await sectorTrigger.click();
         await expect(sectorTrigger).toHaveAttribute('aria-expanded', 'true');
-        // Defensive: honestly distinguish "has options" from "has none",
-        // rather than the old code's "combobox interactive vs not" check
-        // (which never actually reached this branch — see comment above).
+        // Defensive: honestly distinguish "has options" from "has none" —
+        // relevant mainly to the zero-sector branch, whose options come from
+        // a separate query (useAvailableSectors()) that could still be
+        // loading or return an empty list.
         const optionCount = await page.getByRole('option').count();
         if (optionCount > 0) {
           await page.getByRole('option').first().click();
