@@ -15,6 +15,7 @@ import {
   contentCreationKeys,
 } from '@/lib/api/toolbox-talks/use-content-creation';
 import { useInitiateExternalReview } from '@/lib/api/toolbox-talks/use-toolbox-talks';
+import { useValidationHub } from '@/features/toolbox-talks/hooks/use-validation-hub';
 import { ValidationProgressPanel } from '@/features/toolbox-talks/components/create-wizard/steps/validate/ValidationProgressPanel';
 import { ValidationSectionCard } from '@/features/toolbox-talks/components/create-wizard/steps/validate/ValidationSectionCard';
 import { SendExternalReviewDialog } from '../../SendExternalReviewDialog';
@@ -61,6 +62,11 @@ export function ValidateStep({ talkId }: ValidateStepProps) {
   const activeLangCode = languages[activeIndex] ?? null;
   const activeRun = activeLangCode ? (latestRunByCode[activeLangCode] ?? null) : null;
   const activeRunId = activeRun?.id ?? null;
+
+  // Live SignalR progress for the active language's run — feeds ValidationProgressPanel.
+  // Mirrors create-wizard/TranslateStep.tsx's direct useValidationHub usage; only one
+  // run is ever displayed at a time here, so no cross-run aggregation is needed.
+  const hub = useValidationHub(activeRunId);
 
   // Edit/Retry enqueue a background re-validation job (Accept is synchronous and
   // never sets this). Poll the run until the job has genuinely started and finished —
@@ -191,6 +197,14 @@ export function ValidateStep({ talkId }: ValidateStepProps) {
     };
   }, [mergedSections]);
 
+  // Real percentComplete: prefer the SignalR-pushed value while a run is active,
+  // fall back to the REST-derived section ratio once the hub has nothing to report
+  // (no active run, or connection not yet established).
+  const percentComplete = hub.isComplete
+    ? 100
+    : hub.progress?.percentComplete ??
+      (stats.totalSections > 0 ? (stats.sectionsComplete / stats.totalSections) * 100 : 0);
+
   const activeWorkflowState = (workflowStates ?? []).find((s) => s.languageCode === activeLangCode) ?? null;
   const canSendForReview =
     activeWorkflowState?.state === 'Validated' || activeWorkflowState?.state === 'ReviewerAccepted';
@@ -300,15 +314,15 @@ export function ValidateStep({ talkId }: ValidateStepProps) {
             {/* Aggregate progress panel for the active language */}
             <ValidationProgressPanel
               overallScore={runDetail?.overallScore ?? stats.overallScore}
-              percentComplete={100}
+              percentComplete={percentComplete}
               sectionsComplete={stats.sectionsComplete}
               totalSections={stats.totalSections}
               statusCounts={stats.statusCounts}
               safetyVerdict={safetyVerdict}
               sourceDialect={sourceDialect}
-              progressMessage=""
+              progressMessage={hub.progress?.message ?? ''}
               passThreshold={passThreshold}
-              isConnected={false}
+              isConnected={hub.isConnected}
             />
 
             {/* Send for external review — available when language is Validated or ReviewerAccepted */}
