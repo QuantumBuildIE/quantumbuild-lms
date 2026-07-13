@@ -2549,4 +2549,51 @@ Related but distinct: post-hoc behavioural signal (completion rates,
 time-on-page) could inform "this learning is too long" observations
 for existing content. Different feature; also deferred.
 
+---
+
+#### §32 — Centralise IAiUsageLogger as HTTP middleware
+
+- **Priority:** P3
+- **Origin:** `[Engineering]` `[Session 2026-07-17]`
+- **Status:** Deferred — mechanism requires design decision
+
+11 Claude-calling services currently invoke `IAiUsageLogger.LogAsync`
+manually inside their methods after `SendAsync` returns. This means:
+
+- Any new Claude-calling service needs to remember to call the logger
+  (easy to forget silently)
+- Any change to logging shape requires editing 11 files
+- The logger call sits in service business logic where it's a
+  cross-cutting concern
+
+**Fix direction: NOT obvious.** The natural instinct is a
+`DelegatingHandler` attached to Claude HttpClient registrations. But
+`DelegatingHandler` runs BELOW Polly policies in the pipeline
+(`HttpClient` → Polly → DelegatingHandler → wire). Under the
+`GetClaudePolicy` retry policy, a single logical Claude call that
+gets retried 3 times would fire the logger 3 times — recording 3
+usage entries for what is one logical call. Almost certainly wrong.
+
+**Two viable mechanisms to consider before implementing:**
+
+1. **Polly `onResult` callback.** Polly policies can hook into the
+   final result after all retries complete. Attaching logging as a
+   policy hook rather than a middleware step means one entry per
+   logical call.
+2. **DelegatingHandler with retry detection.** The handler could
+   inspect response state to determine whether it's a retry attempt
+   and log only on the terminal attempt. Messier — the handler
+   doesn't naturally know about retry state without a shared
+   context object.
+
+**Recommended next step when picking this up:** small recon to
+establish which mechanism fits the codebase's existing patterns
+better, then implementation chunk. Not urgent enough to schedule
+soon.
+
+**Related:** Chunk B (provider concurrency Bulkheads) uses Polly
+policies, so option 1 (Polly `onResult`) may fit naturally alongside
+the existing policy chain in `ResiliencePolicies.cs`. If option 1
+proves clean, this refactor is genuinely small.
+
 _End of BACKLOG.md._
