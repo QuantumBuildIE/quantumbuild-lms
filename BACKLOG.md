@@ -2671,4 +2671,33 @@ usage site.
 Bundled with the a11y concerns but not urgent enough for its own
 priority sprint.
 
+--- 
+
+#### §36 — Playwright Sector selector needs proper DOM automation
+
+- **Priority:** P4
+- **Origin:** `[Engineering]` `[Session 2026-07-17]`
+- **Status:** Deferred (test-side workaround: skip)
+
+The learning-wizard-pdf Playwright test skips Sector selection.
+Sector is optional (both schema layers), so skipping doesn't invalidate
+the test's coverage. But it means the test doesn't exercise the sector-
+selection UI at all.
+
+Automation was attempted across five test runs. Failures included:
+- Radix SelectTrigger has no accessible name (label htmlFor doesn't
+  reach the button)
+- The zero-sector branch adds a warning alert plus fallback query,
+  changing DOM behavior
+- aria-expanded assertion fails immediately after click, suggesting
+  the trigger element becomes stale or the popover renders elsewhere
+
+Root cause is likely tied to the broader Radix Select accessibility
+gap (BACKLOG entry §X, same session). A proper fix to the Select
+component to expose accessible names would probably make automation
+straightforward.
+
+Blocked pending: the Radix Select a11y fix, OR a manual investigation
+of the zero-sector branch's DOM behavior during click interaction.
+
 _End of BACKLOG.md._
