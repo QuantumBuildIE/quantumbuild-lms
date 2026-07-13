@@ -80,8 +80,15 @@ test.describe('Learning wizard — PDF happy path', () => {
     await test.step('Step 1 — Input & Config', async () => {
       await page.getByRole('textbox', { name: 'Title' }).fill(title);
 
-      // Pdf input mode is labelled "Document" in the UI.
-      await page.getByRole('button', { name: 'Document' }).click();
+      // Pdf input mode is labelled "Document" in the UI. Its accessible name is
+      // the button's label + description text concatenated ("Document Upload a
+      // PDF document" — see INPUT_MODE_OPTIONS in InputConfigStep.tsx), and
+      // Playwright's default name match is substring-based, so a bare
+      // { name: 'Document' } also matches the Docx mode button ("Word Document
+      // Upload a Word document (.docx)") since "Document" is a substring of
+      // "Word Document...". Anchor to the start of the name so only the Pdf
+      // mode button (whose name *starts* with "Document") matches.
+      await page.getByRole('button', { name: /^Document\b/ }).click();
 
       const fixturePath = path.join(
         __dirname,

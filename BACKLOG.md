@@ -2596,4 +2596,33 @@ policies, so option 1 (Polly `onResult`) may fit naturally alongside
 the existing policy chain in `ResiliencePolicies.cs`. If option 1
 proves clean, this refactor is genuinely small.
 
+---
+
+#### §33 — LLM model retirement monitoring
+
+- **Priority:** P3
+- **Origin:** `[Engineering]` `[Session 2026-07-17]`
+- **Status:** Open
+
+The 2026-06-15 incident (BACKLOG §5.28) surfaced a class of risk:
+provider retiring an LLM model that we depend on. The June fix
+was structural (defaults removed, config validation fails fast on
+missing values), which prevents silent fallback to retired models
+but doesn't prevent surprise — we still discover retirements only
+when config validation fails at startup or an API call errors.
+
+Fix direction: some mechanism to proactively know about upcoming
+retirements. Options:
+- Subscribe to Anthropic/DeepL/Gemini deprecation notices
+  (typically via their API docs mailing lists)
+- Periodic automated check of provider documentation for retirement
+  announcements
+- Manual quarterly review of active model versions against provider
+  status pages
+
+Not urgent — the fail-fast validation ensures we don't ship broken
+config to production. But being reactive to retirement means
+scrambling to update before the deadline. Proactive monitoring means
+scheduled work instead of emergency patches.
+
 _End of BACKLOG.md._
