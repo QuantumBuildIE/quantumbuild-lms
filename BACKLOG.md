@@ -2625,4 +2625,50 @@ config to production. But being reactive to retirement means
 scrambling to update before the deadline. Proactive monitoring means
 scheduled work instead of emergency patches.
 
+---
+
+#### §34 — PDF upload path has no timeout
+
+- **Priority:** P2
+- **Origin:** `[Engineering]` `[Session 2026-07-17]`
+- **Status:** Open
+
+useUploadSourceFile.ts's axios.put to R2 has no timeout configured.
+If R2 network access stalls (transient outage, slow region routing,
+DNS issue), admins clicking Continue on Step 1 of the new wizard
+experience an indefinite hang with no UI feedback. Same problem
+would affect any other consumer of this hook.
+
+Fix direction: configure a reasonable timeout on the axios call
+(30-60 seconds), surface network failures via toast or inline
+error, allow retry.
+
+Discovered via Playwright test hang investigation — the test
+absorbed a 15-minute budget silently because both the upload and
+the subsequent /initialise wait had no timeouts.
+
+---
+
+#### §35 — Radix Select components need explicit aria-labels
+
+- **Priority:** P3 (a11y hygiene)
+- **Origin:** `[Engineering]` `[Session 2026-07-17]`
+- **Status:** Open
+
+Multiple Select components in the codebase (Sector, Audit Purpose,
+and previously MultiSelectCombobox before it got its ariaLabel prop)
+suffer the same accessible-name gap: FormControl's htmlFor id
+attaches to the Radix Select.Root, which doesn't forward props to
+the actual clickable Select.Trigger button. Screen readers announce
+the trigger with no accessible name.
+
+Fix direction: audit all Select usages in the codebase, add explicit
+aria-label to each Select.Trigger. Same pattern as the
+MultiSelectCombobox fix from earlier in the session — add an
+ariaLabel prop, pass through to the trigger, populate at each
+usage site.
+
+Bundled with the a11y concerns but not urgent enough for its own
+priority sprint.
+
 _End of BACKLOG.md._

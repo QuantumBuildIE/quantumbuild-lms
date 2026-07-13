@@ -216,42 +216,68 @@ test.describe('Learning wizard — PDF happy path', () => {
       await page.keyboard.press('Escape'); // close the popover
       ok('Target language selected');
 
+      // Sector and Audit Purpose share a defect: Radix's
+      // <button role="combobox"> SelectTrigger has no accessible name
+      // (InputConfigStep.tsx — FormControl's id/aria-describedby target the
+      // non-DOM Radix Select.Root and never reach the trigger button; same
+      // gap already documented for MultiSelectCombobox in the recon doc).
+      // A name-based getByRole('combobox', { name: ... }) query therefore
+      // always resolves to zero elements — for Sector this silently
+      // misidentified a real interactive selector as "already auto-selected"
+      // every run, and for Audit Purpose (no such fallback branch) it hung
+      // the whole test waiting for a locator that could never appear. Scope
+      // by the surrounding form-item container instead of the trigger's own
+      // (nonexistent) accessible name. Confirmed against
+      // InputConfigStep.tsx: no other field's FormLabel text starts with
+      // "Sector" or equals "Audit purpose", so the container match is
+      // unambiguous.
+      const groupByLabel = (labelPattern: string | RegExp) =>
+        page.locator('div[data-slot="form-item"]', {
+          has: page.getByText(labelPattern),
+        });
+
       // Sector — NOT required by validation (inputConfigSchema.ts's
       // `sectorKey: z.string().optional()`, no superRefine rule; backend
       // InitialiseToolboxTalkCommandValidator has no rule for it either).
-      // The manual-run doc confirms this empirically: "Sector is optional in
-      // inputConfigSchema.ts, so this didn't block anything" even when the
-      // tenant had zero sectors configured. Filled here anyway for realism —
-      // a real admin would pick one — but this is defensive, not a fix for a
-      // confirmed blocker. Its rendered state depends on tenant sector count
-      // (0 -> optional Select + alert, 1 -> static auto-selected card with NO
-      // interactive control, >1 -> Select, possibly pre-filled with a tenant
-      // default). The unselected placeholder text "Select a sector" is the
-      // only accessible name available (SelectTrigger has no aria-label, and
-      // FormControl's id/aria-describedby land on the non-DOM Radix
-      // Select.Root and never reach the actual trigger button — same
-      // accessible-name gap already documented for MultiSelectCombobox in
-      // the recon doc). If no such combobox is found, the field is either
-      // already auto-selected (1 sector, or a tenant default among >1) or
-      // this is the single-sector static-card state — either way there is
-      // nothing to click.
+      // Rendered state depends on tenant sector count: 0 -> optional Select
+      // + alert (FormLabel text "Sector (optional)"), 1 -> static
+      // auto-selected card with NO FormItem/label at all (no combobox can
+      // ever exist in this state), >1 -> required Select (FormLabel text
+      // "Sector *"). The label always *starts* with "Sector" but the
+      // trailing suffix differs, so match a leading substring rather than
+      // the full label text — an exact match would fail both real cases.
       step('Checking for an interactive Sector selector');
-      const sectorTrigger = page.getByRole('combobox', { name: /select a sector/i });
+      const sectorGroup = groupByLabel(/^Sector\b/);
+      const sectorTrigger = sectorGroup.getByRole('combobox');
       if ((await sectorTrigger.count()) > 0) {
         await sectorTrigger.click();
-        await page.getByRole('option').first().click();
-        ok('Sector selected');
+        await expect(sectorTrigger).toHaveAttribute('aria-expanded', 'true');
+        // Defensive: honestly distinguish "has options" from "has none",
+        // rather than the old code's "combobox interactive vs not" check
+        // (which never actually reached this branch — see comment above).
+        const optionCount = await page.getByRole('option').count();
+        if (optionCount > 0) {
+          await page.getByRole('option').first().click();
+          ok('Sector selected');
+        } else {
+          await page.keyboard.press('Escape');
+          ok('Sector dropdown opened but has no options — skipped');
+        }
       } else {
-        ok('Sector already auto-selected or not interactive for this tenant — skipped');
+        ok('Sector auto-selected (single tenant sector, no interactive control) — skipped');
       }
 
       // Audit purpose — also NOT required by validation (same schema file,
-      // `auditPurpose: z.string().max(500).optional()`). Filled for realism;
-      // always empty at form-init (no auto-populate effect), so this
-      // selector should always be present, unlike Sector.
+      // `auditPurpose: z.string().max(500).optional()`). Always rendered as
+      // a preset Select at form-init (no auto-populate effect, no
+      // alternate/static state like Sector), so the group and its combobox
+      // should always be present.
       step('Selecting Audit Purpose');
-      await page.getByRole('combobox', { name: /select purpose/i }).click();
-      await page.getByRole('option').first().click();
+      const auditGroup = groupByLabel('Audit purpose');
+      const auditTrigger = auditGroup.getByRole('combobox');
+      await auditTrigger.click();
+      await expect(auditTrigger).toHaveAttribute('aria-expanded', 'true');
+      await page.getByRole('option', { name: 'Regulatory Compliance' }).click();
       ok('Audit Purpose selected');
 
       // Reviewer Name / Role are pre-populated from the JWT user profile
