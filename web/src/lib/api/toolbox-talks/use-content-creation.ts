@@ -336,17 +336,23 @@ export function useCourseValidationRun(
 }
 
 /**
- * Fetch validation run details
+ * Fetch validation run details.
+ *
+ * Pass `refetchInterval` when the caller needs to observe a background
+ * re-validation job (triggered by an edit/retry) reach a terminal status —
+ * defaults to no polling so existing read-only consumers are unaffected.
  */
 export function useValidationRun(
   talkId: string | null,
-  runId: string | null
+  runId: string | null,
+  options?: { refetchInterval?: number | false }
 ) {
   return useQuery({
     queryKey: contentCreationKeys.validationRun(talkId ?? '', runId ?? ''),
     queryFn: () => getValidationRun(talkId!, runId!),
     enabled: !!talkId && !!runId,
     staleTime: 10 * 1000,
+    refetchInterval: options?.refetchInterval ?? false,
   });
 }
 

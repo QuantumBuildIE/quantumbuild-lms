@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Languages, Send } from 'lucide-react';
 import { toast } from 'sonner';
@@ -62,7 +62,41 @@ export function ValidateStep({ talkId }: ValidateStepProps) {
   const activeRun = activeLangCode ? (latestRunByCode[activeLangCode] ?? null) : null;
   const activeRunId = activeRun?.id ?? null;
 
-  const { data: runDetail, refetch: refetchRun } = useValidationRun(talkId, activeRunId);
+  // Edit/Retry enqueue a background re-validation job (Accept is synchronous and
+  // never sets this). Poll the run until the job has genuinely started and finished —
+  // `hasSeenRunning` guards against the run's status still reading 'Completed' from
+  // the *previous* job in the brief window before the new one is picked up.
+  const [revalidating, setRevalidating] = useState<{
+    sectionIndex: number;
+    hasSeenRunning: boolean;
+  } | null>(null);
+
+  const { data: runDetail, refetch: refetchRun } = useValidationRun(talkId, activeRunId, {
+    refetchInterval: revalidating ? 2000 : false,
+  });
+
+  // A run switch invalidates any in-flight tracking for the previous run
+  useEffect(() => {
+    setRevalidating(null);
+  }, [activeRunId]);
+
+  useEffect(() => {
+    if (!revalidating) return;
+    if (runDetail?.status === 'Running') {
+      if (!revalidating.hasSeenRunning) {
+        setRevalidating((prev) => (prev ? { ...prev, hasSeenRunning: true } : prev));
+      }
+      return;
+    }
+    if (
+      revalidating.hasSeenRunning &&
+      (runDetail?.status === 'Completed' ||
+        runDetail?.status === 'Failed' ||
+        runDetail?.status === 'Cancelled')
+    ) {
+      setRevalidating(null);
+    }
+  }, [revalidating, runDetail?.status]);
 
   const sectionDecision = useSectionDecision();
   const initiateReviewMutation = useInitiateExternalReview();
@@ -88,7 +122,10 @@ export function ValidateStep({ talkId }: ValidateStepProps) {
             const label =
               action === 'accept' ? 'accepted' : action === 'edit' ? 'edited & re-validating' : 'retrying';
             toast.success(`Section ${sectionIndex + 1} ${label}`);
-            setTimeout(() => refetchRun(), 1500);
+            if (action === 'edit' || action === 'retry') {
+              setRevalidating({ sectionIndex, hasSeenRunning: false });
+            }
+            refetchRun();
           },
           onError: (error: unknown) => {
             const isConflict = error instanceof Error && error.message.includes('409');
@@ -304,8 +341,9 @@ export function ValidateStep({ talkId }: ValidateStepProps) {
                   sectionTitle={section.title}
                   result={section.result}
                   isRunning={
-                    activeRun.status === 'Running' || activeRun.status === 'Pending'
+                    runDetail?.status === 'Running' || runDetail?.status === 'Pending'
                   }
+                  isRevalidating={revalidating?.sectionIndex === section.index}
                   languageCode={activeLangCode ?? ''}
                   passThreshold={passThreshold}
                   onAccept={() => handleSectionAction(section.index, 'accept')}

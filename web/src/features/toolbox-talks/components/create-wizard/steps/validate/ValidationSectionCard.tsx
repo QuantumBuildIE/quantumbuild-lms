@@ -65,6 +65,8 @@ interface ValidationSectionCardProps {
   sectionTitle: string;
   result: SectionValidationResult | null;
   isRunning: boolean;
+  /** True while a background re-validation job for THIS section is in flight (Edit/Retry) */
+  isRevalidating?: boolean;
   languageCode: string;
   passThreshold: number;
   onAccept: () => void;
@@ -192,6 +194,7 @@ export function ValidationSectionCard({
   sectionTitle,
   result,
   isRunning,
+  isRevalidating = false,
   languageCode,
   passThreshold,
   onAccept,
@@ -288,8 +291,10 @@ export function ValidationSectionCard({
     setIsEditing(false);
   }
 
+  const isBusy = isDecisionPending || isRevalidating;
+
   const canSubmitEdit =
-    editTranslationText.trim() !== '' && editSourceText.trim() !== '' && !isDecisionPending;
+    editTranslationText.trim() !== '' && editSourceText.trim() !== '' && !isBusy;
 
   // ============================================
   // Render: Header (always visible)
@@ -377,12 +382,21 @@ export function ValidationSectionCard({
       )}
 
       {/* Outcome pill / status */}
-      {result ? (
+      {isRevalidating ? (
+        <Badge
+          role="status"
+          aria-live="polite"
+          className="shrink-0 animate-pulse bg-blue-100 text-blue-800"
+        >
+          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+          Revalidating…
+        </Badge>
+      ) : result ? (
         <Badge className={cn('shrink-0', outcomePillColor[result.outcome])}>
           {result.outcome}
         </Badge>
       ) : isRunning ? (
-        <Badge className="shrink-0 animate-pulse bg-blue-100 text-blue-800">
+        <Badge role="status" aria-live="polite" className="shrink-0 animate-pulse bg-blue-100 text-blue-800">
           <Loader2 className="mr-1 h-3 w-3 animate-spin" />
           Running
         </Badge>
@@ -486,7 +500,7 @@ export function ValidationSectionCard({
               onClick={submitEdit}
               disabled={!canSubmitEdit}
             >
-              {isDecisionPending ? (
+              {isBusy ? (
                 <Loader2 className="mr-1 h-3 w-3 animate-spin" />
               ) : (
                 <RefreshCw className="mr-1 h-3 w-3" />
@@ -648,7 +662,7 @@ export function ValidationSectionCard({
                   : ''
               }
               onClick={onAccept}
-              disabled={isDecisionPending}
+              disabled={isBusy}
             >
               <Check className="mr-1 h-3 w-3" />
               Accept
@@ -657,7 +671,7 @@ export function ValidationSectionCard({
               size="sm"
               variant="outline"
               onClick={startEdit}
-              disabled={isDecisionPending}
+              disabled={isBusy}
             >
               <Pencil className="mr-1 h-3 w-3" />
               Edit
@@ -666,9 +680,9 @@ export function ValidationSectionCard({
               size="sm"
               variant="outline"
               onClick={onRetry}
-              disabled={isDecisionPending}
+              disabled={isBusy}
             >
-              {isDecisionPending ? (
+              {isBusy ? (
                 <Loader2 className="mr-1 h-3 w-3 animate-spin" />
               ) : (
                 <RefreshCw className="mr-1 h-3 w-3" />
@@ -734,11 +748,13 @@ export function ValidationSectionCard({
     <div
       className={cn(
         'overflow-hidden rounded-lg border transition-colors',
-        result
-          ? outcomeColor[result.outcome]
-          : isRunning
-            ? 'border-blue-200 bg-blue-50/30'
-            : 'border-muted bg-muted/10'
+        isRevalidating
+          ? 'border-blue-200 bg-blue-50/30'
+          : result
+            ? outcomeColor[result.outcome]
+            : isRunning
+              ? 'border-blue-200 bg-blue-50/30'
+              : 'border-muted bg-muted/10'
       )}
     >
       {renderHeader()}

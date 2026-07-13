@@ -2506,4 +2506,47 @@ affected admins while we investigate. Deleting the legacy code
 removes that safety net. Once confidence-based triggers are met, the
 safety net is no longer worth the maintenance burden.
 
+---
+
+#### §31 — Learning-side "split into multiple learnings" suggestion
+
+- **Priority:** P4 (deferred, feedback-triggered)
+- **Origin:** `[Engineering]` `[Session 2026-07-17]`
+- **Status:** Deferred pending customer signal
+
+Idea: when an admin uploads content that parses into an unusually
+large number of sections, the new-learning wizard could suggest
+splitting the content into multiple learnings rather than creating
+one very long one. This lives on the learning-creation side, not
+course-creation — courses stay a separate deliberate composition
+action.
+
+Not being built now. Reasons:
+
+- No customer data confirms this is a real problem. Building the
+  suggestion mechanism speculatively adds friction to the common
+  case (admin uploaded what they intended) for the benefit of an
+  unconfirmed uncommon case.
+- Waiting for admin feedback gives us better design input than
+  guessing. If admins request it, the request itself tells us
+  what problem they're actually experiencing and what shape of
+  solution they'd want.
+
+If we do build it later:
+
+- Learning-side, not course-side. Detection lives where upload
+  happens.
+- Coherence-based (LLM-assessed), not length-based. Length is
+  arbitrary; coherence is the actual signal.
+- Suggested output is "split into N learnings," not "make this a
+  course." Course composition stays separate — admin can compose
+  the split learnings into a course afterwards if they want.
+- Framing: focus on the operator experience ("learnings this long
+  can be hard for operators to complete in one sitting") rather
+  than a system judgement about admin choices.
+
+Related but distinct: post-hoc behavioural signal (completion rates,
+time-on-page) could inform "this learning is too long" observations
+for existing content. Different feature; also deferred.
+
 _End of BACKLOG.md._
