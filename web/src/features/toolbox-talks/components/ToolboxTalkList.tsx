@@ -229,6 +229,25 @@ export function ToolboxTalkList({ onSchedule, basePath = '/admin/toolbox-talks' 
       },
     },
     {
+      key: 'validationFailStats',
+      header: 'Failures',
+      render: (item) => {
+        const stats = item.validationFailStats;
+        if (!stats || !stats.hasValidationRuns) {
+          return <span className="text-muted-foreground">Not validated</span>;
+        }
+        if (stats.sectionFailCount === 0) {
+          return <span className="text-muted-foreground">-</span>;
+        }
+        return (
+          <Badge variant="destructive" className="text-xs">
+            {stats.sectionFailCount} fail ({stats.failingLanguageCount} language
+            {stats.failingLanguageCount === 1 ? '' : 's'})
+          </Badge>
+        );
+      },
+    },
+    {
       key: 'createdAt',
       header: 'Created',
       sortable: true,

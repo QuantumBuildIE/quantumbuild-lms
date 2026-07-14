@@ -63,6 +63,12 @@ export interface ToolboxTalkCompletionStats {
   completionRate: number;
 }
 
+export interface ToolboxTalkValidationFailStats {
+  sectionFailCount: number;
+  failingLanguageCount: number;
+  hasValidationRuns: boolean;
+}
+
 export interface ToolboxTalkTranslation {
   languageCode: string;
   language: string;
@@ -171,6 +177,7 @@ export interface ToolboxTalkListItem {
   statusDisplay: string;
   autoAssignToNewEmployees: boolean;
   completionStats: ToolboxTalkCompletionStats | null;
+  validationFailStats: ToolboxTalkValidationFailStats;
   createdAt: string;
   createdBy: string;
   createdByName: string | null;

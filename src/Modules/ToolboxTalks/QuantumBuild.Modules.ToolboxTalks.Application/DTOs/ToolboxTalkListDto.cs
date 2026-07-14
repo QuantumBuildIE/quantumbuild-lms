@@ -32,6 +32,9 @@ public record ToolboxTalkListDto
     // Completion stats
     public ToolboxTalkCompletionStatsDto? CompletionStats { get; init; }
 
+    // Validation fail stats (section-language failure counts, most recent run per language)
+    public ToolboxTalkValidationFailStatsDto ValidationFailStats { get; init; } = new();
+
     // Audit
     public DateTime CreatedAt { get; init; }
     public string CreatedBy { get; init; } = string.Empty;

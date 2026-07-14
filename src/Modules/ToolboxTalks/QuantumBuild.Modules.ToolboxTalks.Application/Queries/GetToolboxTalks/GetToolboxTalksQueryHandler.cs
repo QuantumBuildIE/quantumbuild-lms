@@ -89,6 +89,7 @@ public class GetToolboxTalksQueryHandler : IRequestHandler<GetToolboxTalksQuery,
         // Get completion stats for each talk
         var talkIds = items.Select(i => i.Id).ToList();
         var completionStats = await GetCompletionStats(talkIds, request.TenantId, cancellationToken);
+        var validationFailStats = await GetValidationFailStats(talkIds, request.TenantId, cancellationToken);
 
         // Resolve creator display names via User table
         var creatorIds = items
@@ -116,11 +117,13 @@ public class GetToolboxTalksQueryHandler : IRequestHandler<GetToolboxTalksQuery,
             var item = items[i];
             var hasStats = completionStats.TryGetValue(item.Id, out var stats);
             var hasName = creatorNames.TryGetValue(item.CreatedBy, out var creatorName);
+            var hasFailStats = validationFailStats.TryGetValue(item.Id, out var failStats);
 
             items[i] = item with
             {
                 CompletionStats = hasStats ? stats : null,
-                CreatedByName = hasName ? creatorName : null
+                CreatedByName = hasName ? creatorName : null,
+                ValidationFailStats = hasFailStats ? failStats! : new ToolboxTalkValidationFailStatsDto()
             };
         }
 
@@ -162,6 +165,67 @@ public class GetToolboxTalksQueryHandler : IRequestHandler<GetToolboxTalksQuery,
                     ? Math.Round((decimal)s.CompletedCount / s.TotalAssignments * 100, 2)
                     : 0
             });
+    }
+
+    /// <summary>
+    /// Computes section-language validation failure counts per talk, using only the most
+    /// recent TranslationValidationRun per (talk, language) — there is no IsCurrent flag on
+    /// the run entity, so "most recent" is derived from CreatedAt (ties broken by Id).
+    /// Two queries total regardless of page size (run metadata, then failing result rows),
+    /// matching the batched-aggregate pattern used by GetCompletionStats.
+    /// </summary>
+    private async Task<Dictionary<Guid, ToolboxTalkValidationFailStatsDto>> GetValidationFailStats(
+        List<Guid> talkIds,
+        Guid tenantId,
+        CancellationToken cancellationToken)
+    {
+        var runMeta = await _context.TranslationValidationRuns
+            .Where(r => r.ToolboxTalkId != null
+                && talkIds.Contains(r.ToolboxTalkId.Value)
+                && r.TenantId == tenantId
+                && !r.IsDeleted)
+            .Select(r => new { r.Id, ToolboxTalkId = r.ToolboxTalkId!.Value, r.LanguageCode, r.CreatedAt })
+            .ToListAsync(cancellationToken);
+
+        if (runMeta.Count == 0)
+        {
+            return new Dictionary<Guid, ToolboxTalkValidationFailStatsDto>();
+        }
+
+        var latestRuns = runMeta
+            .GroupBy(r => new { r.ToolboxTalkId, r.LanguageCode })
+            .Select(g => g.OrderByDescending(r => r.CreatedAt).ThenByDescending(r => r.Id).First())
+            .ToList();
+
+        var latestRunIds = latestRuns.Select(r => r.Id).ToList();
+        var runById = latestRuns.ToDictionary(r => r.Id);
+
+        var failingRunIds = await _context.TranslationValidationResults
+            .Where(res => latestRunIds.Contains(res.ValidationRunId) && res.Outcome == ValidationOutcome.Fail)
+            .Select(res => res.ValidationRunId)
+            .ToListAsync(cancellationToken);
+
+        return latestRuns
+            .Select(r => r.ToolboxTalkId)
+            .Distinct()
+            .ToDictionary(
+                talkId => talkId,
+                talkId =>
+                {
+                    var failingRunIdsForTalk = failingRunIds
+                        .Where(runId => runById[runId].ToolboxTalkId == talkId)
+                        .ToList();
+
+                    return new ToolboxTalkValidationFailStatsDto
+                    {
+                        SectionFailCount = failingRunIdsForTalk.Count,
+                        FailingLanguageCount = failingRunIdsForTalk
+                            .Select(runId => runById[runId].LanguageCode)
+                            .Distinct()
+                            .Count(),
+                        HasValidationRuns = true
+                    };
+                });
     }
 
     private static string GetFrequencyDisplay(ToolboxTalkFrequency frequency) => frequency switch
