@@ -116,6 +116,25 @@ export interface AssignTenantSectorRequest {
   isDefault: boolean;
 }
 
+export interface TenantReviewerConfigurationDto {
+  id: string;
+  /** Null means this is the tenant's "all languages" fallback reviewer. */
+  languageCode: string | null;
+  reviewerEmail: string;
+  reviewerName: string | null;
+}
+
+export interface CreateTenantReviewerConfigurationRequest {
+  languageCode: string | null;
+  reviewerEmail: string;
+  reviewerName?: string | null;
+}
+
+export interface UpdateTenantReviewerConfigurationRequest {
+  reviewerEmail: string;
+  reviewerName?: string | null;
+}
+
 export type TenantStatus = "Active" | "Suspended" | "Inactive";
 
 export interface TenantListItem {

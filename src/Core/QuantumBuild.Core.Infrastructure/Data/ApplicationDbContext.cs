@@ -101,6 +101,7 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
     public DbSet<ContentCreationSession> ContentCreationSessions => Set<ContentCreationSession>();
     public DbSet<Sector> Sectors => Set<Sector>();
     public DbSet<TenantSector> TenantSectors => Set<TenantSector>();
+    public DbSet<TenantReviewerConfiguration> TenantReviewerConfigurations => Set<TenantReviewerConfiguration>();
     public DbSet<RegulatoryBody> RegulatoryBodies => Set<RegulatoryBody>();
     public DbSet<RegulatoryDocument> RegulatoryDocuments => Set<RegulatoryDocument>();
     public DbSet<RegulatoryProfile> RegulatoryProfiles => Set<RegulatoryProfile>();
@@ -286,6 +287,7 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.ApplyConfiguration(new ContentCreationSessionConfiguration());
         modelBuilder.ApplyConfiguration(new SectorConfiguration());
         modelBuilder.ApplyConfiguration(new TenantSectorConfiguration());
+        modelBuilder.ApplyConfiguration(new TenantReviewerConfigurationConfiguration());
         modelBuilder.ApplyConfiguration(new RegulatoryBodyConfiguration());
         modelBuilder.ApplyConfiguration(new RegulatoryDocumentConfiguration());
         modelBuilder.ApplyConfiguration(new RegulatoryProfileConfiguration());
@@ -323,6 +325,7 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.Entity<SupervisorAssignment>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<TenantModule>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<TenantSector>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
+        modelBuilder.Entity<TenantReviewerConfiguration>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<RegulatoryRequirementMapping>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<AuditCorpus>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<CorpusRun>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));

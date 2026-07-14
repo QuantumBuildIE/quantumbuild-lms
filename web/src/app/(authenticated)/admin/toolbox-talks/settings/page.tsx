@@ -12,8 +12,9 @@ import { QrLocationTrainingSection } from '@/features/toolbox-talks/components/s
 import { WizardDefaultsSection } from '@/features/toolbox-talks/components/settings/wizard-defaults-section';
 import { WizardToggleSection } from '@/features/toolbox-talks/components/settings/wizard-toggle-section';
 import { NotificationsSettingsSection } from '@/features/toolbox-talks/components/settings/notifications-settings-section';
+import { ExternalReviewersSection } from '@/features/toolbox-talks/components/settings/external-reviewers-section';
 
-const VALID_TABS = ['general', 'notifications', 'quiz', 'validation', 'qr-training'] as const;
+const VALID_TABS = ['general', 'notifications', 'quiz', 'validation', 'reviewers', 'qr-training'] as const;
 type SettingsTab = typeof VALID_TABS[number];
 
 export default function AdminToolboxTalksSettingsPage() {
@@ -57,6 +58,7 @@ export default function AdminToolboxTalksSettingsPage() {
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="quiz">Quiz</TabsTrigger>
           <TabsTrigger value="validation">Validation</TabsTrigger>
+          <TabsTrigger value="reviewers">Reviewers</TabsTrigger>
           <TabsTrigger value="qr-training">QR Training</TabsTrigger>
         </TabsList>
 
@@ -90,6 +92,10 @@ export default function AdminToolboxTalksSettingsPage() {
           <SafetyGlossarySection />
           <PassThresholdSection />
           <AuditPurposeSection />
+        </TabsContent>
+
+        <TabsContent value="reviewers" className="space-y-6 pt-4">
+          <ExternalReviewersSection />
         </TabsContent>
 
         <TabsContent value="qr-training" className="space-y-6 pt-4">
