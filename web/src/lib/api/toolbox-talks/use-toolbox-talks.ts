@@ -23,6 +23,8 @@ import {
   cancelExternalReview,
   startTalkTranslation,
   addTargetLanguage,
+  getSendForReviewPreview,
+  sendForReview,
 } from './toolbox-talks';
 import type {
   GenerateTranslationsRequest,
@@ -315,6 +317,30 @@ export function useAddTargetLanguage() {
       queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, talkId, 'workflow-state'] });
       // Invalidate the learnings cache key used by TranslateStep's useTalk hook
       queryClient.invalidateQueries({ queryKey: ['learnings', talkId] });
+    },
+  });
+}
+
+// ============================================
+// Send for Review Hooks
+// ============================================
+
+export function useSendForReviewPreview(talkId: string, enabled = true) {
+  return useQuery({
+    queryKey: [...TOOLBOX_TALKS_KEY, talkId, 'send-for-review', 'preview'],
+    queryFn: () => getSendForReviewPreview(talkId),
+    enabled: !!talkId && enabled,
+    retry: false,
+  });
+}
+
+export function useSendForReview() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (talkId: string) => sendForReview(talkId),
+    onSuccess: (_, talkId) => {
+      queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, 'list'] });
+      queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, talkId, 'workflow-state'] });
     },
   });
 }

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { format } from 'date-fns';
-import { PlusIcon, EyeIcon, PencilIcon, TrashIcon, CalendarClockIcon, SearchIcon } from 'lucide-react';
+import { PlusIcon, EyeIcon, PencilIcon, TrashIcon, CalendarClockIcon, SearchIcon, SendIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { DataTable, type Column } from '@/components/shared/data-table';
 import { DeleteConfirmationDialog } from '@/components/shared/delete-confirmation-dialog';
+import { SendForReviewDialog } from '@/features/toolbox-talks/components/SendForReviewDialog';
 import { useToolboxTalks, useDeleteToolboxTalk } from '@/lib/api/toolbox-talks';
 import { usePermission } from '@/lib/auth/use-auth';
 import type {
@@ -68,6 +69,8 @@ export function ToolboxTalkList({ onSchedule, basePath = '/admin/toolbox-talks' 
   const [localSearch, setLocalSearch] = useState(searchTerm);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [talkToDelete, setTalkToDelete] = useState<ToolboxTalkListItem | null>(null);
+  const [sendForReviewDialogOpen, setSendForReviewDialogOpen] = useState(false);
+  const [talkToSendForReview, setTalkToSendForReview] = useState<ToolboxTalkListItem | null>(null);
 
   // Parse active filter
   const isActiveFilter = activeFilter === 'true' ? true : activeFilter === 'false' ? false : undefined;
@@ -292,6 +295,17 @@ export function ToolboxTalkList({ onSchedule, basePath = '/admin/toolbox-talks' 
                 )}
               </DropdownMenuItem>
             )}
+            {canManage && item.validationFailStats?.hasValidationRuns && item.validationFailStats.sectionFailCount > 0 && (
+              <DropdownMenuItem
+                onClick={() => {
+                  setTalkToSendForReview(item);
+                  setSendForReviewDialogOpen(true);
+                }}
+              >
+                <SendIcon className="mr-2 h-4 w-4" />
+                Send for Review
+              </DropdownMenuItem>
+            )}
             {canManage && (
               <DropdownMenuItem
                 className="text-destructive focus:text-destructive"
@@ -414,6 +428,16 @@ export function ToolboxTalkList({ onSchedule, basePath = '/admin/toolbox-talks' 
         onConfirm={handleDelete}
         isLoading={deleteMutation.isPending}
       />
+
+      {/* Send for review dialog */}
+      {talkToSendForReview && (
+        <SendForReviewDialog
+          talkId={talkToSendForReview.id}
+          talkTitle={talkToSendForReview.title}
+          isOpen={sendForReviewDialogOpen}
+          onOpenChange={setSendForReviewDialogOpen}
+        />
+      )}
     </div>
   );
 }

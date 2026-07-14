@@ -21,6 +21,8 @@ import type {
   SlideshowHtmlResponse,
   SmartGenerateContentRequest,
   SmartGenerateContentResult,
+  PreviewSendForReviewDto,
+  SendForReviewResultDto,
 } from '@/types/toolbox-talks';
 
 export interface PaginatedResponse<T> {
@@ -691,6 +693,24 @@ export async function regenerateCertificate(
 ): Promise<{ certificateUrl: string }> {
   const response = await apiClient.post<{ certificateUrl: string }>(
     `/toolbox-talks/${talkId}/completions/${completionId}/regenerate-certificate`
+  );
+  return response.data;
+}
+
+// ============================================
+// Send for Review
+// ============================================
+
+export async function getSendForReviewPreview(id: string): Promise<PreviewSendForReviewDto> {
+  const response = await apiClient.get<PreviewSendForReviewDto>(
+    `/toolbox-talks/${id}/send-for-review/preview`
+  );
+  return response.data;
+}
+
+export async function sendForReview(id: string): Promise<SendForReviewResultDto> {
+  const response = await apiClient.post<SendForReviewResultDto>(
+    `/toolbox-talks/${id}/send-for-review`
   );
   return response.data;
 }

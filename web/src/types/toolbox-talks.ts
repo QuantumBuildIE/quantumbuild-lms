@@ -1123,3 +1123,52 @@ export interface SmartGenerateContentResult {
   generationJobQueued: boolean;
   generationJobId?: string;
 }
+
+// ============================================
+// Send for Review
+// ============================================
+
+/** How a language's reviewer was resolved against TenantReviewerConfiguration. */
+export type ReviewerResolutionSource = 'LanguageSpecific' | 'Fallback' | 'None';
+
+export interface PreviewLanguageDto {
+  languageCode: string;
+  /** 0-indexed section positions with a Fail outcome in this language's most recent validation run. */
+  failingSectionIndices: number[];
+  failingSectionCount: number;
+  resolvedReviewerEmail: string | null;
+  resolvedReviewerName: string | null;
+  resolutionSource: ReviewerResolutionSource;
+  /** True when this language's current workflow state permits InitiateExternalReview. */
+  workflowStateEligible: boolean;
+}
+
+export interface PreviewSendForReviewDto {
+  talkId: string;
+  languages: PreviewLanguageDto[];
+  /** True if any listed language is missing a resolved reviewer or is not in an eligible workflow state. */
+  blocked: boolean;
+}
+
+export interface BlockedLanguageDto {
+  languageCode: string;
+  reviewerMissing: boolean;
+  workflowStateIneligible: boolean;
+}
+
+export interface SendForReviewLanguageResultDto {
+  languageCode: string;
+  success: boolean;
+  invitationId: string | null;
+  errorMessage: string | null;
+}
+
+export interface SendForReviewResultDto {
+  /** True only when not blocked and every language's invitation was initiated successfully. */
+  success: boolean;
+  /** True when the server-recomputed preview found a blocking issue; nothing was initiated. */
+  blocked: boolean;
+  blockedLanguages: BlockedLanguageDto[];
+  /** Per-language outcome of the InitiateExternalReview calls. Empty when blocked is true. */
+  languageResults: SendForReviewLanguageResultDto[];
+}

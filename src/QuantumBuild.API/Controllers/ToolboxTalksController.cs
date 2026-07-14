@@ -41,7 +41,9 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Features.Certificates.Querie
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Storage;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Sectors;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Workflows;
+using QuantumBuild.Modules.ToolboxTalks.Application.Commands.SendForReview;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Workflows;
+using QuantumBuild.Modules.ToolboxTalks.Application.Queries.PreviewSendForReview;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 using System.ComponentModel.DataAnnotations;
@@ -1936,6 +1938,93 @@ public class ToolboxTalksController : ControllerBase
         {
             _logger.LogError(ex, "Error initiating external review for toolbox talk {ToolboxTalkId}, language {LanguageCode}", id, languageCode);
             return StatusCode(500, new { error = "Error initiating external review" });
+        }
+    }
+
+    /// <summary>
+    /// Previews what "Send for Review" would do: per language with failing sections in its most
+    /// recent validation run, the resolved reviewer and workflow-state eligibility. Read-only —
+    /// initiates nothing.
+    /// </summary>
+    /// <param name="id">Toolbox talk ID</param>
+    /// <param name="ct">Cancellation token</param>
+    [HttpGet("{id:guid}/send-for-review/preview")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> PreviewSendForReview(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            var query = new GetToolboxTalkByIdQuery
+            {
+                TenantId = _currentUserService.TenantId,
+                Id = id
+            };
+
+            var toolboxTalk = await _mediator.Send(query, ct);
+            if (toolboxTalk == null)
+                return NotFound(new { error = "Learning not found" });
+
+            var result = await _mediator.Send(
+                new PreviewSendForReviewQuery { TalkId = id, TenantId = _currentUserService.TenantId }, ct);
+
+            if (!result.Success)
+                return BadRequest(new { error = result.Errors.FirstOrDefault() });
+
+            return Ok(result.Data);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error previewing send-for-review for toolbox talk {ToolboxTalkId}", id);
+            return StatusCode(500, new { error = "Error previewing send for review" });
+        }
+    }
+
+    /// <summary>
+    /// Sends a talk's failing translation sections for external review — one invitation per
+    /// language with Fail-outcome sections. Refuses atomically (nothing initiated) if any
+    /// affected language is blocked (no resolved reviewer, or an ineligible workflow state).
+    /// </summary>
+    /// <param name="id">Toolbox talk ID</param>
+    /// <param name="ct">Cancellation token</param>
+    [HttpPost("{id:guid}/send-for-review")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> SendForReview(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            var query = new GetToolboxTalkByIdQuery
+            {
+                TenantId = _currentUserService.TenantId,
+                Id = id
+            };
+
+            var toolboxTalk = await _mediator.Send(query, ct);
+            if (toolboxTalk == null)
+                return NotFound(new { error = "Learning not found" });
+
+            var result = await _mediator.Send(
+                new SendForReviewCommand { TalkId = id, TenantId = _currentUserService.TenantId }, ct);
+
+            if (!result.Success)
+            {
+                return result.ErrorCode switch
+                {
+                    FailureCode.WorkflowInvalidState => Conflict(result.Data),
+                    _ => BadRequest(new { error = result.Errors.FirstOrDefault() })
+                };
+            }
+
+            return Ok(result.Data);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error sending for review for toolbox talk {ToolboxTalkId}", id);
+            return StatusCode(500, new { error = "Error sending for review" });
         }
     }
 
