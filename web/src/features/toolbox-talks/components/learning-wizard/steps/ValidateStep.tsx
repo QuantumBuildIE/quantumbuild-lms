@@ -21,6 +21,7 @@ import { ValidationSectionCard } from '@/features/toolbox-talks/components/creat
 import { SendExternalReviewDialog } from '../../SendExternalReviewDialog';
 import { LoadingState } from '../components/LoadingState';
 import { parseLanguageCodes } from '@/features/toolbox-talks/utils/parseLanguageCodes';
+import { isWorkflowStateEligibleForExternalReview } from '@/features/toolbox-talks/lib/workflowStateMessages';
 import type { ValidationRunSummary } from '@/types/content-creation';
 import type { TranslationWorkflowState } from '@/types/workflows';
 
@@ -209,8 +210,9 @@ export function ValidateStep({ talkId }: ValidateStepProps) {
       (stats.totalSections > 0 ? (stats.sectionsComplete / stats.totalSections) * 100 : 0);
 
   const activeWorkflowState = (workflowStates ?? []).find((s) => s.languageCode === activeLangCode) ?? null;
-  const canSendForReview =
-    activeWorkflowState?.state === 'Validated' || activeWorkflowState?.state === 'ReviewerAccepted';
+  const canSendForReview = activeWorkflowState
+    ? isWorkflowStateEligibleForExternalReview(activeWorkflowState.state)
+    : false;
 
   const handleSendForExternalReview = useCallback(
     async (email: string, editableSectionIndices: number[]) => {
