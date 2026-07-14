@@ -295,7 +295,11 @@ export function ValidateStep({ talkId }: ValidateStepProps) {
             : undefined) ?? 'Initial'
         }
         raceState={sendReviewRaceState}
-        sections={mergedSections.map((s) => ({ title: s.title }))}
+        sections={mergedSections.map((s) => ({
+          title: s.title,
+          score: s.result?.finalScore,
+          outcome: s.result?.outcome,
+        }))}
       />
 
       <div className="space-y-6">
