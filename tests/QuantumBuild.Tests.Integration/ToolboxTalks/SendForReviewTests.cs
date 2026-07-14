@@ -100,7 +100,7 @@ public class SendForReviewTests : IntegrationTestBase
         return talkId;
     }
 
-    /// <summary>Seeds a translation with enough placeholder sections that any FailingSectionIndices we seed are in range.</summary>
+    /// <summary>Seeds a translation with enough placeholder sections that any failing sections we seed are in range.</summary>
     private async Task SeedTranslationAsync(Guid tenantId, Guid talkId, string languageCode, int sectionCount)
     {
         var sections = Enumerable.Range(0, sectionCount)
@@ -145,7 +145,7 @@ public class SendForReviewTests : IntegrationTestBase
         return runId;
     }
 
-    private async Task SeedValidationResultAsync(Guid runId, int sectionIndex, ValidationOutcome outcome)
+    private async Task SeedValidationResultAsync(Guid runId, int sectionIndex, ValidationOutcome outcome, int finalScore = 0)
     {
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -159,6 +159,7 @@ public class SendForReviewTests : IntegrationTestBase
             TranslatedText = "Translated text",
             Outcome = outcome,
             EngineOutcome = outcome,
+            FinalScore = finalScore,
             CreatedAt = DateTime.UtcNow,
             CreatedBy = "test"
         });
@@ -258,7 +259,7 @@ public class SendForReviewTests : IntegrationTestBase
         await SeedTranslationAsync(tenantId, talkId, "fr", 3);
         await MakeEligibleAsync(tenantId, talkId, "fr");
         var runId = await SeedValidationRunAsync(tenantId, talkId, "fr");
-        await SeedValidationResultAsync(runId, 0, ValidationOutcome.Fail);
+        await SeedValidationResultAsync(runId, 0, ValidationOutcome.Fail, finalScore: 42);
         await SeedValidationResultAsync(runId, 1, ValidationOutcome.Pass);
         await CreateReviewerConfigAsync(admin, "fr", "fr-reviewer@example.com", "French Reviewer");
 
@@ -268,7 +269,9 @@ public class SendForReviewTests : IntegrationTestBase
         dto.Languages.Should().HaveCount(1);
         var lang = dto.Languages.Single();
         lang.LanguageCode.Should().Be("fr");
-        lang.FailingSectionIndices.Should().Equal(0);
+        lang.FailingSections.Select(f => f.Index).Should().Equal(0);
+        lang.FailingSections.Single().Score.Should().Be(42);
+        lang.FailingSections.Single().Title.Should().Be("Section 0");
         lang.FailingSectionCount.Should().Be(1);
         lang.ResolvedReviewerEmail.Should().Be("fr-reviewer@example.com");
         lang.ResolvedReviewerName.Should().Be("French Reviewer");
@@ -412,7 +415,7 @@ public class SendForReviewTests : IntegrationTestBase
         var dto = await GetPreviewAsync(admin, talkId);
 
         var lang = dto!.Languages.Single();
-        lang.FailingSectionIndices.Should().Equal(4);
+        lang.FailingSections.Select(f => f.Index).Should().Equal(4);
     }
 
     // ── Send command tests ───────────────────────────────────────────────────

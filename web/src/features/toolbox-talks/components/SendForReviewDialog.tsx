@@ -280,6 +280,22 @@ function LanguageRow({
           </p>
         )}
       </div>
+
+      {language.failingSections.length > 0 && (
+        <div className="mt-2 space-y-1 border-t pt-2">
+          {language.failingSections.map((section) => (
+            <div key={section.index} className="flex items-center justify-between gap-2 text-xs">
+              <span className="truncate text-muted-foreground">
+                Section {section.index + 1}
+                {section.title ? `: ${section.title}` : ''}
+              </span>
+              <span className="shrink-0 tabular-nums font-semibold text-red-700 dark:text-red-500">
+                {section.score}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -1131,10 +1131,18 @@ export interface SmartGenerateContentResult {
 /** How a language's reviewer was resolved against TenantReviewerConfiguration. */
 export type ReviewerResolutionSource = 'LanguageSpecific' | 'Fallback' | 'None';
 
+export interface FailingSectionDto {
+  /** 0-indexed section position in the validation run. */
+  index: number;
+  /** TranslationValidationResult.FinalScore — the post-consensus score (0-100) that caused the Fail. */
+  score: number;
+  title: string | null;
+}
+
 export interface PreviewLanguageDto {
   languageCode: string;
-  /** 0-indexed section positions with a Fail outcome in this language's most recent validation run. */
-  failingSectionIndices: number[];
+  /** Sections with a Fail outcome in this language's most recent validation run, ordered by index. */
+  failingSections: FailingSectionDto[];
   failingSectionCount: number;
   resolvedReviewerEmail: string | null;
   resolvedReviewerName: string | null;

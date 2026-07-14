@@ -13,10 +13,21 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { cn } from '@/lib/utils';
+import type { ValidationOutcome } from '@/types/content-creation';
 
 interface SendExternalReviewDialogSection {
   title: string;
+  /** TranslationValidationResult.FinalScore for this section in the language's most recent validation run, if any. */
+  score?: number;
+  outcome?: ValidationOutcome;
 }
+
+const outcomeScoreClass: Record<ValidationOutcome, string> = {
+  Pass: 'text-green-700 dark:text-green-500',
+  Review: 'text-amber-700 dark:text-amber-500',
+  Fail: 'text-red-700 dark:text-red-500',
+};
 
 interface SendExternalReviewDialogProps {
   open: boolean;
@@ -137,9 +148,19 @@ export function SendExternalReviewDialog({
                     disabled={isLoading}
                   />
                   <span className="text-xs text-muted-foreground tabular-nums">{index + 1}.</span>
-                  <span className="truncate">
+                  <span className="flex-1 truncate">
                     {section.title || <span className="italic text-muted-foreground">Untitled section</span>}
                   </span>
+                  {section.score !== undefined && (
+                    <span
+                      className={cn(
+                        'shrink-0 tabular-nums text-xs font-semibold',
+                        section.outcome && outcomeScoreClass[section.outcome]
+                      )}
+                    >
+                      {section.score}
+                    </span>
+                  )}
                 </label>
               ))}
             </div>

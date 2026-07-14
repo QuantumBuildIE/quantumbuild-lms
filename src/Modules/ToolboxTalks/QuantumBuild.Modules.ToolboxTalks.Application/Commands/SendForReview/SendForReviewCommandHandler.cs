@@ -73,7 +73,7 @@ public class SendForReviewCommandHandler : IRequestHandler<SendForReviewCommand,
                 request.TalkId,
                 language.LanguageCode,
                 language.ResolvedReviewerEmail!,
-                language.FailingSectionIndices.ToList(),
+                language.FailingSections.Select(f => f.Index).ToList(),
                 ct: cancellationToken);
 
             languageResults.Add(new SendForReviewLanguageResultDto

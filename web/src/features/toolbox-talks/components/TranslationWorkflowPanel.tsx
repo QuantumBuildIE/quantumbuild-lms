@@ -39,6 +39,7 @@ import {
   useInitiateExternalReview,
   useCancelExternalReview,
   useAcceptTranslation,
+  useValidationRun,
 } from '@/lib/api/toolbox-talks';
 import { SendExternalReviewDialog } from './SendExternalReviewDialog';
 import { CancelExternalReviewDialog } from './CancelExternalReviewDialog';
@@ -106,7 +107,15 @@ export function TranslationWorkflowPanel({
   const [sendReviewLanguageCode, setSendReviewLanguageCode] = useState<string | null>(null);
   const [sendReviewLanguageName, setSendReviewLanguageName] = useState<string | null>(null);
   const [sendReviewFlaggedCount, setSendReviewFlaggedCount] = useState(0);
+  const [sendReviewRunId, setSendReviewRunId] = useState<string | null>(null);
   const [cancelReviewLanguageCode, setCancelReviewLanguageCode] = useState<string | null>(null);
+
+  // Per-section scores for the language currently open in the send-for-review dialog — fetched
+  // from the same validation run detail endpoint the run history page already uses.
+  const { data: sendReviewRunDetail } = useValidationRun(toolboxTalkId, sendReviewRunId);
+  const sendReviewScoreByIndex = new Map(
+    (sendReviewRunDetail?.results ?? []).map((r) => [r.sectionIndex, { score: r.finalScore, outcome: r.outcome }])
+  );
 
   const existingCodes = new Set(existingTranslations.map((t) => t.languageCode));
 
@@ -422,6 +431,7 @@ export function TranslationWorkflowPanel({
                         setSendReviewLanguageCode(row.languageCode);
                         setSendReviewLanguageName(row.languageName);
                         setSendReviewFlaggedCount(dto?.flaggedWordCount ?? 0);
+                        setSendReviewRunId(dto?.lastValidationRunId ?? null);
                       }}
                     >
                       <Send className="mr-1 h-3 w-3" />
@@ -512,13 +522,17 @@ export function TranslationWorkflowPanel({
           if (!open) {
             setSendReviewLanguageCode(null);
             setSendReviewLanguageName(null);
+            setSendReviewRunId(null);
           }
         }}
         onConfirm={handleSendForExternalReview}
         isLoading={initiateExternalReviewMutation.isPending}
         flaggedWordCount={sendReviewFlaggedCount}
         languageName={sendReviewLanguageName ?? ''}
-        sections={sortedSections.map((s) => ({ title: s.title }))}
+        sections={sortedSections.map((s, index) => {
+          const scored = sendReviewScoreByIndex.get(index);
+          return { title: s.title, score: scored?.score, outcome: scored?.outcome };
+        })}
       />
 
       {/* Cancel external review dialog */}

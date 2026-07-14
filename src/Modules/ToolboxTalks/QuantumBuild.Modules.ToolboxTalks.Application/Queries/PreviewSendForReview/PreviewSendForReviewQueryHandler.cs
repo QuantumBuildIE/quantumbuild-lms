@@ -47,15 +47,19 @@ public class PreviewSendForReviewQueryHandler : IRequestHandler<PreviewSendForRe
 
         var failingSections = await _context.TranslationValidationResults
             .Where(res => latestRunIds.Contains(res.ValidationRunId) && res.Outcome == ValidationOutcome.Fail)
-            .Select(res => new { res.ValidationRunId, res.SectionIndex })
+            .Select(res => new { res.ValidationRunId, res.SectionIndex, res.FinalScore, res.SectionTitle })
             .ToListAsync(cancellationToken);
 
-        var failingIndicesByRun = failingSections
+        var failingSectionsByRun = failingSections
             .GroupBy(r => r.ValidationRunId)
-            .ToDictionary(g => g.Key, g => g.Select(r => r.SectionIndex).OrderBy(i => i).ToList());
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderBy(r => r.SectionIndex)
+                    .Select(r => new FailingSectionDto { Index = r.SectionIndex, Score = r.FinalScore, Title = r.SectionTitle })
+                    .ToList());
 
         var languagesWithFailures = latestRuns
-            .Where(r => failingIndicesByRun.ContainsKey(r.Id))
+            .Where(r => failingSectionsByRun.ContainsKey(r.Id))
             .OrderBy(r => r.LanguageCode, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
@@ -78,8 +82,8 @@ public class PreviewSendForReviewQueryHandler : IRequestHandler<PreviewSendForRe
             languageDtos.Add(new PreviewLanguageDto
             {
                 LanguageCode = run.LanguageCode,
-                FailingSectionIndices = failingIndicesByRun[run.Id],
-                FailingSectionCount = failingIndicesByRun[run.Id].Count,
+                FailingSections = failingSectionsByRun[run.Id],
+                FailingSectionCount = failingSectionsByRun[run.Id].Count,
                 ResolvedReviewerEmail = config?.ReviewerEmail,
                 ResolvedReviewerName = config?.ReviewerName,
                 ResolutionSource = source,

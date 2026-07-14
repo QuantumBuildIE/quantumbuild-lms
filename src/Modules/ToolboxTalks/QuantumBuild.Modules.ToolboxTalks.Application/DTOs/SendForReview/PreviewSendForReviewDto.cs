@@ -30,8 +30,8 @@ public record PreviewLanguageDto
 {
     public string LanguageCode { get; init; } = string.Empty;
 
-    /// <summary>0-indexed section positions with a Fail outcome in this language's most recent validation run.</summary>
-    public IReadOnlyList<int> FailingSectionIndices { get; init; } = Array.Empty<int>();
+    /// <summary>Sections with a Fail outcome in this language's most recent validation run, ordered by index.</summary>
+    public IReadOnlyList<FailingSectionDto> FailingSections { get; init; } = Array.Empty<FailingSectionDto>();
 
     public int FailingSectionCount { get; init; }
 
@@ -46,4 +46,16 @@ public record PreviewLanguageDto
     /// (Validated, ReviewerAccepted, or ThirdPartyReviewed).
     /// </summary>
     public bool WorkflowStateEligible { get; init; }
+}
+
+/// <summary>A section flagged as Fail, carrying the score that caused the flag so reviewers see why.</summary>
+public record FailingSectionDto
+{
+    /// <summary>0-indexed section position in the validation run.</summary>
+    public int Index { get; init; }
+
+    /// <summary>TranslationValidationResult.FinalScore — the post-consensus score (0-100).</summary>
+    public int Score { get; init; }
+
+    public string? Title { get; init; }
 }
