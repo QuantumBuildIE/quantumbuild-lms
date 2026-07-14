@@ -1,7 +1,9 @@
 using System.Net;
 using Microsoft.Extensions.Logging;
 using Polly;
+using Polly.Bulkhead;
 using Polly.Extensions.Http;
+using Polly.Timeout;
 
 namespace QuantumBuild.Core.Application.Http;
 
@@ -105,5 +107,33 @@ public static class ResiliencePolicies
 
                     return Task.CompletedTask;
                 });
+    }
+
+    /// <summary>
+    /// Bulkhead (concurrency-limiting) policy for a provider's HTTP calls.
+    /// Must be built ONCE per provider and the SAME instance reused across every
+    /// HttpClient registration for that provider — building a fresh instance per
+    /// call site would give each registration its own permit pool, silently
+    /// multiplying the effective concurrency ceiling instead of sharing one quota.
+    /// </summary>
+    public static IAsyncPolicy<HttpResponseMessage> GetProviderBulkheadPolicy(int maxConcurrency, int maxQueuingActions)
+    {
+        return Policy.BulkheadAsync<HttpResponseMessage>(maxConcurrency, maxQueuingActions);
+    }
+
+    /// <summary>
+    /// Wraps an existing shared bulkhead in an outer Timeout, so a synchronous
+    /// caller (e.g. a controller action) fails fast with TimeoutRejectedException
+    /// rather than hanging indefinitely behind a saturated bulkhead queue.
+    /// Takes the bulkhead instance as a parameter (does not build a new one) so
+    /// callers are forced to pass the SAME shared instance used elsewhere for
+    /// this provider — this keeps the permit pool shared even for the
+    /// timeout-wrapped variant.
+    /// </summary>
+    public static IAsyncPolicy<HttpResponseMessage> GetProviderBulkheadWithTimeoutPolicy(
+        IAsyncPolicy<HttpResponseMessage> sharedBulkhead, int timeoutSeconds)
+    {
+        var timeout = Policy.TimeoutAsync<HttpResponseMessage>(TimeSpan.FromSeconds(timeoutSeconds), TimeoutStrategy.Optimistic);
+        return timeout.WrapAsync(sharedBulkhead);
     }
 }

@@ -92,18 +92,24 @@ public class TenantService : ITenantService
     {
         try
         {
+            var normalisedName = command.Name?.Trim() ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(normalisedName))
+                return Result.Fail<TenantDetailDto>("Tenant name is required");
+
             var existingByName = await _context.Tenants
                 .IgnoreQueryFilters()
-                .AnyAsync(t => t.Name.ToLower() == command.Name.ToLower() && !t.IsDeleted);
+                .AnyAsync(t => t.Name.ToLower() == normalisedName.ToLower() && !t.IsDeleted);
 
             if (existingByName)
                 return Result.Fail<TenantDetailDto>("A tenant with this name already exists");
 
-            if (!string.IsNullOrWhiteSpace(command.Code))
+            var normalisedCode = command.Code?.Trim();
+            if (!string.IsNullOrWhiteSpace(normalisedCode))
             {
                 var existingByCode = await _context.Tenants
                     .IgnoreQueryFilters()
-                    .AnyAsync(t => t.Code != null && t.Code.ToLower() == command.Code.ToLower() && !t.IsDeleted);
+                    .AnyAsync(t => t.Code != null && t.Code.ToLower() == normalisedCode.ToLower() && !t.IsDeleted);
 
                 if (existingByCode)
                     return Result.Fail<TenantDetailDto>("A tenant with this code already exists");
@@ -111,11 +117,11 @@ public class TenantService : ITenantService
 
             var tenant = new Tenant
             {
-                Name = command.Name,
-                Code = command.Code,
-                CompanyName = command.CompanyName,
-                ContactEmail = command.ContactEmail,
-                ContactName = command.ContactName,
+                Name = normalisedName,
+                Code = string.IsNullOrWhiteSpace(normalisedCode) ? null : normalisedCode,
+                CompanyName = command.CompanyName?.Trim(),
+                ContactEmail = command.ContactEmail?.Trim(),
+                ContactName = command.ContactName?.Trim(),
                 Status = TenantStatus.Active,
                 IsActive = true
             };
@@ -124,6 +130,13 @@ public class TenantService : ITenantService
             await _context.SaveChangesAsync();
 
             return Result.Ok(MapToDetailDto(tenant));
+        }
+        catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+        {
+            // Concurrent-tab scenario: a second request committed the same name between our
+            // duplicate check and our SaveChangesAsync. Return the clean user-facing message
+            // rather than leaking the raw EF/DB exception text.
+            return Result.Fail<TenantDetailDto>("A tenant with this name already exists");
         }
         catch (Exception ex)
         {
@@ -197,6 +210,13 @@ public class TenantService : ITenantService
         {
             return Result.Fail<TenantDetailDto>($"Error updating tenant status: {ex.Message}");
         }
+    }
+
+    private static bool IsUniqueConstraintViolation(DbUpdateException ex)
+    {
+        var message = ex.InnerException?.Message ?? ex.Message;
+        return message.Contains("duplicate key", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("23505", StringComparison.OrdinalIgnoreCase);
     }
 
     private static TenantDetailDto MapToDetailDto(Tenant tenant) =>

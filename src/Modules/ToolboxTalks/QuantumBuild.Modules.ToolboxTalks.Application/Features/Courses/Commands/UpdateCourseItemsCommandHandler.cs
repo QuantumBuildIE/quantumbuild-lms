@@ -4,6 +4,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Features.Courses.DTOs;
 using QuantumBuild.Modules.ToolboxTalks.Application.Features.Courses.Queries;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
+using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Application.Features.Courses.Commands;
 
@@ -41,15 +42,22 @@ public class UpdateCourseItemsCommandHandler : IRequestHandler<UpdateCourseItems
         var requestedTalkIds = dto.Items.Select(i => i.ToolboxTalkId).Distinct().ToList();
         if (requestedTalkIds.Any())
         {
-            var existingTalkIds = await _dbContext.ToolboxTalks
+            var existingTalks = await _dbContext.ToolboxTalks
                 .Where(t => requestedTalkIds.Contains(t.Id) && t.TenantId == request.TenantId && !t.IsDeleted)
-                .Select(t => t.Id)
                 .ToListAsync(cancellationToken);
 
-            var missingIds = requestedTalkIds.Except(existingTalkIds).ToList();
+            var missingIds = requestedTalkIds.Except(existingTalks.Select(t => t.Id)).ToList();
             if (missingIds.Any())
             {
                 throw new InvalidOperationException($"One or more learnings not found: {string.Join(", ", missingIds)}");
+            }
+
+            // Only Published talks may be composed into a course
+            var nonPublishedTalks = existingTalks.Where(t => t.Status != ToolboxTalkStatus.Published).ToList();
+            if (nonPublishedTalks.Count > 0)
+            {
+                var titles = string.Join(", ", nonPublishedTalks.Select(t => t.Title));
+                throw new InvalidOperationException($"Only published learnings can be added to a course. Not published: {titles}");
             }
         }
 

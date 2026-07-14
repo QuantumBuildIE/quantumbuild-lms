@@ -12,9 +12,11 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Storage;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Subtitles;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Translations;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Translation;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services.Subtitles;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
+using QuantumBuild.Modules.ToolboxTalks.Domain.Helpers;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
@@ -1449,21 +1451,12 @@ public class ContentCreationSessionService : IContentCreationSessionService
                 draftTalk.AutoAssignToNewEmployees = courseSessionSettings?.AutoAssign ?? false;
                 draftTalk.AutoAssignDueDays = courseSessionSettings?.AutoAssignDueDays ?? 14;
 
-                if (courseSessionSettings != null && courseSessionSettings.RefresherFrequency != "Once")
-                {
-                    draftTalk.RequiresRefresher = true;
-                    draftTalk.RefresherIntervalMonths = courseSessionSettings.RefresherFrequency switch
-                    {
-                        "Monthly" => 1,
-                        "Quarterly" => 3,
-                        "Annually" => 12,
-                        _ => 12
-                    };
-                }
-                else
-                {
-                    draftTalk.RequiresRefresher = false;
-                }
+                (draftTalk.RequiresRefresher, draftTalk.RefresherIntervalMonths) =
+                    RefresherFrequencyMapper.FromWizardFrequencyString(
+                        courseSessionSettings?.RefresherFrequency, draftTalk.RefresherIntervalMonths);
+
+                draftTalk.Frequency = RefresherFrequencyMapper.ToLegacyFrequency(
+                    draftTalk.RequiresRefresher, draftTalk.RefresherIntervalMonths);
 
                 // Regenerate code if a custom one was requested
                 if (!string.IsNullOrWhiteSpace(request.Code) && request.Code.Trim() != draftTalk.Code)
@@ -1735,17 +1728,10 @@ public class ContentCreationSessionService : IContentCreationSessionService
             AutoAssignDueDays = sessionSettings?.AutoAssignDueDays ?? 14
         };
 
-        if (sessionSettings != null && sessionSettings.RefresherFrequency != "Once")
-        {
-            talk.RequiresRefresher = true;
-            talk.RefresherIntervalMonths = sessionSettings.RefresherFrequency switch
-            {
-                "Monthly" => 1,
-                "Quarterly" => 3,
-                "Annually" => 12,
-                _ => 12
-            };
-        }
+        (talk.RequiresRefresher, talk.RefresherIntervalMonths) =
+            RefresherFrequencyMapper.FromWizardFrequencyString(sessionSettings?.RefresherFrequency);
+
+        talk.Frequency = RefresherFrequencyMapper.ToLegacyFrequency(talk.RequiresRefresher, talk.RefresherIntervalMonths);
 
         // Create sections (same pattern as CreateToolboxTalkCommandHandler)
         foreach (var parsedSection in sections)
@@ -2231,26 +2217,21 @@ public class ContentCreationSessionService : IContentCreationSessionService
     /// Extracts a single section's translated data from the TranslatedSections JSON array,
     /// matching by the draft section's SectionId, and remaps to the new course talk's section ID.
     /// Returns a JSON array with a single element, or null if not found.
-    /// Format: [{SectionId, Title, Content}]
+    /// Uses the shared TranslatedSectionEntry shape so any provenance fields on the matched
+    /// entry (e.g. ReviewedAt/ReviewedBy) carry over rather than being stripped by a narrower
+    /// reconstructed shape.
     /// </summary>
     private static string? ExtractTranslatedSectionForId(string translatedSectionsJson, Guid draftSectionId, Guid newSectionId)
     {
         try
         {
-            using var doc = JsonDocument.Parse(translatedSectionsJson);
-            foreach (var element in doc.RootElement.EnumerateArray())
-            {
-                if (element.TryGetProperty("SectionId", out var sectionIdProp) &&
-                    sectionIdProp.TryGetGuid(out var sectionId) &&
-                    sectionId == draftSectionId)
-                {
-                    var title = element.TryGetProperty("Title", out var titleProp) ? titleProp.GetString() : null;
-                    var content = element.TryGetProperty("Content", out var contentProp) ? contentProp.GetString() : null;
+            var sections = JsonSerializer.Deserialize<List<TranslatedSectionEntry>>(translatedSectionsJson);
+            var match = sections?.FirstOrDefault(s => s.SectionId == draftSectionId);
+            if (match is null)
+                return null;
 
-                    var remapped = new[] { new { SectionId = newSectionId, Title = title, Content = content } };
-                    return JsonSerializer.Serialize(remapped);
-                }
-            }
+            var remapped = new[] { match with { SectionId = newSectionId } };
+            return JsonSerializer.Serialize(remapped);
         }
         catch (JsonException)
         {

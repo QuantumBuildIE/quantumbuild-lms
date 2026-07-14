@@ -34,4 +34,9 @@ public record ToolboxTalkListDto
 
     // Audit
     public DateTime CreatedAt { get; init; }
+    public string CreatedBy { get; init; } = string.Empty;
+    public string? CreatedByName { get; init; }
+
+    // Learning wizard
+    public int? LastEditedStep { get; init; }
 }

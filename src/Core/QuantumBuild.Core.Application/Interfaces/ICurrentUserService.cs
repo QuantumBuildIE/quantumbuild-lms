@@ -41,4 +41,9 @@ public interface ICurrentUserService
     /// Current user's linked Employee ID (null if not linked to an employee)
     /// </summary>
     Guid? EmployeeId { get; }
+
+    /// <summary>
+    /// Current user's roles from JWT claims. Empty list for unauthenticated requests.
+    /// </summary>
+    IReadOnlyList<string> Roles { get; }
 }

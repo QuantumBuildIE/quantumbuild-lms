@@ -146,6 +146,34 @@ public class FakeR2StorageService : IR2StorageService
         return Task.CompletedTask;
     }
 
+    public Task<R2UploadResult> UploadCoverImageAsync(
+        Guid tenantId,
+        Guid toolboxTalkId,
+        Stream content,
+        string originalFileName,
+        CancellationToken cancellationToken = default)
+    {
+        var ext = Path.GetExtension(originalFileName).TrimStart('.').ToLowerInvariant();
+        if (ext is not "png" and not "jpg" and not "jpeg") ext = "png";
+        var key = $"{tenantId}/cover-images/{toolboxTalkId:N}-cover.{ext}";
+        var bytes = ReadStream(content);
+        _files[key] = bytes;
+        return Task.FromResult(R2UploadResult.SuccessResult(
+            $"https://fake-r2.test/{key}", key, bytes.Length, "image/png"));
+    }
+
+    public Task DeleteCoverImageAsync(
+        Guid tenantId,
+        Guid toolboxTalkId,
+        CancellationToken cancellationToken = default)
+    {
+        var prefix = $"{tenantId}/cover-images/{toolboxTalkId:N}-cover.";
+        var keysToRemove = _files.Keys.Where(k => k.StartsWith(prefix)).ToList();
+        foreach (var key in keysToRemove)
+            _files.Remove(key);
+        return Task.CompletedTask;
+    }
+
     public Task<R2UploadResult> UploadSessionFileAsync(
         Guid tenantId,
         Guid sessionId,
@@ -200,6 +228,45 @@ public class FakeR2StorageService : IR2StorageService
     public string GeneratePublicUrl(Guid tenantId, string folder, string fileName)
     {
         return $"https://fake-r2.test/{tenantId}/{folder}/{fileName}";
+    }
+
+    public Task<R2UploadResult> UploadQrCodeImageAsync(
+        Guid tenantId,
+        string codeToken,
+        byte[] pngBytes,
+        CancellationToken cancellationToken = default)
+    {
+        var key = $"{tenantId}/qr-codes/{codeToken}.png";
+        _files[key] = pngBytes;
+        return Task.FromResult(R2UploadResult.SuccessResult(
+            $"https://fake-r2.test/{key}", key, pngBytes.Length, "image/png"));
+    }
+
+    public Task<string> UploadBulkImportCsvAsync(
+        Guid tenantId,
+        Guid sessionId,
+        Stream content,
+        CancellationToken cancellationToken = default)
+    {
+        var key = $"{tenantId}/bulk-import/{sessionId}.csv";
+        _files[key] = ReadStream(content);
+        return Task.FromResult(key);
+    }
+
+    public Task DeleteFileAsync(string key, CancellationToken cancellationToken = default)
+    {
+        _files.Remove(key);
+        return Task.CompletedTask;
+    }
+
+    public string GetPublicUrl(string key)
+    {
+        return $"https://fake-r2.test/{key}";
+    }
+
+    public Task<string> GenerateUploadUrlAsync(string key, string contentType, TimeSpan expiry)
+    {
+        return Task.FromResult($"https://fake-r2.test/presigned/{key}");
     }
 
     private static byte[] ReadStream(Stream stream)

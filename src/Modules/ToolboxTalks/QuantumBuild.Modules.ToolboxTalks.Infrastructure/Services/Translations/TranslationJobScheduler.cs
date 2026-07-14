@@ -10,9 +10,11 @@ namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Translations
 /// </summary>
 public class TranslationJobScheduler : ITranslationJobScheduler
 {
-    public string EnqueueMissingTranslationsJob(Guid toolboxTalkId, Guid tenantId)
-    {
-        return BackgroundJob.Enqueue<MissingTranslationsJob>(job =>
+    public string EnqueueMissingTranslationsJob(Guid toolboxTalkId, Guid tenantId) =>
+        BackgroundJob.Enqueue<MissingTranslationsJob>(job =>
             job.ExecuteAsync(toolboxTalkId, tenantId, null, CancellationToken.None));
-    }
+
+    public string EnqueueValidation(Guid runId, Guid tenantId) =>
+        BackgroundJob.Enqueue<TranslationValidationJob>(job =>
+            job.ExecuteAsync(runId, tenantId, null, CancellationToken.None));
 }

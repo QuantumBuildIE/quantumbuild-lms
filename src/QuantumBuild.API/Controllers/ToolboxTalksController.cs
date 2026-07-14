@@ -9,10 +9,23 @@ using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Core.Application.Models;
 using QuantumBuild.Core.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.CreateToolboxTalk;
+using QuantumBuild.Modules.ToolboxTalks.Application.Commands.InitialiseToolboxTalk;
+using QuantumBuild.Modules.ToolboxTalks.Application.Commands.ParseToolboxTalkContent;
+using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalkSections;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.DeleteToolboxTalk;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.GenerateContentTranslations;
+using QuantumBuild.Modules.ToolboxTalks.Application.Commands.StartTalkTranslation;
+using QuantumBuild.Modules.ToolboxTalks.Application.Commands.AddTargetLanguage;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.SmartGenerateContent;
+using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateLastEditedStep;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalk;
+using QuantumBuild.Modules.ToolboxTalks.Application.Commands.GenerateToolboxTalkQuiz;
+using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalkQuestions;
+using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalkQuizSettings;
+using QuantumBuild.Modules.ToolboxTalks.Application.Commands.PublishToolboxTalk;
+using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalkSettings;
+using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalkTenantDefaults;
+using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalkNotificationSettings;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Reports;
 using QuantumBuild.Modules.ToolboxTalks.Application.Queries.GetSlideshowHtml;
@@ -27,9 +40,12 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Features.Certificates.DTOs;
 using QuantumBuild.Modules.ToolboxTalks.Application.Features.Certificates.Queries;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Storage;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Sectors;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Workflows;
+using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Workflows;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
 using FileHashType = QuantumBuild.Modules.ToolboxTalks.Application.Services.FileHashType;
 using ISlideshowGenerationService = QuantumBuild.Modules.ToolboxTalks.Application.Services.ISlideshowGenerationService;
 
@@ -53,6 +69,7 @@ public class ToolboxTalksController : ControllerBase
     private readonly ISlideshowGenerationService _slideshowGenerationService;
     private readonly ISupervisorAssignmentService _supervisorAssignmentService;
     private readonly ITenantSectorService _tenantSectorService;
+    private readonly ITranslationWorkflowService _workflowService;
     private readonly UserManager<User> _userManager;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<ToolboxTalksController> _logger;
@@ -68,6 +85,7 @@ public class ToolboxTalksController : ControllerBase
         ISlideshowGenerationService slideshowGenerationService,
         ISupervisorAssignmentService supervisorAssignmentService,
         ITenantSectorService tenantSectorService,
+        ITranslationWorkflowService workflowService,
         UserManager<User> userManager,
         IHttpClientFactory httpClientFactory,
         ILogger<ToolboxTalksController> logger)
@@ -82,6 +100,7 @@ public class ToolboxTalksController : ControllerBase
         _slideshowGenerationService = slideshowGenerationService;
         _supervisorAssignmentService = supervisorAssignmentService;
         _tenantSectorService = tenantSectorService;
+        _workflowService = workflowService;
         _userManager = userManager;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
@@ -145,6 +164,7 @@ public class ToolboxTalksController : ControllerBase
         [FromQuery] string? searchTerm = null,
         [FromQuery] ToolboxTalkFrequency? frequency = null,
         [FromQuery] bool? isActive = null,
+        [FromQuery] ToolboxTalkStatus? status = null,
         [FromQuery] int pageNumber = 1,
         [FromQuery] int pageSize = 10)
     {
@@ -156,6 +176,7 @@ public class ToolboxTalksController : ControllerBase
                 SearchTerm = searchTerm,
                 Frequency = frequency,
                 IsActive = isActive,
+                Status = status,
                 PageNumber = pageNumber,
                 PageSize = pageSize
             };
@@ -330,6 +351,356 @@ public class ToolboxTalksController : ControllerBase
     }
 
     /// <summary>
+    /// Initialise a Draft learning shell from the new learning wizard (Step 1).
+    /// Creates a minimal ToolboxTalk row with no sections or questions.
+    /// </summary>
+    [HttpPost("initialise")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(typeof(ToolboxTalkDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> Initialise([FromBody] InitialiseToolboxTalkCommand command)
+    {
+        try
+        {
+            var commandWithTenant = command with { TenantId = _currentUserService.TenantId };
+            var result = await _mediator.Send(commandWithTenant);
+            return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
+        }
+        catch (FluentValidation.ValidationException ex)
+        {
+            return BadRequest(new { message = ex.Message, errors = ex.Errors });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error initialising learning");
+            return StatusCode(500, new { message = "Error initialising learning" });
+        }
+    }
+
+    /// <summary>
+    /// Generates a presigned R2 PUT URL for direct browser-to-R2 upload of a wizard
+    /// source file before the talk row exists. The file is stored at a temp key:
+    /// uploads/{tenantId}/{guid}/{filename}. The caller passes the resulting public URL
+    /// to InitialiseToolboxTalkCommand.SourceFileUrl.
+    /// </summary>
+    [HttpPost("learning-wizard/upload-source-url")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(typeof(UploadSourceUrlResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> GetUploadSourceUrl([FromBody] UploadSourceUrlRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.FileName))
+            return BadRequest(new { message = "FileName is required." });
+        if (string.IsNullOrWhiteSpace(request.ContentType))
+            return BadRequest(new { message = "ContentType is required." });
+
+        var key = $"uploads/{_currentUserService.TenantId}/{Guid.NewGuid():N}/{request.FileName}";
+        var presignedUrl = await _r2StorageService.GenerateUploadUrlAsync(key, request.ContentType, TimeSpan.FromMinutes(15));
+        var publicUrl = _r2StorageService.GetPublicUrl(key);
+
+        return Ok(new UploadSourceUrlResponse
+        {
+            UploadUrl = presignedUrl,
+            PublicUrl = publicUrl,
+            Key = key,
+        });
+    }
+
+    /// <summary>
+    /// Parse uploaded source content (text, PDF, or video) into sections for a wizard-drafted learning.
+    /// Text and PDF modes run inline and return sections immediately.
+    /// Video mode sets status to Processing, enqueues a background job, and returns immediately — poll for status.
+    /// </summary>
+    [HttpPost("{id:guid}/parse")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(typeof(ToolboxTalkDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> ParseContent(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            var command = new ParseToolboxTalkContentCommand(
+                TalkId: id,
+                TenantId: _currentUserService.TenantId,
+                UserId: _currentUserService.UserId != null ? Guid.TryParse(_currentUserService.UserId, out var uid) ? uid : (Guid?)null : null);
+
+            var result = await _mediator.Send(command, ct);
+
+            if (!result.Success)
+            {
+                if (result.ErrorCode == FailureCode.WorkflowInvalidState)
+                    return Conflict(new { error = result.Errors.FirstOrDefault() });
+                if (result.Errors.FirstOrDefault()?.Contains("not found", StringComparison.OrdinalIgnoreCase) == true)
+                    return NotFound(new { error = result.Errors.FirstOrDefault() });
+                return BadRequest(new { error = result.Errors.FirstOrDefault() });
+            }
+
+            return Ok(result.Data);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error parsing content for learning {TalkId}", id);
+            return StatusCode(500, new { error = "Error parsing content" });
+        }
+    }
+
+    /// <summary>
+    /// Update sections on a wizard-drafted learning (Step 2 save).
+    /// Upserts provided sections and soft-deletes any removed sections.
+    /// </summary>
+    [HttpPut("{id:guid}/sections")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(typeof(ToolboxTalkDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateSections(Guid id, [FromBody] UpdateTalkSectionsRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var command = new UpdateToolboxTalkSectionsCommand(
+                TalkId: id,
+                TenantId: _currentUserService.TenantId,
+                Sections: request.Sections);
+
+            var result = await _mediator.Send(command, ct);
+
+            if (!result.Success)
+            {
+                if (result.Errors.FirstOrDefault()?.Contains("not found", StringComparison.OrdinalIgnoreCase) == true)
+                    return NotFound(new { error = result.Errors.FirstOrDefault() });
+                return BadRequest(new { error = result.Errors.FirstOrDefault() });
+            }
+
+            return Ok(result.Data);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating sections for learning {TalkId}", id);
+            return StatusCode(500, new { error = "Error updating sections" });
+        }
+    }
+
+    /// <summary>
+    /// Generate AI quiz questions from the talk's existing sections (Step 3 — Quiz).
+    /// Replaces any previously generated questions atomically.
+    /// </summary>
+    [HttpPost("{id:guid}/quiz/generate")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(typeof(ToolboxTalkDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> GenerateQuiz(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            var userId = _currentUserService.UserId != null && Guid.TryParse(_currentUserService.UserId, out var uid) ? uid : (Guid?)null;
+            var command = new GenerateToolboxTalkQuizCommand(
+                TalkId: id,
+                TenantId: _currentUserService.TenantId,
+                UserId: userId);
+
+            var result = await _mediator.Send(command, ct);
+
+            if (!result.Success)
+            {
+                if (result.ErrorCode == FailureCode.WorkflowInvalidState)
+                    return Conflict(new { error = result.Errors.FirstOrDefault() });
+                if (result.Errors.FirstOrDefault()?.Contains("not found", StringComparison.OrdinalIgnoreCase) == true)
+                    return NotFound(new { error = result.Errors.FirstOrDefault() });
+                return BadRequest(new { error = result.Errors.FirstOrDefault() });
+            }
+
+            return Ok(result.Data);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating quiz for learning {TalkId}", id);
+            return StatusCode(500, new { error = "Error generating quiz" });
+        }
+    }
+
+    /// <summary>
+    /// Upsert quiz questions on a wizard-drafted learning (Step 3 save).
+    /// Questions omitted from the list are hard-deleted.
+    /// </summary>
+    [HttpPut("{id:guid}/questions")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(typeof(ToolboxTalkDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> UpdateQuestions(Guid id, [FromBody] UpdateTalkQuestionsRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var command = new UpdateToolboxTalkQuestionsCommand(
+                TalkId: id,
+                TenantId: _currentUserService.TenantId,
+                Questions: request.Questions);
+
+            var result = await _mediator.Send(command, ct);
+
+            if (!result.Success)
+            {
+                if (result.ErrorCode == FailureCode.WorkflowInvalidState)
+                    return Conflict(new { error = result.Errors.FirstOrDefault() });
+                if (result.Errors.FirstOrDefault()?.Contains("not found", StringComparison.OrdinalIgnoreCase) == true)
+                    return NotFound(new { error = result.Errors.FirstOrDefault() });
+                return BadRequest(new { error = result.Errors.FirstOrDefault() });
+            }
+
+            return Ok(result.Data);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating questions for learning {TalkId}", id);
+            return StatusCode(500, new { error = "Error updating questions" });
+        }
+    }
+
+    /// <summary>
+    /// Update quiz settings on a wizard-drafted learning (Step 3 QuizSettingsPanel auto-save).
+    /// Writes 7 fields: RequiresQuiz, PassingScore, QuizQuestionCount, ShuffleQuestions, ShuffleOptions, UseQuestionPool, AllowRetry.
+    /// </summary>
+    [HttpPut("{id:guid}/quiz-settings")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(typeof(ToolboxTalkDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> UpdateQuizSettings(Guid id, [FromBody] UpdateTalkQuizSettingsRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var command = new UpdateToolboxTalkQuizSettingsCommand(
+                TalkId: id,
+                TenantId: _currentUserService.TenantId,
+                RequiresQuiz: request.RequiresQuiz,
+                PassingScore: request.PassingScore,
+                QuizQuestionCount: request.QuizQuestionCount,
+                ShuffleQuestions: request.ShuffleQuestions,
+                ShuffleOptions: request.ShuffleOptions,
+                UseQuestionPool: request.UseQuestionPool,
+                AllowRetry: request.AllowRetry);
+
+            var result = await _mediator.Send(command, ct);
+
+            if (!result.Success)
+            {
+                if (result.ErrorCode == FailureCode.WorkflowInvalidState)
+                    return Conflict(new { error = result.Errors.FirstOrDefault() });
+                if (result.Errors.FirstOrDefault()?.Contains("not found", StringComparison.OrdinalIgnoreCase) == true)
+                    return NotFound(new { error = result.Errors.FirstOrDefault() });
+                return BadRequest(new { error = result.Errors.FirstOrDefault() });
+            }
+
+            return Ok(result.Data);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating quiz settings for learning {TalkId}", id);
+            return StatusCode(500, new { error = "Error updating quiz settings" });
+        }
+    }
+
+    /// <summary>
+    /// Update wizard Step 4 settings on a draft learning.
+    /// Handles title/description/category, behaviour toggles, refresher, and slideshow config.
+    /// Title/Description changes automatically stale any existing translations.
+    /// </summary>
+    [HttpPut("{id:guid}/settings")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(typeof(ToolboxTalkDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> UpdateLearningSettings(Guid id, [FromBody] UpdateLearningSettingsRequest request, CancellationToken ct)
+    {
+        var command = new UpdateToolboxTalkSettingsCommand(
+            TalkId: id,
+            TenantId: _currentUserService.TenantId,
+            Title: request.Title,
+            Description: request.Description,
+            Category: request.Category,
+            RefresherFrequency: request.RefresherFrequency,
+            IsActive: request.IsActive,
+            GenerateCertificate: request.GenerateCertificate,
+            MinimumVideoWatchPercent: request.MinimumVideoWatchPercent,
+            AutoAssignToNewEmployees: request.AutoAssignToNewEmployees,
+            AutoAssignDueDays: request.AutoAssignDueDays,
+            GenerateSlidesFromPdf: request.GenerateSlidesFromPdf);
+
+        var result = await _mediator.Send(command, ct);
+
+        if (!result.Success)
+        {
+            if (result.ErrorCode == FailureCode.WorkflowInvalidState)
+                return Conflict(new { error = result.Errors.FirstOrDefault() });
+            if (result.ErrorCode == FailureCode.TitleNotUnique)
+                return Conflict(new { error = result.Errors.FirstOrDefault(), code = "TitleNotUnique" });
+            if (result.Errors.FirstOrDefault()?.Contains("not found", StringComparison.OrdinalIgnoreCase) == true)
+                return NotFound(new { error = result.Errors.FirstOrDefault() });
+            return BadRequest(new { error = result.Errors.FirstOrDefault() });
+        }
+
+        return Ok(result.Data);
+    }
+
+    /// <summary>
+    /// Publish a wizard-drafted learning by talkId (new wizard Step 7).
+    /// Preconditions: talk exists, is not already published, has at least one section,
+    /// and (if target languages are declared) at least one language has a completed validation run.
+    /// Enqueues RequirementMappingJob after a successful status flip.
+    /// </summary>
+    [HttpPost("{talkId:guid}/publish")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(typeof(PublishTalkResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> PublishByTalkId(Guid talkId, CancellationToken ct)
+    {
+        var tenantId = _currentUserService.TenantId;
+        var command = new PublishToolboxTalkCommand(TalkId: talkId, TenantId: tenantId);
+        var result = await _mediator.Send(command, ct);
+
+        if (!result.Success)
+        {
+            if (result.Errors.FirstOrDefault()?.Contains("not found", StringComparison.OrdinalIgnoreCase) == true)
+                return NotFound(new { error = result.Errors.FirstOrDefault() });
+            if (result.ErrorCode == FailureCode.WorkflowInvalidState)
+                return Conflict(new { error = result.Errors.FirstOrDefault() });
+            return BadRequest(new { error = result.Errors.FirstOrDefault() });
+        }
+
+        // Fire-and-forget: enqueue AI requirement mapping (per CLAUDE.md Note 21 — concrete class)
+        BackgroundJob.Enqueue<RequirementMappingJob>(job =>
+            job.MapRequirementsAsync(tenantId, talkId, null, CancellationToken.None));
+
+        // Shape D — fire slideshow generation on Publish, mirroring the legacy wizard's
+        // ContentCreationSessionService.PublishAsync. Fire-and-forget: a failure here must
+        // never fail the publish, matching legacy's own swallow-and-log behaviour.
+        if (result.Data!.GenerateSlidesFromPdf)
+        {
+            try
+            {
+                BackgroundJob.Enqueue<ContentGenerationJob>(job =>
+                    job.GenerateSlideshowOnlyAsync(talkId, tenantId, "pdf", CancellationToken.None));
+            }
+            catch (Exception slideshowEx)
+            {
+                _logger.LogError(slideshowEx,
+                    "Failed to enqueue slideshow generation for talk {TalkId} in tenant {TenantId}. Publish succeeded.",
+                    talkId, tenantId);
+            }
+        }
+
+        return Ok(result.Data);
+    }
+
+    /// <summary>
     /// Update an existing toolbox talk
     /// </summary>
     /// <param name="id">Toolbox talk ID</param>
@@ -410,6 +781,36 @@ public class ToolboxTalksController : ControllerBase
     }
 
     /// <summary>
+    /// Update the wizard step last edited — used by the learning-wizard for resume navigation.
+    /// </summary>
+    [HttpPatch("{id:guid}/step")]
+    [Authorize(Policy = "Learnings.View")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateLastEditedStep(Guid id, [FromBody] UpdateLastEditedStepRequest request)
+    {
+        try
+        {
+            await _mediator.Send(new UpdateLastEditedStepCommand
+            {
+                TenantId = _currentUserService.TenantId,
+                TalkId = id,
+                Step = request.Step
+            });
+            return NoContent();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating step for toolbox talk {ToolboxTalkId}", id);
+            return StatusCode(500, new { message = "Error updating step" });
+        }
+    }
+
+    /// <summary>
     /// Get toolbox talks dashboard with KPIs and statistics
     /// </summary>
     /// <returns>Dashboard data with completion rates and overdue counts</returns>
@@ -476,20 +877,57 @@ public class ToolboxTalksController : ControllerBase
     {
         try
         {
-            // TODO: Implement UpdateToolboxTalkSettingsCommand when available
-            // For now, return the current settings as a placeholder
-            var query = new GetToolboxTalkSettingsQuery
-            {
-                TenantId = _currentUserService.TenantId
-            };
+            var command = new UpdateToolboxTalkTenantDefaultsCommand(
+                TenantId: _currentUserService.TenantId,
+                DefaultMinimumVideoWatchPercent: dto.DefaultMinimumVideoWatchPercent,
+                DefaultAutoAssignDueDays: dto.DefaultAutoAssignDueDays,
+                DefaultGenerateCertificate: dto.DefaultGenerateCertificate,
+                DefaultRefresherFrequency: dto.DefaultRefresherFrequency,
+                DefaultIsActive: dto.DefaultIsActive
+            );
 
-            var result = await _mediator.Send(query);
-            return Ok(Result.Ok(result));
+            var result = await _mediator.Send(command);
+            if (!result.Success)
+                return BadRequest(result);
+
+            return Ok(Result.Ok(result.Data));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error updating learning settings");
             return StatusCode(500, Result.Fail("Error updating learning settings"));
+        }
+    }
+
+    /// <summary>
+    /// Update notification toggle settings for the current tenant
+    /// </summary>
+    [HttpPut("settings/notifications")]
+    [Authorize(Policy = "Learnings.Admin")]
+    [ProducesResponseType(typeof(ToolboxTalkSettingsDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UpdateNotificationSettings([FromBody] UpdateToolboxTalkNotificationSettingsDto dto)
+    {
+        try
+        {
+            var command = new UpdateToolboxTalkNotificationSettingsCommand(
+                TenantId: _currentUserService.TenantId,
+                NotifyOnTranslationComplete: dto.NotifyOnTranslationComplete,
+                NotifyOnValidationComplete: dto.NotifyOnValidationComplete,
+                NotifyOnFailure: dto.NotifyOnFailure,
+                NotifyOnExternalReviewResponse: dto.NotifyOnExternalReviewResponse
+            );
+
+            var result = await _mediator.Send(command);
+            if (!result.Success)
+                return BadRequest(result);
+
+            return Ok(Result.Ok(result.Data));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating notification settings");
+            return StatusCode(500, Result.Fail("Error updating notification settings"));
         }
     }
 
@@ -1096,6 +1534,7 @@ public class ToolboxTalksController : ControllerBase
                 ToolboxTalkId = id,
                 TenantId = _currentUserService.TenantId,
                 TargetLanguages = request.Languages,
+                ConfirmOverwrite = request.ConfirmOverwrite ?? false,
                 SectorKey = sectorKey
             };
 
@@ -1133,6 +1572,79 @@ public class ToolboxTalksController : ControllerBase
                 type = ex.GetType().Name
             });
         }
+    }
+
+    /// <summary>
+    /// New-wizard translation entry point: start a translation + validation run for a single language.
+    /// Creates a TranslationValidationRun (IsNewWizard=true), records the workflow TranslationStarted event,
+    /// and enqueues TranslationValidationJob which generates the translation then validates it inline.
+    /// Returns the RunId so the frontend can subscribe to SignalR progress.
+    /// </summary>
+    /// <param name="id">Toolbox talk ID</param>
+    /// <param name="code">ISO 639-1 language code (e.g. "fr", "de"). Must be in the talk's TargetLanguageCodes.</param>
+    /// <param name="request">Optional overwrite confirmation</param>
+    /// <param name="ct">Cancellation token</param>
+    [HttpPost("{id:guid}/translations/{code}/start-translation")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> StartTalkTranslation(
+        Guid id, string code, [FromBody] StartTalkTranslationRequest request, CancellationToken ct)
+    {
+        var command = new StartTalkTranslationCommand
+        {
+            TalkId = id,
+            TenantId = _currentUserService.TenantId,
+            LanguageCode = code,
+            ConfirmOverwrite = request.ConfirmOverwrite
+        };
+
+        var result = await _mediator.Send(command, ct);
+
+        if (!result.Success)
+        {
+            return result.ErrorCode switch
+            {
+                FailureCode.WorkflowInvalidState         => Conflict(new { error = result.Errors.FirstOrDefault() }),
+                FailureCode.WorkflowConfirmationRequired => Conflict(new { error = result.Errors.FirstOrDefault() }),
+                _                                        => BadRequest(new { error = result.Errors.FirstOrDefault() })
+            };
+        }
+
+        return Ok(new { runId = result.Data!.RunId });
+    }
+
+    /// <summary>
+    /// Adds a new target language to an existing (Published) learning.
+    /// The language immediately appears in the Translations tab with Initial state,
+    /// ready for translation to be started.
+    /// </summary>
+    /// <param name="id">Toolbox talk ID</param>
+    /// <param name="request">Language code to add</param>
+    /// <param name="ct">Cancellation token</param>
+    [HttpPost("{id:guid}/target-languages")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(typeof(ToolboxTalkDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> AddTargetLanguage(
+        Guid id,
+        [FromBody] AddTargetLanguageRequest request,
+        CancellationToken ct)
+    {
+        var command = new AddTargetLanguageCommand(id, _currentUserService.TenantId, request.LanguageCode);
+        var result = await _mediator.Send(command, ct);
+
+        if (!result.Success)
+        {
+            if (result.Errors.FirstOrDefault()?.Contains("not found", StringComparison.OrdinalIgnoreCase) == true)
+                return NotFound(new { error = result.Errors.FirstOrDefault() });
+            return BadRequest(new { error = result.Errors.FirstOrDefault() });
+        }
+
+        return Ok(result.Data);
     }
 
     /// <summary>
@@ -1175,6 +1687,255 @@ public class ToolboxTalksController : ControllerBase
         {
             _logger.LogError(ex, "Error retrieving translations for toolbox talk {ToolboxTalkId}", id);
             return StatusCode(500, new { error = "Error retrieving translations" });
+        }
+    }
+
+    /// <summary>
+    /// Gets the workflow state for each translated language of a toolbox talk.
+    /// </summary>
+    /// <param name="id">Toolbox talk ID</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>List of workflow states, one per target language code</returns>
+    [HttpGet("{id:guid}/translations/workflow-state")]
+    [ProducesResponseType(typeof(List<TranslationWorkflowStateDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<List<TranslationWorkflowStateDto>>> GetTranslationsWorkflowState(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            var query = new GetToolboxTalkByIdQuery
+            {
+                TenantId = _currentUserService.TenantId,
+                Id = id
+            };
+
+            var toolboxTalk = await _mediator.Send(query, ct);
+            if (toolboxTalk == null)
+            {
+                return NotFound(new { error = "Learning not found" });
+            }
+
+            List<string> languageCodes;
+            if (string.IsNullOrWhiteSpace(toolboxTalk.TargetLanguageCodes))
+            {
+                languageCodes = new List<string>();
+            }
+            else
+            {
+                try
+                {
+                    languageCodes = JsonSerializer.Deserialize<List<string>>(
+                        toolboxTalk.TargetLanguageCodes)
+                        ?? new List<string>();
+                }
+                catch (JsonException)
+                {
+                    _logger.LogWarning(
+                        "Failed to deserialize TargetLanguageCodes for talk {TalkId}",
+                        id);
+                    languageCodes = new List<string>();
+                }
+            }
+
+            languageCodes = languageCodes
+                .Where(l => !string.IsNullOrWhiteSpace(l))
+                .Distinct()
+                .ToList();
+
+            var states = new List<TranslationWorkflowStateDto>();
+            foreach (var lang in languageCodes)
+            {
+                var state = await _workflowService.GetState(id, lang, ct: ct);
+                states.Add(state);
+            }
+
+            return Ok(states);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving translation workflow states for toolbox talk {ToolboxTalkId}", id);
+            return StatusCode(500, new { error = "Error retrieving translation workflow states" });
+        }
+    }
+
+    /// <summary>
+    /// Gets the chronological event history for a specific language's translation workflow.
+    /// </summary>
+    /// <param name="id">Toolbox talk ID</param>
+    /// <param name="languageCode">Language code (e.g., "pl", "ro")</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Ordered list of workflow events; empty list if talk exists but has no events for this language</returns>
+    [HttpGet("{id:guid}/translations/{languageCode}/history")]
+    [Authorize(Policy = "Learnings.View")]
+    [ProducesResponseType(typeof(IReadOnlyList<WorkflowEventDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<IReadOnlyList<WorkflowEventDto>>> GetTranslationHistory(
+        Guid id, string languageCode, CancellationToken ct)
+    {
+        try
+        {
+            var query = new GetToolboxTalkByIdQuery
+            {
+                TenantId = _currentUserService.TenantId,
+                Id = id
+            };
+
+            var toolboxTalk = await _mediator.Send(query, ct);
+            if (toolboxTalk == null)
+                return NotFound(new { error = "Learning not found" });
+
+            var history = await _workflowService.GetHistory(id, languageCode, ct: ct);
+            return Ok(history);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving translation history for toolbox talk {ToolboxTalkId}, language {LanguageCode}", id, languageCode);
+            return StatusCode(500, new { error = "Error retrieving translation history" });
+        }
+    }
+
+    /// <summary>
+    /// Marks a language's translation as accepted and final.
+    /// Valid from states: Validated, ReviewerAccepted, ThirdPartyReviewed.
+    /// Under Option A, ThirdPartyReviewed means the external reviewer's edits have already been
+    /// merged into TranslatedSections on submission (see SubmitExternalReview auto-apply) — this
+    /// endpoint simply transitions the state to Accepted from there without moving any data.
+    /// </summary>
+    /// <param name="id">Toolbox talk ID</param>
+    /// <param name="languageCode">Language code (e.g., "pl", "ro")</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>200 OK on success</returns>
+    [HttpPost("{id:guid}/translations/{languageCode}/accept")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> AcceptTranslationAsFinal(
+        Guid id, string languageCode, CancellationToken ct)
+    {
+        try
+        {
+            var query = new GetToolboxTalkByIdQuery
+            {
+                TenantId = _currentUserService.TenantId,
+                Id = id
+            };
+
+            var toolboxTalk = await _mediator.Send(query, ct);
+            if (toolboxTalk == null)
+                return NotFound(new { error = "Learning not found" });
+
+            var result = await _workflowService.AcceptAsFinal(id, languageCode, ct: ct);
+            if (!result.Success)
+            {
+                if (result.ErrorCode == FailureCode.WorkflowInvalidState)
+                    return Conflict(new { error = result.Errors.FirstOrDefault() });
+                return BadRequest(new { error = result.Errors.FirstOrDefault() });
+            }
+
+            return Ok(new { message = "Translation accepted as final" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error accepting translation as final for toolbox talk {ToolboxTalkId}, language {LanguageCode}", id, languageCode);
+            return StatusCode(500, new { error = "Error accepting translation as final" });
+        }
+    }
+
+    /// <summary>
+    /// Cancels an outstanding external review invitation, revoking the pending invitation and
+    /// reverting workflow state from AwaitingThirdParty back to ReviewerAccepted.
+    /// </summary>
+    /// <param name="id">Toolbox talk ID</param>
+    /// <param name="languageCode">Language code (e.g., "pl", "ro")</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>200 OK on success</returns>
+    [HttpPost("{id:guid}/translations/{languageCode}/cancel-external-review")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> CancelTranslationExternalReview(
+        Guid id, string languageCode, CancellationToken ct)
+    {
+        try
+        {
+            var query = new GetToolboxTalkByIdQuery
+            {
+                TenantId = _currentUserService.TenantId,
+                Id = id
+            };
+
+            var toolboxTalk = await _mediator.Send(query, ct);
+            if (toolboxTalk == null)
+                return NotFound(new { error = "Learning not found" });
+
+            var result = await _workflowService.CancelExternalReview(id, languageCode, ct: ct);
+            if (!result.Success)
+            {
+                if (result.ErrorCode == FailureCode.WorkflowInvalidState)
+                    return Conflict(new { error = result.Errors.FirstOrDefault() });
+                if (result.ErrorCode == FailureCode.WorkflowInvitationNotFound)
+                    return NotFound(new { error = result.Errors.FirstOrDefault() });
+                return BadRequest(new { error = result.Errors.FirstOrDefault() });
+            }
+
+            return Ok(new { message = "External review cancelled" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error cancelling external review for toolbox talk {ToolboxTalkId}, language {LanguageCode}", id, languageCode);
+            return StatusCode(500, new { error = "Error cancelling external review" });
+        }
+    }
+
+    /// <summary>
+    /// Initiates an external review by creating an invitation for a third-party reviewer.
+    /// Valid from state: ReviewerAccepted. Transitions workflow to AwaitingThirdParty.
+    /// </summary>
+    /// <param name="id">Toolbox talk ID</param>
+    /// <param name="languageCode">Language code (e.g., "pl", "ro")</param>
+    /// <param name="request">Reviewer email address</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>200 OK with invitation details on success</returns>
+    [HttpPost("{id:guid}/translations/{languageCode}/initiate-external-review")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> InitiateTranslationExternalReview(
+        Guid id, string languageCode, [FromBody] InitiateExternalReviewRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var query = new GetToolboxTalkByIdQuery
+            {
+                TenantId = _currentUserService.TenantId,
+                Id = id
+            };
+
+            var toolboxTalk = await _mediator.Send(query, ct);
+            if (toolboxTalk == null)
+                return NotFound(new { error = "Learning not found" });
+
+            var result = await _workflowService.InitiateExternalReview(
+                id, languageCode, request.ReviewerEmail, request.EditableSectionIndices, ct: ct);
+            if (!result.Success)
+            {
+                return result.ErrorCode switch
+                {
+                    FailureCode.WorkflowInvalidState => Conflict(new { error = result.Errors.FirstOrDefault() }),
+                    FailureCode.WorkflowInitiationInvalid => BadRequest(new { error = result.Errors.FirstOrDefault() }),
+                    _ => BadRequest(new { error = result.Errors.FirstOrDefault() })
+                };
+            }
+
+            return Ok(new { message = "External review invitation sent" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error initiating external review for toolbox talk {ToolboxTalkId}, language {LanguageCode}", id, languageCode);
+            return StatusCode(500, new { error = "Error initiating external review" });
         }
     }
 
@@ -1666,7 +2427,18 @@ public class ToolboxTalksController : ControllerBase
 }
 
 /// <summary>
-/// DTO for updating toolbox talk settings
+/// DTO for updating notification toggle settings
+/// </summary>
+public record UpdateToolboxTalkNotificationSettingsDto
+{
+    public bool NotifyOnTranslationComplete { get; init; } = true;
+    public bool NotifyOnValidationComplete { get; init; } = true;
+    public bool NotifyOnFailure { get; init; } = true;
+    public bool NotifyOnExternalReviewResponse { get; init; } = true;
+}
+
+/// <summary>
+/// DTO for updating toolbox talk tenant-level settings
 /// </summary>
 public record UpdateToolboxTalkSettingsDto
 {
@@ -1677,6 +2449,12 @@ public record UpdateToolboxTalkSettingsDto
     public int MaxQuizAttempts { get; init; } = 3;
     public bool RequireSignature { get; init; } = true;
     public bool AutoAssignNewEmployees { get; init; } = true;
+    // Wizard Step 4 defaults
+    public int DefaultMinimumVideoWatchPercent { get; init; } = 90;
+    public int DefaultAutoAssignDueDays { get; init; } = 14;
+    public bool DefaultGenerateCertificate { get; init; } = true;
+    public string DefaultRefresherFrequency { get; init; } = "Once";
+    public bool DefaultIsActive { get; init; } = true;
 }
 
 /// <summary>
@@ -1778,6 +2556,12 @@ public record GenerateTranslationsRequest
     /// List of language names to translate to (e.g., "Polish", "Romanian")
     /// </summary>
     public List<string> Languages { get; init; } = new();
+
+    /// <summary>
+    /// When true, allows overwriting a translation in Accepted or ReviewerAccepted state.
+    /// Set to true when the user confirms the overwrite dialog in the UI.
+    /// </summary>
+    public bool? ConfirmOverwrite { get; init; }
 }
 
 /// <summary>
@@ -2040,4 +2824,93 @@ public record SmartGenerateContentResponse
     // Missing translations job info (if content was fully reused but some languages are missing)
     public bool MissingTranslationsJobQueued { get; init; }
     public string? MissingTranslationsJobId { get; init; }
+}
+
+
+public record InitiateExternalReviewRequest
+{
+    public string ReviewerEmail { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Section indices the reviewer may edit. Null means full-scope review (all sections
+    /// editable). When provided, must be non-empty with no duplicates and every index in
+    /// range against the translation's section count.
+    /// </summary>
+    public List<int>? EditableSectionIndices { get; init; }
+}
+
+public record StartTalkTranslationRequest
+{
+    public bool ConfirmOverwrite { get; init; }
+}
+
+public record UpdateLastEditedStepRequest
+{
+    public int Step { get; init; }
+}
+
+/// <summary>Request DTO for obtaining a presigned R2 upload URL for a wizard source file.</summary>
+public record UploadSourceUrlRequest
+{
+    public string FileName { get; init; } = string.Empty;
+    public string ContentType { get; init; } = string.Empty;
+}
+
+/// <summary>Response DTO returned by the upload-source-url endpoint.</summary>
+public record UploadSourceUrlResponse
+{
+    /// <summary>Presigned S3/R2 PUT URL. Expires in 15 minutes.</summary>
+    public string UploadUrl { get; init; } = string.Empty;
+
+    /// <summary>Public URL of the file after upload completes. Pass this as SourceFileUrl when initialising the talk.</summary>
+    public string PublicUrl { get; init; } = string.Empty;
+
+    /// <summary>R2 storage key for the file.</summary>
+    public string Key { get; init; } = string.Empty;
+}
+
+/// <summary>Request body for PUT {id}/sections (Step 2 section save).</summary>
+public record UpdateTalkSectionsRequest
+{
+    public List<UpdateToolboxTalkSectionDto> Sections { get; init; } = [];
+}
+
+/// <summary>Request body for PUT {id}/questions (Step 3 question upsert).</summary>
+public record UpdateTalkQuestionsRequest
+{
+    public List<UpdateToolboxTalkQuestionDto> Questions { get; init; } = [];
+}
+
+/// <summary>Request body for PUT {id}/quiz-settings (Step 3 quiz settings auto-save).</summary>
+public record UpdateTalkQuizSettingsRequest
+{
+    public bool RequiresQuiz { get; init; } = true;
+    public int PassingScore { get; init; } = 80;
+    public int? QuizQuestionCount { get; init; }
+    public bool ShuffleQuestions { get; init; }
+    public bool ShuffleOptions { get; init; }
+    public bool UseQuestionPool { get; init; }
+    public bool AllowRetry { get; init; } = true;
+}
+
+/// <summary>Request body for POST {id}/target-languages.</summary>
+public record AddTargetLanguageRequest
+{
+    /// <summary>ISO 639-1 language code (e.g. "fr", "de").</summary>
+    [Required, MaxLength(10)]
+    public string LanguageCode { get; init; } = string.Empty;
+}
+
+public record UpdateLearningSettingsRequest
+{
+    [Required, MaxLength(200)] public string Title { get; init; } = string.Empty;
+    [MaxLength(2000)] public string? Description { get; init; }
+    public string? Category { get; init; }
+    public RefresherFrequency RefresherFrequency { get; init; } = RefresherFrequency.Once;
+    public bool IsActive { get; init; } = true;
+    public bool GenerateCertificate { get; init; } = true;
+    [Range(50, 100)] public int MinimumVideoWatchPercent { get; init; } = 90;
+    public bool AutoAssignToNewEmployees { get; init; }
+    [Range(1, 90)] public int AutoAssignDueDays { get; init; } = 14;
+    public bool GenerateSlidesFromPdf { get; init; }
 }

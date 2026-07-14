@@ -16,7 +16,7 @@ public class EmployeeCompletionTests : IntegrationTestBase
     public async Task GetMyToolboxTalks_ReturnsPagedResults()
     {
         // Act
-        var response = await SiteManagerClient.GetAsync("/api/my/toolbox-talks?pageNumber=1&pageSize=10");
+        var response = await OperatorClient.GetAsync("/api/my/toolbox-talks?pageNumber=1&pageSize=10");
         var result = await response.Content.ReadFromJsonAsync<ResultWrapper<PaginatedResult<MyToolboxTalkListDto>>>();
 
         // Assert
@@ -30,7 +30,7 @@ public class EmployeeCompletionTests : IntegrationTestBase
     public async Task GetMyToolboxTalks_FilterByStatus_ReturnsFilteredResults()
     {
         // Act
-        var response = await SiteManagerClient.GetAsync($"/api/my/toolbox-talks?status={ScheduledTalkStatus.Pending}");
+        var response = await OperatorClient.GetAsync($"/api/my/toolbox-talks?status={ScheduledTalkStatus.Pending}");
         var result = await response.Content.ReadFromJsonAsync<ResultWrapper<PaginatedResult<MyToolboxTalkListDto>>>();
 
         // Assert
@@ -52,7 +52,7 @@ public class EmployeeCompletionTests : IntegrationTestBase
     public async Task GetPendingToolboxTalks_ReturnsOnlyPending()
     {
         // Act
-        var response = await SiteManagerClient.GetAsync("/api/my/toolbox-talks/pending");
+        var response = await OperatorClient.GetAsync("/api/my/toolbox-talks/pending");
         var result = await response.Content.ReadFromJsonAsync<ResultWrapper<PaginatedResult<MyToolboxTalkListDto>>>();
 
         // Assert
@@ -64,7 +64,7 @@ public class EmployeeCompletionTests : IntegrationTestBase
     public async Task GetInProgressToolboxTalks_ReturnsOnlyInProgress()
     {
         // Act
-        var response = await SiteManagerClient.GetAsync("/api/my/toolbox-talks/in-progress");
+        var response = await OperatorClient.GetAsync("/api/my/toolbox-talks/in-progress");
         var result = await response.Content.ReadFromJsonAsync<ResultWrapper<PaginatedResult<MyToolboxTalkListDto>>>();
 
         // Assert
@@ -76,7 +76,7 @@ public class EmployeeCompletionTests : IntegrationTestBase
     public async Task GetOverdueToolboxTalks_ReturnsOnlyOverdue()
     {
         // Act
-        var response = await SiteManagerClient.GetAsync("/api/my/toolbox-talks/overdue");
+        var response = await OperatorClient.GetAsync("/api/my/toolbox-talks/overdue");
         var result = await response.Content.ReadFromJsonAsync<ResultWrapper<PaginatedResult<MyToolboxTalkListDto>>>();
 
         // Assert
@@ -88,7 +88,7 @@ public class EmployeeCompletionTests : IntegrationTestBase
     public async Task GetCompletedToolboxTalks_ReturnsOnlyCompleted()
     {
         // Act
-        var response = await SiteManagerClient.GetAsync("/api/my/toolbox-talks/completed");
+        var response = await OperatorClient.GetAsync("/api/my/toolbox-talks/completed");
         var result = await response.Content.ReadFromJsonAsync<ResultWrapper<PaginatedResult<MyToolboxTalkListDto>>>();
 
         // Assert
@@ -107,7 +107,7 @@ public class EmployeeCompletionTests : IntegrationTestBase
         var nonExistentId = Guid.NewGuid();
 
         // Act
-        var response = await SiteManagerClient.GetAsync($"/api/my/toolbox-talks/{nonExistentId}");
+        var response = await OperatorClient.GetAsync($"/api/my/toolbox-talks/{nonExistentId}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -129,7 +129,7 @@ public class EmployeeCompletionTests : IntegrationTestBase
         }
 
         // Get the talk details to find the first section
-        var talkResponse = await SiteManagerClient.GetAsync($"/api/my/toolbox-talks/{scheduledTalk.Id}");
+        var talkResponse = await OperatorClient.GetAsync($"/api/my/toolbox-talks/{scheduledTalk.Id}");
         if (!talkResponse.IsSuccessStatusCode)
         {
             // Talk might not be assigned to current user
@@ -146,7 +146,7 @@ public class EmployeeCompletionTests : IntegrationTestBase
 
         // Act
         var request = new { TimeSpentSeconds = 30 };
-        var response = await SiteManagerClient.PostAsJsonAsync(
+        var response = await OperatorClient.PostAsJsonAsync(
             $"/api/my/toolbox-talks/{scheduledTalk.Id}/sections/{firstSection.SectionId}/read",
             request);
 
@@ -163,7 +163,7 @@ public class EmployeeCompletionTests : IntegrationTestBase
 
         // Act
         var request = new { TimeSpentSeconds = 30 };
-        var response = await SiteManagerClient.PostAsJsonAsync(
+        var response = await OperatorClient.PostAsJsonAsync(
             $"/api/my/toolbox-talks/{nonExistentTalkId}/sections/{nonExistentSectionId}/read",
             request);
 
@@ -203,7 +203,7 @@ public class EmployeeCompletionTests : IntegrationTestBase
         };
 
         // Act
-        var response = await SiteManagerClient.PostAsJsonAsync(
+        var response = await OperatorClient.PostAsJsonAsync(
             $"/api/my/toolbox-talks/{nonExistentTalkId}/quiz/submit",
             new { Answers = answers });
 
@@ -243,7 +243,7 @@ public class EmployeeCompletionTests : IntegrationTestBase
 
         // Act
         var request = new { WatchPercent = 50 };
-        var response = await SiteManagerClient.PostAsJsonAsync(
+        var response = await OperatorClient.PostAsJsonAsync(
             $"/api/my/toolbox-talks/{scheduledTalk.Id}/video-progress",
             request);
 
@@ -259,7 +259,7 @@ public class EmployeeCompletionTests : IntegrationTestBase
 
         // Act
         var request = new { WatchPercent = 50 };
-        var response = await SiteManagerClient.PostAsJsonAsync(
+        var response = await OperatorClient.PostAsJsonAsync(
             $"/api/my/toolbox-talks/{nonExistentTalkId}/video-progress",
             request);
 
@@ -275,7 +275,7 @@ public class EmployeeCompletionTests : IntegrationTestBase
 
         // Act
         var request = new { WatchPercent = 150 }; // Invalid - over 100
-        var response = await SiteManagerClient.PostAsJsonAsync(
+        var response = await OperatorClient.PostAsJsonAsync(
             $"/api/my/toolbox-talks/{talkId}/video-progress",
             request);
 
@@ -295,7 +295,7 @@ public class EmployeeCompletionTests : IntegrationTestBase
         var sampleSignature = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 
         // Act
-        var response = await SiteManagerClient.PostAsJsonAsync(
+        var response = await OperatorClient.PostAsJsonAsync(
             $"/api/my/toolbox-talks/{nonExistentTalkId}/complete",
             new { SignatureData = sampleSignature, SignedByName = "Test User" });
 
@@ -326,7 +326,7 @@ public class EmployeeCompletionTests : IntegrationTestBase
         var talkId = Guid.NewGuid();
 
         // Act
-        var response = await SiteManagerClient.PostAsJsonAsync(
+        var response = await OperatorClient.PostAsJsonAsync(
             $"/api/my/toolbox-talks/{talkId}/complete",
             new { SignatureData = "", SignedByName = "Test User" });
 
@@ -343,7 +343,7 @@ public class EmployeeCompletionTests : IntegrationTestBase
     {
         // This is an integration test that requires seeded test data
         // Skip if test tenant data not available
-        var pendingResponse = await SiteManagerClient.GetAsync("/api/my/toolbox-talks/pending?pageSize=1");
+        var pendingResponse = await OperatorClient.GetAsync("/api/my/toolbox-talks/pending?pageSize=1");
         var pendingResult = await pendingResponse.Content.ReadFromJsonAsync<ResultWrapper<PaginatedResult<MyToolboxTalkListDto>>>();
 
         if (pendingResult?.Data?.Items == null || !pendingResult.Data.Items.Any())
@@ -355,7 +355,7 @@ public class EmployeeCompletionTests : IntegrationTestBase
         var pendingTalk = pendingResult.Data.Items.First();
 
         // Get full talk details
-        var detailResponse = await SiteManagerClient.GetAsync($"/api/my/toolbox-talks/{pendingTalk.ScheduledTalkId}");
+        var detailResponse = await OperatorClient.GetAsync($"/api/my/toolbox-talks/{pendingTalk.ScheduledTalkId}");
         if (!detailResponse.IsSuccessStatusCode)
         {
             return;
@@ -371,7 +371,7 @@ public class EmployeeCompletionTests : IntegrationTestBase
         foreach (var section in talk.Sections.OrderBy(s => s.SectionNumber))
         {
             var readRequest = new { TimeSpentSeconds = 30 };
-            var readResponse = await SiteManagerClient.PostAsJsonAsync(
+            var readResponse = await OperatorClient.PostAsJsonAsync(
                 $"/api/my/toolbox-talks/{talk.ScheduledTalkId}/sections/{section.SectionId}/read",
                 readRequest);
 
@@ -391,7 +391,7 @@ public class EmployeeCompletionTests : IntegrationTestBase
                 answers[q.Id] = q.Options?.FirstOrDefault() ?? "True";
             }
 
-            var quizResponse = await SiteManagerClient.PostAsJsonAsync(
+            var quizResponse = await OperatorClient.PostAsJsonAsync(
                 $"/api/my/toolbox-talks/{talk.ScheduledTalkId}/quiz/submit",
                 new { Answers = answers });
 
@@ -404,7 +404,7 @@ public class EmployeeCompletionTests : IntegrationTestBase
 
         // Step 3: Complete the talk
         var sampleSignature = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
-        var completeResponse = await SiteManagerClient.PostAsJsonAsync(
+        var completeResponse = await OperatorClient.PostAsJsonAsync(
             $"/api/my/toolbox-talks/{talk.ScheduledTalkId}/complete",
             new { SignatureData = sampleSignature, SignedByName = "Test Manager" });
 

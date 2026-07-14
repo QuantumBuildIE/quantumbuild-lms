@@ -102,6 +102,25 @@ public interface IR2StorageService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Uploads a cover image (PNG or JPEG) to R2 storage.
+    /// Path: {tenantId}/cover-images/{talkId}-cover.{ext}
+    /// </summary>
+    Task<R2UploadResult> UploadCoverImageAsync(
+        Guid tenantId,
+        Guid toolboxTalkId,
+        Stream content,
+        string originalFileName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes the cover image for a specific Toolbox Talk (best-effort).
+    /// </summary>
+    Task DeleteCoverImageAsync(
+        Guid tenantId,
+        Guid toolboxTalkId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Uploads a session file (PDF, video, or document) to R2 storage.
     /// Path: {tenantId}/sessions/{sessionId}/{originalFileName}
     /// </summary>

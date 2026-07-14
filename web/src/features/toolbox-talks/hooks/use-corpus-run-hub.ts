@@ -81,6 +81,9 @@ export function useCorpusRunHub(runId: string | null): UseCorpusRunHubReturn {
       .configureLogging(LogLevel.Warning)
       .build();
 
+    connection.serverTimeoutInMilliseconds = 120_000;
+    connection.keepAliveIntervalInMilliseconds = 10_000;
+
     connectionRef.current = connection;
 
     const manualReconnect = async () => {
@@ -95,6 +98,9 @@ export function useCorpusRunHub(runId: string | null): UseCorpusRunHubReturn {
           .withAutomaticReconnect(RECONNECT_DELAYS)
           .configureLogging(LogLevel.Warning)
           .build();
+
+        fresh.serverTimeoutInMilliseconds = 120_000;
+        fresh.keepAliveIntervalInMilliseconds = 10_000;
 
         registerHandlers(fresh);
 

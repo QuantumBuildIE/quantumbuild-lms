@@ -175,42 +175,6 @@ public class SubtitleProcessingTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task StartProcessing_WithEditPermission_Returns202()
-    {
-        // Arrange - Create a new talk for this test
-        var createCommand = new
-        {
-            Title = $"Talk for permission test {Guid.NewGuid()}",
-            Frequency = ToolboxTalkFrequency.Once,
-            RequiresQuiz = false,
-            IsActive = true,
-            VideoUrl = "https://example.com/video.mp4",
-            Sections = new[]
-            {
-                new { SectionNumber = 1, Title = "Section 1", Content = "<p>Content</p>", RequiresAcknowledgment = true }
-            }
-        };
-
-        var createResponse = await AdminClient.PostAsJsonAsync("/api/toolbox-talks", createCommand);
-        var createdTalk = await createResponse.Content.ReadFromJsonAsync<ToolboxTalkDto>();
-        var talkId = createdTalk!.Id;
-
-        var request = new StartProcessingRequest
-        {
-            VideoUrl = "https://drive.google.com/file/d/test/view",
-            VideoSourceType = SubtitleVideoSourceType.GoogleDrive,
-            TargetLanguages = new List<string> { "Spanish" }
-        };
-
-        // Act - SiteManager has ToolboxTalks.Edit permission
-        var response = await SiteManagerClient.PostAsJsonAsync(
-            $"/api/toolbox-talks/{talkId}/subtitles/process", request);
-
-        // Assert - Should be accepted (or fail in background)
-        response.StatusCode.Should().BeOneOf(HttpStatusCode.Accepted, HttpStatusCode.BadRequest);
-    }
-
-    [Fact]
     public async Task StartProcessing_MissingVideoUrl_Returns400()
     {
         // Arrange

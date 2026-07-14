@@ -34,6 +34,7 @@ import {
   uploadSessionCoverImage,
   triggerRegulatoryScore,
   getRegulatoryScoreHistory,
+  getRegulatoryApplicability,
 } from './content-creation';
 import type {
   CreateSessionRequest,
@@ -44,6 +45,7 @@ import type {
   QuizSettings,
   ContentCreationSettings,
   ValidationScoreType,
+  RegulatoryApplicabilityDto,
 } from '@/types/content-creation';
 
 // ============================================
@@ -67,6 +69,8 @@ export const contentCreationKeys = {
     [...contentCreationKeys.all, 'course-validation', courseId, runId] as const,
   regulatoryScoreHistory: (talkId: string, runId: string) =>
     [...contentCreationKeys.all, 'validation', talkId, runId, 'regulatory-score-history'] as const,
+  regulatoryApplicability: (sectorKey: string) =>
+    [...contentCreationKeys.all, 'regulatory-applicability', sectorKey] as const,
 };
 
 // ============================================
@@ -248,6 +252,9 @@ export function useSectionDecision() {
       queryClient.invalidateQueries({
         queryKey: contentCreationKeys.validationRun(talkId, runId),
       });
+      queryClient.invalidateQueries({
+        queryKey: contentCreationKeys.validationRuns(talkId),
+      });
     },
   });
 }
@@ -329,17 +336,23 @@ export function useCourseValidationRun(
 }
 
 /**
- * Fetch validation run details
+ * Fetch validation run details.
+ *
+ * Pass `refetchInterval` when the caller needs to observe a background
+ * re-validation job (triggered by an edit/retry) reach a terminal status —
+ * defaults to no polling so existing read-only consumers are unaffected.
  */
 export function useValidationRun(
   talkId: string | null,
-  runId: string | null
+  runId: string | null,
+  options?: { refetchInterval?: number | false }
 ) {
   return useQuery({
     queryKey: contentCreationKeys.validationRun(talkId ?? '', runId ?? ''),
     queryFn: () => getValidationRun(talkId!, runId!),
     enabled: !!talkId && !!runId,
     staleTime: 10 * 1000,
+    refetchInterval: options?.refetchInterval ?? false,
   });
 }
 
@@ -455,6 +468,9 @@ export function useSessionSectionDecision() {
     onSuccess: (_, { talkId, runId }) => {
       queryClient.invalidateQueries({
         queryKey: contentCreationKeys.validationRun(talkId, runId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: contentCreationKeys.validationRuns(talkId),
       });
     },
   });
@@ -656,5 +672,22 @@ export function useTriggerRegulatoryScore() {
         queryKey: contentCreationKeys.regulatoryScoreHistory(talkId, runId),
       });
     },
+  });
+}
+
+/**
+ * Check whether a sector key has an ingested regulatory profile with approved requirements.
+ * Re-fires when sectorKey changes — used for pre-flight warnings in the wizard and on
+ * the results screen. Returns null immediately when sectorKey is null or empty.
+ */
+export function useRegulatoryApplicability(sectorKey: string | null | undefined): {
+  data: RegulatoryApplicabilityDto | null | undefined;
+  isLoading: boolean;
+} {
+  return useQuery({
+    queryKey: contentCreationKeys.regulatoryApplicability(sectorKey ?? ''),
+    queryFn: () => getRegulatoryApplicability(sectorKey!),
+    enabled: !!sectorKey,
+    staleTime: 5 * 60 * 1000, // 5 minutes — profile counts change rarely
   });
 }

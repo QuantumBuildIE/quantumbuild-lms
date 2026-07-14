@@ -98,6 +98,7 @@ public class TestTenantSeeder
         // Core module (must be last due to foreign keys)
         await ExecuteDeleteAsync("Contacts", "\"TenantId\" = {0}", tenantId);
         await ExecuteDeleteAsync("Companies", "\"TenantId\" = {0}", tenantId);
+        await ExecuteDeleteAsync("SupervisorAssignments", "\"TenantId\" = {0}", tenantId);
         await ExecuteDeleteAsync("Employees", "\"TenantId\" = {0}", tenantId);
         await ExecuteDeleteAsync("Sites", "\"TenantId\" = {0}", tenantId);
 
@@ -123,6 +124,7 @@ public class TestTenantSeeder
     {
         await SeedTenantAsync();
         await SeedUsersAsync();
+        await SeedDpaAsync();
         await SeedSitesAsync();
         await SeedEmployeesAsync();
         await SeedCompaniesAsync();
@@ -152,8 +154,11 @@ public class TestTenantSeeder
         await tenants.AddAsync(tenant);
         await _context.SaveChangesAsync();
         _logger.LogInformation("Created test tenant: {TenantName}", tenant.Name);
+    }
 
-        // Seed DPA acceptance so the tenant clears the DPA gate
+    private async Task SeedDpaAsync()
+    {
+        // DPA seeded after users so FK_DpaAcceptances_Users_AcceptedByUserId is satisfied.
         var dpaAcceptances = _context.Set<DpaAcceptance>();
         if (!await dpaAcceptances.IgnoreQueryFilters().AnyAsync(d => d.TenantId == TestTenantConstants.TenantId))
         {
@@ -216,38 +221,6 @@ public class TestTenantSeeder
             },
             new User
             {
-                Id = TestTenantConstants.Users.SiteManager.Id,
-                TenantId = TestTenantConstants.TenantId,
-                Email = TestTenantConstants.Users.SiteManager.Email,
-                NormalizedEmail = TestTenantConstants.Users.SiteManager.Email.ToUpperInvariant(),
-                UserName = TestTenantConstants.Users.SiteManager.Email,
-                NormalizedUserName = TestTenantConstants.Users.SiteManager.Email.ToUpperInvariant(),
-                FirstName = TestTenantConstants.Users.SiteManager.FirstName,
-                LastName = TestTenantConstants.Users.SiteManager.LastName,
-                EmailConfirmed = true,
-                IsActive = true,
-                SecurityStamp = Guid.NewGuid().ToString(),
-                CreatedAt = DateTime.UtcNow,
-                CreatedBy = "test-seeder"
-            },
-            new User
-            {
-                Id = TestTenantConstants.Users.Warehouse.Id,
-                TenantId = TestTenantConstants.TenantId,
-                Email = TestTenantConstants.Users.Warehouse.Email,
-                NormalizedEmail = TestTenantConstants.Users.Warehouse.Email.ToUpperInvariant(),
-                UserName = TestTenantConstants.Users.Warehouse.Email,
-                NormalizedUserName = TestTenantConstants.Users.Warehouse.Email.ToUpperInvariant(),
-                FirstName = TestTenantConstants.Users.Warehouse.FirstName,
-                LastName = TestTenantConstants.Users.Warehouse.LastName,
-                EmailConfirmed = true,
-                IsActive = true,
-                SecurityStamp = Guid.NewGuid().ToString(),
-                CreatedAt = DateTime.UtcNow,
-                CreatedBy = "test-seeder"
-            },
-            new User
-            {
                 Id = TestTenantConstants.Users.Supervisor.Id,
                 TenantId = TestTenantConstants.TenantId,
                 Email = TestTenantConstants.Users.Supervisor.Email,
@@ -278,22 +251,6 @@ public class TestTenantSeeder
                 CreatedAt = DateTime.UtcNow,
                 CreatedBy = "test-seeder"
             },
-            new User
-            {
-                Id = TestTenantConstants.Users.Finance.Id,
-                TenantId = TestTenantConstants.TenantId,
-                Email = TestTenantConstants.Users.Finance.Email,
-                NormalizedEmail = TestTenantConstants.Users.Finance.Email.ToUpperInvariant(),
-                UserName = TestTenantConstants.Users.Finance.Email,
-                NormalizedUserName = TestTenantConstants.Users.Finance.Email.ToUpperInvariant(),
-                FirstName = TestTenantConstants.Users.Finance.FirstName,
-                LastName = TestTenantConstants.Users.Finance.LastName,
-                EmailConfirmed = true,
-                IsActive = true,
-                SecurityStamp = Guid.NewGuid().ToString(),
-                CreatedAt = DateTime.UtcNow,
-                CreatedBy = "test-seeder"
-            }
         };
 
         await users.AddRangeAsync(usersToCreate);
@@ -314,11 +271,8 @@ public class TestTenantSeeder
         var usersToCreate = new (Guid Id, string Email, string Password, string FirstName, string LastName, string Role)[]
         {
             (TestTenantConstants.Users.Admin.Id, TestTenantConstants.Users.Admin.Email, TestTenantConstants.Users.Admin.Password, TestTenantConstants.Users.Admin.FirstName, TestTenantConstants.Users.Admin.LastName, "Admin"),
-            (TestTenantConstants.Users.SiteManager.Id, TestTenantConstants.Users.SiteManager.Email, TestTenantConstants.Users.SiteManager.Password, TestTenantConstants.Users.SiteManager.FirstName, TestTenantConstants.Users.SiteManager.LastName, "SiteManager"),
-            (TestTenantConstants.Users.Warehouse.Id, TestTenantConstants.Users.Warehouse.Email, TestTenantConstants.Users.Warehouse.Password, TestTenantConstants.Users.Warehouse.FirstName, TestTenantConstants.Users.Warehouse.LastName, "WarehouseStaff"),
             (TestTenantConstants.Users.Supervisor.Id, TestTenantConstants.Users.Supervisor.Email, TestTenantConstants.Users.Supervisor.Password, TestTenantConstants.Users.Supervisor.FirstName, TestTenantConstants.Users.Supervisor.LastName, "Supervisor"),
-            (TestTenantConstants.Users.Operator.Id, TestTenantConstants.Users.Operator.Email, TestTenantConstants.Users.Operator.Password, TestTenantConstants.Users.Operator.FirstName, TestTenantConstants.Users.Operator.LastName, "Operator"),
-            (TestTenantConstants.Users.Finance.Id, TestTenantConstants.Users.Finance.Email, TestTenantConstants.Users.Finance.Password, TestTenantConstants.Users.Finance.FirstName, TestTenantConstants.Users.Finance.LastName, "Finance")
+            (TestTenantConstants.Users.Operator.Id, TestTenantConstants.Users.Operator.Email, TestTenantConstants.Users.Operator.Password, TestTenantConstants.Users.Operator.FirstName, TestTenantConstants.Users.Operator.LastName, "Operator")
         };
 
         foreach (var userInfo in usersToCreate)
@@ -532,6 +486,23 @@ public class TestTenantSeeder
                 IsActive = true,
                 StartDate = DateTime.UtcNow.AddMonths(-6),
                 PreferredLanguage = "en",
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = "test-seeder"
+            },
+            new Employee
+            {
+                Id = TestTenantConstants.Employees.SupervisorEmployee,
+                TenantId = TestTenantConstants.TenantId,
+                EmployeeCode = TestTenantConstants.Employees.SupervisorEmployeeCode,
+                FirstName = TestTenantConstants.Employees.SupervisorEmployeeFirstName,
+                LastName = TestTenantConstants.Employees.SupervisorEmployeeLastName,
+                Email = "supervisor.test@test.quantumbuild.ie",
+                JobTitle = "Supervisor",
+                PrimarySiteId = TestTenantConstants.Sites.MainSite,
+                IsActive = true,
+                StartDate = DateTime.UtcNow.AddYears(-3),
+                PreferredLanguage = "en",
+                UserId = TestTenantConstants.Users.Supervisor.Id,
                 CreatedAt = DateTime.UtcNow,
                 CreatedBy = "test-seeder"
             }

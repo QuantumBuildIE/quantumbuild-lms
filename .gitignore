@@ -2,6 +2,8 @@
 bin/
 obj/
 publish/
+# Un-ignore Next.js route groups that happen to be named 'publish'
+!web/src/app/**/publish/
 *.user
 *.suo
 .vs/
@@ -32,6 +34,8 @@ Thumbs.db
 **/.ds
 
 nul
+TestResults/
+BACKLOG_CLEAN.md
 
 
 *.lscache

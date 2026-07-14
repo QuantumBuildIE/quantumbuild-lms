@@ -37,8 +37,6 @@ public class UserTests : IntegrationTestBase
             Email = $"{searchTerm.ToLower()}@test.quantumbuild.ie",
             FirstName = searchTerm,
             LastName = "User",
-            Password = "Search123!",
-            ConfirmPassword = "Search123!",
             IsActive = true,
             RoleIds = new List<Guid>()
         };
@@ -143,8 +141,6 @@ public class UserTests : IntegrationTestBase
             Email = $"new-user-{Guid.NewGuid():N}@test.quantumbuild.ie",
             FirstName = "New",
             LastName = "User",
-            Password = "NewUser123!",
-            ConfirmPassword = "NewUser123!",
             IsActive = true,
             RoleIds = operatorRole != null ? new List<Guid> { operatorRole.Id } : new List<Guid>()
         };
@@ -177,8 +173,6 @@ public class UserTests : IntegrationTestBase
             Email = $"multi-role-{Guid.NewGuid():N}@test.quantumbuild.ie",
             FirstName = "Multi",
             LastName = "Role",
-            Password = "MultiRole123!",
-            ConfirmPassword = "MultiRole123!",
             IsActive = true,
             RoleIds = roleIds
         };
@@ -203,8 +197,6 @@ public class UserTests : IntegrationTestBase
             Email = TestTenantConstants.Users.Admin.Email, // Already exists in test tenant
             FirstName = "Duplicate",
             LastName = "Email",
-            Password = "DupEmail123!",
-            ConfirmPassword = "DupEmail123!",
             IsActive = true,
             RoleIds = new List<Guid>()
         };
@@ -217,42 +209,16 @@ public class UserTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task CreateUser_PasswordMismatch_ReturnsExpectedResponse()
+    public async Task CreateUser_NoPasswordField_ReturnsCreatedWithTempPassword()
     {
-        // Note: This test verifies password mismatch validation
-        // The API behavior depends on whether password match validation is enforced
-
-        // Arrange
+        // Arrange — CreateUserDto has no Password field; the service
+        // generates a temp password and the user must reset on first login.
+        // This test asserts that contract.
         var command = new
         {
-            Email = $"mismatch-{Guid.NewGuid():N}@test.quantumbuild.ie",
-            FirstName = "Mismatch",
-            LastName = "Password",
-            Password = "Password123!",
-            ConfirmPassword = "DifferentPassword123!",
-            IsActive = true,
-            RoleIds = new List<Guid>()
-        };
-
-        // Act
-        var response = await AdminClient.PostAsJsonAsync("/api/users", command);
-
-        // Assert - API may not enforce password match validation at endpoint level
-        // Accept either BadRequest (if validated) or Created (if not validated)
-        response.StatusCode.Should().BeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.Created);
-    }
-
-    [Fact]
-    public async Task CreateUser_WeakPassword_ReturnsBadRequest()
-    {
-        // Arrange
-        var command = new
-        {
-            Email = $"weak-{Guid.NewGuid():N}@test.quantumbuild.ie",
-            FirstName = "Weak",
-            LastName = "Password",
-            Password = "weak", // Too weak
-            ConfirmPassword = "weak",
+            Email = $"newuser-{Guid.NewGuid():N}@test.quantumbuild.ie",
+            FirstName = "New",
+            LastName = "User",
             IsActive = true,
             RoleIds = new List<Guid>()
         };
@@ -261,7 +227,7 @@ public class UserTests : IntegrationTestBase
         var response = await AdminClient.PostAsJsonAsync("/api/users", command);
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
     }
 
     [Fact]
@@ -272,8 +238,6 @@ public class UserTests : IntegrationTestBase
         {
             FirstName = "Missing",
             LastName = "Email",
-            Password = "Password123!",
-            ConfirmPassword = "Password123!",
             IsActive = true,
             RoleIds = new List<Guid>()
         };
@@ -294,8 +258,6 @@ public class UserTests : IntegrationTestBase
             Email = $"noperm-{Guid.NewGuid():N}@test.quantumbuild.ie",
             FirstName = "No",
             LastName = "Permission",
-            Password = "NoPerm123!",
-            ConfirmPassword = "NoPerm123!",
             IsActive = true,
             RoleIds = new List<Guid>()
         };
@@ -320,8 +282,6 @@ public class UserTests : IntegrationTestBase
             Email = $"update-{Guid.NewGuid():N}@test.quantumbuild.ie",
             FirstName = "Original",
             LastName = "Name",
-            Password = "Original123!",
-            ConfirmPassword = "Original123!",
             IsActive = true,
             RoleIds = new List<Guid>()
         };
@@ -362,8 +322,6 @@ public class UserTests : IntegrationTestBase
             Email = $"roles-{Guid.NewGuid():N}@test.quantumbuild.ie",
             FirstName = "Role",
             LastName = "Change",
-            Password = "RoleChange123!",
-            ConfirmPassword = "RoleChange123!",
             IsActive = true,
             RoleIds = new List<Guid>()
         };
@@ -457,8 +415,6 @@ public class UserTests : IntegrationTestBase
             Email = $"delete-{Guid.NewGuid():N}@test.quantumbuild.ie",
             FirstName = "To",
             LastName = "Delete",
-            Password = "Delete123!",
-            ConfirmPassword = "Delete123!",
             IsActive = true,
             RoleIds = new List<Guid>()
         };
@@ -507,8 +463,6 @@ public class UserTests : IntegrationTestBase
             Email = $"delete-perm-{Guid.NewGuid():N}@test.quantumbuild.ie",
             FirstName = "Delete",
             LastName = "Permission",
-            Password = "DeletePerm123!",
-            ConfirmPassword = "DeletePerm123!",
             IsActive = true,
             RoleIds = new List<Guid>()
         };
@@ -538,8 +492,6 @@ public class UserTests : IntegrationTestBase
             Email = $"reset-{Guid.NewGuid():N}@test.quantumbuild.ie",
             FirstName = "Reset",
             LastName = "Password",
-            Password = "Original123!",
-            ConfirmPassword = "Original123!",
             IsActive = true,
             RoleIds = new List<Guid>()
         };

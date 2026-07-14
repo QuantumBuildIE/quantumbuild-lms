@@ -9,6 +9,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
+using QuantumBuild.Core.Application.Configuration;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Validation;
@@ -20,8 +21,8 @@ namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Validation;
 /// </summary>
 public class RegulatoryScoreService : IRegulatoryScoreService
 {
-    private const string SonnetModel = "claude-sonnet-4-5";
     private const int MaxTokens = 4096;
+    private readonly string _sonnetModel;
 
     private static readonly JsonSerializerOptions CamelCaseOptions = new()
     {
@@ -40,13 +41,15 @@ public class RegulatoryScoreService : IRegulatoryScoreService
         HttpClient httpClient,
         IOptions<SubtitleProcessingSettings> settings,
         IAiUsageLogger aiUsageLogger,
-        ILogger<RegulatoryScoreService> logger)
+        ILogger<RegulatoryScoreService> logger,
+        IOptions<AIProviderOptions> aiProviders)
     {
         _dbContext = dbContext;
         _httpClient = httpClient;
         _settings = settings.Value;
         _aiUsageLogger = aiUsageLogger;
         _logger = logger;
+        _sonnetModel = aiProviders.Value.Anthropic.Models.Sonnet;
     }
 
     public async Task<RegulatoryScoreResultDto> ScoreAsync(
@@ -221,6 +224,45 @@ public class RegulatoryScoreService : IRegulatoryScoreService
 
         var allDtos = scores.Select((s, idx) => MapToDto(s, profile, scores)).ToList();
 
+        // Populate applicability when the run has a SectorKey
+        RegulatoryApplicabilityDto? applicability = null;
+        var run = await _dbContext.TranslationValidationRuns
+            .FirstOrDefaultAsync(r => r.Id == validationRunId, cancellationToken);
+
+        if (run?.SectorKey != null)
+        {
+            var profiles = await _dbContext.RegulatoryProfiles
+                .Where(p => p.SectorKey == run.SectorKey)
+                .ToListAsync(cancellationToken);
+
+            if (profiles.Count == 0)
+            {
+                applicability = new RegulatoryApplicabilityDto
+                {
+                    HasRegulatoryProfile = false,
+                    ApprovedRequirementCount = 0,
+                    ProfileName = null
+                };
+            }
+            else
+            {
+                var profileIds = profiles.Select(p => p.Id).ToList();
+                var approvedCount = await _dbContext.RegulatoryRequirements
+                    .IgnoreQueryFilters()
+                    .Where(r => !r.IsDeleted
+                             && r.IngestionStatus == RequirementIngestionStatus.Approved
+                             && profileIds.Contains(r.RegulatoryProfileId))
+                    .CountAsync(cancellationToken);
+
+                applicability = new RegulatoryApplicabilityDto
+                {
+                    HasRegulatoryProfile = true,
+                    ApprovedRequirementCount = approvedCount,
+                    ProfileName = profiles.Count == 1 ? profiles[0].ScoreLabel : null
+                };
+            }
+        }
+
         return new RegulatoryScoreHistoryDto
         {
             ValidationRunId = validationRunId,
@@ -229,7 +271,8 @@ public class RegulatoryScoreService : IRegulatoryScoreService
             RegulatoryScores = allDtos
                 .Where(d => d.ScoreType == ValidationScoreType.RegulatoryTranslation)
                 .OrderBy(d => d.RunNumber)
-                .ToList()
+                .ToList(),
+            Applicability = applicability
         };
     }
 
@@ -438,7 +481,7 @@ public class RegulatoryScoreService : IRegulatoryScoreService
 
         var requestBody = new
         {
-            model = SonnetModel,
+            model = _sonnetModel,
             max_tokens = MaxTokens,
             messages = new[]
             {

@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { useWizardPreference } from '@/features/toolbox-talks/hooks/useWizardPreference';
 import { useQueries } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -89,6 +90,7 @@ function outcomeColor(outcome: ValidationOutcome): string {
 
 export function PublishStep({ state, onBack }: PublishStepProps) {
   const router = useRouter();
+  const wizardPreference = useWizardPreference();
   const sessionId = state.sessionId;
 
   // Data fetching
@@ -220,7 +222,11 @@ export function PublishStep({ state, onBack }: PublishStepProps) {
           </Button>
           <Button
             variant="outline"
-            onClick={() => router.push('/admin/toolbox-talks/create')}
+            onClick={() => router.push(
+              wizardPreference === 'new'
+                ? '/admin/toolbox-talks/learnings/new'
+                : '/admin/toolbox-talks/create'
+            )}
           >
             <Plus className="h-4 w-4 mr-2" />
             Create Another

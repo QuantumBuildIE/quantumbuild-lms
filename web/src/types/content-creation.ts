@@ -2,7 +2,7 @@
 // Content Creation Session Types
 // ============================================
 
-export type InputMode = 'Text' | 'Pdf' | 'Video';
+export type InputMode = 'Text' | 'Pdf' | 'Video' | 'Docx';
 
 export type OutputType = 'Lesson' | 'Course';
 
@@ -156,6 +156,8 @@ export interface ValidationRunSummary {
   startedAt: string | null;
   completedAt: string | null;
   createdAt: string;
+  /** True when this completed run has non-Pass sections awaiting a reviewer decision. */
+  hasPendingDecisions: boolean;
 }
 
 export interface ValidationRunDetail {
@@ -221,6 +223,22 @@ export interface ReviewReason {
   detail: string;
 }
 
+// Translation flag types
+export enum FlagSeverity {
+  Info = 'Info',
+  Warning = 'Warning',
+  Error = 'Error',
+}
+
+export interface TranslationFlag {
+  id: string;
+  startOffset: number;
+  endOffset: number;
+  severity: FlagSeverity;
+  reason: string;
+  createdAt: string;
+}
+
 export interface SectionValidationResult {
   id: string;
   sectionIndex: number;
@@ -253,6 +271,7 @@ export interface SectionValidationResult {
   editedSource: string | null;
   decisionAt: string | null;
   decisionBy: string | null;
+  flags: TranslationFlag[];
 }
 
 // ============================================
@@ -286,11 +305,18 @@ export interface RegulatoryScoreResultDto {
   fullResponse: string;
 }
 
+export interface RegulatoryApplicabilityDto {
+  hasRegulatoryProfile: boolean;
+  approvedRequirementCount: number;
+  profileName: string | null;
+}
+
 export interface RegulatoryScoreHistoryDto {
   validationRunId: string;
   sourceScore: RegulatoryScoreResultDto | null;
   pureScore: RegulatoryScoreResultDto | null;
   regulatoryScores: RegulatoryScoreResultDto[];
+  applicability: RegulatoryApplicabilityDto | null;
 }
 
 // ============================================

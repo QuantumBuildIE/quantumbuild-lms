@@ -17,10 +17,8 @@ public abstract class IntegrationTestBase : IAsyncLifetime
 
     // Pre-configured authenticated clients for different user types
     protected HttpClient AdminClient { get; private set; } = null!;
-    protected HttpClient SiteManagerClient { get; private set; } = null!;
-    protected HttpClient WarehouseClient { get; private set; } = null!;
     protected HttpClient OperatorClient { get; private set; } = null!;
-    protected HttpClient FinanceClient { get; private set; } = null!;
+    protected HttpClient SupervisorClient { get; private set; } = null!;
     protected HttpClient UnauthenticatedClient { get; private set; } = null!;
 
     protected IntegrationTestBase(CustomWebApplicationFactory factory)
@@ -36,10 +34,8 @@ public abstract class IntegrationTestBase : IAsyncLifetime
 
         // Initialize authenticated clients
         AdminClient = Factory.CreateAuthenticatedClient(TestUserType.Admin);
-        SiteManagerClient = Factory.CreateAuthenticatedClient(TestUserType.SiteManager);
-        WarehouseClient = Factory.CreateAuthenticatedClient(TestUserType.Warehouse);
         OperatorClient = Factory.CreateAuthenticatedClient(TestUserType.Operator);
-        FinanceClient = Factory.CreateAuthenticatedClient(TestUserType.Finance);
+        SupervisorClient = Factory.CreateAuthenticatedClient(TestUserType.Supervisor);
         UnauthenticatedClient = Factory.CreateClient();
     }
 
@@ -47,10 +43,8 @@ public abstract class IntegrationTestBase : IAsyncLifetime
     {
         Scope?.Dispose();
         AdminClient?.Dispose();
-        SiteManagerClient?.Dispose();
-        WarehouseClient?.Dispose();
         OperatorClient?.Dispose();
-        FinanceClient?.Dispose();
+        SupervisorClient?.Dispose();
         UnauthenticatedClient?.Dispose();
 
         await Task.CompletedTask;
@@ -73,6 +67,11 @@ public abstract class IntegrationTestBase : IAsyncLifetime
         Scope = Factory.Services.CreateScope();
         return Scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     }
+
+    /// <summary>
+    /// Gets the fake email service for asserting invitation email sends.
+    /// </summary>
+    protected FakeEmailService FakeEmailService => Factory.FakeEmailService;
 
     #region Fake Subtitle Services
 

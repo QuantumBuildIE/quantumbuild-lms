@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { format } from 'date-fns';
 import {
   PencilIcon,
@@ -10,30 +9,35 @@ import {
   CalendarClockIcon,
   VideoIcon,
   FileTextIcon,
-  HelpCircleIcon,
-  CheckCircle2Icon,
   ClockIcon,
   AlertTriangleIcon,
   ListChecksIcon,
   ExternalLinkIcon,
   EyeIcon,
+  CheckCircle2Icon,
 } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DeleteConfirmationDialog } from '@/components/shared/delete-confirmation-dialog';
 import { PreviewModal } from './PreviewModal';
 import { ValidationHistoryTab } from './ValidationHistoryTab';
+import { SectionEditPanel } from './detail/SectionEditPanel';
+import { QuizEditPanel } from './detail/QuizEditPanel';
+import { SettingsEditPanel } from './detail/SettingsEditPanel';
+import { AddTargetLanguagePicker } from './detail/AddTargetLanguagePicker';
+import { TranslateStep } from './learning-wizard/steps/TranslateStep';
+import { ValidateStep } from './learning-wizard/steps/ValidateStep';
+import { parseLanguageCodes } from '@/features/toolbox-talks/utils/parseLanguageCodes';
 import { useToolboxTalk, useDeleteToolboxTalk } from '@/lib/api/toolbox-talks';
+import { useValidationRuns } from '@/lib/api/toolbox-talks/use-content-creation';
+import { useWorkflowSubscription } from './learning-wizard/hooks/useWorkflowSubscription';
 import { usePermission } from '@/lib/auth/use-auth';
+import { useWizardPreference } from '@/features/toolbox-talks/hooks/useWizardPreference';
 import type { ToolboxTalk } from '@/types/toolbox-talks';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -53,8 +57,14 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
   const canManage = usePermission('Learnings.Manage');
   const canSchedule = usePermission('Learnings.Schedule');
 
-  const { data: talk, isLoading, error } = useToolboxTalk(talkId);
+  const { data: talk, isLoading, error, refetch } = useToolboxTalk(talkId);
   const deleteMutation = useDeleteToolboxTalk();
+  const { data: validationRuns, isLoading: validationRunsLoading } = useValidationRuns(talkId);
+  const { data: workflowStates, isLoading: workflowStatesLoading } = useWorkflowSubscription(talkId);
+  const wizardPreference = useWizardPreference();
+
+  const hasStaleTranslation = !workflowStatesLoading
+    && (workflowStates ?? []).some(s => s.state === 'Stale');
 
   const handleDelete = async () => {
     if (!talk) return;
@@ -93,6 +103,7 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
 
   const stats = talk.completionStats;
   const isPartOfCourse = talk.isPartOfCourse;
+  const hasTargetLanguages = parseLanguageCodes(talk.targetLanguageCodes).length > 0;
 
   return (
     <div className="space-y-6">
@@ -137,7 +148,7 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
               <EyeIcon className="mr-2 h-4 w-4" />
               Preview as Employee
             </Button>
-            {canManage && (
+            {canManage && wizardPreference === 'old' && (
               <Button variant="outline" onClick={() => router.push(`${basePath}/${talk.id}/edit`)}>
                 <PencilIcon className="mr-2 h-4 w-4" />
                 Edit
@@ -218,10 +229,13 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
         </div>
       )}
 
-      {/* Tabs: Overview / Validation */}
+      {/* Tabs: Overview / Translations / Validation */}
       <Tabs defaultValue="overview">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          {!isPartOfCourse && !previewMode && (
+            <TabsTrigger value="translations">Translations</TabsTrigger>
+          )}
           {!isPartOfCourse && !previewMode && (
             <TabsTrigger value="validation">Validation</TabsTrigger>
           )}
@@ -237,16 +251,16 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
               <CardContent className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Frequency</label>
-                    <p className="mt-1">{talk.frequencyDisplay}</p>
+                    <p className="text-xs text-muted-foreground">Frequency</p>
+                    <p className="text-sm font-medium mt-0.5">{talk.frequencyDisplay}</p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Sections</label>
-                    <p className="mt-1">{talk.sections.length}</p>
+                    <p className="text-xs text-muted-foreground">Sections</p>
+                    <p className="text-sm font-medium mt-0.5">{talk.sections.length}</p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Video</label>
-                    <div className="mt-1 flex items-center gap-2">
+                    <p className="text-xs text-muted-foreground">Video</p>
+                    <div className="mt-0.5 flex items-center gap-2 text-sm font-medium">
                       {talk.videoSource !== 'None' ? (
                         <>
                           <VideoIcon className="h-4 w-4 text-muted-foreground" />
@@ -263,41 +277,41 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
                           )}
                         </>
                       ) : (
-                        <span className="text-muted-foreground">No video</span>
+                        <span className="text-muted-foreground font-normal">No video</span>
                       )}
                     </div>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Minimum Watch %</label>
-                    <p className="mt-1">
+                    <p className="text-xs text-muted-foreground">Minimum Watch %</p>
+                    <p className="text-sm font-medium mt-0.5">
                       {talk.videoSource !== 'None' ? `${talk.minimumVideoWatchPercent}%` : '-'}
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Quiz Required</label>
-                    <p className="mt-1">{talk.requiresQuiz ? 'Yes' : 'No'}</p>
+                    <p className="text-xs text-muted-foreground">Quiz Required</p>
+                    <p className="text-sm font-medium mt-0.5">{talk.requiresQuiz ? 'Yes' : 'No'}</p>
                   </div>
                   {talk.requiresQuiz && (
                     <>
                       <div>
-                        <label className="text-sm font-medium text-muted-foreground">Passing Score</label>
-                        <p className="mt-1">{talk.passingScore}%</p>
+                        <p className="text-xs text-muted-foreground">Passing Score</p>
+                        <p className="text-sm font-medium mt-0.5">{talk.passingScore}%</p>
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-muted-foreground">Questions</label>
-                        <p className="mt-1">{talk.questions.length}</p>
+                        <p className="text-xs text-muted-foreground">Questions</p>
+                        <p className="text-sm font-medium mt-0.5">{talk.questions.length}</p>
                       </div>
                     </>
                   )}
                   {talk.attachmentUrl && (
                     <div className="sm:col-span-2">
-                      <label className="text-sm font-medium text-muted-foreground">Attachment</label>
-                      <div className="mt-1">
+                      <p className="text-xs text-muted-foreground">Attachment</p>
+                      <div className="mt-0.5">
                         <a
                           href={talk.attachmentUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-2 text-primary hover:underline"
+                          className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
                         >
                           <FileTextIcon className="h-4 w-4" />
                           Download Attachment
@@ -326,119 +340,67 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
             )}
           </div>
 
-          {/* Translation note */}
-          {!previewMode && (talk.videoSource !== 'None' || talk.sections.length > 0 || talk.questions.length > 0) && (
-            <p className="text-sm text-muted-foreground">
-              To generate translations or subtitles, use the{' '}
-              <Link href={`${basePath}/${talk.id}/edit`} className="underline text-primary hover:text-primary/80">
-                Edit page
-              </Link>.
-            </p>
+          {/* Stale-translation banner — shown when any target language is outdated */}
+          {hasStaleTranslation && (
+            <Alert className="border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/30">
+              <AlertTriangleIcon className="h-4 w-4 text-amber-600" />
+              <AlertTitle className="text-amber-800 dark:text-amber-300">
+                One or more translations are outdated
+              </AlertTitle>
+              <AlertDescription className="text-amber-700 dark:text-amber-400">
+                Content changes have been made since the last translation run.
+                Re-run translations before scheduling new assignments.
+              </AlertDescription>
+            </Alert>
           )}
 
-          {/* Sections Preview */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileTextIcon className="h-5 w-5" />
-                Sections ({talk.sections.length})
-              </CardTitle>
-              <CardDescription>Content sections for this learning</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Accordion type="multiple" className="w-full">
-                {talk.sections.map((section) => (
-                  <AccordionItem key={section.id} value={section.id}>
-                    <AccordionTrigger className="hover:no-underline">
-                      <div className="flex items-center gap-3 text-left">
-                        <Badge variant="outline" className="shrink-0">
-                          {section.sectionNumber}
-                        </Badge>
-                        <span className="font-medium">{section.title}</span>
-                        {section.requiresAcknowledgment && (
-                          <Badge variant="secondary" className="text-xs">
-                            Acknowledgment Required
-                          </Badge>
-                        )}
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      <div className="rounded-lg bg-muted/50 p-4 mt-2">
-                        <div className="prose prose-sm max-w-none dark:prose-invert">
-                          <p className="whitespace-pre-wrap">{section.content}</p>
-                        </div>
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
-            </CardContent>
-          </Card>
+          {/* Settings — inline editable for new-wizard talks */}
+          <SettingsEditPanel talk={talk} onRefetch={refetch} />
 
-          {/* Questions Preview */}
-          {talk.requiresQuiz && talk.questions.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <HelpCircleIcon className="h-5 w-5" />
-                  Quiz Questions ({talk.questions.length})
-                </CardTitle>
-                <CardDescription>
-                  Passing score: {talk.passingScore}%
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {talk.questions.map((question) => (
-                    <div key={question.id} className="rounded-lg border p-4">
-                      <div className="flex items-start gap-3">
-                        <Badge variant="outline" className="shrink-0">
-                          Q{question.questionNumber}
-                        </Badge>
-                        <div className="flex-1 space-y-2">
-                          <p className="font-medium">{question.questionText}</p>
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            <span>{question.questionTypeDisplay}</span>
-                            <span>{question.points} point{question.points !== 1 ? 's' : ''}</span>
-                          </div>
-                          {question.options && question.options.length > 0 && (
-                            <div className="mt-2 space-y-1">
-                              {question.options.map((option, idx) => (
-                                <div
-                                  key={idx}
-                                  className={cn(
-                                    'flex items-center gap-2 text-sm',
-                                    option === question.correctAnswer && 'text-green-600 font-medium'
-                                  )}
-                                >
-                                  <span className="w-6">{String.fromCharCode(65 + idx)}.</span>
-                                  <span>{option}</span>
-                                  {option === question.correctAnswer && (
-                                    <CheckCircle2Icon className="h-4 w-4" />
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          {question.questionType === 'ShortAnswer' && (
-                            <div className="mt-2 text-sm">
-                              <span className="text-muted-foreground">Expected answer: </span>
-                              <span className="font-medium text-green-600">{question.correctAnswer}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          {/* Sections — inline editable for new-wizard talks */}
+          <SectionEditPanel talk={talk} onRefetch={refetch} />
+
+          {/* Quiz Questions — inline editable for new-wizard talks */}
+          <QuizEditPanel talk={talk} onRefetch={refetch} />
         </TabsContent>
 
         {!isPartOfCourse && !previewMode && (
+          <TabsContent value="translations" className="mt-4">
+            <div className="space-y-4">
+              <AddTargetLanguagePicker
+                talkId={talkId}
+                existingLanguages={parseLanguageCodes(talk?.targetLanguageCodes)}
+              />
+              {hasTargetLanguages ? (
+                <TranslateStep talkId={talkId} />
+              ) : (
+                <div className="rounded-md border border-dashed border-muted-foreground/30 p-6 text-center text-sm text-muted-foreground">
+                  No translations yet — use the language picker above to add a target language and begin translation.
+                </div>
+              )}
+            </div>
+          </TabsContent>
+        )}
+
+        {!isPartOfCourse && !previewMode && (
           <TabsContent value="validation" className="mt-4">
-            <ValidationHistoryTab talkId={talkId} basePath={basePath} />
+            {validationRunsLoading ? (
+              <div className="space-y-3">
+                {[...Array(3)].map((_, i) => (
+                  <Skeleton key={i} className="h-12 w-full" />
+                ))}
+              </div>
+            ) : (validationRuns ?? []).length === 0 ? (
+              <div className="rounded-md border border-dashed border-muted-foreground/30 p-6 text-center text-sm text-muted-foreground">
+                No validation runs yet. Start a translation to begin validation.
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <ValidateStep talkId={talkId} />
+                <Separator />
+                <ValidationHistoryTab talkId={talkId} basePath={basePath} />
+              </div>
+            )}
           </TabsContent>
         )}
       </Tabs>

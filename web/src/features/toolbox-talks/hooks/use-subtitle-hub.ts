@@ -97,6 +97,9 @@ export function useSubtitleHub(
       .configureLogging(LogLevel.Warning)
       .build();
 
+    connection.serverTimeoutInMilliseconds = 120_000;
+    connection.keepAliveIntervalInMilliseconds = 10_000;
+
     connectionRef.current = connection;
 
     /**
@@ -115,6 +118,9 @@ export function useSubtitleHub(
           .withAutomaticReconnect(RECONNECT_DELAYS)
           .configureLogging(LogLevel.Warning)
           .build();
+
+        fresh.serverTimeoutInMilliseconds = 120_000;
+        fresh.keepAliveIntervalInMilliseconds = 10_000;
 
         registerHandlers(fresh);
 

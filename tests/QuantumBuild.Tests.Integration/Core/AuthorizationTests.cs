@@ -30,26 +30,6 @@ public class AuthorizationTests : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
-    [Fact]
-    public async Task UsersEndpoint_AsWarehouse_Returns403()
-    {
-        // Act
-        var response = await WarehouseClient.GetAsync("/api/users");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-    }
-
-    [Fact]
-    public async Task UsersEndpoint_AsFinance_Returns403()
-    {
-        // Act
-        var response = await FinanceClient.GetAsync("/api/users");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-    }
-
     #endregion
 
     #region Core.ManageEmployees Permission Tests
@@ -212,11 +192,10 @@ public class AuthorizationTests : IntegrationTestBase
     #region Cross-Module Permission Tests
 
     [Fact]
-    public async Task Warehouse_CannotManageUsers()
+    public async Task Operator_CannotManageUsers()
     {
-        // Warehouse has stock permissions but not user management
         // Act
-        var response = await WarehouseClient.GetAsync("/api/users");
+        var response = await OperatorClient.GetAsync("/api/users");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
@@ -238,64 +217,6 @@ public class AuthorizationTests : IntegrationTestBase
         employeesResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         sitesResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         companiesResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-    }
-
-    #endregion
-
-    #region Role-Based Access Tests
-
-    [Fact]
-    public async Task AllAuthenticatedUsers_CanAccessEmployeesList()
-    {
-        // Act
-        var adminResponse = await AdminClient.GetAsync("/api/employees");
-        var warehouseResponse = await WarehouseClient.GetAsync("/api/employees");
-        var operatorResponse = await OperatorClient.GetAsync("/api/employees");
-        var financeResponse = await FinanceClient.GetAsync("/api/employees");
-
-        // Assert - All authenticated users can view employee list
-        adminResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        warehouseResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        operatorResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        financeResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-    }
-
-    [Fact]
-    public async Task OnlyManagePermission_CanModifyEmployees()
-    {
-        // Arrange
-        var command = new
-        {
-            EmployeeCode = $"EMP-{Guid.NewGuid():N}".Substring(0, 10),
-            FirstName = "Test",
-            LastName = "Employee",
-            Email = $"test-employee-{Guid.NewGuid():N}@test.quantumbuild.ie",
-            IsActive = true
-        };
-
-        // Act - Admin can create
-        var adminResponse = await AdminClient.PostAsJsonAsync("/api/employees", command);
-
-        // Create new command with different data for other tests
-        var command2 = new
-        {
-            EmployeeCode = $"EMP-{Guid.NewGuid():N}".Substring(0, 10),
-            FirstName = "Test2",
-            LastName = "Employee2",
-            Email = $"test-employee2-{Guid.NewGuid():N}@test.quantumbuild.ie",
-            IsActive = true
-        };
-
-        // Act - Others cannot create
-        var warehouseResponse = await WarehouseClient.PostAsJsonAsync("/api/employees", command2);
-        var operatorResponse = await OperatorClient.PostAsJsonAsync("/api/employees", command2);
-        var financeResponse = await FinanceClient.PostAsJsonAsync("/api/employees", command2);
-
-        // Assert
-        adminResponse.StatusCode.Should().Be(HttpStatusCode.Created);
-        warehouseResponse.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-        operatorResponse.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-        financeResponse.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
     #endregion

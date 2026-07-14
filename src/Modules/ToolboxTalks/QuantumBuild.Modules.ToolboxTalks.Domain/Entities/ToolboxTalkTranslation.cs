@@ -64,6 +64,18 @@ public class ToolboxTalkTranslation : TenantEntity
     /// </summary>
     public bool NeedsRevalidation { get; set; } = false;
 
+    /// <summary>
+    /// When an external reviewer's accepted submission was last auto-applied to this translation.
+    /// Null when no external review round has ever been applied.
+    /// </summary>
+    public DateTime? LastExternalReviewedAt { get; set; }
+
+    /// <summary>
+    /// Email address of the external reviewer whose accepted edits were last auto-applied
+    /// (sourced from <c>ExternalParticipantInvitation.InvitedEmail</c> — no reviewer name is ever collected).
+    /// </summary>
+    public string? LastExternalReviewedBy { get; set; }
+
     // Navigation properties
 
     /// <summary>

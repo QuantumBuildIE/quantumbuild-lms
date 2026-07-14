@@ -23,24 +23,6 @@ public static class TestTenantConstants
             public const string LastName = "Admin";
         }
 
-        public static class SiteManager
-        {
-            public static readonly Guid Id = Guid.Parse("AAAAAAAA-0001-0001-0001-000000000002");
-            public const string Email = "manager@test.quantumbuild.ie";
-            public const string Password = "TestManager123!";
-            public const string FirstName = "Test";
-            public const string LastName = "Manager";
-        }
-
-        public static class Warehouse
-        {
-            public static readonly Guid Id = Guid.Parse("AAAAAAAA-0001-0001-0001-000000000003");
-            public const string Email = "warehouse@test.quantumbuild.ie";
-            public const string Password = "TestWarehouse123!";
-            public const string FirstName = "Test";
-            public const string LastName = "Warehouse";
-        }
-
         public static class Supervisor
         {
             public static readonly Guid Id = Guid.Parse("AAAAAAAA-0001-0001-0001-000000000006");
@@ -59,14 +41,6 @@ public static class TestTenantConstants
             public const string LastName = "Operator";
         }
 
-        public static class Finance
-        {
-            public static readonly Guid Id = Guid.Parse("AAAAAAAA-0001-0001-0001-000000000005");
-            public const string Email = "finance@test.quantumbuild.ie";
-            public const string Password = "TestFinance123!";
-            public const string FirstName = "Test";
-            public const string LastName = "Finance";
-        }
     }
 
     // ==================== SITES ====================
@@ -123,6 +97,11 @@ public static class TestTenantConstants
         public const string InactiveEmployeeCode = "EMP006";
         public const string InactiveEmployeeFirstName = "Inactive";
         public const string InactiveEmployeeLastName = "Test";
+
+        public static readonly Guid SupervisorEmployee = Guid.Parse("AAAAAAAA-0003-0001-0001-000000000007");
+        public const string SupervisorEmployeeCode = "EMP007";
+        public const string SupervisorEmployeeFirstName = "Supervisor";
+        public const string SupervisorEmployeeLastName = "Test";
     }
 
     // ==================== COMPANIES ====================

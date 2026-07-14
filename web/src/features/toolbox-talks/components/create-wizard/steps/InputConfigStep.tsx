@@ -63,6 +63,7 @@ const INPUT_MODES: { mode: InputMode; label: string; icon: React.ElementType; de
   { mode: 'Text', label: 'Text', icon: Type, description: 'Paste or type content directly' },
   { mode: 'Pdf', label: 'Document', icon: FileText, description: 'Upload a PDF document' },
   { mode: 'Video', label: 'Video', icon: FileVideo, description: 'Upload video or paste URL' },
+  { mode: 'Docx', label: 'Word Document', icon: FileText, description: 'Upload a Word document (.docx)' },
 ];
 
 const DEFAULT_PASS_THRESHOLDS = [50, 60, 70, 75, 80, 85, 90, 95];
@@ -214,6 +215,21 @@ export function InputConfigStep({
       const file = e.target.files?.[0];
       if (!file) return;
 
+      if (state.inputMode === 'Docx') {
+        const isDocxMime = file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        const isDocxExt = file.name.toLowerCase().endsWith('.docx');
+        if (!isDocxMime && !isDocxExt) {
+          toast.error('Only .docx Word documents are accepted.');
+          return;
+        }
+        if (file.size > 50 * 1024 * 1024) {
+          toast.error('File too large. Maximum size is 50MB.');
+          return;
+        }
+        updateState({ sourceFile: file, sourceFileName: file.name });
+        return;
+      }
+
       const isPdf = state.inputMode === 'Pdf';
       const maxSize = isPdf ? 50 * 1024 * 1024 : 500 * 1024 * 1024;
       const allowedTypes = isPdf
@@ -265,7 +281,7 @@ export function InputConfigStep({
     (!sectorRequired || !!state.sectorKey) &&
     (state.inputMode === 'Text'
       ? state.sourceText.trim().length > 0
-      : state.inputMode === 'Pdf'
+      : state.inputMode === 'Pdf' || state.inputMode === 'Docx'
         ? !!state.sourceFile
         : !!state.sourceFile ||
           (state.videoUrl.trim().length > 0 && state.videoRightsConfirmed));
@@ -274,11 +290,11 @@ export function InputConfigStep({
     mode: state.inputMode!,
     text: state.inputMode === 'Text' ? state.sourceText : undefined,
     fileName:
-      (state.inputMode === 'Pdf' || state.inputMode === 'Video') && state.sourceFile
+      (state.inputMode === 'Pdf' || state.inputMode === 'Video' || state.inputMode === 'Docx') && state.sourceFile
         ? (state.sourceFileName ?? undefined)
         : undefined,
     fileSize:
-      (state.inputMode === 'Pdf' || state.inputMode === 'Video') && state.sourceFile
+      (state.inputMode === 'Pdf' || state.inputMode === 'Video' || state.inputMode === 'Docx') && state.sourceFile
         ? state.sourceFile.size
         : undefined,
     videoUrl:
@@ -329,6 +345,7 @@ export function InputConfigStep({
               sourceChanged = state.sourceText !== snap.text;
               break;
             case 'Pdf':
+            case 'Docx':
               sourceChanged =
                 state.sourceFileName !== snap.fileName ||
                 state.sourceFile?.size !== snap.fileSize;
@@ -368,7 +385,7 @@ export function InputConfigStep({
 
       // Step 2: Upload file if applicable
       if (
-        (state.inputMode === 'Pdf' || state.inputMode === 'Video') &&
+        (state.inputMode === 'Pdf' || state.inputMode === 'Video' || state.inputMode === 'Docx') &&
         state.sourceFile
       ) {
         setIsUploading(true);
@@ -382,10 +399,8 @@ export function InputConfigStep({
       }
 
       onNext();
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Failed to create session';
-      toast.error('Error', { description: message });
+    } catch {
+      // Error surfaced via mutation isError banner above Continue.
     } finally {
       setIsUploading(false);
     }
@@ -402,7 +417,7 @@ export function InputConfigStep({
 
       {/* Mode Selection */}
       <div>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {INPUT_MODES.map(({ mode, label, icon: Icon, description }) => (
             <button
               key={mode}
@@ -509,6 +524,67 @@ export function InputConfigStep({
                 ref={fileInputRef}
                 type="file"
                 accept=".pdf"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+            </div>
+          )}
+
+          {state.inputMode === 'Docx' && (
+            <div
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={handleFileDrop}
+              className={cn(
+                'flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed p-8 transition-colors',
+                state.sourceFile
+                  ? 'border-primary bg-primary/5'
+                  : 'border-muted hover:border-muted-foreground/50'
+              )}
+            >
+              {state.sourceFile ? (
+                <>
+                  <FileText className="h-8 w-8 text-primary" />
+                  <div className="text-center">
+                    <p className="text-sm font-medium">{state.sourceFileName}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {(state.sourceFile.size / (1024 * 1024)).toFixed(1)} MB
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      updateState({ sourceFile: null, sourceFileName: null });
+                      if (fileInputRef.current) fileInputRef.current.value = '';
+                    }}
+                  >
+                    Remove
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Upload className="h-8 w-8 text-muted-foreground" />
+                  <div className="text-center">
+                    <p className="text-sm font-medium">
+                      Drop Word document here or click to browse
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Word Document (.docx), max 50MB
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    Browse Files
+                  </Button>
+                </>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx"
                 onChange={handleFileSelect}
                 className="hidden"
               />
@@ -1010,6 +1086,21 @@ export function InputConfigStep({
           <AlertDescription>
             No languages configured for your organisation. Contact your
             administrator to set up target languages.
+          </AlertDescription>
+        </Alert>
+      )}
+      {/* Form-level error: mutation failure shown above the action cluster per PHASE_5_STANDARDS §6.2. */}
+      {(createSession.isError || updateSource.isError || uploadFile.isError) && (
+        <Alert variant="destructive" role="alert">
+          <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+          <AlertDescription>
+            {createSession.error instanceof Error
+              ? createSession.error.message
+              : updateSource.error instanceof Error
+                ? updateSource.error.message
+                : uploadFile.error instanceof Error
+                  ? uploadFile.error.message
+                  : 'Failed to create session. Please try again.'}
           </AlertDescription>
         </Alert>
       )}

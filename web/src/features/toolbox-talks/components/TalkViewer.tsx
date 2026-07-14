@@ -14,8 +14,10 @@ import {
   FileDown,
   HelpCircle,
   PenLine,
+  Info,
 } from 'lucide-react';
 
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -194,6 +196,8 @@ export function TalkViewer({ scheduledTalkId }: TalkViewerProps) {
   const [currentSectionIndex, setCurrentSectionIndex] = React.useState(0);
   const [initialStepSet, setInitialStepSet] = React.useState(false);
   const [hasRecordedStart, setHasRecordedStart] = React.useState(false);
+  // Review mode: replaying a completed talk's content. Nothing is recorded — see docs/operator-review-mode-recon.md.
+  const [reviewMode, setReviewMode] = React.useState(false);
 
   // Standalone video talk: video-based talk with a single auto-generated placeholder section.
   // These are created by the wizard for video-only talks and don't need a separate Sections step.
@@ -207,8 +211,9 @@ export function TalkViewer({ scheduledTalkId }: TalkViewerProps) {
     );
   }, [talk]);
 
-  // Determine available steps based on talk configuration
-  const getAvailableSteps = React.useCallback((talk: MyToolboxTalk | undefined) => {
+  // Determine available steps based on talk configuration.
+  // In review mode the Sign step is omitted — review never re-signs a completed talk.
+  const getAvailableSteps = React.useCallback((talk: MyToolboxTalk | undefined, reviewMode: boolean) => {
     if (!talk) return [];
 
     const steps: { key: ViewerStep; label: string; icon: React.ElementType; available: boolean }[] = [];
@@ -228,8 +233,10 @@ export function TalkViewer({ scheduledTalkId }: TalkViewerProps) {
       steps.push({ key: 'quiz', label: 'Quiz', icon: HelpCircle, available: true });
     }
 
-    // Signature step (always)
-    steps.push({ key: 'signature', label: 'Sign', icon: PenLine, available: true });
+    // Signature step (always, except in review mode)
+    if (!reviewMode) {
+      steps.push({ key: 'signature', label: 'Sign', icon: PenLine, available: true });
+    }
 
     // Complete step (always)
     steps.push({ key: 'complete', label: 'Complete', icon: CheckCircle2, available: true });
@@ -314,6 +321,7 @@ export function TalkViewer({ scheduledTalkId }: TalkViewerProps) {
   };
 
   const handleVideoProgress = async (percent: number) => {
+    if (reviewMode) return;
     try {
       await updateVideoProgress.mutateAsync({
         scheduledTalkId,
@@ -370,6 +378,23 @@ export function TalkViewer({ scheduledTalkId }: TalkViewerProps) {
     }
   };
 
+  // Advances past the last content step. In review mode there is no Sign step to
+  // advance to, so this closes the loop back to the (already-completed) Complete screen.
+  const advanceToSignOrComplete = () => {
+    if (reviewMode) {
+      setReviewMode(false);
+      setCurrentStep('complete');
+    } else {
+      setCurrentStep('signature');
+    }
+  };
+
+  const handleStartReview = () => {
+    setReviewMode(true);
+    const steps = getAvailableSteps(talk, true);
+    setCurrentStep(steps[0]?.key ?? 'sections');
+  };
+
   const handleNextSection = () => {
     if (!talk) return;
 
@@ -380,7 +405,7 @@ export function TalkViewer({ scheduledTalkId }: TalkViewerProps) {
       if (talk.requiresQuiz && talk.questions.length > 0) {
         setCurrentStep('quiz');
       } else {
-        setCurrentStep('signature');
+        advanceToSignOrComplete();
       }
     }
   };
@@ -468,15 +493,26 @@ export function TalkViewer({ scheduledTalkId }: TalkViewerProps) {
           completion={completion}
           totalSections={talk.totalSections}
           hasQuiz={talk.requiresQuiz}
+          onReview={handleStartReview}
         />
       </div>
     );
   }
 
-  const availableSteps = getAvailableSteps(talk);
+  const availableSteps = getAvailableSteps(talk, reviewMode);
 
   return (
     <div className="space-y-6">
+      {/* Review mode banner */}
+      {reviewMode && (
+        <Alert className="border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/30">
+          <Info className="h-4 w-4 text-blue-600" />
+          <AlertDescription className="text-blue-800 dark:text-blue-200">
+            You&apos;re reviewing this completed learning. Nothing you do here will be recorded.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4">
@@ -586,14 +622,14 @@ export function TalkViewer({ scheduledTalkId }: TalkViewerProps) {
                       if (talk.requiresQuiz && talk.questions.length > 0) {
                         setCurrentStep('quiz');
                       } else {
-                        setCurrentStep('signature');
+                        advanceToSignOrComplete();
                       }
                     } else if (talk.sections.length > 0) {
                       setCurrentStep('sections');
                     } else if (talk.requiresQuiz && talk.questions.length > 0) {
                       setCurrentStep('quiz');
                     } else {
-                      setCurrentStep('signature');
+                      advanceToSignOrComplete();
                     }
                   }}
                   disabled={!canProceedFromVideo}
@@ -640,7 +676,7 @@ export function TalkViewer({ scheduledTalkId }: TalkViewerProps) {
               lastQuizScore={talk.lastQuizScore}
               attemptCount={talk.quizAttemptCount}
               onSubmit={handleQuizSubmit}
-              onContinue={() => setCurrentStep('signature')}
+              onContinue={advanceToSignOrComplete}
               onRewatchVideo={talk.videoUrl && talk.videoSource !== 'None' ? handleRewatchVideo : undefined}
             />
           )}

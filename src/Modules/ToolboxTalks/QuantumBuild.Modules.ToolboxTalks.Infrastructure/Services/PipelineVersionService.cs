@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using QuantumBuild.Core.Application.Configuration;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Validation;
@@ -20,6 +21,7 @@ public class PipelineVersionService : IPipelineVersionService
 {
     private readonly IToolboxTalksDbContext _dbContext;
     private readonly TranslationValidationSettings _settings;
+    private readonly AIProviderOptions _aiProviders;
     private readonly ILogger<PipelineVersionService> _logger;
 
     private static readonly JsonSerializerOptions SnakeCaseOptions = new()
@@ -31,10 +33,12 @@ public class PipelineVersionService : IPipelineVersionService
     public PipelineVersionService(
         IToolboxTalksDbContext dbContext,
         IOptions<TranslationValidationSettings> settings,
+        IOptions<AIProviderOptions> aiProviders,
         ILogger<PipelineVersionService> logger)
     {
         _dbContext = dbContext;
         _settings = settings.Value;
+        _aiProviders = aiProviders.Value;
         _logger = logger;
     }
 
@@ -116,10 +120,10 @@ public class PipelineVersionService : IPipelineVersionService
     {
         var components = new
         {
-            round1_a = _settings.Round1AModel,
+            round1_a = _aiProviders.Anthropic.Models.Haiku,
             round1_b = "deepl",
-            round2_c = _settings.Gemini.Model,
-            round3_d = _settings.Round3DModel,
+            round2_c = _aiProviders.Gemini.Models.Flash,
+            round3_d = _aiProviders.Anthropic.Models.Sonnet,
             thresholds = new
             {
                 @default = _settings.DefaultThreshold,

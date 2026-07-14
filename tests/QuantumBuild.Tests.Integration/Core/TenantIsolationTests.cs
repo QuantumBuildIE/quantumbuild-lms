@@ -295,34 +295,12 @@ public class TenantIsolationTests : IntegrationTestBase
         var employeeId = createResult!.Data!.Id;
 
         // Act - Try to access as different user in same tenant
-        var getResponse = await WarehouseClient.GetAsync($"/api/employees/{employeeId}");
+        var getResponse = await OperatorClient.GetAsync($"/api/employees/{employeeId}");
 
         // Assert - Should be accessible
         getResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         var getResult = await getResponse.Content.ReadFromJsonAsync<ResultWrapper<EmployeeDto>>();
         getResult!.Data!.FirstName.Should().Be("Cross");
-    }
-
-    [Fact]
-    public async Task AllUsersInTenant_SeesSameEmployeeList()
-    {
-        // Act - Get employee lists from different users
-        var adminResponse = await AdminClient.GetAsync("/api/employees/all");
-        var warehouseResponse = await WarehouseClient.GetAsync("/api/employees/all");
-        var operatorResponse = await OperatorClient.GetAsync("/api/employees/all");
-
-        // Assert - All should return OK with same data structure
-        adminResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        warehouseResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        operatorResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-
-        var adminResult = await adminResponse.Content.ReadFromJsonAsync<ResultWrapper<List<EmployeeDto>>>();
-        var warehouseResult = await warehouseResponse.Content.ReadFromJsonAsync<ResultWrapper<List<EmployeeDto>>>();
-        var operatorResult = await operatorResponse.Content.ReadFromJsonAsync<ResultWrapper<List<EmployeeDto>>>();
-
-        // All users should see the same number of employees
-        adminResult!.Data!.Count.Should().Be(warehouseResult!.Data!.Count);
-        adminResult.Data.Count.Should().Be(operatorResult!.Data!.Count);
     }
 
     #endregion

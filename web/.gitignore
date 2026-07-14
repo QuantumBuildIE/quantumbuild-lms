@@ -42,3 +42,9 @@ next-env.d.ts
 
 # Zoho Creator exports
 *.ds
+
+# Playwright
+/playwright-report/
+/test-results/
+/playwright/.cache/
+/e2e/.auth/

@@ -21,9 +21,9 @@ public class ConsensusEngineTests
     private readonly Mock<IClaudeSonnetBackTranslationService> _claudeSonnet = new();
     private readonly Mock<ILexicalScoringService> _scorer = new();
 
-    private ConsensusEngine CreateEngine(int maxRounds = 3)
+    private ConsensusEngine CreateEngine(int maxRounds = 3, string processingMode = "Sequential")
     {
-        var settings = Options.Create(new TranslationValidationSettings { MaxRounds = maxRounds });
+        var settings = Options.Create(new TranslationValidationSettings { MaxRounds = maxRounds, ProcessingMode = processingMode });
         var logger = Mock.Of<ILogger<ConsensusEngine>>();
         return new ConsensusEngine(
             _claudeHaiku.Object, _deepL.Object, _gemini.Object,
@@ -254,5 +254,78 @@ public class ConsensusEngineTests
         // R1 fails (74 < 75), R2 skipped, R3 skipped, final avg = 74, within 15 → Review
         result.Outcome.Should().Be(ValidationOutcome.Review);
         result.FinalScore.Should().Be(74);
+    }
+
+    // ── ProcessingMode = Sequential (default) — Round 1 calls Haiku, waits, then calls DeepL ──
+
+    [Fact]
+    public async Task RunAsync_SequentialMode_CallsHaikuThenDeepL_InStrictOrder()
+    {
+        var callOrder = new List<string>();
+        var btA = "Always wear PPE on site";
+        var btB = "Always wear PPE on the site";
+
+        _claudeHaiku.Setup(c => c.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>(), It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<bool>(), It.IsAny<Guid?>()))
+            .Returns(async () =>
+            {
+                callOrder.Add("HaikuStart");
+                await Task.Delay(30);
+                callOrder.Add("HaikuEnd");
+                return SuccessBt(btA, "Claude");
+            });
+        _deepL.Setup(d => d.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>()))
+            .Returns(async () =>
+            {
+                callOrder.Add("DeepLStart");
+                await Task.Delay(1);
+                callOrder.Add("DeepLEnd");
+                return SuccessBt(btB, "DeepL");
+            });
+        SetupScorer(btA, 90.0);
+        SetupScorer(btB, 85.0);
+
+        await CreateEngine(processingMode: "Sequential").RunAsync(OriginalText, TranslatedText, SourceLang, TargetLang, Threshold);
+
+        // DeepL must not start until Haiku has fully completed — proves sequential await, not just fast timing
+        callOrder.Should().Equal("HaikuStart", "HaikuEnd", "DeepLStart", "DeepLEnd");
+    }
+
+    // ── ProcessingMode = Parallel — Round 1 dispatches Haiku and DeepL concurrently via Task.WhenAll ──
+
+    [Fact]
+    public async Task RunAsync_ParallelMode_CallsHaikuAndDeepLConcurrently()
+    {
+        var btA = "Always wear PPE on site";
+        var btB = "Always wear PPE on the site";
+
+        // Each mock waits on the OTHER provider's start signal before returning.
+        // Under sequential execution this deadlocks (DeepL never starts until Haiku
+        // completes, but Haiku is blocked waiting for DeepL to start) — proving genuine
+        // concurrency rather than relying on flaky timing assertions.
+        var haikuStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var deepLStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        _claudeHaiku.Setup(c => c.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>(), It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<bool>(), It.IsAny<Guid?>()))
+            .Returns(async () =>
+            {
+                haikuStarted.TrySetResult();
+                await deepLStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                return SuccessBt(btA, "Claude");
+            });
+        _deepL.Setup(d => d.BackTranslateAsync(TranslatedText, SourceLang, TargetLang, It.IsAny<CancellationToken>()))
+            .Returns(async () =>
+            {
+                deepLStarted.TrySetResult();
+                await haikuStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                return SuccessBt(btB, "DeepL");
+            });
+        SetupScorer(btA, 90.0);
+        SetupScorer(btB, 85.0);
+
+        var result = await CreateEngine(processingMode: "Parallel").RunAsync(OriginalText, TranslatedText, SourceLang, TargetLang, Threshold);
+
+        result.Outcome.Should().Be(ValidationOutcome.Pass);
+        result.ScoreA.Should().Be(90);
+        result.ScoreB.Should().Be(85);
     }
 }

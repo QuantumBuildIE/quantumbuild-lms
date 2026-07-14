@@ -14,7 +14,7 @@ public class CostEstimationService : ICostEstimationService
     private const decimal HaikuInputPer1K = 0.00074m;
     private const decimal HaikuOutputPer1K = 0.00370m;
 
-    // claude-sonnet-4-20250514
+    // claude-sonnet-4-5
     private const decimal SonnetInputPer1K = 0.00277m;
     private const decimal SonnetOutputPer1K = 0.01385m;
 

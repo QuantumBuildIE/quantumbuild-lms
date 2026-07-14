@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
+using QuantumBuild.Modules.ToolboxTalks.Domain.Entities.Workflows;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 
@@ -92,6 +93,14 @@ public interface IToolboxTalksDbContext
 
     // Monitoring
     DbSet<CustomerUsageReportState> CustomerUsageReportStates { get; }
+
+    // Workflow primitives
+    DbSet<WorkflowEvent> WorkflowEvents { get; }
+    DbSet<WorkflowReview> WorkflowReviews { get; }
+    DbSet<ExternalParticipantInvitation> ExternalParticipantInvitations { get; }
+
+    // Translation flags
+    DbSet<TranslationFlag> TranslationFlags { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

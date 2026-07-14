@@ -4,8 +4,12 @@ using System.Text.RegularExpressions;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using QuantumBuild.Core.Application.Models;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Translations;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Workflows;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Translation;
+using QuantumBuild.Modules.ToolboxTalks.Application.Services;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services.Subtitles;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 
@@ -20,17 +24,23 @@ public class GenerateContentTranslationsCommandHandler
     private readonly IToolboxTalksDbContext _context;
     private readonly IContentTranslationService _translationService;
     private readonly ILanguageCodeService _languageCodeService;
+    private readonly ITranslationWorkflowService _workflowService;
+    private readonly IToolboxTalkNotificationService _notificationService;
     private readonly ILogger<GenerateContentTranslationsCommandHandler> _logger;
 
     public GenerateContentTranslationsCommandHandler(
         IToolboxTalksDbContext context,
         IContentTranslationService translationService,
         ILanguageCodeService languageCodeService,
+        ITranslationWorkflowService workflowService,
+        IToolboxTalkNotificationService notificationService,
         ILogger<GenerateContentTranslationsCommandHandler> logger)
     {
         _context = context;
         _translationService = translationService;
         _languageCodeService = languageCodeService;
+        _workflowService = workflowService;
+        _notificationService = notificationService;
         _logger = logger;
     }
 
@@ -92,6 +102,37 @@ public class GenerateContentTranslationsCommandHandler
                 continue;
             }
 
+            // Guard: enforce state machine rules before starting AI work for this language.
+            // StartTranslation blocks if the language is in a protected state (e.g. Accepted) without
+            // explicit confirmation, or if an external review is in progress.
+            var workflowGuard = await _workflowService.StartTranslation(
+                request.ToolboxTalkId,
+                targetCode,
+                request.ConfirmOverwrite,
+                request.TriggeredBy,
+                explicitTenantId: request.TenantId,
+                ct: cancellationToken);
+
+            if (!workflowGuard.Success)
+            {
+                var errorMessage = workflowGuard.ErrorCode == FailureCode.WorkflowConfirmationRequired
+                    ? "Confirmation required to overwrite this language."
+                    : workflowGuard.Errors.FirstOrDefault() ?? "Translation blocked by workflow state.";
+
+                _logger.LogWarning(
+                    "StartTranslation guard rejected {Language} ({Code}) for talk {ToolboxTalkId}: {Error}",
+                    language, targetCode, request.ToolboxTalkId, errorMessage);
+
+                results.Add(new LanguageTranslationResult
+                {
+                    Language = language,
+                    LanguageCode = targetCode,
+                    Success = false,
+                    ErrorMessage = errorMessage
+                });
+                continue;
+            }
+
             _logger.LogInformation("Starting translation for language: {Language} (from {Source})", language, sourceLanguageName);
             var result = await TranslateForLanguageAsync(toolboxTalk, language, sourceLanguageName, request.SectorKey, cancellationToken);
             _logger.LogInformation(
@@ -101,6 +142,31 @@ public class GenerateContentTranslationsCommandHandler
                 language, result.Success, result.SectionsTranslated, result.QuestionsTranslated,
                 result.SlidesTranslated, result.SlideshowTranslated, result.ErrorMessage ?? "none");
             results.Add(result);
+        }
+
+        // Append any successfully translated language codes to TargetLanguageCodes so the
+        // workflow-state endpoint and Detail-page TranslateStep can see this language.
+        var existingCodes = string.IsNullOrWhiteSpace(toolboxTalk.TargetLanguageCodes)
+            ? new List<string>()
+            : (JsonSerializer.Deserialize<List<string>>(toolboxTalk.TargetLanguageCodes)
+               ?? new List<string>());
+
+        var codesChanged = false;
+        foreach (var successfulResult in results.Where(r => r.Success))
+        {
+            if (!existingCodes.Contains(successfulResult.LanguageCode, StringComparer.OrdinalIgnoreCase))
+            {
+                existingCodes.Add(successfulResult.LanguageCode.ToLowerInvariant());
+                codesChanged = true;
+            }
+        }
+
+        if (codesChanged)
+        {
+            toolboxTalk.TargetLanguageCodes = JsonSerializer.Serialize(existingCodes);
+            _logger.LogInformation(
+                "TargetLanguageCodes updated for talk {ToolboxTalkId}: {Codes}",
+                request.ToolboxTalkId, toolboxTalk.TargetLanguageCodes);
         }
 
         _logger.LogInformation(
@@ -125,6 +191,34 @@ public class GenerateContentTranslationsCommandHandler
                 "ToolboxTalkId: {ToolboxTalkId}, TenantId: {TenantId}, Error: {Error}",
                 request.ToolboxTalkId, request.TenantId, ex.Message);
             throw;
+        }
+
+        foreach (var successfulResult in results.Where(r => r.Success))
+        {
+            var recordResult = await _workflowService.RecordTranslationCompleted(
+                request.ToolboxTalkId,
+                successfulResult.LanguageCode,
+                request.TriggeredBy,
+                explicitTenantId: request.TenantId,
+                ct: cancellationToken);
+
+            if (!recordResult.Success)
+            {
+                _logger.LogWarning(
+                    "RecordTranslationCompleted failed for {Language} ({Code}) after successful translation. " +
+                    "Translation is persisted; StartValidation guard will surface the inconsistency. Error: {Error}",
+                    successfulResult.Language, successfulResult.LanguageCode,
+                    recordResult.Errors.FirstOrDefault() ?? "unknown");
+            }
+        }
+
+        // Notify tenant admins that translation has completed (hook 1)
+        if (results.Count > 0)
+        {
+            var notifyResults = results.Select(r => new TranslationLanguageResult(
+                r.Language, r.LanguageCode, r.Success, r.ErrorMessage)).ToList();
+            await _notificationService.NotifyTranslationCompleteAsync(
+                request.TenantId, request.ToolboxTalkId, toolboxTalk.Title, notifyResults, cancellationToken);
         }
 
         return GenerateContentTranslationsResult.SuccessResult(results);
@@ -205,7 +299,7 @@ public class GenerateContentTranslationsCommandHandler
 
             // Translate sections
             var sectionsTranslated = 0;
-            var translatedSections = new List<TranslatedSectionData>();
+            var translatedSections = new List<TranslatedSectionEntry>();
 
             foreach (var section in toolboxTalk.Sections)
             {
@@ -221,7 +315,9 @@ public class GenerateContentTranslationsCommandHandler
 
                 if (sectionTitleResult.Success && sectionContentResult.Success)
                 {
-                    translatedSections.Add(new TranslatedSectionData
+                    // Explicit construction (not deserialization) — ReviewedAt/ReviewedBy default
+                    // to null, correct for a regenerated translation that has never been reviewed.
+                    translatedSections.Add(new TranslatedSectionEntry
                     {
                         SectionId = section.Id,
                         Title = sectionTitleResult.TranslatedContent,
@@ -764,14 +860,7 @@ public class GenerateContentTranslationsCommandHandler
             .Replace("\t", "\\t");
     }
 
-    // Internal DTOs for JSON serialization (matching existing structure)
-    private class TranslatedSectionData
-    {
-        public Guid SectionId { get; set; }
-        public string Title { get; set; } = string.Empty;
-        public string Content { get; set; } = string.Empty;
-    }
-
+    // Internal DTO for JSON serialization (matching existing structure)
     private class TranslatedQuestionData
     {
         public Guid QuestionId { get; set; }

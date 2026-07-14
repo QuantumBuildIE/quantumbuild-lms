@@ -8,12 +8,21 @@ import {
   getToolboxTalkDashboard,
   getToolboxTalkSettings,
   updateToolboxTalkSettings,
+  updateToolboxTalkNotificationSettings,
   generateContentTranslations,
   getContentTranslations,
   getToolboxTalkPreview,
   getToolboxTalkPreviewSlides,
   getAdminSlideshowHtml,
   regenerateCertificate,
+  getWorkflowStates,
+  getWorkflowHistory,
+  acceptTranslation,
+  validateTranslation,
+  initiateExternalReview,
+  cancelExternalReview,
+  startTalkTranslation,
+  addTargetLanguage,
 } from './toolbox-talks';
 import type {
   GenerateTranslationsRequest,
@@ -22,6 +31,7 @@ import type {
   CreateToolboxTalkRequest,
   UpdateToolboxTalkRequest,
   UpdateToolboxTalkSettingsRequest,
+  UpdateToolboxTalkNotificationSettingsRequest,
   GetToolboxTalksParams,
 } from '@/types/toolbox-talks';
 
@@ -117,6 +127,18 @@ export function useUpdateToolboxTalkSettings() {
   });
 }
 
+export function useUpdateToolboxTalkNotificationSettings() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: UpdateToolboxTalkNotificationSettingsRequest) =>
+      updateToolboxTalkNotificationSettings(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: TOOLBOX_TALKS_SETTINGS_KEY });
+    },
+  });
+}
+
 // ============================================
 // Content Translation Hooks
 // ============================================
@@ -138,6 +160,8 @@ export function useGenerateContentTranslations() {
     onSuccess: (_, { toolboxTalkId }) => {
       queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId] });
       queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId, 'translations'] });
+      queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId, 'workflow-state'] });
+      queryClient.invalidateQueries({ queryKey: ['learnings', toolboxTalkId] });
     },
   });
 }
@@ -178,6 +202,119 @@ export function useRegenerateCertificate() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reports'] });
       queryClient.invalidateQueries({ queryKey: TOOLBOX_TALKS_KEY });
+    },
+  });
+}
+
+// ============================================
+// Translation Workflow Hooks
+// ============================================
+
+export function useWorkflowStates(toolboxTalkId: string) {
+  return useQuery({
+    queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId, 'workflow-state'],
+    queryFn: () => getWorkflowStates(toolboxTalkId),
+    enabled: !!toolboxTalkId,
+  });
+}
+
+export function useWorkflowHistory(toolboxTalkId: string, languageCode: string) {
+  return useQuery({
+    queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId, 'workflow-history', languageCode],
+    queryFn: () => getWorkflowHistory(toolboxTalkId, languageCode),
+    enabled: !!toolboxTalkId && !!languageCode,
+  });
+}
+
+export function useAcceptTranslation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ toolboxTalkId, languageCode }: { toolboxTalkId: string; languageCode: string }) =>
+      acceptTranslation(toolboxTalkId, languageCode),
+    onSuccess: (_, { toolboxTalkId }) => {
+      queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId, 'workflow-state'] });
+      queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId] });
+    },
+  });
+}
+
+export function useValidateTranslation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ toolboxTalkId, languageCode }: { toolboxTalkId: string; languageCode: string }) =>
+      validateTranslation(toolboxTalkId, languageCode),
+    onSuccess: (_, { toolboxTalkId }) => {
+      queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId, 'workflow-state'] });
+      queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId] });
+    },
+  });
+}
+
+export function useInitiateExternalReview() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      toolboxTalkId,
+      languageCode,
+      reviewerEmail,
+      editableSectionIndices,
+    }: {
+      toolboxTalkId: string;
+      languageCode: string;
+      reviewerEmail: string;
+      editableSectionIndices?: number[] | null;
+    }) =>
+      initiateExternalReview(toolboxTalkId, languageCode, reviewerEmail, editableSectionIndices),
+    onSuccess: (_, { toolboxTalkId, languageCode }) => {
+      queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId, 'workflow-state'] });
+      queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId, 'workflow-history', languageCode] });
+    },
+  });
+}
+
+export function useCancelExternalReview() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ toolboxTalkId, languageCode }: { toolboxTalkId: string; languageCode: string }) =>
+      cancelExternalReview(toolboxTalkId, languageCode),
+    onSuccess: (_, { toolboxTalkId, languageCode }) => {
+      queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId, 'workflow-state'] });
+      queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, toolboxTalkId, 'workflow-history', languageCode] });
+    },
+  });
+}
+
+export function useStartTalkTranslation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      talkId,
+      languageCode,
+      confirmOverwrite,
+    }: {
+      talkId: string;
+      languageCode: string;
+      confirmOverwrite?: boolean;
+    }) => startTalkTranslation(talkId, languageCode, confirmOverwrite),
+    onSuccess: (_, { talkId, languageCode }) => {
+      queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, talkId, 'workflow-state'] });
+      queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, talkId, 'workflow-history', languageCode] });
+    },
+  });
+}
+
+export function useAddTargetLanguage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ talkId, languageCode }: { talkId: string; languageCode: string }) =>
+      addTargetLanguage(talkId, languageCode),
+    onSuccess: (_, { talkId }) => {
+      // Invalidate the talk object so ToolboxTalkDetail sees the updated targetLanguageCodes
+      queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, talkId] });
+      // Invalidate workflow states so TranslateStep renders the new language (Initial state)
+      queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, talkId, 'workflow-state'] });
+      // Invalidate the learnings cache key used by TranslateStep's useTalk hook
+      queryClient.invalidateQueries({ queryKey: ['learnings', talkId] });
     },
   });
 }

@@ -94,7 +94,8 @@
       "Bash(Get-ChildItem -Path \"c:\\\\WORK\\\\Contracts - RASCORE\\\\Applications\\\\quantumbuild-lms\\\\src\\\\Core\\\\QuantumBuild.Core.Infrastructure\\\\Migrations\" -Filter \"*.cs\")",
       "Bash(Select-Object -First 20)",
       "Bash(Select-Object Name)",
-      "Bash(Format-Table -AutoSize)"
+      "Bash(Format-Table -AutoSize)",
+      "PowerShell($content = Get-Content \"C:\\\\Users\\\\Eddie\\\\.claude\\\\projects\\\\c--WORK-Contracts---RASCORE-Applications-quantumbuild-lms\\\\27301671-68eb-4f98-a8cf-b977a0ce6794\\\\tool-results\\\\bsu2lfu10.txt\" -Raw; $lines = $content -split \"`n\"; $lines | Where-Object { $_ -match \"\\(Alert|src\\\\/\\)\" } | Select-Object -First 40)"
     ]
   }
 }

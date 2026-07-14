@@ -59,6 +59,7 @@ public class TranslationValidationResult : BaseEntity
     public DateTime? DecisionAt { get; set; }
     public string? DecisionBy { get; set; }
 
-    // Navigation property
+    // Navigation properties
     public TranslationValidationRun ValidationRun { get; set; } = null!;
+    public ICollection<TranslationFlag> Flags { get; set; } = new List<TranslationFlag>();
 }

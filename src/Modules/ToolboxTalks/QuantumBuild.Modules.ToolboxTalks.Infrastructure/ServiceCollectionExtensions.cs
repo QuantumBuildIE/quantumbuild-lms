@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Pdf;
@@ -28,9 +29,12 @@ using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Mapping;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Sectors;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.ContentCreation;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Workflows;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Ingestion;
+using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Workflows;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 using Microsoft.Extensions.Logging;
+using Polly;
 using QuantumBuild.Core.Application.Http;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure;
@@ -40,6 +44,22 @@ namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure;
 /// </summary>
 public static class ServiceCollectionExtensions
 {
+    /// <summary>
+    /// Resolves the shared Anthropic Bulkhead policy instance from DI. Used by every
+    /// Claude-calling HttpClient registration so they all draw from ONE shared permit pool
+    /// (see ProviderBulkheadPolicies — one instance per provider, not per typed client).
+    /// </summary>
+    private static IAsyncPolicy<HttpResponseMessage> GetAnthropicBulkheadFromDI(IServiceProvider sp) =>
+        sp.GetRequiredService<ProviderBulkheadPolicies>().Anthropic;
+
+    /// <summary>Shared DeepL Bulkhead policy instance from DI (see GetAnthropicBulkheadFromDI).</summary>
+    private static IAsyncPolicy<HttpResponseMessage> GetDeepLBulkheadFromDI(IServiceProvider sp) =>
+        sp.GetRequiredService<ProviderBulkheadPolicies>().DeepL;
+
+    /// <summary>Shared Gemini Bulkhead policy instance from DI (see GetAnthropicBulkheadFromDI).</summary>
+    private static IAsyncPolicy<HttpResponseMessage> GetGeminiBulkheadFromDI(IServiceProvider sp) =>
+        sp.GetRequiredService<ProviderBulkheadPolicies>().Gemini;
+
     /// <summary>
     /// Registers Toolbox Talks Infrastructure layer services with the dependency injection container
     /// </summary>
@@ -53,6 +73,9 @@ public static class ServiceCollectionExtensions
         // Register email service
         services.AddScoped<IToolboxTalkEmailService, ToolboxTalkEmailService>();
 
+        // Register translation/validation pipeline notification service
+        services.AddScoped<IToolboxTalkNotificationService, ToolboxTalkNotificationService>();
+
         // Register reports service
         services.AddScoped<IToolboxTalkReportsService, ToolboxTalkReportsService>();
 
@@ -62,9 +85,11 @@ public static class ServiceCollectionExtensions
         // Register export service (stub implementation for Phase 2)
         services.AddScoped<IToolboxTalkExportService, ToolboxTalkExportService>();
 
-        // Register subtitle processing configuration
-        services.Configure<SubtitleProcessingSettings>(
-            configuration.GetSection(SubtitleProcessingSettings.SectionName));
+        // Register subtitle processing configuration with startup validation
+        services.AddOptions<SubtitleProcessingSettings>()
+            .BindConfiguration(SubtitleProcessingSettings.SectionName)
+            .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<SubtitleProcessingSettings>, SubtitleProcessingSettingsValidator>();
 
         // Register R2 storage configuration and services
         services.Configure<R2StorageSettings>(
@@ -78,6 +103,12 @@ public static class ServiceCollectionExtensions
             client.Timeout = TimeSpan.FromSeconds(30); // 30 seconds for PDF download
         });
 
+        // Register DOCX extraction service (for AI content generation from uploaded Word documents)
+        services.AddHttpClient<IDocxExtractionService, DocxExtractionService>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(30); // 30 seconds for DOCX download
+        });
+
         // Register subtitle processing infrastructure services
         // ElevenLabs transcription can take a long time for large videos (download + transcription)
         services.AddHttpClient<ITranscriptionService, ElevenLabsTranscriptionService>(client =>
@@ -87,10 +118,15 @@ public static class ServiceCollectionExtensions
         .AddPolicyHandler((sp, _) => ResiliencePolicies.GetElevenLabsPolicy(
             sp.GetRequiredService<ILogger<ElevenLabsTranscriptionService>>()));
         // Claude translation is usually fast but can take time for long subtitle files
+        // (bundled hygiene fix: this registration previously had NO retry policy at all,
+        // unlike every other Claude-calling service — added here alongside the bulkhead)
         services.AddHttpClient<ITranslationService, ClaudeTranslationService>(client =>
         {
             client.Timeout = TimeSpan.FromMinutes(5); // 5 minutes for translation
-        });
+        })
+        .AddPolicyHandler((sp, _) => ResiliencePolicies.GetClaudePolicy(
+            sp.GetRequiredService<ILogger<ClaudeTranslationService>>()))
+        .AddPolicyHandler((sp, _) => GetAnthropicBulkheadFromDI(sp));
 
         // Content translation service for translating sections and quiz questions
         services.AddHttpClient<IContentTranslationService, ContentTranslationService>(client =>
@@ -98,10 +134,14 @@ public static class ServiceCollectionExtensions
             client.Timeout = TimeSpan.FromMinutes(5); // 5 minutes for content translation
         })
         .AddPolicyHandler((sp, _) => ResiliencePolicies.GetClaudePolicy(
-            sp.GetRequiredService<ILogger<ContentTranslationService>>()));
+            sp.GetRequiredService<ILogger<ContentTranslationService>>()))
+        .AddPolicyHandler((sp, _) => GetAnthropicBulkheadFromDI(sp));
 
         // Translation job scheduler (fire-and-forget Hangfire enqueue, used by cross-module callers)
         services.AddSingleton<ITranslationJobScheduler, TranslationJobScheduler>();
+
+        // Parse job scheduler (fire-and-forget Hangfire enqueue for new-wizard video parse pipeline)
+        services.AddSingleton<IParseJobScheduler, ParseJobScheduler>();
 
         // Register SRT storage provider based on configuration
         var srtStorageType = configuration
@@ -140,7 +180,8 @@ public static class ServiceCollectionExtensions
             client.Timeout = TimeSpan.FromMinutes(3); // 3 minutes for section generation
         })
         .AddPolicyHandler((sp, _) => ResiliencePolicies.GetClaudePolicy(
-            sp.GetRequiredService<ILogger<AiSectionGenerationService>>()));
+            sp.GetRequiredService<ILogger<AiSectionGenerationService>>()))
+        .AddPolicyHandler((sp, _) => GetAnthropicBulkheadFromDI(sp));
 
         // Register AI quiz generation service for generating quiz questions from content
         services.AddHttpClient<IAiQuizGenerationService, AiQuizGenerationService>(client =>
@@ -148,7 +189,8 @@ public static class ServiceCollectionExtensions
             client.Timeout = TimeSpan.FromMinutes(3); // 3 minutes for quiz generation
         })
         .AddPolicyHandler((sp, _) => ResiliencePolicies.GetClaudePolicy(
-            sp.GetRequiredService<ILogger<AiQuizGenerationService>>()));
+            sp.GetRequiredService<ILogger<AiQuizGenerationService>>()))
+        .AddPolicyHandler((sp, _) => GetAnthropicBulkheadFromDI(sp));
 
         // Register the full content generation orchestrator service
         // This service coordinates extraction, section generation, and quiz generation
@@ -166,7 +208,8 @@ public static class ServiceCollectionExtensions
             client.Timeout = TimeSpan.FromMinutes(5); // 5 minutes for PDF analysis and HTML generation
         })
         .AddPolicyHandler((sp, _) => ResiliencePolicies.GetClaudePolicy(
-            sp.GetRequiredService<ILogger<AiSlideshowGenerationService>>()));
+            sp.GetRequiredService<ILogger<AiSlideshowGenerationService>>()))
+        .AddPolicyHandler((sp, _) => GetAnthropicBulkheadFromDI(sp));
 
         // Register slideshow generation service (orchestrates PDF download + AI generation)
         services.AddHttpClient<ISlideshowGenerationService, SlideshowGenerationService>(client =>
@@ -185,25 +228,32 @@ public static class ServiceCollectionExtensions
             client.Timeout = TimeSpan.FromMinutes(2); // 2 minutes for back-translation
         })
         .AddPolicyHandler((sp, _) => ResiliencePolicies.GetTransientPolicy(
-            sp.GetRequiredService<ILogger<DeepLTranslationService>>(), "DeepL"));
+            sp.GetRequiredService<ILogger<DeepLTranslationService>>(), "DeepL"))
+        .AddPolicyHandler((sp, _) => GetDeepLBulkheadFromDI(sp));
         // Gemini: Google AI, good for diverse language pairs
         services.AddHttpClient<IGeminiTranslationService, GeminiTranslationService>(client =>
         {
             client.Timeout = TimeSpan.FromMinutes(2); // 2 minutes for back-translation
         })
         .AddPolicyHandler((sp, _) => ResiliencePolicies.GetTransientPolicy(
-            sp.GetRequiredService<ILogger<GeminiTranslationService>>(), "Gemini"));
+            sp.GetRequiredService<ILogger<GeminiTranslationService>>(), "Gemini"))
+        .AddPolicyHandler((sp, _) => GetGeminiBulkheadFromDI(sp));
         // Claude Sonnet: Round 3 final tiebreaker (v6.4 — replaced DeepSeek for GDPR compliance)
         services.AddHttpClient<IClaudeSonnetBackTranslationService, ClaudeSonnetBackTranslationService>(client =>
         {
             client.Timeout = TimeSpan.FromMinutes(2); // 2 minutes for back-translation
         })
         .AddPolicyHandler((sp, _) => ResiliencePolicies.GetClaudePolicy(
-            sp.GetRequiredService<ILogger<ClaudeSonnetBackTranslationService>>()));
+            sp.GetRequiredService<ILogger<ClaudeSonnetBackTranslationService>>()))
+        .AddPolicyHandler((sp, _) => GetAnthropicBulkheadFromDI(sp));
 
         // Register translation validation scoring and diff services (pure logic, no HTTP)
         services.AddSingleton<ILexicalScoringService, LexicalScoringService>();
         services.AddSingleton<IWordDiffService, WordDiffService>();
+        services.AddSingleton<ISentenceSplitter, SentenceSplitter>();
+        services.AddSingleton<IBackTranslationSelector, BackTranslationSelector>();
+        services.AddSingleton<IDiffRunGrouper, DiffRunGrouper>();
+        services.AddSingleton<IWordToSentenceMapper, WordToSentenceMapper>();
 
         // Register dialect detection service (uses Claude Haiku API)
         services.AddHttpClient<IDialectDetectionService, DialectDetectionService>(client =>
@@ -211,7 +261,8 @@ public static class ServiceCollectionExtensions
             client.Timeout = TimeSpan.FromMinutes(1); // 1 minute for dialect detection
         })
         .AddPolicyHandler((sp, _) => ResiliencePolicies.GetClaudePolicy(
-            sp.GetRequiredService<ILogger<DialectDetectionService>>()));
+            sp.GetRequiredService<ILogger<DialectDetectionService>>()))
+        .AddPolicyHandler((sp, _) => GetAnthropicBulkheadFromDI(sp));
 
         // Register safety classification, glossary verification, and glossary hard-block replacement
         services.AddScoped<ISafetyClassificationService, SafetyClassificationService>();
@@ -224,7 +275,8 @@ public static class ServiceCollectionExtensions
             client.Timeout = TimeSpan.FromMinutes(2); // 2 minutes for back-translation
         })
         .AddPolicyHandler((sp, _) => ResiliencePolicies.GetClaudePolicy(
-            sp.GetRequiredService<ILogger<ClaudeHaikuBackTranslationService>>()));
+            sp.GetRequiredService<ILogger<ClaudeHaikuBackTranslationService>>()))
+        .AddPolicyHandler((sp, _) => GetAnthropicBulkheadFromDI(sp));
 
         // Register consensus engine (multi-round back-translation scoring)
         services.AddScoped<IConsensusEngine, ConsensusEngine>();
@@ -247,15 +299,23 @@ public static class ServiceCollectionExtensions
             client.Timeout = TimeSpan.FromMinutes(1);
         })
         .AddPolicyHandler((sp, _) => ResiliencePolicies.GetClaudePolicy(
-            sp.GetRequiredService<ILogger<PreFlightScanService>>()));
+            sp.GetRequiredService<ILogger<PreFlightScanService>>()))
+        .AddPolicyHandler((sp, _) => GetAnthropicBulkheadFromDI(sp));
 
-        // Register regulatory score service (Claude Sonnet for regulatory scoring)
+        // Register regulatory score service (Claude Sonnet for regulatory scoring).
+        // Sole consumer is RegulatoryScoreController's synchronous request-path action (confirmed —
+        // no Hangfire job references IRegulatoryScoreService) — so this gets the AnthropicSynchronous
+        // bulkhead variant (shared Anthropic permit pool + outer Timeout) instead of the plain
+        // Anthropic bulkhead every other Claude-calling registration uses. This makes a live admin
+        // request fail fast with a timeout rather than hang indefinitely if background jobs have
+        // saturated the shared Anthropic quota.
         services.AddHttpClient<IRegulatoryScoreService, RegulatoryScoreService>(client =>
         {
             client.Timeout = TimeSpan.FromMinutes(3); // 3 minutes for regulatory scoring
         })
         .AddPolicyHandler((sp, _) => ResiliencePolicies.GetClaudePolicy(
-            sp.GetRequiredService<ILogger<RegulatoryScoreService>>()));
+            sp.GetRequiredService<ILogger<RegulatoryScoreService>>()))
+        .AddPolicyHandler((sp, _) => sp.GetRequiredService<ProviderBulkheadPolicies>().AnthropicSynchronous);
 
         // Register sector services (system-wide sector lookup + tenant-sector management)
         services.AddScoped<ISectorService, SectorService>();
@@ -267,7 +327,8 @@ public static class ServiceCollectionExtensions
             client.Timeout = TimeSpan.FromMinutes(3); // 3 minutes for content parsing
         })
         .AddPolicyHandler((sp, _) => ResiliencePolicies.GetClaudePolicy(
-            sp.GetRequiredService<ILogger<ContentParserService>>()));
+            sp.GetRequiredService<ILogger<ContentParserService>>()))
+        .AddPolicyHandler((sp, _) => GetAnthropicBulkheadFromDI(sp));
         services.AddScoped<IContentCreationSessionService, ContentCreationSessionService>();
 
         // Register requirement ingestion service (AI-powered regulatory requirement extraction)
@@ -279,7 +340,8 @@ public static class ServiceCollectionExtensions
             client.Timeout = TimeSpan.FromMinutes(5); // 5 minutes for document fetch + AI extraction
         })
         .AddPolicyHandler((sp, _) => ResiliencePolicies.GetClaudePolicy(
-            sp.GetRequiredService<ILogger<RequirementIngestionJob>>()));
+            sp.GetRequiredService<ILogger<RequirementIngestionJob>>()))
+        .AddPolicyHandler((sp, _) => GetAnthropicBulkheadFromDI(sp));
 
         // Register requirement mapping service (AI-suggested requirement ↔ content mappings)
         services.AddScoped<IRequirementMappingService, RequirementMappingService>();
@@ -308,7 +370,11 @@ public static class ServiceCollectionExtensions
             client.Timeout = TimeSpan.FromMinutes(5); // 5 minutes for AI mapping analysis
         })
         .AddPolicyHandler((sp, _) => ResiliencePolicies.GetClaudePolicy(
-            sp.GetRequiredService<ILogger<RequirementMappingJob>>()));
+            sp.GetRequiredService<ILogger<RequirementMappingJob>>()))
+        .AddPolicyHandler((sp, _) => GetAnthropicBulkheadFromDI(sp));
+
+        // Register translation workflow service (Phase 1b — event log, no state machine enforcement yet)
+        services.AddScoped<ITranslationWorkflowService, TranslationWorkflowService>();
 
         // Note: SignalR hubs are registered in Program.cs with app.MapHub<>()
         //   - SubtitleProcessingHub: /api/hubs/subtitle-processing

@@ -26,8 +26,10 @@ using QuantumBuild.Modules.LessonParser.Infrastructure.Jobs;
 using QuantumBuild.Core.Application.Http;
 using QuantumBuild.Modules.LessonParser.Infrastructure.Persistence;
 using QuantumBuild.Core.Application.Abstractions;
+using QuantumBuild.Core.Application.Configuration;
 using QuantumBuild.Core.Application.Features.BulkImport;
 using QuantumBuild.Core.Infrastructure.Jobs;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -97,7 +99,8 @@ builder.Services.AddHttpClient("ClaudeApi", client =>
     client.Timeout = TimeSpan.FromSeconds(30);
 })
 .AddPolicyHandler((sp, _) => ResiliencePolicies.GetClaudePolicy(
-    sp.GetRequiredService<ILogger<Program>>()));
+    sp.GetRequiredService<ILogger<Program>>()))
+.AddPolicyHandler((sp, _) => sp.GetRequiredService<ProviderBulkheadPolicies>().Anthropic);
 
 // Register Infrastructure services
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
@@ -110,6 +113,17 @@ builder.Services.Configure<EmailProviderSettings>(
 
 builder.Services.Configure<BulkImportSettings>(
     builder.Configuration.GetSection(BulkImportSettings.SectionName));
+
+builder.Services.AddOptions<AIProviderOptions>()
+    .BindConfiguration(AIProviderOptions.SectionName)
+    .ValidateOnStart();
+builder.Services.AddSingleton<IValidateOptions<AIProviderOptions>, AIProviderOptionsValidator>();
+
+builder.Services.AddOptions<ProviderConcurrencyOptions>()
+    .BindConfiguration(ProviderConcurrencyOptions.SectionName)
+    .ValidateOnStart();
+builder.Services.AddSingleton<IValidateOptions<ProviderConcurrencyOptions>, ProviderConcurrencyOptionsValidator>();
+builder.Services.AddSingleton<ProviderBulkheadPolicies>();
 
 var emailProvider = builder.Configuration.GetValue<string>("EmailProvider:Provider");
 if (string.Equals(emailProvider, "MailerSend", StringComparison.OrdinalIgnoreCase))
@@ -210,7 +224,16 @@ if (!string.IsNullOrEmpty(connectionString))
 }
 
 // Add SignalR for real-time subtitle processing progress updates
-builder.Services.AddSignalR();
+// KeepAliveInterval: server pings client every 10 s — defeats Railway proxy idle timeout (assumed ~60 s)
+// ClientTimeoutInterval: server waits 2 min before treating a silent client as disconnected
+// Change is global; all five registered hubs (SubtitleProcessingHub, ContentGenerationHub,
+// TranslationValidationHub, CorpusRunHub, LessonParserHub) inherit these settings.
+// Shorter keep-alive is strictly more conservative; longer client timeout is strictly more lenient — safe for all hubs.
+builder.Services.AddSignalR(options =>
+{
+    options.KeepAliveInterval = TimeSpan.FromSeconds(10);
+    options.ClientTimeoutInterval = TimeSpan.FromMinutes(2);
+});
 
 var app = builder.Build();
 

@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.PreFlightScan;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
+using QuantumBuild.Core.Application.Configuration;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Validation;
@@ -13,10 +14,11 @@ public class PreFlightScanService(
     HttpClient httpClient,
     IOptions<SubtitleProcessingSettings> settings,
     IAiUsageLogger aiUsageLogger,
-    ILogger<PreFlightScanService> logger) : IPreFlightScanService
+    ILogger<PreFlightScanService> logger,
+    IOptions<AIProviderOptions> aiProviders) : IPreFlightScanService
 {
-    private const string HaikuModel = "claude-haiku-4-5-20251001";
     private const int MaxTokens = 4096;
+    private readonly string _haikuModel = aiProviders.Value.Anthropic.Models.Haiku;
 
     private static readonly JsonSerializerOptions CamelCaseOptions = new()
     {
@@ -95,7 +97,7 @@ public class PreFlightScanService(
 
         var requestBody = new
         {
-            model = HaikuModel,
+            model = _haikuModel,
             max_tokens = MaxTokens,
             messages = new[]
             {

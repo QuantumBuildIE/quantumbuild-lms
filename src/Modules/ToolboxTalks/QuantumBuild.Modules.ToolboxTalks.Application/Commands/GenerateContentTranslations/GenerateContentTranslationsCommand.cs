@@ -1,4 +1,5 @@
 using MediatR;
+using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Application.Commands.GenerateContentTranslations;
 
@@ -23,11 +24,23 @@ public record GenerateContentTranslationsCommand : IRequest<GenerateContentTrans
     public List<string> TargetLanguages { get; init; } = new();
 
     /// <summary>
+    /// When true, allows overwriting a translation that is in an Accepted or ReviewerAccepted
+    /// state. Corresponds to the user confirming the overwrite dialog in the UI.
+    /// </summary>
+    public bool ConfirmOverwrite { get; init; } = false;
+
+    /// <summary>
     /// Optional sector key for tiered translation prompts (e.g., "construction", "homecare").
     /// When provided, translations use sector-specific terminology rules (Tier 2).
     /// Nullable because some dispatch sites may not have sector context available.
     /// </summary>
     public string? SectorKey { get; init; }
+
+    /// <summary>
+    /// Who triggered this translation run. Use System for background jobs (Hangfire).
+    /// Defaults to User to preserve existing callers.
+    /// </summary>
+    public TriggeredByType TriggeredBy { get; init; } = TriggeredByType.User;
 }
 
 /// <summary>

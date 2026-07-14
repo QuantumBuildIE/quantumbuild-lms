@@ -33,7 +33,7 @@ import { useLookupValues } from '@/hooks/use-lookups';
 import { SectionEditor } from './SectionEditor';
 import { QuestionEditor } from './QuestionEditor';
 import { SubtitleProcessingPanel } from './SubtitleProcessingPanel';
-import { ContentTranslationPanel } from './ContentTranslationPanel';
+import { TranslationWorkflowPanel } from './TranslationWorkflowPanel';
 import { useCreateToolboxTalk, useUpdateToolboxTalk, TOOLBOX_TALKS_KEY } from '@/lib/api/toolbox-talks';
 import { generateSlides } from '@/lib/api/toolbox-talks/toolbox-talks';
 import type {
@@ -54,7 +54,7 @@ const sectionSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   content: z.string().min(1, 'Content is required'),
   requiresAcknowledgment: z.boolean(),
-  source: z.enum(['Manual', 'Video', 'Pdf', 'Both'] as const).optional(),
+  source: z.enum(['Manual', 'Video', 'Pdf', 'Both', 'Docx'] as const).optional(),
 }).superRefine((data, _ctx) => {
   console.log('Section validating:', {
     sectionNumber: data.sectionNumber,
@@ -73,7 +73,7 @@ const questionSchema = z.object({
   options: z.array(z.string()).nullable(),
   correctAnswer: z.string().min(1, 'Correct answer is required'),
   points: z.number().min(1),
-  source: z.enum(['Manual', 'Video', 'Pdf', 'Both'] as const).optional(),
+  source: z.enum(['Manual', 'Video', 'Pdf', 'Both', 'Docx'] as const).optional(),
 });
 
 const toolboxTalkFormSchema = z.object({
@@ -438,7 +438,9 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {FREQUENCY_OPTIONS.map((option) => (
+                        {FREQUENCY_OPTIONS.filter(
+                          (opt) => opt.value !== 'Weekly' || talk?.frequency === 'Weekly'
+                        ).map((option) => (
                           <SelectItem key={option.value} value={option.value}>
                             {option.label}
                           </SelectItem>
@@ -1054,14 +1056,12 @@ export function ToolboxTalkForm({ talk, onSuccess, onCancel }: ToolboxTalkFormPr
               />
             )}
 
-            {/* Content Translations - show if talk has sections or questions */}
-            {(talk.sections.length > 0 || talk.questions.length > 0) && (
-              <ContentTranslationPanel
+            {/* Content Translations - show if talk has translations, sections, or questions */}
+            {(talk.translations.length > 0 || talk.sections.length > 0 || talk.questions.length > 0) && (
+              <TranslationWorkflowPanel
                 toolboxTalkId={talk.id}
                 existingTranslations={talk.translations}
-                onTranslationsGenerated={() => {
-                  queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, talk.id] });
-                }}
+                sections={talk.sections}
               />
             )}
           </>

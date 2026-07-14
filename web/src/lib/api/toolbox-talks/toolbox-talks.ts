@@ -1,5 +1,6 @@
 import { apiClient } from '@/lib/api/client';
 import type { ApiResponse } from '@/types/auth';
+import type { TranslationWorkflowStateDto, WorkflowEventDto } from '@/types/workflows';
 import type {
   ToolboxTalk,
   ToolboxTalkListItem,
@@ -10,6 +11,7 @@ import type {
   CreateToolboxTalkRequest,
   UpdateToolboxTalkRequest,
   UpdateToolboxTalkSettingsRequest,
+  UpdateToolboxTalkNotificationSettingsRequest,
   GetToolboxTalksParams,
   CheckDuplicateRequest,
   DuplicateCheckResponse,
@@ -48,6 +50,9 @@ export async function getToolboxTalks(
   }
   if (params?.isActive !== undefined) {
     queryParams.append('isActive', String(params.isActive));
+  }
+  if (params?.status) {
+    queryParams.append('status', params.status);
   }
   if (params?.pageNumber) {
     queryParams.append('pageNumber', String(params.pageNumber));
@@ -104,6 +109,149 @@ export async function deleteToolboxTalk(id: string): Promise<void> {
   await apiClient.delete(`/toolbox-talks/${id}`);
 }
 
+export interface PublishTalkResult {
+  talkId: string;
+  status: string;
+  publishedAt: string;
+}
+
+export async function publishTalk(talkId: string): Promise<PublishTalkResult> {
+  const response = await apiClient.post<PublishTalkResult>(`/toolbox-talks/${talkId}/publish`);
+  return response.data;
+}
+
+// ============================================
+// Learning Wizard — Step 2 (Parse)
+// ============================================
+
+export async function parseTalk(id: string): Promise<ToolboxTalk> {
+  const response = await apiClient.post<ToolboxTalk>(`/toolbox-talks/${id}/parse`);
+  return response.data;
+}
+
+export interface UpdateTalkSectionRequest {
+  id?: string;
+  sectionNumber: number;
+  title: string;
+  content: string;
+  requiresAcknowledgment: boolean;
+  source: string;
+  videoTimestamp?: string | null;
+}
+
+export async function updateTalkSections(
+  id: string,
+  sections: UpdateTalkSectionRequest[]
+): Promise<ToolboxTalk> {
+  const response = await apiClient.put<ToolboxTalk>(`/toolbox-talks/${id}/sections`, { sections });
+  return response.data;
+}
+
+export async function updateLastEditedStep(id: string, step: number): Promise<void> {
+  await apiClient.patch(`/toolbox-talks/${id}/step`, { step });
+}
+
+// ============================================
+// Learning Wizard — Step 3 (Quiz)
+// ============================================
+
+export async function generateQuiz(id: string): Promise<ToolboxTalk> {
+  const response = await apiClient.post<ToolboxTalk>(`/toolbox-talks/${id}/quiz/generate`);
+  return response.data;
+}
+
+export interface UpdateTalkQuestionRequest {
+  id?: string;
+  questionNumber: number;
+  questionText: string;
+  questionType: string;
+  options?: string[] | null;
+  correctAnswer?: string | null;
+  correctOptionIndex?: number | null;
+  points: number;
+  source: string;
+  isFromVideoFinalPortion: boolean;
+  videoTimestamp?: string | null;
+}
+
+export async function updateTalkQuestions(
+  id: string,
+  questions: UpdateTalkQuestionRequest[]
+): Promise<ToolboxTalk> {
+  const response = await apiClient.put<ToolboxTalk>(`/toolbox-talks/${id}/questions`, {
+    questions,
+  });
+  return response.data;
+}
+
+export interface UpdateTalkQuizSettingsRequest {
+  requiresQuiz: boolean;
+  passingScore: number;
+  quizQuestionCount?: number | null;
+  shuffleQuestions: boolean;
+  shuffleOptions: boolean;
+  useQuestionPool: boolean;
+  allowRetry: boolean;
+}
+
+export async function updateTalkQuizSettings(
+  id: string,
+  settings: UpdateTalkQuizSettingsRequest
+): Promise<ToolboxTalk> {
+  const response = await apiClient.put<ToolboxTalk>(`/toolbox-talks/${id}/quiz-settings`, settings);
+  return response.data;
+}
+
+// ============================================
+// Learning Wizard — Step 4 (Settings)
+// ============================================
+
+export interface UpdateTalkSettingsRequest {
+  title: string;
+  description?: string | null;
+  category?: string | null;
+  refresherFrequency: 'Once' | 'Monthly' | 'Quarterly' | 'Annually';
+  isActive: boolean;
+  generateCertificate: boolean;
+  minimumVideoWatchPercent: number;
+  autoAssignToNewEmployees: boolean;
+  autoAssignDueDays: number;
+  generateSlidesFromPdf: boolean;
+}
+
+export async function updateTalkSettings(
+  id: string,
+  settings: UpdateTalkSettingsRequest
+): Promise<ToolboxTalk> {
+  const response = await apiClient.put<ToolboxTalk>(`/toolbox-talks/${id}/settings`, settings);
+  return response.data;
+}
+
+export interface CoverImageResponse {
+  coverImageUrl: string | null;
+}
+
+export async function uploadCoverImage(
+  id: string,
+  file: File
+): Promise<CoverImageResponse> {
+  const form = new FormData();
+  form.append('file', file);
+  const response = await apiClient.post<CoverImageResponse>(
+    `/toolbox-talks/${id}/cover-image`,
+    form,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  );
+  return response.data;
+}
+
+export async function removeCoverImage(id: string): Promise<CoverImageResponse> {
+  const response = await apiClient.delete<CoverImageResponse>(
+    `/toolbox-talks/${id}/cover-image`
+  );
+  return response.data;
+}
+
 // ============================================
 // Dashboard
 // ============================================
@@ -152,6 +300,16 @@ export async function updateToolboxTalkSettings(
 ): Promise<ToolboxTalkSettings> {
   const response = await apiClient.put<ApiResponse<ToolboxTalkSettings>>(
     '/toolbox-talks/settings',
+    data
+  );
+  return response.data.data;
+}
+
+export async function updateToolboxTalkNotificationSettings(
+  data: UpdateToolboxTalkNotificationSettingsRequest
+): Promise<ToolboxTalkSettings> {
+  const response = await apiClient.put<ApiResponse<ToolboxTalkSettings>>(
+    '/toolbox-talks/settings/notifications',
     data
   );
   return response.data.data;
@@ -466,6 +624,64 @@ export async function getAdminSlideshowHtml(
 }
 
 // ============================================
+// Translation Workflow
+// ============================================
+
+export async function getWorkflowStates(
+  id: string
+): Promise<TranslationWorkflowStateDto[]> {
+  const response = await apiClient.get<TranslationWorkflowStateDto[]>(
+    `/toolbox-talks/${id}/translations/workflow-state`
+  );
+  return response.data;
+}
+
+export async function getWorkflowHistory(
+  id: string,
+  languageCode: string
+): Promise<WorkflowEventDto[]> {
+  const response = await apiClient.get<WorkflowEventDto[]>(
+    `/toolbox-talks/${id}/translations/${languageCode}/history`
+  );
+  return response.data;
+}
+
+export async function acceptTranslation(
+  id: string,
+  languageCode: string
+): Promise<void> {
+  await apiClient.post(`/toolbox-talks/${id}/translations/${languageCode}/accept`);
+}
+
+export async function validateTranslation(
+  id: string,
+  languageCode: string
+): Promise<void> {
+  await apiClient.post(`/toolbox-talks/${id}/validation/validate`, { languageCode });
+}
+
+export async function initiateExternalReview(
+  toolboxTalkId: string,
+  languageCode: string,
+  reviewerEmail: string,
+  editableSectionIndices?: number[] | null
+): Promise<void> {
+  await apiClient.post(
+    `/toolbox-talks/${toolboxTalkId}/translations/${languageCode}/initiate-external-review`,
+    { reviewerEmail, editableSectionIndices: editableSectionIndices ?? null }
+  );
+}
+
+export async function cancelExternalReview(
+  toolboxTalkId: string,
+  languageCode: string
+): Promise<void> {
+  await apiClient.post(
+    `/toolbox-talks/${toolboxTalkId}/translations/${languageCode}/cancel-external-review`
+  );
+}
+
+// ============================================
 // Regenerate Certificate
 // ============================================
 
@@ -475,6 +691,37 @@ export async function regenerateCertificate(
 ): Promise<{ certificateUrl: string }> {
   const response = await apiClient.post<{ certificateUrl: string }>(
     `/toolbox-talks/${talkId}/completions/${completionId}/regenerate-certificate`
+  );
+  return response.data;
+}
+
+// ============================================
+// New Wizard — Start Translation
+// ============================================
+
+export async function startTalkTranslation(
+  talkId: string,
+  languageCode: string,
+  confirmOverwrite = false
+): Promise<{ runId: string }> {
+  const response = await apiClient.post<{ runId: string }>(
+    `/toolbox-talks/${talkId}/translations/${languageCode}/start-translation`,
+    { confirmOverwrite }
+  );
+  return response.data;
+}
+
+// ============================================
+// Add Target Language (§24 Chunk 5)
+// ============================================
+
+export async function addTargetLanguage(
+  talkId: string,
+  languageCode: string
+): Promise<ToolboxTalk> {
+  const response = await apiClient.post<ToolboxTalk>(
+    `/toolbox-talks/${talkId}/target-languages`,
+    { languageCode }
   );
   return response.data;
 }

@@ -8,6 +8,7 @@ using QuantumBuild.Core.Application.Models;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.PreFlightScan;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Storage;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Translation;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
@@ -158,7 +159,11 @@ public class TranslationValidationController : ControllerBase
                     AuditReportUrl = r.AuditReportUrl,
                     StartedAt = r.StartedAt,
                     CompletedAt = r.CompletedAt,
-                    CreatedAt = r.CreatedAt
+                    CreatedAt = r.CreatedAt,
+                    HasPendingDecisions = r.Status == ValidationRunStatus.Completed
+                        && r.Results.Any(res => !res.IsDeleted
+                            && res.Outcome != ValidationOutcome.Pass
+                            && res.ReviewerDecision == ReviewerDecision.Pending),
                 });
 
             var result = await PaginatedList<ValidationRunListDto>.CreateAsync(
@@ -190,6 +195,7 @@ public class TranslationValidationController : ControllerBase
 
             var run = await _dbContext.TranslationValidationRuns
                 .Include(r => r.Results.OrderBy(res => res.SectionIndex))
+                    .ThenInclude(res => res.Flags)
                 .FirstOrDefaultAsync(r => r.Id == runId
                     && r.ToolboxTalkId == talkId
                     && r.TenantId == tenantId, cancellationToken);
@@ -629,6 +635,7 @@ public class TranslationValidationController : ControllerBase
 
             var run = await _dbContext.TranslationValidationRuns
                 .Include(r => r.Results.OrderBy(res => res.SectionIndex))
+                    .ThenInclude(res => res.Flags)
                 .FirstOrDefaultAsync(r => r.Id == runId
                     && r.CourseId == courseId
                     && r.TenantId == tenantId, cancellationToken);
@@ -706,8 +713,6 @@ public class TranslationValidationController : ControllerBase
     }
 
     #region Private Helpers
-
-    private record TranslatedSectionEntry(Guid SectionId, string Title, string Content);
 
     private async Task PropagateEditedTranslationAsync(
         Guid toolboxTalkId, string languageCode, int sectionIndex,
@@ -857,7 +862,20 @@ public class TranslationValidationController : ControllerBase
                 EditedTranslation = r.EditedTranslation,
                 EditedSource = r.EditedSource,
                 DecisionAt = r.DecisionAt,
-                DecisionBy = r.DecisionBy
+                DecisionBy = r.DecisionBy,
+                Flags = r.Flags
+                    .OrderBy(f => f.StartOffset)
+                    .ThenBy(f => f.CreatedAt)
+                    .Select(f => new TranslationFlagDto
+                    {
+                        Id = f.Id,
+                        StartOffset = f.StartOffset,
+                        EndOffset = f.EndOffset,
+                        Severity = f.Severity,
+                        Reason = f.Reason,
+                        CreatedAt = f.CreatedAt
+                    })
+                    .ToList()
             }).ToList()
         };
     }

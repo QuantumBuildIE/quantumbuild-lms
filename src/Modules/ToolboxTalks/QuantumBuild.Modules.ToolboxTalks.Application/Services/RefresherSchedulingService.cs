@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
@@ -8,6 +9,8 @@ namespace QuantumBuild.Modules.ToolboxTalks.Application.Services;
 
 public class RefresherSchedulingService(
     IToolboxTalksDbContext context,
+    ICoreDbContext coreContext,
+    IToolboxTalkEmailService emailService,
     ILogger<RefresherSchedulingService> logger) : IRefresherSchedulingService
 {
     public async Task ScheduleRefresherIfRequired(ScheduledTalk completedTalk, CancellationToken ct = default)
@@ -59,6 +62,31 @@ public class RefresherSchedulingService(
         logger.LogInformation(
             "Scheduled refresher for employee {EmployeeId}, talk {TalkId}, due {DueDate} ({Rows} rows saved)",
             completedTalk.EmployeeId, completedTalk.ToolboxTalkId, refresherDueDate, saved);
+
+        refresher.ToolboxTalk = talk;
+
+        var employee = await coreContext.Employees
+            .FirstOrDefaultAsync(e => e.Id == completedTalk.EmployeeId && e.TenantId == completedTalk.TenantId && !e.IsDeleted, ct);
+
+        if (employee == null)
+        {
+            logger.LogError(
+                "Cannot send refresher assignment email — employee not found. EmployeeId {EmployeeId}, CompletedScheduledTalkId {CompletedScheduledTalkId}, TalkId {TalkId}, TenantId {TenantId}, RefresherScheduledTalkId {RefresherScheduledTalkId}",
+                completedTalk.EmployeeId, completedTalk.Id, completedTalk.ToolboxTalkId, completedTalk.TenantId, refresher.Id);
+            return;
+        }
+
+        try
+        {
+            await emailService.SendTalkAssignmentEmailAsync(refresher, employee, ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Failed to send refresher assignment email for ScheduledTalk {TalkId} to Employee {EmployeeId}",
+                refresher.Id, employee.Id);
+            // Continue processing - don't fail the entire operation due to email failure
+        }
     }
 
     public async Task ScheduleRefresherIfRequired(ToolboxTalkCourseAssignment completedAssignment, CancellationToken ct = default)
@@ -131,5 +159,28 @@ public class RefresherSchedulingService(
         logger.LogInformation(
             "Scheduled course refresher for employee {EmployeeId}, course {CourseId}, due {DueDate} ({Rows} rows saved)",
             completedAssignment.EmployeeId, completedAssignment.CourseId, refresherDueDate, saved);
+
+        var employee = await coreContext.Employees
+            .FirstOrDefaultAsync(e => e.Id == completedAssignment.EmployeeId && e.TenantId == completedAssignment.TenantId && !e.IsDeleted, ct);
+
+        if (employee == null)
+        {
+            logger.LogError(
+                "Cannot send refresher course assignment email — employee not found. EmployeeId {EmployeeId}, CompletedAssignmentId {CompletedAssignmentId}, CourseId {CourseId}, TenantId {TenantId}, RefresherAssignmentId {RefresherAssignmentId}",
+                completedAssignment.EmployeeId, completedAssignment.Id, completedAssignment.CourseId, completedAssignment.TenantId, refresherAssignment.Id);
+            return;
+        }
+
+        try
+        {
+            await emailService.SendCourseAssignmentEmailAsync(course, employee, courseItems.Count, refresherAssignment.DueDate, ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Failed to send refresher course assignment email for Course {CourseId} to Employee {EmployeeId}",
+                course.Id, employee.Id);
+            // Continue processing - don't fail the entire operation due to email failure
+        }
     }
 }

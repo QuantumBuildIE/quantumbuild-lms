@@ -97,6 +97,23 @@ public class CurrentUserService : ICurrentUserService
     }
 
     /// <summary>
+    /// Current user's roles from JWT claims. Empty list for unauthenticated requests.
+    /// </summary>
+    public IReadOnlyList<string> Roles
+    {
+        get
+        {
+            var user = _httpContextAccessor.HttpContext?.User;
+            if (user == null)
+                return Array.Empty<string>();
+            return user.Claims
+                .Where(c => c.Type == ClaimTypes.Role)
+                .Select(c => c.Value)
+                .ToList();
+        }
+    }
+
+    /// <summary>
     /// Current user's tenant ID.
     /// For SuperUser: reads X-Tenant-Id header, returns Guid.Empty if absent (bypasses tenant filter).
     /// For regular users: reads from JWT tenant_id claim.

@@ -90,6 +90,11 @@ public class TranslationValidationRunConfiguration : IEntityTypeConfiguration<Tr
         // Pipeline version stamp (nullable — pre-feature runs have null)
         builder.Property(r => r.PipelineVersionId);
 
+        // New wizard flag — false for all existing rows
+        builder.Property(r => r.IsNewWizard)
+            .IsRequired()
+            .HasDefaultValue(false);
+
         // Run state
         builder.Property(r => r.Status)
             .IsRequired()

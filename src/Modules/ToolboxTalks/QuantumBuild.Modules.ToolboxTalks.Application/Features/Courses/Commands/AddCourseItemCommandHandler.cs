@@ -4,6 +4,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Features.Courses.DTOs;
 using QuantumBuild.Modules.ToolboxTalks.Application.Features.Courses.Queries;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
+using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Application.Features.Courses.Commands;
 
@@ -37,6 +38,12 @@ public class AddCourseItemCommandHandler : IRequestHandler<AddCourseItemCommand,
         if (talk == null)
         {
             throw new KeyNotFoundException($"Learning with ID {dto.ToolboxTalkId} not found.");
+        }
+
+        // Only Published talks may be composed into a course
+        if (talk.Status != ToolboxTalkStatus.Published)
+        {
+            throw new InvalidOperationException($"Only published learnings can be added to a course. '{talk.Title}' is not published.");
         }
 
         // Check for duplicate

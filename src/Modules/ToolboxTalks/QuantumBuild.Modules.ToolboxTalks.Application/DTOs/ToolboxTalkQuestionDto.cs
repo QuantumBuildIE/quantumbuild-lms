@@ -24,6 +24,11 @@ public record ToolboxTalkQuestionDto
     /// </summary>
     public string? CorrectAnswer { get; init; }
 
+    /// <summary>
+    /// 0-based index of the correct option in Options. Used for translation-safe grading.
+    /// </summary>
+    public int? CorrectOptionIndex { get; init; }
+
     public int Points { get; init; }
     public ContentSource Source { get; init; }
     public string SourceDisplay { get; init; } = string.Empty;

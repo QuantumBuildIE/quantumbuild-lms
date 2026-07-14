@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { diffWords } from 'diff';
+import { useState, useMemo, useEffect, useRef, type ReactNode } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -31,6 +32,7 @@ import type {
   ReviewReason,
   ReviewReasonType,
 } from '@/types/content-creation';
+import { FlaggedText } from './FlaggedText';
 
 // ============================================
 // Types
@@ -63,6 +65,8 @@ interface ValidationSectionCardProps {
   sectionTitle: string;
   result: SectionValidationResult | null;
   isRunning: boolean;
+  /** True while a background re-validation job for THIS section is in flight (Edit/Retry) */
+  isRevalidating?: boolean;
   languageCode: string;
   passThreshold: number;
   onAccept: () => void;
@@ -139,6 +143,49 @@ const reasonLabel: Record<ReviewReasonType, string> = {
 };
 
 // ============================================
+// Diff helper
+// ============================================
+
+function renderDiff(original: string, backTranslation: string): ReactNode {
+  const parts = diffWords(original || '', backTranslation || '');
+  const hasChanges = parts.some((p) => p.added || p.removed);
+
+  if (!hasChanges) {
+    return (
+      <p className="italic text-muted-foreground">No differences detected</p>
+    );
+  }
+
+  return (
+    <p className="leading-relaxed">
+      {parts.map((part, idx) => {
+        if (part.added) {
+          return (
+            <ins
+              key={idx}
+              className="rounded bg-green-100 px-0.5 text-green-900 no-underline"
+            >
+              {part.value}
+            </ins>
+          );
+        }
+        if (part.removed) {
+          return (
+            <del
+              key={idx}
+              className="rounded bg-red-100 px-0.5 text-red-900 line-through"
+            >
+              {part.value}
+            </del>
+          );
+        }
+        return <span key={idx}>{part.value}</span>;
+      })}
+    </p>
+  );
+}
+
+// ============================================
 // Component
 // ============================================
 
@@ -147,6 +194,7 @@ export function ValidationSectionCard({
   sectionTitle,
   result,
   isRunning,
+  isRevalidating = false,
   languageCode,
   passThreshold,
   onAccept,
@@ -243,8 +291,10 @@ export function ValidationSectionCard({
     setIsEditing(false);
   }
 
+  const isBusy = isDecisionPending || isRevalidating;
+
   const canSubmitEdit =
-    editTranslationText.trim() !== '' && editSourceText.trim() !== '' && !isDecisionPending;
+    editTranslationText.trim() !== '' && editSourceText.trim() !== '' && !isBusy;
 
   // ============================================
   // Render: Header (always visible)
@@ -332,12 +382,21 @@ export function ValidationSectionCard({
       )}
 
       {/* Outcome pill / status */}
-      {result ? (
+      {isRevalidating ? (
+        <Badge
+          role="status"
+          aria-live="polite"
+          className="shrink-0 animate-pulse bg-blue-100 text-blue-800"
+        >
+          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+          Revalidating…
+        </Badge>
+      ) : result ? (
         <Badge className={cn('shrink-0', outcomePillColor[result.outcome])}>
           {result.outcome}
         </Badge>
       ) : isRunning ? (
-        <Badge className="shrink-0 animate-pulse bg-blue-100 text-blue-800">
+        <Badge role="status" aria-live="polite" className="shrink-0 animate-pulse bg-blue-100 text-blue-800">
           <Loader2 className="mr-1 h-3 w-3 animate-spin" />
           Running
         </Badge>
@@ -381,6 +440,9 @@ export function ValidationSectionCard({
   const renderBody = () => {
     if (!result || !isExpanded) return null;
 
+    const displayText = result.editedSource ?? result.originalText;
+    const displayFlags = result.editedSource ? [] : (result.flags ?? []);
+
     return (
       <div className="space-y-4 border-t px-4 py-4">
         {/* Original / Translation side-by-side */}
@@ -405,7 +467,7 @@ export function ValidationSectionCard({
               </div>
             ) : (
               <div className="rounded-md border bg-muted/20 p-3 text-sm leading-relaxed">
-                {result.editedSource ?? result.originalText}
+                <FlaggedText text={displayText} flags={displayFlags} />
               </div>
             )}
           </div>
@@ -438,7 +500,7 @@ export function ValidationSectionCard({
               onClick={submitEdit}
               disabled={!canSubmitEdit}
             >
-              {isDecisionPending ? (
+              {isBusy ? (
                 <Loader2 className="mr-1 h-3 w-3 animate-spin" />
               ) : (
                 <RefreshCw className="mr-1 h-3 w-3" />
@@ -469,7 +531,7 @@ export function ValidationSectionCard({
           </div>
         )}
 
-        {/* Back-translations side-by-side */}
+        {/* Back-translations side-by-side (diffed against original) */}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -481,8 +543,10 @@ export function ValidationSectionCard({
                 Claude Haiku
               </Badge>
             </div>
-            <div className="rounded-md border bg-muted/20 p-3 text-sm leading-relaxed">
-              {result.backTranslationA ?? (
+            <div className="rounded-md border bg-muted/20 p-3 text-sm">
+              {result.backTranslationA != null ? (
+                renderDiff(displayText ?? '', result.backTranslationA)
+              ) : (
                 <span className="italic text-muted-foreground">
                   Not available
                 </span>
@@ -499,8 +563,10 @@ export function ValidationSectionCard({
                 DeepL
               </Badge>
             </div>
-            <div className="rounded-md border bg-muted/20 p-3 text-sm leading-relaxed">
-              {result.backTranslationB ?? (
+            <div className="rounded-md border bg-muted/20 p-3 text-sm">
+              {result.backTranslationB != null ? (
+                renderDiff(displayText ?? '', result.backTranslationB)
+              ) : (
                 <span className="italic text-muted-foreground">
                   Not available
                 </span>
@@ -596,7 +662,7 @@ export function ValidationSectionCard({
                   : ''
               }
               onClick={onAccept}
-              disabled={isDecisionPending}
+              disabled={isBusy}
             >
               <Check className="mr-1 h-3 w-3" />
               Accept
@@ -605,7 +671,7 @@ export function ValidationSectionCard({
               size="sm"
               variant="outline"
               onClick={startEdit}
-              disabled={isDecisionPending}
+              disabled={isBusy}
             >
               <Pencil className="mr-1 h-3 w-3" />
               Edit
@@ -614,9 +680,9 @@ export function ValidationSectionCard({
               size="sm"
               variant="outline"
               onClick={onRetry}
-              disabled={isDecisionPending}
+              disabled={isBusy}
             >
-              {isDecisionPending ? (
+              {isBusy ? (
                 <Loader2 className="mr-1 h-3 w-3 animate-spin" />
               ) : (
                 <RefreshCw className="mr-1 h-3 w-3" />
@@ -682,11 +748,13 @@ export function ValidationSectionCard({
     <div
       className={cn(
         'overflow-hidden rounded-lg border transition-colors',
-        result
-          ? outcomeColor[result.outcome]
-          : isRunning
-            ? 'border-blue-200 bg-blue-50/30'
-            : 'border-muted bg-muted/10'
+        isRevalidating
+          ? 'border-blue-200 bg-blue-50/30'
+          : result
+            ? outcomeColor[result.outcome]
+            : isRunning
+              ? 'border-blue-200 bg-blue-50/30'
+              : 'border-muted bg-muted/10'
       )}
     >
       {renderHeader()}

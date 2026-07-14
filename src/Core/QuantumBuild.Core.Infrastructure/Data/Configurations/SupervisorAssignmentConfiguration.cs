@@ -14,6 +14,11 @@ public class SupervisorAssignmentConfiguration : IEntityTypeConfiguration<Superv
             .IsUnique()
             .HasDatabaseName("IX_SupervisorAssignments_TenantId_SupervisorEmployeeId_OperatorEmployeeId");
 
+        builder.HasIndex(e => new { e.TenantId, e.OperatorEmployeeId })
+            .IsUnique()
+            .HasFilter("\"IsDeleted\" = false")
+            .HasDatabaseName("IX_SupervisorAssignments_TenantId_OperatorEmployeeId_Active");
+
         builder.HasOne(e => e.Supervisor)
             .WithMany(e => e.SupervisorAssignments)
             .HasForeignKey(e => e.SupervisorEmployeeId)

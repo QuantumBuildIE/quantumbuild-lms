@@ -56,6 +56,11 @@ public class ToolboxTalkTranslationConfiguration : IEntityTypeConfiguration<Tool
             .IsRequired()
             .HasDefaultValue(false);
 
+        builder.Property(t => t.LastExternalReviewedAt);
+
+        builder.Property(t => t.LastExternalReviewedBy)
+            .HasMaxLength(256);
+
         builder.Property(t => t.TenantId)
             .IsRequired();
 

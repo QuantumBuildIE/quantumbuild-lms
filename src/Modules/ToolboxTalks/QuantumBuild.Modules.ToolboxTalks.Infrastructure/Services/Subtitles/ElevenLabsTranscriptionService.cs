@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using QuantumBuild.Core.Application.Configuration;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Subtitles;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
 
@@ -14,15 +15,18 @@ public class ElevenLabsTranscriptionService : ITranscriptionService
 {
     private readonly HttpClient _httpClient;
     private readonly SubtitleProcessingSettings _settings;
+    private readonly AIProviderOptions _aiProviders;
     private readonly ILogger<ElevenLabsTranscriptionService> _logger;
 
     public ElevenLabsTranscriptionService(
         HttpClient httpClient,
         IOptions<SubtitleProcessingSettings> settings,
+        IOptions<AIProviderOptions> aiProviders,
         ILogger<ElevenLabsTranscriptionService> logger)
     {
         _httpClient = httpClient;
         _settings = settings.Value;
+        _aiProviders = aiProviders.Value;
         _logger = logger;
     }
 
@@ -88,7 +92,7 @@ public class ElevenLabsTranscriptionService : ITranscriptionService
                 var fileContent = new StreamContent(bufferedStream);
                 fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
 
-                _logger.LogInformation("Uploading to ElevenLabs for transcription. Model: {Model}", _settings.ElevenLabs.Model);
+                _logger.LogInformation("Uploading to ElevenLabs for transcription. Model: {Model}", _aiProviders.ElevenLabs.Models.Transcription);
 
                 var request = new HttpRequestMessage(HttpMethod.Post, $"{_settings.ElevenLabs.BaseUrl}/speech-to-text");
                 request.Headers.Add("xi-api-key", _settings.ElevenLabs.ApiKey);
@@ -96,7 +100,7 @@ public class ElevenLabsTranscriptionService : ITranscriptionService
                 var formContent = new MultipartFormDataContent
                 {
                     { fileContent, "file", fileName },
-                    { new StringContent(_settings.ElevenLabs.Model), "model_id" }
+                    { new StringContent(_aiProviders.ElevenLabs.Models.Transcription), "model_id" }
                 };
 
                 request.Content = formContent;

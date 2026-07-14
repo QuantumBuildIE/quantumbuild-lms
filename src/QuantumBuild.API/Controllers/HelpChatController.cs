@@ -3,6 +3,8 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
+using QuantumBuild.Core.Application.Configuration;
 using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services;
 
@@ -21,17 +23,20 @@ public class HelpChatController : ControllerBase
     private readonly ICurrentUserService _currentUser;
     private readonly IConfiguration _configuration;
     private readonly ILogger<HelpChatController> _logger;
+    private readonly AIProviderOptions _aiProviders;
 
     public HelpChatController(
         IHttpClientFactory httpClientFactory,
         ICurrentUserService currentUser,
         IConfiguration configuration,
-        ILogger<HelpChatController> logger)
+        ILogger<HelpChatController> logger,
+        IOptions<AIProviderOptions> aiProviders)
     {
         _httpClientFactory = httpClientFactory;
         _currentUser = currentUser;
         _configuration = configuration;
         _logger = logger;
+        _aiProviders = aiProviders.Value;
     }
 
     [HttpPost("chat")]
@@ -45,7 +50,7 @@ public class HelpChatController : ControllerBase
 
         var payload = new
         {
-            model = "claude-sonnet-4-5",
+            model = _aiProviders.Anthropic.Models.Sonnet,
             max_tokens = 1000,
             system = systemPrompt,
             messages = request.Messages.Select(m => new { role = m.Role, content = m.Content }).ToArray()

@@ -16,4 +16,7 @@ public interface ITranslationJobScheduler
     /// <param name="tenantId">Tenant scope</param>
     /// <returns>The Hangfire job ID</returns>
     string EnqueueMissingTranslationsJob(Guid toolboxTalkId, Guid tenantId);
+
+    /// <summary>Enqueues a TranslationValidationJob for the given run.</summary>
+    string EnqueueValidation(Guid runId, Guid tenantId);
 }

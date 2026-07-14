@@ -211,6 +211,54 @@ public class EmailService : IEmailService
         await SendEmailAsync(email, subject, body, cancellationToken);
     }
 
+    public async Task SendExternalReviewInvitationEmailAsync(
+        string reviewerEmail,
+        string talkTitle,
+        string languageName,
+        DateTime expiresAt,
+        string portalUrl,
+        string requesterName,
+        CancellationToken cancellationToken = default)
+    {
+        var subject = $"Translation review request — {talkTitle}";
+        var body = $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8'>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background-color: #28a745; color: white; padding: 20px; text-align: center; }}
+        .content {{ padding: 20px; background-color: #f9f9f9; }}
+        .button {{ display: inline-block; background-color: #28a745; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; margin-top: 15px; }}
+        .footer {{ padding: 20px; text-align: center; color: #666; font-size: 12px; }}
+    </style>
+</head>
+<body>
+    <div class='container'>
+        <div class='header'>
+            <h1>Translation Review Request</h1>
+        </div>
+        <div class='content'>
+            <p>Hi,</p>
+            <p>{requesterName} has invited you to review the translation of <strong>{talkTitle}</strong> into {languageName}.</p>
+            <p style='text-align: center;'>
+                <a href='{portalUrl}' class='button'>Open review</a>
+            </p>
+            <p style='margin-top: 20px;'>This link expires on {expiresAt:dd MMM yyyy}.</p>
+        </div>
+        <div class='footer'>
+            <p>Thank you,<br>The CertifiedIQ Team</p>
+            <p>This is an automated message. Please do not reply to this email.</p>
+        </div>
+    </div>
+</body>
+</html>";
+
+        await SendEmailAsync(reviewerEmail, subject, body, cancellationToken);
+    }
+
     public async Task SendEmailAsync(
         string to,
         string subject,

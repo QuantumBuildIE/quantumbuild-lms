@@ -57,6 +57,7 @@ public class SendRefresherRemindersJob
                     .Include(st => st.ToolboxTalk)
                     .Where(st => st.TenantId == tenant.Id
                         && !st.IsDeleted
+                        && !st.Employee.IsDeleted
                         && st.IsRefresher
                         && st.Status != ScheduledTalkStatus.Completed
                         && st.Status != ScheduledTalkStatus.Cancelled
@@ -88,6 +89,7 @@ public class SendRefresherRemindersJob
                     .Include(st => st.ToolboxTalk)
                     .Where(st => st.TenantId == tenant.Id
                         && !st.IsDeleted
+                        && !st.Employee.IsDeleted
                         && st.IsRefresher
                         && st.Status != ScheduledTalkStatus.Completed
                         && st.Status != ScheduledTalkStatus.Cancelled
@@ -118,6 +120,7 @@ public class SendRefresherRemindersJob
                     .Include(a => a.Course)
                     .Where(a => a.TenantId == tenant.Id
                         && !a.IsDeleted
+                        && !a.Employee.IsDeleted
                         && a.IsRefresher
                         && a.Status != CourseAssignmentStatus.Completed
                         && !a.ReminderSent2Weeks
@@ -148,6 +151,7 @@ public class SendRefresherRemindersJob
                     .Include(a => a.Course)
                     .Where(a => a.TenantId == tenant.Id
                         && !a.IsDeleted
+                        && !a.Employee.IsDeleted
                         && a.IsRefresher
                         && a.Status != CourseAssignmentStatus.Completed
                         && !a.ReminderSent1Week

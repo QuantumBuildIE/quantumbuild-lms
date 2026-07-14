@@ -71,11 +71,11 @@ export function TenantForm({ tenant, onSuccess, onCancel }: TenantFormProps) {
     }
 
     const payload = {
-      name: data.name,
-      code: data.code || undefined,
-      companyName: data.companyName || undefined,
-      contactName: data.contactName || undefined,
-      contactEmail: data.contactEmail || undefined,
+      name: data.name.trim(),
+      code: data.code?.trim() || undefined,
+      companyName: data.companyName?.trim() || undefined,
+      contactName: data.contactName?.trim() || undefined,
+      contactEmail: data.contactEmail?.trim() || undefined,
     };
 
     if (isEditing) {
@@ -274,7 +274,7 @@ export function TenantForm({ tenant, onSuccess, onCancel }: TenantFormProps) {
         )}
 
         <div className="flex items-center gap-4 pt-4">
-          <Button type="submit" disabled={isPending}>
+          <Button type="submit" disabled={isPending || form.formState.isSubmitting}>
             {isPending
               ? isEditing
                 ? "Saving..."

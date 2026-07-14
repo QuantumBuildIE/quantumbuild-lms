@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { WizardSectionDivider } from '@/components/ui/wizard-section-divider';
-import { Loader2, ArrowRight } from 'lucide-react';
+import { Loader2, ArrowRight, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   useCreationSession,
@@ -93,10 +94,7 @@ export function SettingsStep({ state, onNext, onBack }: SettingsStepProps) {
       if (saveRef.current) clearTimeout(saveRef.current);
       saveRef.current = setTimeout(() => {
         if (sessionId) {
-          updateSettingsRef.current.mutate(
-            { sessionId, settings: newSettings },
-            { onError: () => toast.error('Failed to save settings') }
-          );
+          updateSettingsRef.current.mutate({ sessionId, settings: newSettings });
         }
       }, 500);
     },
@@ -207,9 +205,8 @@ export function SettingsStep({ state, onNext, onBack }: SettingsStepProps) {
       });
 
       onNext();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to start validation';
-      toast.error('Error', { description: message });
+    } catch {
+      // Error surfaced via mutation isError banner above Continue.
     } finally {
       setIsStartingValidation(false);
     }
@@ -269,16 +266,31 @@ export function SettingsStep({ state, onNext, onBack }: SettingsStepProps) {
         isSaving={isSaving}
       />
 
-      {/* 4d — Slideshow */}
-      <WizardSectionDivider number="4d" label="Slideshow" />
+      {/* 4d — Slideshow (hidden for Docx: slideshow requires PDF page images) */}
+      {session?.inputMode !== 'Docx' && (
+        <>
+          <WizardSectionDivider number="4d" label="Slideshow" />
 
-      {/* Panel E — Slideshow */}
-      <SlideshowPanel
-        settings={settings}
-        onChange={handleChange}
-        inputMode={session?.inputMode ?? 'Text'}
-        isSaving={isSaving}
-      />
+          <SlideshowPanel
+            settings={settings}
+            onChange={handleChange}
+            inputMode={session?.inputMode ?? 'Text'}
+            isSaving={isSaving}
+          />
+        </>
+      )}
+
+      {/* Form-level error: mutation failure shown above the action cluster per PHASE_5_STANDARDS §6.2. */}
+      {(updateSettings.isError || startValidation.isError) && (
+        <Alert variant="destructive" role="alert">
+          <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+          <AlertDescription>
+            {startValidation.isError
+              ? (startValidation.error instanceof Error ? startValidation.error.message : 'Failed to start validation. Please try again.')
+              : (updateSettings.error instanceof Error ? updateSettings.error.message : 'Failed to save settings. Please try again.')}
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Navigation */}
       <div className="flex justify-between pt-4 border-t">

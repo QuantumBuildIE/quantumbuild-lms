@@ -98,6 +98,10 @@ public class ToolboxTalkConfiguration : IEntityTypeConfiguration<ToolboxTalk>
 
         builder.Property(t => t.VideoTranscriptExtractedAt);
 
+        // Word-level transcript timing for subtitle generation — no max length
+        builder.Property(t => t.TranscriptWordsJson)
+            .HasColumnType("text");
+
         // File hash fields for deduplication
         builder.Property(t => t.PdfFileHash)
             .HasMaxLength(64); // SHA-256 produces 64 hex characters
@@ -121,6 +125,10 @@ public class ToolboxTalkConfiguration : IEntityTypeConfiguration<ToolboxTalk>
         builder.Property(t => t.UseQuestionPool)
             .IsRequired()
             .HasDefaultValue(false);
+
+        builder.Property(t => t.AllowRetry)
+            .IsRequired()
+            .HasDefaultValue(true);
 
         // Refresher settings
         builder.Property(t => t.RequiresRefresher)
@@ -215,6 +223,57 @@ public class ToolboxTalkConfiguration : IEntityTypeConfiguration<ToolboxTalk>
             .WithOne(st => st.ToolboxTalk)
             .HasForeignKey(st => st.ToolboxTalkId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // Learning wizard — source file
+        builder.Property(t => t.SourceFileUrl)
+            .HasMaxLength(500);
+
+        builder.Property(t => t.SourceFileName)
+            .HasMaxLength(255);
+
+        builder.Property(t => t.SourceFileType)
+            .HasMaxLength(255);
+
+        builder.Property(t => t.InputMode)
+            .IsRequired()
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .HasDefaultValue(InputMode.Text);
+
+        builder.Property(t => t.SourceText)
+            .HasColumnType("text");
+
+        builder.Property(t => t.TargetLanguageCodes)
+            .HasColumnType("text");
+
+        // Learning wizard — audit metadata
+        builder.Property(t => t.ReviewerName)
+            .HasMaxLength(200);
+
+        builder.Property(t => t.ReviewerOrg)
+            .HasMaxLength(200);
+
+        builder.Property(t => t.ReviewerRole)
+            .HasMaxLength(200);
+
+        builder.Property(t => t.DocumentRef)
+            .HasMaxLength(100);
+
+        builder.Property(t => t.ClientName)
+            .HasMaxLength(200);
+
+        builder.Property(t => t.AuditPurpose)
+            .HasMaxLength(500);
+
+        builder.Property(t => t.AudienceRole)
+            .HasMaxLength(50);
+
+        builder.Property(t => t.PreserveSourceWording)
+            .IsRequired()
+            .HasDefaultValue(false);
+
+        builder.Property(t => t.CoverImageUrl)
+            .HasMaxLength(500);
 
         // Indexes
         builder.HasIndex(t => new { t.TenantId, t.Code })

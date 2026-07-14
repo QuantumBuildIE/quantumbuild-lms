@@ -17,7 +17,7 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.16")
+                .HasAnnotation("ProductVersion", "9.0.17")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -926,6 +926,11 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                     b.HasIndex("OperatorEmployeeId");
 
                     b.HasIndex("SupervisorEmployeeId");
+
+                    b.HasIndex("TenantId", "OperatorEmployeeId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_SupervisorAssignments_TenantId_OperatorEmployeeId_Active")
+                        .HasFilter("\"IsDeleted\" = false");
 
                     b.HasIndex("TenantId", "SupervisorEmployeeId", "OperatorEmployeeId")
                         .IsUnique()
@@ -3861,7 +3866,20 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("AllowRetry")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
                     b.Property<string>("AttachmentUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("AudienceRole")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("AuditPurpose")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
@@ -3879,6 +3897,10 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("ClientName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -3886,6 +3908,10 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
 
                     b.Property<DateTime?>("ContentGeneratedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CoverImageUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -3901,6 +3927,10 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                     b.Property<string>("Description")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("DocumentRef")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("ExtractedPdfText")
                         .HasColumnType("text");
@@ -3933,6 +3963,13 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
+                    b.Property<string>("InputMode")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Text");
+
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -3947,6 +3984,9 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
+
+                    b.Property<int?>("LastEditedStep")
+                        .HasColumnType("integer");
 
                     b.Property<int>("MinimumVideoWatchPercent")
                         .ValueGeneratedOnAdd()
@@ -3973,6 +4013,14 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
+                    b.Property<bool>("PreserveSourceWording")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateTime?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<int?>("QuizQuestionCount")
                         .HasColumnType("integer");
 
@@ -3990,6 +4038,18 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
+
+                    b.Property<string>("ReviewerName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("ReviewerOrg")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("ReviewerRole")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<bool>("ShuffleOptions")
                         .ValueGeneratedOnAdd()
@@ -4012,12 +4072,27 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                     b.Property<string>("SlideshowHtml")
                         .HasColumnType("text");
 
+                    b.Property<string>("SourceFileName")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("SourceFileType")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("SourceFileUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<string>("SourceLanguageCode")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)")
                         .HasDefaultValue("en");
+
+                    b.Property<string>("SourceText")
+                        .HasColumnType("text");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -4026,6 +4101,9 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                         .HasColumnType("character varying(50)")
                         .HasDefaultValue("Draft");
 
+                    b.Property<string>("TargetLanguageCodes")
+                        .HasColumnType("text");
+
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
 
@@ -4033,6 +4111,9 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
+
+                    b.Property<string>("TranscriptWordsJson")
+                        .HasColumnType("text");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -4835,15 +4916,42 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
+                    b.Property<int>("DefaultAutoAssignDueDays")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(14);
+
                     b.Property<int>("DefaultDueDays")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
                         .HasDefaultValue(7);
 
+                    b.Property<bool>("DefaultGenerateCertificate")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("DefaultIsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<int>("DefaultMinimumVideoWatchPercent")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(90);
+
                     b.Property<int>("DefaultPassingScore")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
                         .HasDefaultValue(80);
+
+                    b.Property<string>("DefaultRefresherFrequency")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Once");
 
                     b.Property<string>("DeletedBy")
                         .HasColumnType("text");
@@ -4875,6 +4983,26 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
 
                     b.Property<string>("NotificationEmailTemplate")
                         .HasColumnType("text");
+
+                    b.Property<bool>("NotifyOnExternalReviewResponse")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("NotifyOnFailure")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("NotifyOnTranslationComplete")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("NotifyOnValidationComplete")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
 
                     b.Property<string>("ReminderEmailTemplate")
                         .HasColumnType("text");
@@ -5113,6 +5241,13 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
+
+                    b.Property<DateTime?>("LastExternalReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastExternalReviewedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.Property<bool>("NeedsRevalidation")
                         .ValueGeneratedOnAdd()
@@ -5382,6 +5517,77 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                     b.ToTable("TranslationDeviations", "toolbox_talks");
                 });
 
+            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.TranslationFlag", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text");
+
+                    b.Property<int>("EndOffset")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("LanguageCode")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<int>("Severity")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("StartOffset")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ToolboxTalkId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid>("ValidationResultId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("ix_translation_flags_tenant");
+
+                    b.HasIndex("ValidationResultId")
+                        .HasDatabaseName("ix_translation_flags_validation_result");
+
+                    b.HasIndex("ToolboxTalkId", "LanguageCode")
+                        .HasDatabaseName("ix_translation_flags_talk_language");
+
+                    b.ToTable("TranslationFlags", "toolbox_talks");
+                });
+
             modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.TranslationValidationResult", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5590,6 +5796,11 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                         .HasDefaultValue(0);
 
                     b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsNewWizard")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
@@ -5814,6 +6025,246 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                         .HasDatabaseName("ix_validation_regulatory_scores_run_type");
 
                     b.ToTable("ValidationRegulatoryScores", "toolbox_talks");
+                });
+
+            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.Workflows.ExternalParticipantInvitation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContextPayload")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ContextType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text");
+
+                    b.Property<string>("EditableSectionIndicesJson")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("InvitedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("InvitedEmail")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<Guid>("RequesterUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TargetEntityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TargetEntitySubKey")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTime?>("UsedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("WorkflowType")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("ix_external_participant_invitations_tenant");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_external_participant_invitations_token_hash");
+
+                    b.HasIndex("WorkflowType", "TargetEntityId", "TargetEntitySubKey")
+                        .HasDatabaseName("ix_external_participant_invitations_target");
+
+                    b.ToTable("ExternalParticipantInvitations", "workflows");
+                });
+
+            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.Workflows.WorkflowEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PayloadJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<Guid>("TargetEntityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TargetEntitySubKey")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("TriggeredByType")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("TriggeredByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<int>("WorkflowType")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("ix_workflow_events_tenant");
+
+                    b.HasIndex("WorkflowType", "TargetEntityId", "TargetEntitySubKey")
+                        .HasDatabaseName("ix_workflow_events_target");
+
+                    b.ToTable("WorkflowEvents", "workflows");
+                });
+
+            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.Workflows.WorkflowReview", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Accepted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("DeclineReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text");
+
+                    b.Property<string>("EditedContent")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("ExternalParticipantInvitationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("ReviewerType")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("ReviewerUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("SubmittedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("TargetEntityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TargetEntitySubKey")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<int>("WorkflowType")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExternalParticipantInvitationId");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("ix_workflow_reviews_tenant");
+
+                    b.HasIndex("WorkflowType", "TargetEntityId", "TargetEntitySubKey")
+                        .HasDatabaseName("ix_workflow_reviews_target");
+
+                    b.ToTable("WorkflowReviews", "workflows");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
@@ -6582,6 +7033,25 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                     b.Navigation("ValidationRun");
                 });
 
+            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.TranslationFlag", b =>
+                {
+                    b.HasOne("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.ToolboxTalk", "ToolboxTalk")
+                        .WithMany()
+                        .HasForeignKey("ToolboxTalkId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.TranslationValidationResult", "ValidationResult")
+                        .WithMany("Flags")
+                        .HasForeignKey("ValidationResultId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ToolboxTalk");
+
+                    b.Navigation("ValidationResult");
+                });
+
             modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.TranslationValidationResult", b =>
                 {
                     b.HasOne("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.TranslationValidationRun", "ValidationRun")
@@ -6633,6 +7103,16 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                     b.Navigation("RegulatoryProfile");
 
                     b.Navigation("ValidationRun");
+                });
+
+            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.Workflows.WorkflowReview", b =>
+                {
+                    b.HasOne("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.Workflows.ExternalParticipantInvitation", "ExternalParticipantInvitation")
+                        .WithMany()
+                        .HasForeignKey("ExternalParticipantInvitationId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("ExternalParticipantInvitation");
                 });
 
             modelBuilder.Entity("QuantumBuild.Core.Domain.Entities.Company", b =>
@@ -6776,6 +7256,11 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
             modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.ToolboxTalkSlide", b =>
                 {
                     b.Navigation("Translations");
+                });
+
+            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.TranslationValidationResult", b =>
+                {
+                    b.Navigation("Flags");
                 });
 
             modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.TranslationValidationRun", b =>

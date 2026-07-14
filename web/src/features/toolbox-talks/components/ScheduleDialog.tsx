@@ -42,6 +42,8 @@ import {
 } from '@/components/ui/popover';
 import { useToolboxTalks, useCreateToolboxTalkSchedule, useUpdateToolboxTalkSchedule, useToolboxTalkSchedule } from '@/lib/api/toolbox-talks';
 import { useAllEmployees } from '@/lib/api/admin/use-employees';
+import { useMyOperators } from '@/lib/api/admin/use-supervisor-assignments';
+import { useAuth } from '@/lib/auth/use-auth';
 import type {
   ToolboxTalkSchedule,
   ToolboxTalkListItem,
@@ -96,6 +98,13 @@ export function ScheduleDialog({
   const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
   const [employeeSearch, setEmployeeSearch] = useState('');
 
+  // Detect supervisor-only role (Supervisor without Admin or SuperUser)
+  const { user } = useAuth();
+  const isSupervisorOnly =
+    (user?.roles?.includes('Supervisor') ?? false) &&
+    !(user?.roles?.includes('Admin') ?? false) &&
+    !(user?.isSuperUser ?? false);
+
   // Fetch schedule by ID if not passed directly
   const { data: fetchedSchedule } = useToolboxTalkSchedule(scheduleId ?? '');
 
@@ -116,8 +125,25 @@ export function ScheduleDialog({
   const { data: talksData } = useToolboxTalks({ isActive: true, pageSize: 100 });
   const talks = talksData?.items || [];
 
-  // Fetch employees for selection
-  const { data: employees, isLoading: employeesLoading } = useAllEmployees();
+  // Fetch employees for selection — Supervisors see only their assigned operators
+  const { data: allEmployees, isLoading: allEmployeesLoading } = useAllEmployees();
+  const { data: myOperators, isLoading: myOperatorsLoading } = useMyOperators();
+
+  const employees = isSupervisorOnly
+    ? (myOperators ?? []).map(op => ({
+        id: op.employeeId,
+        employeeCode: op.employeeCode,
+        firstName: op.fullName.split(' ')[0] ?? op.fullName,
+        lastName: op.fullName.split(' ').slice(1).join(' '),
+        fullName: op.fullName,
+        email: undefined as string | undefined,
+        jobTitle: op.jobTitle,
+        department: op.department,
+        isActive: true,
+        preferredLanguage: 'en',
+      }))
+    : (allEmployees ?? []);
+  const employeesLoading = isSupervisorOnly ? myOperatorsLoading : allEmployeesLoading;
 
   const createMutation = useCreateToolboxTalkSchedule();
   const updateMutation = useUpdateToolboxTalkSchedule();
@@ -414,27 +440,29 @@ export function ScheduleDialog({
               )}
             />
 
-            {/* Assign to all employees checkbox */}
-            <FormField
-              control={form.control}
-              name="assignToAllEmployees"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                  <FormControl>
-                    <Checkbox
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                  <div className="space-y-1 leading-none">
-                    <FormLabel>Assign to all employees</FormLabel>
-                    <FormDescription>
-                      Automatically assign to all current and future employees.
-                    </FormDescription>
-                  </div>
-                </FormItem>
-              )}
-            />
+            {/* Assign to all employees checkbox — hidden for Supervisors */}
+            {!isSupervisorOnly && (
+              <FormField
+                control={form.control}
+                name="assignToAllEmployees"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel>Assign to all employees</FormLabel>
+                      <FormDescription>
+                        Automatically assign to all current and future employees.
+                      </FormDescription>
+                    </div>
+                  </FormItem>
+                )}
+              />
+            )}
 
             {/* Employee selection (conditional) */}
             {!watchAssignToAll && (
@@ -444,7 +472,7 @@ export function ScheduleDialog({
                 render={() => (
                   <FormItem>
                     <div className="flex items-center justify-between">
-                      <FormLabel>Select Employees *</FormLabel>
+                      <FormLabel>{isSupervisorOnly ? 'Select team members *' : 'Select Employees *'}</FormLabel>
                       <div className="flex gap-2">
                         <Button
                           type="button"

@@ -18,7 +18,10 @@ export type CourseAssignmentStatus = 'Assigned' | 'InProgress' | 'Completed' | '
 export type ToolboxTalkStatus = 'Draft' | 'Processing' | 'ReadyForReview' | 'Published';
 
 /** Source of content for learning sections and questions */
-export type ContentSource = 'Manual' | 'Video' | 'Pdf' | 'Both';
+export type ContentSource = 'Manual' | 'Video' | 'Pdf' | 'Both' | 'Docx';
+
+/** Input mode chosen in wizard Step 1 */
+export type InputMode = 'Text' | 'Pdf' | 'Video' | 'Docx';
 
 // ============================================
 // Learning DTOs
@@ -44,8 +47,10 @@ export interface ToolboxTalkQuestion {
   questionTypeDisplay: string;
   options: string[] | null;
   correctAnswer: string | null;
+  correctOptionIndex: number | null;
   points: number;
   source?: ContentSource;
+  isFromVideoFinalPortion: boolean;
   videoTimestamp?: string | null;
 }
 
@@ -107,6 +112,7 @@ export interface ToolboxTalk {
   shuffleQuestions: boolean;
   shuffleOptions: boolean;
   useQuestionPool: boolean;
+  allowRetry: boolean;
   // Course membership
   isPartOfCourse: boolean;
   // Source language
@@ -125,6 +131,26 @@ export interface ToolboxTalk {
   completionStats: ToolboxTalkCompletionStats | null;
   createdAt: string;
   updatedAt: string | null;
+  publishedAt: string | null;
+  // Learning wizard
+  lastEditedStep: number | null;
+  inputMode: InputMode;
+  sourceFileUrl: string | null;
+  sourceFileName: string | null;
+  sourceFileType: string | null;
+  sourceText: string | null;
+  /** JSON-encoded string[] of language codes, e.g. '["fr","de"]' */
+  targetLanguageCodes: string | null;
+  reviewerName: string | null;
+  reviewerOrg: string | null;
+  reviewerRole: string | null;
+  documentRef: string | null;
+  clientName: string | null;
+  auditPurpose: string | null;
+  audienceRole: string | null;
+  preserveSourceWording: boolean;
+  // Learning wizard — cover image (Step 4)
+  coverImageUrl: string | null;
 }
 
 export interface ToolboxTalkListItem {
@@ -146,6 +172,9 @@ export interface ToolboxTalkListItem {
   autoAssignToNewEmployees: boolean;
   completionStats: ToolboxTalkCompletionStats | null;
   createdAt: string;
+  createdBy: string;
+  createdByName: string | null;
+  lastEditedStep: number | null;
 }
 
 // ============================================
@@ -474,6 +503,24 @@ export interface ToolboxTalkSettings {
   videoDubbingProvider: string | null;
   notificationEmailTemplate: string | null;
   reminderEmailTemplate: string | null;
+  // Wizard Step 4 defaults
+  defaultMinimumVideoWatchPercent: number;
+  defaultAutoAssignDueDays: number;
+  defaultGenerateCertificate: boolean;
+  defaultRefresherFrequency: string;
+  defaultIsActive: boolean;
+  // Notification toggles
+  notifyOnTranslationComplete: boolean;
+  notifyOnValidationComplete: boolean;
+  notifyOnFailure: boolean;
+  notifyOnExternalReviewResponse: boolean;
+}
+
+export interface UpdateToolboxTalkNotificationSettingsRequest {
+  notifyOnTranslationComplete: boolean;
+  notifyOnValidationComplete: boolean;
+  notifyOnFailure: boolean;
+  notifyOnExternalReviewResponse: boolean;
 }
 
 export interface UpdateToolboxTalkSettingsRequest {
@@ -484,6 +531,12 @@ export interface UpdateToolboxTalkSettingsRequest {
   maxQuizAttempts?: number;
   requireSignature?: boolean;
   autoAssignNewEmployees?: boolean;
+  // Wizard Step 4 defaults
+  defaultMinimumVideoWatchPercent?: number;
+  defaultAutoAssignDueDays?: number;
+  defaultGenerateCertificate?: boolean;
+  defaultRefresherFrequency?: string;
+  defaultIsActive?: boolean;
 }
 
 // ============================================
@@ -578,6 +631,7 @@ export interface CreateToolboxTalkRequest {
   shuffleQuestions?: boolean;
   shuffleOptions?: boolean;
   useQuestionPool?: boolean;
+  allowRetry?: boolean;
   // Source language
   sourceLanguageCode?: string;
   // Auto-assignment settings
@@ -646,6 +700,7 @@ export interface GetToolboxTalksParams {
   searchTerm?: string;
   frequency?: ToolboxTalkFrequency;
   isActive?: boolean;
+  status?: ToolboxTalkStatus;
   pageNumber?: number;
   pageSize?: number;
 }

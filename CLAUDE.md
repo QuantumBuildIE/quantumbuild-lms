@@ -348,8 +348,8 @@ Lives on a dedicated `RegulatoryBrowseController` (class-gated `Learnings.Admin`
 | GET    | `/pending`                  | Pending assignments                          | ToolboxTalks.View     |
 | GET    | `/in-progress`              | In-progress assignments                      | ToolboxTalks.View     |
 | GET    | `/completed`                | Completed assignments                        | ToolboxTalks.View     |
-| POST   | `/{id}/reminder`            | Send reminder                                | ToolboxTalks.Schedule |
-| DELETE | `/{id}`                     | Cancel assignment                            | ToolboxTalks.Schedule |
+| POST   | `/{id}/reminder`            | Send reminder                                | Learnings.Schedule |
+| DELETE | `/{id}`                     | Cancel assignment                            | Learnings.Schedule |
 
 #### Schedules (`/api/toolbox-talks/schedules`)
 
@@ -357,10 +357,10 @@ Lives on a dedicated `RegulatoryBrowseController` (class-gated `Learnings.Admin`
 | ------ | --------------- | -------------------------------------- | --------------------- |
 | GET    | `/`             | List schedules (paginated, filterable) | ToolboxTalks.View     |
 | GET    | `/{id}`         | Get schedule with assignments          | ToolboxTalks.View     |
-| POST   | `/`             | Create schedule                        | ToolboxTalks.Schedule |
-| PUT    | `/{id}`         | Update schedule                        | ToolboxTalks.Schedule |
-| DELETE | `/{id}`         | Cancel schedule                        | ToolboxTalks.Schedule |
-| POST   | `/{id}/process` | Process schedule to create assignments | ToolboxTalks.Schedule |
+| POST   | `/`             | Create schedule                        | Learnings.Schedule |
+| PUT    | `/{id}`         | Update schedule                        | Learnings.Schedule |
+| DELETE | `/{id}`         | Cancel schedule                        | Learnings.Schedule |
+| POST   | `/{id}/process` | Process schedule to create assignments | Learnings.Schedule |
 
 #### Courses (`/api/toolbox-talks/courses`)
 
@@ -1366,7 +1366,7 @@ Archived notes 1-89 are in CLAUDE-archive.md
 8. **Translation Pipeline Audit Controls — Phase 4 (Corpus) — COMPLETE** — All four phases of pipeline audit controls are now implemented. `AuditCorpus` is TenantEntity; `AuditCorpusEntry` and `CorpusRunResult` are `BaseEntity` (scoped via parent). `ProviderResultCache` is system-level (no TenantId) — safe because corpus entries contain no PII. Cache key is `(CorpusEntryId, Provider, ProviderVersion)` — only re-calls providers that actually changed. `ValidateSectionAsync` now accepts `persist = false` for dry-run scoring (identical pipeline, no DB writes) — used by corpus runs. `CostEstimationService` has static EUR rate table per model ID; smoke test = 5 entries; Round 3 assumed 30% hit rate. Two-step trigger: estimate → confirm (>€3 threshold) → SuperUser approval (>€10). 10-minute cooldown enforced in service layer. Auto-deviation created on Fail verdict; linked `PipelineChangeRecord` moves to `BlockedRegression`. SuperUser override requires written justification which closes the auto-deviation. Draft → ReadyForReview auto-triggers corpus runs for all locked corpora matching the affected sector/language pairs. `TranslationDeviation.MetadataJson` stores `corpusRunId` for corpus-linked deviations (not `ValidationRunId` FK since that expects a validation run).
 10. **QR Code Location Training — COMPLETE** — Public `/qr/[codeToken]` page outside the `(authenticated)` route group — no JWT required. 6-digit PIN hashed via `IPasswordHasher<Employee>`, 5-attempt lockout with 15-minute window, `QrPinFailedAttempts` and `QrPinLockedUntil` on Employee entity. PIN NEVER returned in any API response — emailed only. `QrLocation` + `QrCode` entities (TenantEntity), `CodeToken = Guid.NewGuid("N")`, QR PNG generated via QRCoder and uploaded to R2 at `{tenantId}/qr-codes/{codeToken}.png` on code creation. Three content modes: `ViewOnly`, `Training`, `Induction`. `QrSession` entity (TenantEntity) tracks active/completed/abandoned sessions via `sessionToken` (Guid, no JWT). `QrScanController` has no `[Authorize]` — validates via `sessionToken` only. On completion: creates `ScheduledTalkCompletion` linked to the employee. `GenerateEmployeePinsJob` is one-off (not recurring) — enqueued exactly once when tenant first enables `QrLocationTrainingEnabled`, detected by reading previous setting value before save in `TenantSettingsController`. Welcome email includes PIN section only when QR feature enabled. Admin: `/admin/toolbox-talks/qr-locations` two-panel UI with sessions panel. Employee detail shows `QrTrainingHistorySection` when QR enabled. `GET /api/employees/{id}/training-history` combines `ScheduledTalks` and `QrSessions` sorted by date. `QrLocationTrainingEnabled` in `TenantSettingKeys.cs`.
 12. **Production deployment** — Production Railway instance deployed from `main` branch on `QuantumBuildIE/quantumbuild-lms`. Development deploys from `transval`. Demo is disconnected. Deployment workflow: develop on `transval` → push to `company/transval` (auto-deploys to Development) → when ready: `git checkout main` → `git merge transval` → `git push company main` (auto-deploys to Production). Both `origin` and `company` remotes must be kept in sync. `AppSettings__BaseUrl` on Production web service points to `quantumbuild-lms-web-production.up.railway.app` until custom domain `certifiediq.ai` is configured.
-14. **Cross-tenant data leak fix (CRITICAL)** — `TenantEntity`-derived ToolboxTalks entities had `HasQueryFilter` configured with `!IsDeleted` only in their individual `EntityConfiguration` classes — no tenant predicate. Any query path missing an explicit `.Where(t => t.TenantId == ...)` clause returned rows from all tenants. Fix: moved all 12 `HasQueryFilter` calls to `ApplicationDbContext` (matching Core entity pattern) with `BypassTenantFilter || TenantId == currentTenantId` predicate; removed the soft-delete-only filters from the 12 entity configurations. `ExpiredSessionCleanupJob` and `CorpusRunJob` updated with `IgnoreQueryFilters()` on the queries that must cross tenant boundaries. No migration required — model-level change only.
+14. **Cross-tenant data leak fix (CRITICAL)** — `TenantEntity`-derived ToolboxTalks entities had `HasQueryFilter` configured with `!IsDeleted` only in their individual `EntityConfiguration` classes — no tenant predicate. Any query path missing an explicit `.Where(t => t.TenantId == ...)` clause returned rows from all tenants. Fix: moved all 12 `HasQueryFilter` calls to `ApplicationDbContext` (matching Core entity pattern) with `BypassTenantFilter || TenantId == currentTenantId` predicate; removed the soft-delete-only filters from the 12 entity configurations. `ExpiredSessionCleanupJob` and `CorpusRunJob` updated with `IgnoreQueryFilters()` on the queries that must cross tenant boundaries. No migration required — model-level change only. **Coverage update (2026-06-23):** four additional TenantEntities (`ToolboxTalkCourseAssignment`, `TranslationDeviation`, `AiUsageLog`, `AiUsageSummary`) were not in the original 12 and had only entity-config-level soft-delete filters. These were tightened to the same DbContext-level pattern in the same commit. See `docs/cross-tenant-status-recon.md`.
 15. **TransVal reviewer-edit workflow defects (A–D) fixed** — Four defects in the section reviewer-edit flow resolved: **(A)** `ValidateSectionAsync` no longer wipes `ReviewerDecision`/`EditedTranslation` on re-validation — those fields are only cleared on first-time entity creation (`Id == Guid.Empty`). **(B)** `LoadSectionsAsync` now loads existing reviewer edits into a dictionary and substitutes `EditedTranslation` for the published translation before scoring, so re-validation scores the corrected text. **(C)** `TranslationValidationJob.ExecuteAsync` gains an optional `sectionIndices` parameter — `EditSection` and `RetrySection` pass `[sectionIndex]` to re-validate a single section only; initial validate and wizard flow pass `null` for a full run. **(D)** `AcceptSection` in `TranslationValidationController` now calls `PropagateEditedTranslationAsync` when `EditedTranslation` is non-null — resolves `SectionIndex` to `SectionId` via `ToolboxTalkSections` ordered by `SectionNumber`, deserialises `TranslatedSections` JSON, replaces matching section `Content`, and flushes both mutations in a single atomic `SaveChangesAsync` — employees see the reviewer's corrected translation immediately on acceptance.
 18. **Two API response conventions — match the controller's existing pattern** — Core CRUD controllers (Employees, Users, Sites, Companies, Contacts, Tenants, Roles, SupervisorAssignments, ToolboxTalks most endpoints, Reports, Certificates, CourseAssignments, Schedules, LessonParser) return `Result<T>` envelopes: `{ success, data, errors }`. Frontend reads `response.data.data`. Newer controllers (Monitoring, PipelineAudit, RegulatoryIngestion, RequirementMapping, SafetyGlossary, TenantSettings, TenantSectors, TenantModules, QrLocation, TranslationValidation GetById endpoints) return DTOs directly. Frontend reads `response.data`. The tell-tale sign on the backend is `if (!result.Success) return BadRequest(result)` before `return Ok(result)` — that means `Result<T>` envelope. Before writing a new frontend API function, check what the corresponding controller action returns.
 19. **Course assignment deletion — completed talks survive as standalone history** — `DeleteCourseAssignmentCommandHandler` skips `ScheduledTalk` rows whose `Status == Completed` when soft-deleting an assignment's child talks. Those completed talks remain visible in the employee's Completed tab and all reports (compliance, skills matrix, completion history) as standalone records. Their `ScheduledTalkCompletion` rows are unaffected. `ScheduledTalkCertificate` records are also safe — all certificate queries project snapshot fields stored at issuance time and do not navigate to `CourseAssignment`. Course-level certificates cannot exist for a deletable (in-progress) assignment because the issuance guard in `CourseProgressService` only fires at full completion, and `DeleteCourseAssignmentCommandHandler` already blocks deletion of fully-completed assignments.
@@ -1386,6 +1386,63 @@ Archived notes 1-89 are in CLAUDE-archive.md
 
 **Note 28 — EF migrations must be CLI-generated**: Always create migrations with `dotnet ef migrations add <MigrationName>` (from `src/QuantumBuild.API`, with `--project` pointing to the target Infrastructure project). The CLI generates both `<Name>.cs` and `<Name>.Designer.cs` together. A hand-written `.cs` without its `.Designer.cs` causes EF to silently skip the migration on startup — the `[Migration]` attribute EF reads lives in the `.Designer.cs` partial class declaration. Four instances of this trap in one session (one production bug, three Development drift cases). Always verify both files exist after every `migrations add`.
 
+**Note 29 — Wizard cutover toggle (§5.27)**: Two wizard versions run in parallel during the cutover period. The `UseNewWizard` `TenantSettings` key controls which one the "Create New" button routes to.
+
+- **Legacy wizard** (`/admin/toolbox-talks/create`) — SPA, all 7 steps at one URL, React state. Talks created here have `lastEditedStep == null`.
+- **New wizard** (`/admin/toolbox-talks/learnings/**`) — URL-per-step, server-side state. Talks created here have `lastEditedStep != null`.
+
+**Discriminator:** `lastEditedStep != null` → new wizard; `null` → legacy. This is the only reliable signal — there is no `CreatedByWizard` field.
+
+**Toggle:** `TenantSettings.UseNewWizard`. Default `"false"` (legacy). When `"true"`, Create New on the Learnings list and "Create Another" on the legacy wizard's publish step both route to the new wizard. The drafts list shows both wizard types; legacy drafts get a "Legacy" badge and Resume routes to the talk detail page instead of a wizard URL.
+
+**URL override for smoke-testing:** append `?wizard=new` or `?wizard=old` to any page with the Create New button. One-shot — disappears on next navigation. Not persisted to localStorage/cookie.
+
+**Flip sequence:** Settings → General tab → "Wizard Version" toggle. Only flip after §24 (Edit workflow) is sufficiently complete for production use. The toggle is gated to users who can access the Settings page (Admin / SuperUser).
+
+**Eventual removal (§7.1):** when all tenants are on the new wizard and the legacy wizard is decommissioned, remove: the `UseNewWizard` key, `useWizardPreference` hook, `WizardToggleSection` component, `wizard-toggle-section.tsx`, and the Legacy badge logic in `drafts/page.tsx`.
+
+**Note 30 — Running Playwright E2E tests locally**: Playwright is installed in `web/`. Tests live under `web/e2e/`. Run with `npm run e2e` from `web/`. Variants: `e2e:ui` (Playwright UI mode, recommended for debugging), `e2e:headed` (visible browser), `e2e:debug` (step-through), `e2e:report` (open the last HTML report).
+
+**Prerequisites:**
+- **PostgreSQL** — must be running (Playwright does not start it)
+- **Next.js dev server** — auto-spawned via `webServer` config; reuses `http://localhost:3000` if already running
+- **CORS** — `playwright.config.ts` injects `Cors__AllowedOrigins__0=http://localhost:3000` as an env var when it spawns the API. If you run the API manually before `npm run e2e`, add this to your local (gitignored) `appsettings.Development.json` instead: `{ "Cors": { "AllowedOrigins": ["http://localhost:3000"] } }` — without this, Chromium cannot reach the API from the Next.js origin.
+
+**Auto-spawned servers:** `webServer` in `playwright.config.ts` manages both the Next.js dev server AND the .NET API (`dotnet run --project ../src/QuantumBuild.API --launch-profile http`). Playwright polls `http://localhost:5222/health` until the API is ready before running tests. If either server is already running, Playwright reuses it and leaves it alive after tests complete.
+
+**Project structure:** three projects — `setup` (runs `auth.setup.ts` once, saves SuperUser session to `e2e/.auth/superuser.json`), `unauthenticated` (root-level `e2e/*.spec.ts`, no auth state), `authenticated` (files under `e2e/authenticated/`, loads SuperUser session automatically). The setup project must succeed for authenticated tests to run.
+
+**Auth credentials:** SuperUser (`superuser@certifiediq.ai` / `SuperUser123!`) from `appsettings.Development.json` Seed section. Session saved to `web/e2e/.auth/superuser.json` — gitignored, never committed.
+
+**Current coverage:**
+- `e2e/login-page.spec.ts` — unauthenticated smoke: login page renders
+- `e2e/auth.setup.ts` — setup project: logs in as SuperUser, saves session state
+- `e2e/authenticated/login-flow.spec.ts` — authenticated: SuperUser reaches `/admin/tenants`
+
+**Workers:** locked to 1 (`fullyParallel: false`). The Dev DB is shared, and parallel runs are unsafe until per-test data isolation is established. Do not increase without revisiting test data strategy.
+
+**Adding new authenticated tests:** create files under `web/e2e/authenticated/`. They automatically inherit the SuperUser storage state. Read-only tests need no setup/teardown. Write tests must use the Playwright `request` fixture for API-based setup and cleanup in `beforeEach`/`afterEach`.
+
+**Note 31 — DataSeeder credentials are Development and Demo-sourced from config**: `DataSeeder.SeedAsync` creates two credentialled accounts only when `environment.IsDevelopment() || environment.IsEnvironment("Demo")` is true. Credentials are read from configuration:
+
+- `Seed:SuperUser:Email` / `Seed:SuperUser:Password`
+- `Seed:Admin:Email` / `Seed:Admin:Password`
+
+Defaults live in `appsettings.Development.json`. These are dev-only local credentials, not secrets. If credentials are missing from configuration, the seeder logs a warning and skips that account; it does not throw.
+
+**System data** (roles, permissions, sectors, regulatory bodies, lookup categories, language data, training categories, tenant modules) seeds unconditionally in all environments and is independent of the credential gate.
+
+**Bootstrap pattern by environment:**
+
+- **Demo:** Seeded automatically on first deploy provided `Seed__SuperUser__Email`, `Seed__SuperUser__Password`, `Seed__Admin__Email`, and `Seed__Admin__Password` are set as Railway env vars (ASP.NET Core env-var separator is `__` not `:`). Missing values log a warning and skip that account — no throw.
+- **Production:** SuperUser must still be inserted via direct DB script or pre-deploy migration (per Note 20). The seeder does not run for Production.
+
+**Note 32 — Config layer migration rule, complete or leave intact:** When migrating a model identifier from a legacy config key (e.g., `SubtitleProcessing:Claude:Model`) to the canonical `AIProviders:*` registry, the migration must be atomic end-to-end: (1) add `IOptions<AIProviderOptions>` to the service constructor, (2) change the model read to the new property, (3) remove the old C# property from the settings class, (4) remove the old key from `appsettings.json`, (5) update the validator if it checked the old property — all in the same commit. A partial migration (changing C# defaults to empty without updating the service read) leaves the system in a state worse than either old or new architecture: the old key in config is silently ignored, the new key may not be set, and the first actual API call fails at runtime rather than at startup. The §5.28 → ElevenLabs `unsupported_model` P0 (2026-06-22) is the reference incident.
+
+Option B (2026-06-22) is the canonical example of this rule applied end-to-end — see BACKLOG §5.29 follow-up item 3 closure and §5.34.
+
+**Note 33 — Multi-chunk migration test runs must rebuild, not `--no-build`.** When a migration spans multiple chunks (e.g., Option B Chunks 1 + 2), running `dotnet test --no-build` between chunks can use a stale compiled binary from an earlier chunk and produce false test failures against logic that no longer exists in source. The Option B Chunk 2 verification initially showed 478 false failures because the loaded test binary still contained Chunk 1's now-removed `SubtitleProcessingSettingsValidator.ElevenLabs.Model` check. Always run a full build (`dotnet build` then `dotnet test`, or `dotnet test` without `--no-build`) when verifying across chunk boundaries. The trade-off is build time vs. trustworthy results — trust wins.
+
 ## Backlog
 
 ### High
@@ -1396,6 +1453,7 @@ Archived notes 1-89 are in CLAUDE-archive.md
 
 ### Medium
 
+- **Other services with Hangfire implicit-HTTP dependency (audit, low urgency)**. `TranslationWorkflowService` was fixed in chunk 5.4 (tenant-context fix) by threading `Guid? explicitTenantId` through all non-token public methods. A sweep of the remaining Infrastructure services revealed no other services with both: (a) `TenantEntity` reads/writes and (b) a Hangfire job call site. If any new service is added that meets both criteria, apply the same explicit-tenant pattern documented in `PHASE_5_STANDARDS.md §7.5`. A unified `ServiceContext` abstraction (replacing the ad-hoc parameter approach) remains a future refactor option — low urgency while there is only one instance.
 - **[BACKLOG NOTE — do not run as a prompt] Bulk import — partial-row recovery**. If a process restart interrupts the job between creating an employee and creating its linked user account, the re-run classifies the row as `AlreadyExisted` (employee exists) but the missing user account is never created — the row appears successful in the report but the person has no login. Build a proper fix that REUSES `EmployeeService`'s linked-user-account creation; do NOT duplicate that logic into the job. Edge case; low real-world frequency.
 - Long-running job UX — fire-and-notify — bulk import (and other long jobs: content generation, translation validation, corpus runs) currently expect the user to wait on-screen for completion. Move to a "kick off and get notified when done" model so users aren't tied to a progress screen. Notification mechanism (in-app, email) to be decided. Cross-cutting — not specific to one feature
 - Unify user creation on throwaway-password + invitation-email flow across all three creation paths:
@@ -1444,5 +1502,57 @@ Archived notes 1-89 are in CLAUDE-archive.md
 
 ---
 
-_Last Updated: June 2, 2026 (notes audit — added Note 28 EF migration guard; archived notes 2,4,5,6,7,9,11,13,16,17,25,26; condensed notes 2,25; folded PipelineChangeRecord/TranslationDeviation invariants into entity section; Note 15 deferred)_
+## Claude Code prompt conventions
+
+Every Claude Code prompt sent during build sessions must include the
+following preamble at the top, before the chunk-specific scope:
+
+---
+
+### Scope discipline
+
+The prompt below defines the scope of this chunk. If during
+implementation you discover that work outside that scope is required to
+make the stated scope succeed — failing tests caused by pre-existing
+infrastructure, broken seeders, missing interface implementations,
+schema issues, migration problems, anything — STOP immediately and
+report:
+
+  - What you found
+  - Why it blocks the stated scope
+  - The smallest change that would unblock you
+  - Whether it appears to be a pre-existing bug or freshly introduced
+
+Do NOT fix it yourself. Wait for explicit go-ahead before touching
+anything outside the stated scope. This applies even if the fix seems
+obvious or trivial.
+
+Pre-existing tests that fail for reasons unrelated to this chunk are
+acceptable — note them in the final report but do not attempt to fix.
+
+### Reporting format
+
+The final report must be structured as:
+
+  1. Test results — lead with the actual numbers, e.g.
+     "320 of 321 passing, 1 pre-existing failure unrelated to this chunk"
+     not "all green" or "tests pass"
+
+  2. Files changed in scope — full paths, grouped by purpose
+
+  3. Files changed outside the stated scope — full paths, with rationale
+     for each. If this section is non-empty, the work is on hold
+     pending explicit approval before commit.
+
+  4. Build output — pass/fail and any warnings introduced by this chunk
+
+### Commit discipline
+
+Do not commit unless the prompt explicitly tells you to commit. "Ready
+for commit" means "ready for review." Stop and report; wait for the
+user's explicit "commit + push" before staging anything.
+
+---
+
+_Last Updated: June 7, 2026 (added the 'Claude Code prompt conventions' section)_
 _Architecture: Modular Monolith with Clean Architecture_

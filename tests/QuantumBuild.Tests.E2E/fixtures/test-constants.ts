@@ -7,8 +7,8 @@ export const TEST_TENANT = {
 
   users: {
     admin: {
-      email: 'admin@quantumbuild.ai',
-      password: 'Admin123!',
+      email: process.env.SEED_ADMIN_EMAIL || 'admin@quantumbuild.ai',
+      password: process.env.SEED_ADMIN_PASSWORD || 'Admin123!',
       homePage: '/dashboard',
     },
     supervisor: {

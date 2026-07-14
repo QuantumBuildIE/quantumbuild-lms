@@ -14,12 +14,16 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Core.Domain.Entities;
 using QuantumBuild.Core.Infrastructure.Data;
 using QuantumBuild.Core.Infrastructure.Identity;
 using QuantumBuild.Core.Infrastructure.Persistence;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.ContentCreation;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Pdf;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Storage;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Subtitles;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Validation;
 using QuantumBuild.Tests.Common.TestTenant;
 using QuantumBuild.Tests.Integration.Setup.Fakes;
 using Respawn;
@@ -67,6 +71,11 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
     public FakeEmailSender FakeEmailSender { get; } = new();
 
     /// <summary>
+    /// Fake IEmailService that captures invitation email sends for assertion in tests.
+    /// </summary>
+    public FakeEmailService FakeEmailService { get; } = new();
+
+    /// <summary>
     /// Fake subtitle services for testing subtitle processing without external APIs.
     /// </summary>
     public FakeTranscriptionService FakeTranscriptionService { get; } = new();
@@ -75,6 +84,13 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
     public FakeVideoSourceProvider FakeVideoSourceProvider { get; } = new();
     public FakeSubtitleProgressReporter FakeSubtitleProgressReporter { get; } = new();
     public FakeR2StorageService FakeR2StorageService { get; } = new();
+
+    /// <summary>
+    /// Fake content creation services for testing parse/PDF extract without AI or network calls.
+    /// </summary>
+    public FakeContentParserService FakeContentParserService { get; } = new();
+    public FakePdfExtractionService FakePdfExtractionService { get; } = new();
+    public FakeDocxExtractionService FakeDocxExtractionService { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -184,6 +200,11 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
             // Register fake services for testing
             // services.AddSingleton<IEmailSender>(FakeEmailSender);
 
+            // Replace the real EmailService with a fake so tests can assert email sends
+            // without actually calling MailerSend or requiring SMTP configuration.
+            services.RemoveAll<IEmailService>();
+            services.AddSingleton<IEmailService>(FakeEmailService);
+
             // Register fake subtitle processing services to avoid external API calls
             services.RemoveAll<ITranscriptionService>();
             services.RemoveAll<ITranslationService>();
@@ -200,6 +221,20 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
             // Replace R2 storage service to avoid requiring AWS/R2 configuration
             services.RemoveAll<IR2StorageService>();
             services.AddSingleton<IR2StorageService>(FakeR2StorageService);
+
+            // Replace AI/HTTP services used by the new learning-wizard parse pipeline
+            services.RemoveAll<IContentParserService>();
+            services.AddSingleton<IContentParserService>(FakeContentParserService);
+            services.RemoveAll<IPdfExtractionService>();
+            services.AddSingleton<IPdfExtractionService>(FakePdfExtractionService);
+            services.RemoveAll<IDocxExtractionService>();
+            services.AddSingleton<IDocxExtractionService>(FakeDocxExtractionService);
+
+            // Replace real translation validation service to avoid external API calls
+            // (Claude Haiku, DeepL, Gemini). The fake returns deterministic Pass results
+            // and preserves existing reviewer decisions exactly as the real service does.
+            services.RemoveAll<ITranslationValidationService>();
+            services.AddScoped<ITranslationValidationService, FakeTranslationValidationService>();
         });
 
         builder.UseEnvironment("Testing");
@@ -365,28 +400,6 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
                 Permissions.GetAll(),
                 (Guid?)null // Admin may not have employee record
             ),
-            TestUserType.SiteManager => (
-                TestTenantConstants.Users.SiteManager.Id,
-                TestTenantConstants.Users.SiteManager.Email,
-                TestTenantConstants.Users.SiteManager.FirstName,
-                TestTenantConstants.Users.SiteManager.LastName,
-                new[] { "SiteManager" },
-                new[] {
-                    "Learnings.View", "Learnings.Manage", "Learnings.Schedule"
-                },
-                (Guid?)TestTenantConstants.Employees.ManagerEmployee // Link to manager employee
-            ),
-            TestUserType.Warehouse => (
-                TestTenantConstants.Users.Warehouse.Id,
-                TestTenantConstants.Users.Warehouse.Email,
-                TestTenantConstants.Users.Warehouse.FirstName,
-                TestTenantConstants.Users.Warehouse.LastName,
-                new[] { "WarehouseStaff" },
-                new[] {
-                    "Learnings.View"
-                },
-                (Guid?)null
-            ),
             TestUserType.Operator => (
                 TestTenantConstants.Users.Operator.Id,
                 TestTenantConstants.Users.Operator.Email,
@@ -398,16 +411,14 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
                 },
                 (Guid?)TestTenantConstants.Employees.OperatorEmployee // Link to operator employee
             ),
-            TestUserType.Finance => (
-                TestTenantConstants.Users.Finance.Id,
-                TestTenantConstants.Users.Finance.Email,
-                TestTenantConstants.Users.Finance.FirstName,
-                TestTenantConstants.Users.Finance.LastName,
-                new[] { "Finance" },
-                new[] {
-                    "Learnings.View"
-                },
-                (Guid?)null
+            TestUserType.Supervisor => (
+                TestTenantConstants.Users.Supervisor.Id,
+                TestTenantConstants.Users.Supervisor.Email,
+                TestTenantConstants.Users.Supervisor.FirstName,
+                TestTenantConstants.Users.Supervisor.LastName,
+                new[] { "Supervisor" },
+                new[] { "Learnings.View", "Learnings.Schedule" },
+                (Guid?)TestTenantConstants.Employees.SupervisorEmployee // Link to supervisor employee
             ),
             _ => throw new ArgumentOutOfRangeException(nameof(userType))
         };
@@ -483,22 +494,12 @@ public enum TestUserType
     Admin,
 
     /// <summary>
-    /// Site Manager with site and attendance management permissions.
-    /// </summary>
-    SiteManager,
-
-    /// <summary>
-    /// Warehouse staff with stock management permissions.
-    /// </summary>
-    Warehouse,
-
-    /// <summary>
-    /// Operator with limited view and basic action permissions.
+    /// Operator with Learnings.View permission only.
     /// </summary>
     Operator,
 
     /// <summary>
-    /// Finance user with view and costing permissions.
+    /// Supervisor with Learnings.View and Learnings.Schedule permissions, linked to SupervisorEmployee.
     /// </summary>
-    Finance
+    Supervisor
 }

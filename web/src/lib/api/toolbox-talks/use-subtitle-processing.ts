@@ -155,6 +155,9 @@ export function useSubtitleProcessing(toolboxTalkId: string) {
       .configureLogging(signalR.LogLevel.Warning)
       .build();
 
+    connection.serverTimeoutInMilliseconds = 120_000;
+    connection.keepAliveIntervalInMilliseconds = 10_000;
+
     connectionRef.current = connection;
 
     // Handle progress updates

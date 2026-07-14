@@ -8,8 +8,11 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.PreFlightScan;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Translations;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Validation;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Workflows;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Translation;
 using QuantumBuild.Modules.ToolboxTalks.Application.Prompts;
+using QuantumBuild.Modules.ToolboxTalks.Application.Services;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services.Subtitles;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Hubs;
@@ -32,7 +35,14 @@ public class TranslationValidationJob
     private readonly ISafetyClassificationService _safetyClassificationService;
     private readonly IPreFlightScanService _preFlightScanService;
     private readonly IPipelineVersionService _pipelineVersionService;
+    private readonly ITranslationWorkflowService _workflowService;
+    private readonly IToolboxTalkNotificationService _notificationService;
     private readonly ILogger<TranslationValidationJob> _logger;
+    private readonly ISentenceSplitter _sentenceSplitter;
+    private readonly IBackTranslationSelector _backTranslationSelector;
+    private readonly IWordDiffService _wordDiff;
+    private readonly IDiffRunGrouper _diffRunGrouper;
+    private readonly IWordToSentenceMapper _wordToSentenceMapper;
 
     private static readonly JsonSerializerOptions CamelCaseOptions = new()
     {
@@ -48,7 +58,14 @@ public class TranslationValidationJob
         ISafetyClassificationService safetyClassificationService,
         IPreFlightScanService preFlightScanService,
         IPipelineVersionService pipelineVersionService,
-        ILogger<TranslationValidationJob> logger)
+        ITranslationWorkflowService workflowService,
+        IToolboxTalkNotificationService notificationService,
+        ILogger<TranslationValidationJob> logger,
+        ISentenceSplitter sentenceSplitter,
+        IBackTranslationSelector backTranslationSelector,
+        IWordDiffService wordDiff,
+        IDiffRunGrouper diffRunGrouper,
+        IWordToSentenceMapper wordToSentenceMapper)
     {
         _validationService = validationService;
         _dbContext = dbContext;
@@ -58,7 +75,14 @@ public class TranslationValidationJob
         _safetyClassificationService = safetyClassificationService;
         _preFlightScanService = preFlightScanService;
         _pipelineVersionService = pipelineVersionService;
+        _workflowService = workflowService;
+        _notificationService = notificationService;
         _logger = logger;
+        _sentenceSplitter = sentenceSplitter;
+        _backTranslationSelector = backTranslationSelector;
+        _wordDiff = wordDiff;
+        _diffRunGrouper = diffRunGrouper;
+        _wordToSentenceMapper = wordToSentenceMapper;
     }
 
     /// <summary>
@@ -83,10 +107,11 @@ public class TranslationValidationJob
             "TenantId: {TenantId}",
             validationRunId, tenantId);
 
+        Domain.Entities.TranslationValidationRun? run = null;
         try
         {
             // Load the validation run
-            var run = await _dbContext.TranslationValidationRuns
+            run = await _dbContext.TranslationValidationRuns
                 .IgnoreQueryFilters()
                 .FirstOrDefaultAsync(r => r.Id == validationRunId && r.TenantId == tenantId && !r.IsDeleted,
                     cancellationToken);
@@ -136,6 +161,50 @@ public class TranslationValidationJob
             run.TotalSections = sections.Count;
             await _dbContext.SaveChangesAsync(cancellationToken);
 
+            // Advance to Validating before Phase B begins so WorkflowSubscriber stays mounted
+            // for the duration of back-translation. Without this, state stays AIGenerated
+            // (not in ACTIVE_STATES) and a refetch triggered by another language completing
+            // will unmount the subscriber mid-job, causing it to miss the ValidationComplete
+            // event (§5.17 fix). Guard: new-wizard talk-scoped runs only — old-wizard runs
+            // stay in Translating throughout and must not receive a second StartValidation call.
+            if (run.ToolboxTalkId.HasValue && run.IsNewWizard)
+            {
+                // On re-runs, LoadSectionsAsync returns cached translations without calling
+                // GenerateTranslationForSectionsAsync, so RecordTranslationCompleted is never
+                // called and state stays Translating. StartValidation's guard requires
+                // AIGenerated or Validating, so it fails silently — and RecordValidationCompleted
+                // subsequently fails too, leaving the workflow stuck. Advance state here before
+                // calling StartValidation so both guards pass on every run.
+                // RecordTranslationCompleted is idempotent: if state is already AIGenerated
+                // (first run, generation advanced it inline), it returns Ok() with no side effects.
+                var currentState = await _workflowService.GetState(
+                    run.ToolboxTalkId.Value, run.LanguageCode,
+                    explicitTenantId: tenantId, ct: cancellationToken);
+
+                if (currentState.State == TranslationWorkflowState.Translating)
+                {
+                    var tcResult = await _workflowService.RecordTranslationCompleted(
+                        run.ToolboxTalkId.Value, run.LanguageCode, TriggeredByType.System,
+                        explicitTenantId: tenantId, ct: cancellationToken);
+                    if (!tcResult.Success)
+                        _logger.LogWarning(
+                            "RecordTranslationCompleted (pre-StartValidation, re-run) returned failure for " +
+                            "talk {TalkId}, lang {Lang}: {Error}",
+                            run.ToolboxTalkId, run.LanguageCode, tcResult.Errors.FirstOrDefault());
+                }
+
+                var startValidationResult = await _workflowService.StartValidation(
+                    run.ToolboxTalkId.Value,
+                    run.LanguageCode,
+                    explicitTenantId: tenantId,
+                    ct: cancellationToken);
+
+                if (!startValidationResult.Success)
+                    _logger.LogWarning(
+                        "StartValidation returned failure for talk {TalkId}, lang {Lang}: {Error}",
+                        run.ToolboxTalkId, run.LanguageCode, startValidationResult.Errors.FirstOrDefault());
+            }
+
             // Pre-flight scan — non-blocking, never fails the job
             await RunPreFlightScanAsync(run, sections, cancellationToken);
 
@@ -170,6 +239,92 @@ public class TranslationValidationJob
                         toolboxTalkId: run.ToolboxTalkId);
 
                     results.Add(result);
+
+                    // Auto-accept Pass sections when no user decision has been recorded yet.
+                    // Preserves existing decisions on re-validation (ReviewerDecision is only
+                    // Pending on initial creation; user-set decisions are untouched by the service).
+                    if (result.Outcome == ValidationOutcome.Pass
+                        && result.ReviewerDecision == Domain.Enums.ReviewerDecision.Pending)
+                    {
+                        result.ReviewerDecision = Domain.Enums.ReviewerDecision.Accepted;
+                        result.DecisionAt = DateTime.UtcNow;
+                        result.DecisionBy = "System";
+                        await _dbContext.SaveChangesAsync(cancellationToken);
+                    }
+
+                    // Phase 2a: emit a TranslationFlag for every section that scored below threshold
+                    if (result.Outcome is ValidationOutcome.Review or ValidationOutcome.Fail
+                        && run.ToolboxTalkId.HasValue)
+                    {
+                        _dbContext.TranslationFlags.Add(new Domain.Entities.TranslationFlag
+                        {
+                            Id = Guid.NewGuid(),
+                            TenantId = tenantId,
+                            ToolboxTalkId = run.ToolboxTalkId.Value,
+                            LanguageCode = run.LanguageCode,
+                            ValidationResultId = result.Id,
+                            StartOffset = 0,
+                            EndOffset = result.OriginalText.Length,
+                            Severity = result.Outcome == ValidationOutcome.Fail
+                                ? FlagSeverity.Error
+                                : FlagSeverity.Warning,
+                            Reason = BuildFlagReason(result.ReviewReasonsJson)
+                        });
+
+                        // Phase 2b: phrase-level flags alongside the section-level flag above
+                        if (result.BackTranslationA == null && result.BackTranslationB == null
+                            && result.BackTranslationC == null && result.BackTranslationD == null)
+                        {
+                            _logger.LogWarning(
+                                "No back-translations available for section {Index} in run {RunId} — skipping phrase-level flags",
+                                result.SectionIndex, validationRunId);
+                        }
+                        else
+                        {
+                            try
+                            {
+                                var selection = _backTranslationSelector.Select(result);
+                                var phraseWordDiff = _wordDiff.Diff(result.OriginalText, selection.Text);
+                                var phraseRuns = _diffRunGrouper.Group(phraseWordDiff.Operations);
+
+                                if (phraseRuns.Count > 0)
+                                {
+                                    var sentences = _sentenceSplitter.Split(result.OriginalText);
+                                    var sentenceSpans = _wordToSentenceMapper.Map(result.OriginalText, sentences, phraseRuns);
+
+                                    if (sentenceSpans.Count > 0)
+                                    {
+                                        foreach (var span in sentenceSpans)
+                                        {
+                                            var phraseReason = BuildPhraseReason(selection.ProviderLabel, span.Runs, phraseWordDiff.Operations);
+
+                                            _dbContext.TranslationFlags.Add(new Domain.Entities.TranslationFlag
+                                            {
+                                                Id = Guid.NewGuid(),
+                                                TenantId = tenantId,
+                                                ToolboxTalkId = run.ToolboxTalkId.Value,
+                                                LanguageCode = run.LanguageCode,
+                                                ValidationResultId = result.Id,
+                                                StartOffset = span.StartOffset,
+                                                EndOffset = span.EndOffset,
+                                                Severity = FlagSeverity.Warning,
+                                                Reason = phraseReason,
+                                                CreatedAt = DateTime.UtcNow
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                            catch (Exception phraseEx)
+                            {
+                                _logger.LogWarning(phraseEx,
+                                    "Phrase-level flag emission failed for section {Index} in run {RunId} — continuing",
+                                    result.SectionIndex, validationRunId);
+                            }
+                        }
+
+                        await _dbContext.SaveChangesAsync(cancellationToken);
+                    }
 
                     await SendSectionCompletedAsync(validationRunId, result, percentComplete);
 
@@ -210,7 +365,27 @@ public class TranslationValidationJob
                     failedResult.RoundsUsed = 0;
                     failedResult.EffectiveThreshold = run.PassThreshold;
 
+                    // Save failedResult first so its Id is populated before constructing the flag
                     await _dbContext.SaveChangesAsync(cancellationToken);
+
+                    // Phase 2a: emit a flag for the exception-failed section
+                    if (run.ToolboxTalkId.HasValue)
+                    {
+                        _dbContext.TranslationFlags.Add(new Domain.Entities.TranslationFlag
+                        {
+                            Id = Guid.NewGuid(),
+                            TenantId = tenantId,
+                            ToolboxTalkId = run.ToolboxTalkId.Value,
+                            LanguageCode = run.LanguageCode,
+                            ValidationResultId = failedResult.Id,
+                            StartOffset = 0,
+                            EndOffset = section.OriginalText.Length,
+                            Severity = FlagSeverity.Error,
+                            Reason = BuildFlagReason(null)
+                        });
+                        await _dbContext.SaveChangesAsync(cancellationToken);
+                    }
+
                     results.Add(failedResult);
                 }
             }
@@ -230,6 +405,18 @@ public class TranslationValidationJob
             run.CompletedAt = DateTime.UtcNow;
 
             await _dbContext.SaveChangesAsync(cancellationToken);
+
+            // Record workflow state transition for all talk-scoped runs
+            if (run.ToolboxTalkId.HasValue)
+            {
+                var wfResult = await _workflowService.RecordValidationCompleted(
+                    run.ToolboxTalkId.Value, run.LanguageCode, TriggeredByType.System,
+                    explicitTenantId: tenantId, ct: cancellationToken);
+                if (!wfResult.Success)
+                    _logger.LogWarning(
+                        "RecordValidationCompleted returned failure for talk {TalkId}, lang {Lang}: {Error}",
+                        run.ToolboxTalkId, run.LanguageCode, wfResult.Errors.FirstOrDefault());
+            }
 
             stopwatch.Stop();
 
@@ -251,6 +438,21 @@ public class TranslationValidationJob
 
             await SendCompletionAsync(validationRunId, true, "Validation complete");
 
+            // Hook 2 — notify tenant admins of validation completion
+            if (run.ToolboxTalkId.HasValue)
+            {
+                var talkTitle = await _dbContext.ToolboxTalks.IgnoreQueryFilters()
+                    .Where(t => t.Id == run.ToolboxTalkId.Value)
+                    .Select(t => t.Title)
+                    .FirstOrDefaultAsync(cancellationToken) ?? "Unknown";
+                var languageName = await _languageCodeService.GetLanguageNameAsync(run.LanguageCode);
+                await _notificationService.NotifyValidationCompleteAsync(
+                    tenantId, run.ToolboxTalkId.Value, talkTitle, languageName,
+                    run.OverallOutcome.ToString(),
+                    (double)run.OverallScore,
+                    run.PassedSections, run.TotalSections, cancellationToken);
+            }
+
             // If this run belongs to a creation session, check if all runs are done
             await TryUpdateSessionStatusAsync(validationRunId, tenantId);
         }
@@ -265,6 +467,40 @@ public class TranslationValidationJob
 
             await UpdateRunStatusAsync(validationRunId, tenantId, ValidationRunStatus.Cancelled);
             await SendCompletionAsync(validationRunId, false, "Validation was cancelled");
+
+            if (run?.ToolboxTalkId.HasValue == true && run.IsNewWizard)
+            {
+                try
+                {
+                    var currentState = await _workflowService.GetState(
+                        run.ToolboxTalkId.Value, run.LanguageCode,
+                        explicitTenantId: tenantId, ct: CancellationToken.None);
+
+                    if (currentState.State == TranslationWorkflowState.Translating)
+                    {
+                        await _workflowService.RecordTranslationCompleted(
+                            run.ToolboxTalkId.Value, run.LanguageCode, TriggeredByType.System,
+                            explicitTenantId: tenantId, ct: CancellationToken.None);
+                    }
+
+                    var vcResult = await _workflowService.RecordValidationCompleted(
+                        run.ToolboxTalkId.Value, run.LanguageCode, TriggeredByType.System,
+                        explicitTenantId: tenantId, ct: CancellationToken.None);
+
+                    if (!vcResult.Success)
+                        _logger.LogWarning(
+                            "RecordValidationCompleted (cancellation cleanup) returned failure for " +
+                            "talk {TalkId}, lang {Lang}: {Error}",
+                            run.ToolboxTalkId, run.LanguageCode, vcResult.Errors.FirstOrDefault());
+                }
+                catch (Exception cleanupEx)
+                {
+                    _logger.LogError(cleanupEx,
+                        "Failed to advance workflow state during cancellation cleanup for " +
+                        "talk {TalkId}, lang {Lang}",
+                        run.ToolboxTalkId, run.LanguageCode);
+                }
+            }
 
             throw;
         }
@@ -287,6 +523,24 @@ public class TranslationValidationJob
 
             await UpdateRunStatusAsync(validationRunId, tenantId, ValidationRunStatus.Failed);
 
+            // Hook 4 — notify tenant admins of validation failure
+            try
+            {
+                var failedRun = await _dbContext.TranslationValidationRuns.IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(r => r.Id == validationRunId && r.TenantId == tenantId, default);
+                if (failedRun?.ToolboxTalkId.HasValue == true)
+                {
+                    var talkTitle = await _dbContext.ToolboxTalks.IgnoreQueryFilters()
+                        .Where(t => t.Id == failedRun.ToolboxTalkId.Value)
+                        .Select(t => t.Title)
+                        .FirstOrDefaultAsync(default) ?? "Unknown";
+                    await _notificationService.NotifyFailureAsync(
+                        tenantId, failedRun.ToolboxTalkId.Value, talkTitle,
+                        "Translation validation", ex.Message, default);
+                }
+            }
+            catch { /* swallow — never let notification failure hide the original exception */ }
+
             // Surface a meaningful error to the frontend instead of a generic fallback
             var clientMessage = ex switch
             {
@@ -299,6 +553,40 @@ public class TranslationValidationJob
             };
 
             await SendCompletionAsync(validationRunId, false, clientMessage);
+
+            if (run?.ToolboxTalkId.HasValue == true && run.IsNewWizard)
+            {
+                try
+                {
+                    var currentState = await _workflowService.GetState(
+                        run.ToolboxTalkId.Value, run.LanguageCode,
+                        explicitTenantId: tenantId, ct: CancellationToken.None);
+
+                    if (currentState.State == TranslationWorkflowState.Translating)
+                    {
+                        await _workflowService.RecordTranslationCompleted(
+                            run.ToolboxTalkId.Value, run.LanguageCode, TriggeredByType.System,
+                            explicitTenantId: tenantId, ct: CancellationToken.None);
+                    }
+
+                    var vcResult = await _workflowService.RecordValidationCompleted(
+                        run.ToolboxTalkId.Value, run.LanguageCode, TriggeredByType.System,
+                        explicitTenantId: tenantId, ct: CancellationToken.None);
+
+                    if (!vcResult.Success)
+                        _logger.LogWarning(
+                            "RecordValidationCompleted (exception cleanup) returned failure for " +
+                            "talk {TalkId}, lang {Lang}: {Error}",
+                            run.ToolboxTalkId, run.LanguageCode, vcResult.Errors.FirstOrDefault());
+                }
+                catch (Exception cleanupEx)
+                {
+                    _logger.LogError(cleanupEx,
+                        "Failed to advance workflow state during exception cleanup for " +
+                        "talk {TalkId}, lang {Lang}",
+                        run.ToolboxTalkId, run.LanguageCode);
+                }
+            }
 
             throw;
         }
@@ -390,7 +678,7 @@ public class TranslationValidationJob
             // Pass sectorKey from the validation run for tiered prompt quality
             translation = await GenerateTranslationForSectionsAsync(
                 run.ToolboxTalkId.Value, tenantId, run.LanguageCode, originalSections,
-                run.SectorKey, run.SourceLanguage, run.Id, cancellationToken);
+                run.SectorKey, run.SourceLanguage, run.Id, run.IsNewWizard, cancellationToken);
 
             if (string.IsNullOrWhiteSpace(translation))
             {
@@ -656,51 +944,57 @@ public class TranslationValidationJob
         string? sectorKey,
         string? sourceLanguage,
         Guid runId,
+        bool isNewWizard,
         CancellationToken cancellationToken)
     {
         // Relevance guard: if this run has been superseded (cascade-reset cleared the session's
         // ValidationRunIds), abort before inserting the ToolboxTalkTranslation row that would
         // conflict on the unique index. This covers the in-flight case where Delete() could not
         // stop an already-running job.
-        var session = await _dbContext.ContentCreationSessions
-            .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(s => s.OutputTalkId == talkId && s.TenantId == tenantId,
-                cancellationToken);
-
-        if (session == null)
+        // New-wizard runs (IsNewWizard=true) skip this guard — they are created without a session
+        // and manage their own lifecycle via TranslationWorkflowService.
+        if (!isNewWizard)
         {
-            _logger.LogInformation(
-                "TranslationValidationJob run {RunId} is no longer relevant — no session found for talk {TalkId}. Aborting before INSERT.",
-                runId, talkId);
-            return null;
-        }
+            var session = await _dbContext.ContentCreationSessions
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(s => s.OutputTalkId == talkId && s.TenantId == tenantId,
+                    cancellationToken);
 
-        if (string.IsNullOrWhiteSpace(session.ValidationRunIds))
-        {
-            _logger.LogInformation(
-                "TranslationValidationJob run {RunId} is no longer relevant — session {SessionId} has no current ValidationRunIds. Aborting before INSERT.",
-                runId, session.Id);
-            return null;
-        }
-
-        try
-        {
-            var currentRunIds = JsonSerializer.Deserialize<List<Guid>>(session.ValidationRunIds);
-            if (currentRunIds == null || !currentRunIds.Contains(runId))
+            if (session == null)
             {
                 _logger.LogInformation(
-                    "TranslationValidationJob run {RunId} is no longer in session {SessionId}'s ValidationRunIds. Aborting before INSERT.",
+                    "TranslationValidationJob run {RunId} is no longer relevant — no session found for talk {TalkId}. Aborting before INSERT.",
+                    runId, talkId);
+                return null;
+            }
+
+            if (string.IsNullOrWhiteSpace(session.ValidationRunIds))
+            {
+                _logger.LogInformation(
+                    "TranslationValidationJob run {RunId} is no longer relevant — session {SessionId} has no current ValidationRunIds. Aborting before INSERT.",
                     runId, session.Id);
                 return null;
             }
-        }
-        catch (JsonException ex)
-        {
-            // Malformed JSON — log and fall through. Better to risk a conflict than to silently
-            // abort on a parse failure.
-            _logger.LogWarning(ex,
-                "Failed to parse session.ValidationRunIds for session {SessionId} — proceeding cautiously.",
-                session.Id);
+
+            try
+            {
+                var currentRunIds = JsonSerializer.Deserialize<List<Guid>>(session.ValidationRunIds);
+                if (currentRunIds == null || !currentRunIds.Contains(runId))
+                {
+                    _logger.LogInformation(
+                        "TranslationValidationJob run {RunId} is no longer in session {SessionId}'s ValidationRunIds. Aborting before INSERT.",
+                        runId, session.Id);
+                    return null;
+                }
+            }
+            catch (JsonException ex)
+            {
+                // Malformed JSON — log and fall through. Better to risk a conflict than to silently
+                // abort on a parse failure.
+                _logger.LogWarning(ex,
+                    "Failed to parse session.ValidationRunIds for session {SessionId} — proceeding cautiously.",
+                    session.Id);
+            }
         }
 
         Domain.Entities.ToolboxTalkTranslation? translation = null;
@@ -725,7 +1019,7 @@ public class TranslationValidationJob
                     glossaryInstructions.Count, sectorKey, languageCode);
             }
 
-            var translatedSections = new List<object>();
+            var translatedSections = new List<TranslatedSectionEntry>();
 
             foreach (var section in originalSections)
             {
@@ -766,7 +1060,9 @@ public class TranslationValidationJob
 
                 if (titleResult.Success && contentResult.Success)
                 {
-                    translatedSections.Add(new
+                    // Explicit construction (not deserialization) — ReviewedAt/ReviewedBy default
+                    // to null, correct for a section that has never been externally reviewed.
+                    translatedSections.Add(new TranslatedSectionEntry
                     {
                         SectionId = sectionId,
                         Title = titleResult.TranslatedContent,
@@ -895,6 +1191,18 @@ public class TranslationValidationJob
 
             _dbContext.ToolboxTalkTranslations.Add(translation);
             await _dbContext.SaveChangesAsync(cancellationToken);
+
+            // Advance the workflow state to AIGenerated for new-wizard runs
+            if (isNewWizard)
+            {
+                var translationResult = await _workflowService.RecordTranslationCompleted(
+                    talkId, languageCode, TriggeredByType.System,
+                    explicitTenantId: tenantId, ct: cancellationToken);
+                if (!translationResult.Success)
+                    _logger.LogWarning(
+                        "RecordTranslationCompleted returned failure for talk {TalkId}, lang {Lang}: {Error}",
+                        talkId, languageCode, translationResult.Errors.FirstOrDefault());
+            }
 
             _logger.LogInformation(
                 "Generated translation for {Count}/{Total} sections to {Language}",
@@ -1082,6 +1390,95 @@ public class TranslationValidationJob
         if (sanitised.Length > 200)
             sanitised = sanitised[..200];
         return $"Translation failed: {sanitised}";
+    }
+
+    /// <summary>
+    /// Builds a human-readable flag reason from the ReviewReasonsJson produced by the validation engine.
+    /// ReviewReasonsJson is a camelCase JSON array of {type, message, detail} objects.
+    /// </summary>
+    private static string BuildFlagReason(string? reviewReasonsJson)
+    {
+        const string fallback = "Validation score below threshold";
+        const int maxLength = 512;
+
+        if (string.IsNullOrWhiteSpace(reviewReasonsJson))
+            return fallback;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(reviewReasonsJson);
+            var messages = doc.RootElement.EnumerateArray()
+                .Select(e => e.TryGetProperty("message", out var m) ? m.GetString() : null)
+                .Where(m => !string.IsNullOrWhiteSpace(m))
+                .Cast<string>()
+                .ToList();
+
+            if (messages.Count == 0)
+                return fallback;
+
+            var reason = string.Join("; ", messages);
+            return reason.Length <= maxLength ? reason : reason[..maxLength];
+        }
+        catch (JsonException)
+        {
+            return fallback;
+        }
+    }
+
+    /// <summary>
+    /// Builds a phrase-level flag reason from the diff runs and words involved.
+    /// Called once per sentence span with the runs that anchor to that span.
+    /// </summary>
+    private static string BuildPhraseReason(
+        string providerLabel,
+        IReadOnlyList<DiffRun> runsInSentence,
+        IReadOnlyList<DiffOperation> allOperations)
+    {
+        const int maxLength = 512;
+
+        var deleteRanges = runsInSentence
+            .Where(r => r.Type == DiffType.Delete)
+            .ToList();
+        var insertPositions = runsInSentence
+            .Where(r => r.Type == DiffType.Insert)
+            .Select(r => r.StartWordIndex)
+            .ToHashSet();
+
+        var deleteWords = new List<string>();
+        var insertWords = new List<string>();
+        int counter = 0;
+
+        foreach (var op in allOperations)
+        {
+            switch (op.Type)
+            {
+                case DiffType.Delete:
+                    if (deleteRanges.Any(r => counter >= r.StartWordIndex && counter <= r.EndWordIndex))
+                        deleteWords.Add(op.Word);
+                    counter++;
+                    break;
+                case DiffType.Insert:
+                    if (insertPositions.Contains(counter))
+                        insertWords.Add(op.Word);
+                    break;
+                case DiffType.Equal:
+                    counter++;
+                    break;
+            }
+        }
+
+        bool hasDelete = runsInSentence.Any(r => r.Type == DiffType.Delete);
+        bool hasInsert = runsInSentence.Any(r => r.Type == DiffType.Insert);
+
+        string reason;
+        if (hasDelete && !hasInsert)
+            reason = $"Words missing from back-translation ({providerLabel}): '{string.Join(" ", deleteWords)}'";
+        else if (hasInsert && !hasDelete)
+            reason = $"Extra words in back-translation ({providerLabel}): '{string.Join(" ", insertWords)}'";
+        else
+            reason = $"Words differ in back-translation ({providerLabel}): missing '{string.Join(" ", deleteWords)}', extra '{string.Join(" ", insertWords)}'";
+
+        return reason.Length <= maxLength ? reason : reason[..maxLength];
     }
 
     /// <summary>

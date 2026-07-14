@@ -4,10 +4,11 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using QuantumBuild.Core.Application.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Sectors;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.GenerateContentTranslations;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services.Subtitles;
-using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Sectors;
+using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Hubs;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
@@ -275,7 +276,8 @@ public class MissingTranslationsJob
             ToolboxTalkId = toolboxTalkId,
             TenantId = tenantId,
             TargetLanguages = missingLanguageNames,
-            SectorKey = sectorKey
+            SectorKey = sectorKey,
+            TriggeredBy = TriggeredByType.System
         };
 
         var result = await _sender.Send(command, cancellationToken);

@@ -52,7 +52,9 @@ public class TenantSettingsService(ICoreDbContext context) : ITenantSettingsServ
         {
             [TenantSettingKeys.EmailTeamName] = TenantSettingKeys.Defaults.EmailTeamName,
             [TenantSettingKeys.TalkCertificatePrefix] = TenantSettingKeys.Defaults.TalkCertificatePrefix,
-            [TenantSettingKeys.CourseCertificatePrefix] = TenantSettingKeys.Defaults.CourseCertificatePrefix
+            [TenantSettingKeys.CourseCertificatePrefix] = TenantSettingKeys.Defaults.CourseCertificatePrefix,
+            [TenantSettingKeys.UseNewWizard] = "false",
+            [TenantSettingKeys.UseNewCourseCreation] = TenantSettingKeys.Defaults.UseNewCourseCreation
         };
 
         foreach (var setting in settings)

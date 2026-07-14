@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using QuantumBuild.Core.Application.Configuration;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Subtitles;
 using QuantumBuild.Modules.ToolboxTalks.Application.Prompts;
@@ -18,17 +19,20 @@ public class ClaudeTranslationService : ITranslationService
 {
     private readonly HttpClient _httpClient;
     private readonly SubtitleProcessingSettings _settings;
+    private readonly string _claudeModel;
     private readonly IAiUsageLogger _aiUsageLogger;
     private readonly ILogger<ClaudeTranslationService> _logger;
 
     public ClaudeTranslationService(
         HttpClient httpClient,
         IOptions<SubtitleProcessingSettings> settings,
+        IOptions<AIProviderOptions> aiProviders,
         IAiUsageLogger aiUsageLogger,
         ILogger<ClaudeTranslationService> logger)
     {
         _httpClient = httpClient;
         _settings = settings.Value;
+        _claudeModel = aiProviders.Value.Anthropic.Models.Sonnet;
         _aiUsageLogger = aiUsageLogger;
         _logger = logger;
     }
@@ -53,7 +57,7 @@ public class ClaudeTranslationService : ITranslationService
 
             var requestBody = new
             {
-                model = _settings.Claude.Model,
+                model = _claudeModel,
                 max_tokens = _settings.Claude.MaxTokens,
                 messages = new[]
                 {

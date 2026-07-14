@@ -82,6 +82,7 @@ public class GetToolboxTalkByIdQueryHandler : IRequestHandler<GetToolboxTalkById
             ShuffleQuestions = talk.ShuffleQuestions,
             ShuffleOptions = talk.ShuffleOptions,
             UseQuestionPool = talk.UseQuestionPool,
+            AllowRetry = talk.AllowRetry,
             IsPartOfCourse = talk.IsPartOfCourse,
             AutoAssignToNewEmployees = talk.AutoAssignToNewEmployees,
             AutoAssignDueDays = talk.AutoAssignDueDays,
@@ -111,6 +112,7 @@ public class GetToolboxTalkByIdQueryHandler : IRequestHandler<GetToolboxTalkById
                 QuestionTypeDisplay = GetQuestionTypeDisplay(q.QuestionType),
                 Options = ParseOptions(q.Options),
                 CorrectAnswer = q.CorrectAnswer,
+                CorrectOptionIndex = q.CorrectOptionIndex,
                 Points = q.Points,
                 Source = q.Source,
                 SourceDisplay = GetContentSourceDisplay(q.Source),
@@ -130,7 +132,25 @@ public class GetToolboxTalkByIdQueryHandler : IRequestHandler<GetToolboxTalkById
                     : 0
             } : null,
             CreatedAt = talk.CreatedAt,
-            UpdatedAt = talk.UpdatedAt
+            UpdatedAt = talk.UpdatedAt,
+            PublishedAt = talk.PublishedAt,
+            LastEditedStep = talk.LastEditedStep,
+
+            // Learning wizard fields
+            SourceFileUrl = talk.SourceFileUrl,
+            SourceFileName = talk.SourceFileName,
+            SourceFileType = talk.SourceFileType,
+            SourceText = talk.SourceText,
+            TargetLanguageCodes = talk.TargetLanguageCodes,
+            ReviewerName = talk.ReviewerName,
+            ReviewerOrg = talk.ReviewerOrg,
+            ReviewerRole = talk.ReviewerRole,
+            DocumentRef = talk.DocumentRef,
+            ClientName = talk.ClientName,
+            AuditPurpose = talk.AuditPurpose,
+            AudienceRole = talk.AudienceRole,
+            PreserveSourceWording = talk.PreserveSourceWording,
+            InputMode = talk.InputMode,
         };
     }
 

@@ -26,9 +26,11 @@ public class ToolboxTalkFilesController : ControllerBase
     // Size limits
     private const long MaxVideoSizeBytes = 500 * 1024 * 1024; // 500MB
     private const long MaxPdfSizeBytes = 50 * 1024 * 1024;    // 50MB
+    private const long MaxCoverImageSizeBytes = 5 * 1024 * 1024; // 5MB
 
     private static readonly string[] AllowedVideoTypes = ["video/mp4", "video/webm", "video/quicktime"];
     private static readonly string[] AllowedPdfTypes = ["application/pdf"];
+    private static readonly string[] AllowedImageTypes = ["image/png", "image/jpeg"];
 
     public ToolboxTalkFilesController(
         IR2StorageService storageService,
@@ -287,6 +289,97 @@ public class ToolboxTalkFilesController : ControllerBase
     }
 
     /// <summary>
+    /// Upload a cover image for a Toolbox Talk (wizard Step 4)
+    /// </summary>
+    [HttpPost("cover-image")]
+    [RequestSizeLimit(5 * 1024 * 1024)] // 5MB
+    [ProducesResponseType(typeof(CoverImageResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UploadCoverImage(
+        Guid toolboxTalkId,
+        IFormFile file,
+        CancellationToken cancellationToken)
+    {
+        if (file == null || file.Length == 0)
+            return BadRequest(new { error = "No file provided." });
+
+        if (!AllowedImageTypes.Contains(file.ContentType.ToLower()))
+            return BadRequest(new { error = "Invalid file type. Only PNG and JPEG images are allowed." });
+
+        if (file.Length > MaxCoverImageSizeBytes)
+            return BadRequest(new { error = $"Image size ({file.Length / 1024 / 1024}MB) exceeds the 5MB limit." });
+
+        var talk = await _dbContext.ToolboxTalks
+            .FirstOrDefaultAsync(t => t.Id == toolboxTalkId
+                && t.TenantId == _currentUser.TenantId
+                && !t.IsDeleted, cancellationToken);
+
+        if (talk == null)
+            return NotFound(new { error = "Learning not found." });
+
+        if (talk.Status != QuantumBuild.Modules.ToolboxTalks.Domain.Enums.ToolboxTalkStatus.Draft)
+            return Conflict(new { error = "Learning must be in Draft status to upload a cover image." });
+
+        await using var stream = file.OpenReadStream();
+        var result = await _storageService.UploadCoverImageAsync(
+            _currentUser.TenantId,
+            toolboxTalkId,
+            stream,
+            file.FileName,
+            cancellationToken);
+
+        if (!result.Success)
+            return BadRequest(new { error = result.ErrorMessage });
+
+        talk.CoverImageUrl = result.PublicUrl;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("Cover image uploaded for ToolboxTalk {Id}: {Url}", toolboxTalkId, result.PublicUrl);
+
+        return Ok(new CoverImageResponseDto(result.PublicUrl!));
+    }
+
+    /// <summary>
+    /// Remove the cover image for a Toolbox Talk (wizard Step 4)
+    /// </summary>
+    [HttpDelete("cover-image")]
+    [ProducesResponseType(typeof(CoverImageResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteCoverImage(
+        Guid toolboxTalkId,
+        CancellationToken cancellationToken)
+    {
+        var talk = await _dbContext.ToolboxTalks
+            .FirstOrDefaultAsync(t => t.Id == toolboxTalkId
+                && t.TenantId == _currentUser.TenantId
+                && !t.IsDeleted, cancellationToken);
+
+        if (talk == null)
+            return NotFound(new { error = "Learning not found." });
+
+        if (talk.Status != QuantumBuild.Modules.ToolboxTalks.Domain.Enums.ToolboxTalkStatus.Draft)
+            return Conflict(new { error = "Learning must be in Draft status to remove a cover image." });
+
+        // Best-effort R2 delete — DB update proceeds even if R2 delete fails
+        try
+        {
+            await _storageService.DeleteCoverImageAsync(_currentUser.TenantId, toolboxTalkId, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Non-fatal: failed to delete R2 cover image for ToolboxTalk {Id}", toolboxTalkId);
+        }
+
+        talk.CoverImageUrl = null;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("Cover image removed for ToolboxTalk {Id}", toolboxTalkId);
+
+        return Ok(new CoverImageResponseDto(null));
+    }
+
+    /// <summary>
     /// Delete all files associated with a Toolbox Talk
     /// </summary>
     /// <param name="toolboxTalkId">The Toolbox Talk ID</param>
@@ -324,3 +417,5 @@ public class ToolboxTalkFilesController : ControllerBase
         return NoContent();
     }
 }
+
+public record CoverImageResponseDto(string? CoverImageUrl);

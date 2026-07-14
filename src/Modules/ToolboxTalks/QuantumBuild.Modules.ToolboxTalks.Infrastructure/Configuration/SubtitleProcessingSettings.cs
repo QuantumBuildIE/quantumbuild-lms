@@ -64,12 +64,6 @@ public class ElevenLabsSettings
     public string ApiKey { get; set; } = string.Empty;
 
     /// <summary>
-    /// Transcription model to use.
-    /// Default: scribe_v1
-    /// </summary>
-    public string Model { get; set; } = "scribe_v1";
-
-    /// <summary>
     /// ElevenLabs API base URL.
     /// Default: https://api.elevenlabs.io/v1
     /// </summary>

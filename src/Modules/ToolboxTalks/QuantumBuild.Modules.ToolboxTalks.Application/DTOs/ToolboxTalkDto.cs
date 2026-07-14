@@ -42,6 +42,7 @@ public record ToolboxTalkDto
     public bool ShuffleQuestions { get; init; }
     public bool ShuffleOptions { get; init; }
     public bool UseQuestionPool { get; init; }
+    public bool AllowRetry { get; init; }
 
     // Course membership
     public bool IsPartOfCourse { get; init; }
@@ -71,6 +72,37 @@ public record ToolboxTalkDto
     // Audit
     public DateTime CreatedAt { get; init; }
     public DateTime? UpdatedAt { get; init; }
+    public DateTime? PublishedAt { get; init; }
+
+    // Learning wizard
+    public int? LastEditedStep { get; init; }
+
+    // Learning wizard — source file (new wizard Step 1)
+    public string? SourceFileUrl { get; init; }
+    public string? SourceFileName { get; init; }
+    public string? SourceFileType { get; init; }
+    public string? SourceText { get; init; }
+
+    // Learning wizard — target languages (JSON array string, e.g. ["es","fr"])
+    public string? TargetLanguageCodes { get; init; }
+
+    // Learning wizard — audit metadata
+    public string? ReviewerName { get; init; }
+    public string? ReviewerOrg { get; init; }
+    public string? ReviewerRole { get; init; }
+    public string? DocumentRef { get; init; }
+    public string? ClientName { get; init; }
+    public string? AuditPurpose { get; init; }
+
+    // Learning wizard — generation preferences
+    public string? AudienceRole { get; init; }
+    public bool PreserveSourceWording { get; init; }
+
+    // Learning wizard — input mode
+    public InputMode InputMode { get; init; }
+
+    // Learning wizard — cover image (Step 4)
+    public string? CoverImageUrl { get; init; }
 }
 
 /// <summary>
