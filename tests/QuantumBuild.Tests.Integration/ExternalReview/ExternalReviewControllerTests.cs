@@ -315,9 +315,13 @@ public class ExternalReviewControllerTests : IntegrationTestBase
         await SeedEventAsync(talkId, "qb", WorkflowEventTypes.ExternalReviewInitiated);
         var (rawToken, _) = await SeedInvitationAsync(talkId, "qb");
 
+        // camelCase keys mirror the actual wire contract sent by the external-review frontend
+        // (web/src/types/external-review.ts) — PascalCase keys previously "worked" only because
+        // the DTO had no JsonPropertyName attributes and STJ's default case-sensitive matching
+        // happened to line up with the C# property names, masking the real-world camelCase bug.
         var editsJson = JsonSerializer.Serialize(new[]
         {
-            new { SectionIndex = 0, TranslatedText = "Reviewer edited translation" }
+            new { sectionIndex = 0, translatedText = "Reviewer edited translation" }
         });
 
         var response = await UnauthenticatedClient.PostAsJsonAsync(
@@ -343,6 +347,30 @@ public class ExternalReviewControllerTests : IntegrationTestBase
         sections![0].Content.Should().Be("Reviewer edited translation");
         translation.LastExternalReviewedAt.Should().NotBeNull();
         translation.LastExternalReviewedBy.Should().Be("reviewer@example.com");
+    }
+
+    // 7b — Active invitation, Accepted = true, editedContent is non-blank but not parseable as
+    //      section edits → 400 with a distinct diagnostic, not the generic "cannot be left blank"
+    //      message that this failure mode used to silently fall through to.
+    [Fact]
+    public async Task Submit_ActiveInvitation_MalformedEditedContent_Returns400WithDistinctError()
+    {
+        var talkId = await CreateTalkAsync();
+        var sectionId = Guid.NewGuid();
+        await SeedTranslationAsync(talkId, "qb", JsonSerializer.Serialize(new[]
+        {
+            new { SectionId = sectionId, Title = "Section Title", Content = "Original AI translation" }
+        }));
+        await SeedEventAsync(talkId, "qb", WorkflowEventTypes.ExternalReviewInitiated);
+        var (rawToken, _) = await SeedInvitationAsync(talkId, "qb");
+
+        var response = await UnauthenticatedClient.PostAsJsonAsync(
+            $"/api/external-review/{rawToken}/submit",
+            new { accepted = true, editedContent = "{ this is not a valid section edits array" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        body.GetProperty("error").GetString().Should().Contain("could not be parsed");
     }
 
     // 8 — Active invitation, Accepted = false → 200, ExternalReviewSubmitted event written

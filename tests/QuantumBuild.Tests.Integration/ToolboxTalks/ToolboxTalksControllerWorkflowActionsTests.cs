@@ -243,7 +243,7 @@ public class ToolboxTalksControllerWorkflowActionsTests : IntegrationTestBase
 
             var editsJson = JsonSerializer.Serialize(new[]
             {
-                new { SectionIndex = 0, TranslatedText = "Reviewer edited translation" }
+                new { sectionIndex = 0, translatedText = "Reviewer edited translation" }
             });
             var submit = await service.SubmitExternalReview(rawToken, accepted: true, editedContent: editsJson);
             submit.Success.Should().BeTrue();

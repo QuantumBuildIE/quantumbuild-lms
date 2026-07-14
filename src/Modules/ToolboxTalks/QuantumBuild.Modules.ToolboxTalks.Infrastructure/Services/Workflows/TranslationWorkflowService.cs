@@ -522,7 +522,7 @@ public sealed class TranslationWorkflowService(
 
             var validationFailure = await ValidateExternalReviewSubmissionAsync(
                 invitation.TargetEntityId, invitation.TargetEntitySubKey ?? string.Empty, edits,
-                invitation.EditableSectionIndices, ct);
+                invitation.EditableSectionIndices, editedContent, ct);
             if (validationFailure is not null)
                 return validationFailure;
         }
@@ -1074,8 +1074,18 @@ public sealed class TranslationWorkflowService(
         string languageCode,
         List<ExternalReviewEditedSectionDto> edits,
         List<int>? editableSectionIndices,
+        string? editedContent,
         CancellationToken ct)
     {
+        // Gate 0 — the wire payload had content but it deserialised to nothing usable (malformed
+        // JSON is swallowed to an empty list upstream, or the array itself was empty). Distinct
+        // from Gate 1's genuine "reviewer submitted zero edits" so this failure mode isn't
+        // misreported as a blank-section problem.
+        if (edits.Count == 0 && !string.IsNullOrWhiteSpace(editedContent))
+            return Result.Fail(
+                "editedContent could not be parsed as section edits.",
+                FailureCode.WorkflowSubmissionInvalid);
+
         // Gate 1 — non-empty submission
         if (edits.Count == 0)
             return Result.Fail(
