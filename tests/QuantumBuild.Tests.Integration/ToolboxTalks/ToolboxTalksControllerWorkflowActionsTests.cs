@@ -5,6 +5,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Workflows;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities.Workflows;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
+using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -400,7 +401,53 @@ public class ToolboxTalksControllerWorkflowActionsTests : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
+    // ── initiate-external-review tests ────────────────────────────────────────
+
+    // 16 — State is Initial (no events) → 409 Conflict, response body includes currentState
+    //      as a structured field (not just embedded in the prose error message).
+    [Fact]
+    public async Task InitiateExternalReview_FromInitialState_Returns409WithCurrentState()
+    {
+        var talkId = await CreateTalkAsync();
+        // No events → state is Initial, which InitiateExternalReview does not accept
+
+        var response = await AdminClient.PostAsJsonAsync(
+            $"/api/toolbox-talks/{talkId}/translations/es/initiate-external-review",
+            new { ReviewerEmail = "reviewer@example.com" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var body = await response.Content.ReadFromJsonAsync<InitiateExternalReviewConflictResponse>();
+        body!.CurrentState.Should().Be("Initial");
+        body.Error.Should().NotBeNullOrEmpty();
+    }
+
+    // 17 — State is AwaitingThirdParty (an external review is already in progress) → 409 Conflict
+    //      with currentState reflecting the actual blocking state, not just "not eligible".
+    [Fact]
+    public async Task InitiateExternalReview_FromAwaitingThirdPartyState_Returns409WithCurrentState()
+    {
+        var talkId = await CreateTalkAsync();
+        await SeedEventAsync(talkId, "es", WorkflowEventTypes.TranslationCompleted);
+        await SeedEventAsync(talkId, "es", WorkflowEventTypes.ValidationCompleted);
+        await SeedEventAsync(talkId, "es", WorkflowEventTypes.InternalReviewSubmitted);
+        await SeedEventAsync(talkId, "es", WorkflowEventTypes.ExternalReviewInitiated);
+
+        var response = await AdminClient.PostAsJsonAsync(
+            $"/api/toolbox-talks/{talkId}/translations/es/initiate-external-review",
+            new { ReviewerEmail = "reviewer@example.com" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        var body = await response.Content.ReadFromJsonAsync<InitiateExternalReviewConflictResponse>();
+        body!.CurrentState.Should().Be("AwaitingThirdParty");
+    }
+
     // ── local DTOs ────────────────────────────────────────────────────────────
+
+    private record InitiateExternalReviewConflictResponse
+    {
+        public string? Error { get; init; }
+        public string? CurrentState { get; init; }
+    }
 
     private record WorkflowEventResponse
     {

@@ -44,6 +44,7 @@ import {
 import { SendExternalReviewDialog } from './SendExternalReviewDialog';
 import { CancelExternalReviewDialog } from './CancelExternalReviewDialog';
 import { computeReviewCoverage } from '../lib/reviewCoverage';
+import { isWorkflowStateEligibleForExternalReview } from '../lib/workflowStateMessages';
 import type { ToolboxTalkSection, ToolboxTalkTranslation } from '@/types/toolbox-talks';
 import type { TranslationWorkflowState, ValidationOutcome } from '@/types/workflows';
 
@@ -76,7 +77,7 @@ function canAcceptExternalReview(state: TranslationWorkflowState): boolean {
 }
 
 function canSendForExternalReview(state: TranslationWorkflowState): boolean {
-  return state === 'Validated' || state === 'ReviewerAccepted' || state === 'ThirdPartyReviewed';
+  return isWorkflowStateEligibleForExternalReview(state);
 }
 
 function canCancelExternalReview(state: TranslationWorkflowState): boolean {
@@ -108,6 +109,10 @@ export function TranslationWorkflowPanel({
   const [sendReviewLanguageName, setSendReviewLanguageName] = useState<string | null>(null);
   const [sendReviewFlaggedCount, setSendReviewFlaggedCount] = useState(0);
   const [sendReviewRunId, setSendReviewRunId] = useState<string | null>(null);
+  // Set when a send attempt races the workflow state changing between dialog-open and submit
+  // (e.g. a second admin cancels/completes review concurrently) — the 409 response's currentState
+  // is mapped to the same per-state message the pre-send check would have shown.
+  const [sendReviewRaceState, setSendReviewRaceState] = useState<TranslationWorkflowState | null>(null);
   const [cancelReviewLanguageCode, setCancelReviewLanguageCode] = useState<string | null>(null);
 
   // Per-section scores for the language currently open in the send-for-review dialog — fetched
@@ -204,6 +209,7 @@ export function TranslationWorkflowPanel({
 
   const handleSendForExternalReview = async (email: string, editableSectionIndices: number[]) => {
     if (!sendReviewLanguageCode || !sendReviewLanguageName) return;
+    setSendReviewRaceState(null);
     try {
       await initiateExternalReviewMutation.mutateAsync({
         toolboxTalkId,
@@ -213,8 +219,18 @@ export function TranslationWorkflowPanel({
       });
       toast.success(`Invitation sent to ${email}`);
       setSendReviewLanguageCode(null);
-    } catch {
-      toast.error(`Failed to send invitation for ${sendReviewLanguageName}`);
+    } catch (err) {
+      const axiosError = err as {
+        response?: { status?: number; data?: { currentState?: TranslationWorkflowState } };
+      };
+      const currentState = axiosError.response?.status === 409 ? axiosError.response.data?.currentState : undefined;
+      if (currentState) {
+        // Workflow state changed between dialog-open and submit — show the dialog's blocked
+        // view instead of a raw toast, same as the pre-send check would have shown.
+        setSendReviewRaceState(currentState);
+      } else {
+        toast.error(`Failed to send invitation for ${sendReviewLanguageName}`);
+      }
     }
   };
 
@@ -432,6 +448,7 @@ export function TranslationWorkflowPanel({
                         setSendReviewLanguageName(row.languageName);
                         setSendReviewFlaggedCount(dto?.flaggedWordCount ?? 0);
                         setSendReviewRunId(dto?.lastValidationRunId ?? null);
+                        setSendReviewRaceState(null);
                       }}
                     >
                       <Send className="mr-1 h-3 w-3" />
@@ -523,12 +540,17 @@ export function TranslationWorkflowPanel({
             setSendReviewLanguageCode(null);
             setSendReviewLanguageName(null);
             setSendReviewRunId(null);
+            setSendReviewRaceState(null);
           }
         }}
         onConfirm={handleSendForExternalReview}
         isLoading={initiateExternalReviewMutation.isPending}
         flaggedWordCount={sendReviewFlaggedCount}
         languageName={sendReviewLanguageName ?? ''}
+        state={
+          (sendReviewLanguageCode ? stateByCode.get(sendReviewLanguageCode)?.state : undefined) ?? 'Initial'
+        }
+        raceState={sendReviewRaceState}
         sections={sortedSections.map((s, index) => {
           const scored = sendReviewScoreByIndex.get(index);
           return { title: s.title, score: scored?.score, outcome: scored?.outcome };

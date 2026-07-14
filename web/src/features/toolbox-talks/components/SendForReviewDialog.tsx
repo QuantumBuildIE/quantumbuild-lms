@@ -18,6 +18,7 @@ import { useSendForReviewPreview, useSendForReview } from '@/lib/api/toolbox-tal
 import type { BlockedLanguageDto, PreviewLanguageDto } from '@/types/toolbox-talks';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { getWorkflowStateIneligibilityMessage } from '../lib/workflowStateMessages';
 
 // Mirrors the LANG_NAMES convention used in WizardTranslationPanel — this codebase does not
 // have a shared language-name lookup, so each consumer keeps a local copy.
@@ -225,6 +226,9 @@ function LanguageRow({
   const reviewerMissing = blockedOverride?.reviewerMissing ?? !language.resolvedReviewerEmail;
   const workflowIneligible = blockedOverride?.workflowStateIneligible ?? !language.workflowStateEligible;
   const isRowBlocked = reviewerMissing || workflowIneligible;
+  const ineligibilityMessage = workflowIneligible
+    ? getWorkflowStateIneligibilityMessage(blockedOverride?.currentWorkflowState ?? language.currentWorkflowState)
+    : null;
 
   return (
     <div
@@ -268,10 +272,9 @@ function LanguageRow({
             </span>
           )}
         </div>
-        {workflowIneligible && (
+        {workflowIneligible && ineligibilityMessage && (
           <p className="text-destructive text-xs">
-            Language not ready for review — it may already be under review, or hasn&apos;t been
-            validated yet.
+            {ineligibilityMessage.title} — {ineligibilityMessage.suggestion}
           </p>
         )}
         {reviewerMissing && (

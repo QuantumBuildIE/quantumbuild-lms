@@ -41,7 +41,8 @@ public class SendForReviewCommandHandler : IRequestHandler<SendForReviewCommand,
                 {
                     LanguageCode = l.LanguageCode,
                     ReviewerMissing = l.ResolvedReviewerEmail is null,
-                    WorkflowStateIneligible = !l.WorkflowStateEligible
+                    WorkflowStateIneligible = !l.WorkflowStateEligible,
+                    CurrentWorkflowState = l.CurrentWorkflowState
                 })
                 .ToList();
 

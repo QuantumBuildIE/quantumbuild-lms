@@ -1,3 +1,5 @@
+using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
+
 namespace QuantumBuild.Modules.ToolboxTalks.Application.DTOs.SendForReview;
 
 public record SendForReviewResultDto
@@ -19,6 +21,9 @@ public record BlockedLanguageDto
     public string LanguageCode { get; init; } = string.Empty;
     public bool ReviewerMissing { get; init; }
     public bool WorkflowStateIneligible { get; init; }
+
+    /// <summary>The language's current TranslationWorkflowState, for surfacing state-specific guidance when WorkflowStateIneligible.</summary>
+    public TranslationWorkflowState CurrentWorkflowState { get; init; }
 }
 
 public record SendForReviewLanguageResultDto

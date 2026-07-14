@@ -1924,9 +1924,17 @@ public class ToolboxTalksController : ControllerBase
                 id, languageCode, request.ReviewerEmail, request.EditableSectionIndices, ct: ct);
             if (!result.Success)
             {
+                if (result.ErrorCode == FailureCode.WorkflowInvalidState)
+                {
+                    // Fetch the current state for the response body — the Result envelope only
+                    // carries the human-readable message, and the frontend needs a structured
+                    // field to map to state-specific guidance rather than parsing prose.
+                    var currentState = await _workflowService.GetState(id, languageCode, ct: ct);
+                    return Conflict(new { error = result.Errors.FirstOrDefault(), currentState = currentState.State });
+                }
+
                 return result.ErrorCode switch
                 {
-                    FailureCode.WorkflowInvalidState => Conflict(new { error = result.Errors.FirstOrDefault() }),
                     FailureCode.WorkflowInitiationInvalid => BadRequest(new { error = result.Errors.FirstOrDefault() }),
                     _ => BadRequest(new { error = result.Errors.FirstOrDefault() })
                 };

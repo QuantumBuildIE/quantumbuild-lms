@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -13,8 +14,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
+import {
+  getWorkflowStateIneligibilityMessage,
+  isWorkflowStateEligibleForExternalReview,
+} from '../lib/workflowStateMessages';
 import type { ValidationOutcome } from '@/types/content-creation';
+import type { TranslationWorkflowState } from '@/types/workflows';
 
 interface SendExternalReviewDialogSection {
   title: string;
@@ -37,6 +44,14 @@ interface SendExternalReviewDialogProps {
   flaggedWordCount: number;
   languageName: string;
   sections: SendExternalReviewDialogSection[];
+  /** This language's current workflow state. When ineligible, the send form is replaced with a blocked message. */
+  state: TranslationWorkflowState;
+  /**
+   * Set when a send attempt raced the workflow state changing between dialog-open and submit
+   * (409 response). Takes priority over `state` so the blocked view reflects what actually
+   * happened at send time, not just the state as of dialog-open.
+   */
+  raceState?: TranslationWorkflowState | null;
 }
 
 export function SendExternalReviewDialog({
@@ -47,9 +62,13 @@ export function SendExternalReviewDialog({
   flaggedWordCount,
   languageName,
   sections,
+  state,
+  raceState,
 }: SendExternalReviewDialogProps) {
   const [email, setEmail] = useState('');
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
+
+  const ineligibleState = raceState ?? (isWorkflowStateEligibleForExternalReview(state) ? null : state);
 
   useEffect(() => {
     if (open) {
@@ -78,6 +97,33 @@ export function SendExternalReviewDialog({
 
   const selectAll = () => setSelectedIndices(new Set(sections.map((_, index) => index)));
   const deselectAll = () => setSelectedIndices(new Set());
+
+  if (ineligibleState) {
+    const { title, suggestion } = getWorkflowStateIneligibilityMessage(ineligibleState);
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send for External Review</DialogTitle>
+            <DialogDescription>
+              <span className="font-medium text-foreground">{languageName}</span> cannot be sent for
+              external review right now.
+            </DialogDescription>
+          </DialogHeader>
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>{title}</AlertTitle>
+            <AlertDescription>{suggestion}</AlertDescription>
+          </Alert>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

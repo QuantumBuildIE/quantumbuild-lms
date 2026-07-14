@@ -1,3 +1,5 @@
+using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
+
 namespace QuantumBuild.Modules.ToolboxTalks.Application.DTOs.SendForReview;
 
 /// <summary>
@@ -46,6 +48,9 @@ public record PreviewLanguageDto
     /// (Validated, ReviewerAccepted, or ThirdPartyReviewed).
     /// </summary>
     public bool WorkflowStateEligible { get; init; }
+
+    /// <summary>This language's current TranslationWorkflowState, for surfacing state-specific guidance when ineligible.</summary>
+    public TranslationWorkflowState CurrentWorkflowState { get; init; }
 }
 
 /// <summary>A section flagged as Fail, carrying the score that caused the flag so reviewers see why.</summary>

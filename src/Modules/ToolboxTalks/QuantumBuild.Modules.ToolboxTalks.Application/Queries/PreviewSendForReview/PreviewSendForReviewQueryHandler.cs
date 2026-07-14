@@ -87,7 +87,8 @@ public class PreviewSendForReviewQueryHandler : IRequestHandler<PreviewSendForRe
                 ResolvedReviewerEmail = config?.ReviewerEmail,
                 ResolvedReviewerName = config?.ReviewerName,
                 ResolutionSource = source,
-                WorkflowStateEligible = eligible
+                WorkflowStateEligible = eligible,
+                CurrentWorkflowState = state.State
             });
         }
 

@@ -1,3 +1,5 @@
+import type { TranslationWorkflowState } from './workflows';
+
 // ============================================
 // Enums
 // ============================================
@@ -1149,6 +1151,8 @@ export interface PreviewLanguageDto {
   resolutionSource: ReviewerResolutionSource;
   /** True when this language's current workflow state permits InitiateExternalReview. */
   workflowStateEligible: boolean;
+  /** This language's current workflow state, for surfacing state-specific guidance when ineligible. */
+  currentWorkflowState: TranslationWorkflowState;
 }
 
 export interface PreviewSendForReviewDto {
@@ -1162,6 +1166,8 @@ export interface BlockedLanguageDto {
   languageCode: string;
   reviewerMissing: boolean;
   workflowStateIneligible: boolean;
+  /** The language's current workflow state, for surfacing state-specific guidance when workflowStateIneligible. */
+  currentWorkflowState: TranslationWorkflowState;
 }
 
 export interface SendForReviewLanguageResultDto {

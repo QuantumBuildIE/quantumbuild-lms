@@ -390,6 +390,7 @@ public class SendForReviewTests : IntegrationTestBase
         dto!.Blocked.Should().BeTrue();
         var lang = dto.Languages.Single();
         lang.WorkflowStateEligible.Should().BeFalse();
+        lang.CurrentWorkflowState.Should().Be(TranslationWorkflowState.AIGenerated);
         lang.ResolvedReviewerEmail.Should().NotBeNull(); // reviewer resolved fine; state is what blocks
     }
 
@@ -525,7 +526,8 @@ public class SendForReviewTests : IntegrationTestBase
         var second = await admin.PostAsync(SendUrl(talkId), null);
         second.StatusCode.Should().Be(HttpStatusCode.Conflict);
         var secondBody = await ReadJsonAsync<SendForReviewResultDto>(second);
-        secondBody!.BlockedLanguages.Should().ContainSingle(l => l.LanguageCode == "pt" && l.WorkflowStateIneligible);
+        secondBody!.BlockedLanguages.Should().ContainSingle(l =>
+            l.LanguageCode == "pt" && l.WorkflowStateIneligible && l.CurrentWorkflowState == TranslationWorkflowState.AwaitingThirdParty);
 
         var invitations = await GetInvitationsAsync(talkId);
         invitations.Should().HaveCount(1);
