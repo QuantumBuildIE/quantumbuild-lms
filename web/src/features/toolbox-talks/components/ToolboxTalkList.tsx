@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { format } from 'date-fns';
-import { PlusIcon, EyeIcon, PencilIcon, TrashIcon, CalendarClockIcon, SearchIcon, SendIcon } from 'lucide-react';
+import { PlusIcon, EyeIcon, PencilIcon, TrashIcon, CalendarClockIcon, SearchIcon, SendIcon, PowerIcon, PowerOffIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -23,7 +23,8 @@ import {
 import { DataTable, type Column } from '@/components/shared/data-table';
 import { DeleteConfirmationDialog } from '@/components/shared/delete-confirmation-dialog';
 import { SendForReviewDialog } from '@/features/toolbox-talks/components/SendForReviewDialog';
-import { useToolboxTalks, useDeleteToolboxTalk } from '@/lib/api/toolbox-talks';
+import { DeactivateToolboxTalkDialog } from '@/features/toolbox-talks/components/DeactivateToolboxTalkDialog';
+import { useToolboxTalks, useDeleteToolboxTalk, useToggleToolboxTalkActive } from '@/lib/api/toolbox-talks';
 import { usePermission } from '@/lib/auth/use-auth';
 import type {
   ToolboxTalkListItem,
@@ -71,6 +72,8 @@ export function ToolboxTalkList({ onSchedule, basePath = '/admin/toolbox-talks' 
   const [talkToDelete, setTalkToDelete] = useState<ToolboxTalkListItem | null>(null);
   const [sendForReviewDialogOpen, setSendForReviewDialogOpen] = useState(false);
   const [talkToSendForReview, setTalkToSendForReview] = useState<ToolboxTalkListItem | null>(null);
+  const [deactivateDialogOpen, setDeactivateDialogOpen] = useState(false);
+  const [talkToDeactivate, setTalkToDeactivate] = useState<ToolboxTalkListItem | null>(null);
 
   // Parse active filter
   const isActiveFilter = activeFilter === 'true' ? true : activeFilter === 'false' ? false : undefined;
@@ -85,6 +88,7 @@ export function ToolboxTalkList({ onSchedule, basePath = '/admin/toolbox-talks' 
   });
 
   const deleteMutation = useDeleteToolboxTalk();
+  const toggleActiveMutation = useToggleToolboxTalkActive();
 
   // Update URL params
   const updateParams = useCallback(
@@ -127,6 +131,25 @@ export function ToolboxTalkList({ onSchedule, basePath = '/admin/toolbox-talks' 
       setTalkToDelete(null);
     } catch (error: unknown) {
       let message = 'Failed to delete learning';
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as { response?: { data?: { message?: string } } };
+        if (axiosError.response?.data?.message) {
+          message = axiosError.response.data.message;
+        }
+      } else if (error instanceof Error) {
+        message = error.message;
+      }
+      toast.error('Error', { description: message });
+    }
+  };
+
+  // Handle activate — direct action, no confirmation (deactivate has its own dialog)
+  const handleActivate = async (item: ToolboxTalkListItem) => {
+    try {
+      await toggleActiveMutation.mutateAsync({ id: item.id, active: true });
+      toast.success('Learning activated');
+    } catch (error: unknown) {
+      let message = 'Failed to activate learning';
       if (error && typeof error === 'object' && 'response' in error) {
         const axiosError = error as { response?: { data?: { message?: string } } };
         if (axiosError.response?.data?.message) {
@@ -295,6 +318,30 @@ export function ToolboxTalkList({ onSchedule, basePath = '/admin/toolbox-talks' 
                 )}
               </DropdownMenuItem>
             )}
+            {canManage && (
+              <DropdownMenuItem
+                onClick={() => {
+                  if (item.isActive) {
+                    setTalkToDeactivate(item);
+                    setDeactivateDialogOpen(true);
+                  } else {
+                    handleActivate(item);
+                  }
+                }}
+              >
+                {item.isActive ? (
+                  <>
+                    <PowerOffIcon className="mr-2 h-4 w-4" />
+                    Deactivate
+                  </>
+                ) : (
+                  <>
+                    <PowerIcon className="mr-2 h-4 w-4" />
+                    Activate
+                  </>
+                )}
+              </DropdownMenuItem>
+            )}
             {canManage && item.validationFailStats?.hasValidationRuns && item.validationFailStats.sectionFailCount > 0 && (
               <DropdownMenuItem
                 onClick={() => {
@@ -436,6 +483,16 @@ export function ToolboxTalkList({ onSchedule, basePath = '/admin/toolbox-talks' 
           talkTitle={talkToSendForReview.title}
           isOpen={sendForReviewDialogOpen}
           onOpenChange={setSendForReviewDialogOpen}
+        />
+      )}
+
+      {/* Deactivate confirmation dialog */}
+      {talkToDeactivate && (
+        <DeactivateToolboxTalkDialog
+          talkId={talkToDeactivate.id}
+          talkTitle={talkToDeactivate.title}
+          isOpen={deactivateDialogOpen}
+          onOpenChange={setDeactivateDialogOpen}
         />
       )}
     </div>

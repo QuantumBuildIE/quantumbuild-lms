@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using QuantumBuild.Core.Infrastructure.Data;
+using QuantumBuild.Core.Infrastructure.Identity;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 using System.Net;
@@ -109,6 +110,34 @@ public class InitialiseToolboxTalkCommandHandlerTests : IntegrationTestBase
         var db = await GetTalkFromDbAsync(result.Id);
         db.Should().NotBeNull();
         db!.Sections.Should().BeNullOrEmpty();
+    }
+
+    // 1a — No ToolboxTalkSettings row for the tenant → IsActive still defaults true
+    // (InitialiseToolboxTalkCommandHandler's tenantSettings?.DefaultIsActive fallback is
+    // now ?? true, matching the legacy wizard and the entity/DB defaults).
+    // Tenant B is never seeded a ToolboxTalkSettings row (only the primary test tenant is —
+    // see TestTenantSeeder.SeedToolboxTalkSettingsAsync), so it's a genuine "no settings row"
+    // tenant without needing to mutate the shared seeded row (which ApplicationDbContext's
+    // soft-delete interceptor would turn into a soft-delete, not a real removal, breaking
+    // Respawner-based reset for every subsequent test in the run).
+    [Fact]
+    public async Task NoToolboxTalkSettingsRow_DefaultsIsActiveTrue()
+    {
+        var tenantBClient = Factory.CreateAuthenticatedClient(
+            TestTenantConstants.TenantB.Users.Admin.Id,
+            TestTenantConstants.TenantB.Users.Admin.Email,
+            TestTenantConstants.TenantB.TenantId,
+            new[] { "Admin" },
+            Permissions.GetAll());
+
+        var response = await tenantBClient.PostAsJsonAsync(
+            "/api/toolbox-talks/initialise", MinimalRequest(UniqueTitle("No Settings Row Talk")));
+        response.EnsureSuccessStatusCode();
+
+        var result = await response.Content.ReadFromJsonAsync<InitialisedTalkDto>()
+            ?? throw new InvalidOperationException("Initialise returned null");
+
+        result.IsActive.Should().BeTrue();
     }
 
     // 2 — Happy path (Pdf mode) → 201, SourceFileUrl persisted

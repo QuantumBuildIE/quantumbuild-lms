@@ -119,7 +119,7 @@ public class InitialiseToolboxTalkCommandHandler : IRequestHandler<InitialiseToo
 
             // Wizard shell defaults — sourced from tenant ToolboxTalkSettings
             Status = ToolboxTalkStatus.Draft,
-            IsActive = tenantSettings?.DefaultIsActive ?? false,
+            IsActive = tenantSettings?.DefaultIsActive ?? true,
             GenerateCertificate = tenantSettings?.DefaultGenerateCertificate ?? true,
             MinimumVideoWatchPercent = tenantSettings?.DefaultMinimumVideoWatchPercent ?? 90,
             AutoAssignDueDays = tenantSettings?.DefaultAutoAssignDueDays ?? 14,

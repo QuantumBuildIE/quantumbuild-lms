@@ -18,6 +18,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Commands.StartTalkTranslatio
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.AddTargetLanguage;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.SmartGenerateContent;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateLastEditedStep;
+using QuantumBuild.Modules.ToolboxTalks.Application.Commands.ToggleToolboxTalkActive;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalk;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.GenerateToolboxTalkQuiz;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalkQuestions;
@@ -809,6 +810,37 @@ public class ToolboxTalksController : ControllerBase
         {
             _logger.LogError(ex, "Error updating step for toolbox talk {ToolboxTalkId}", id);
             return StatusCode(500, new { message = "Error updating step" });
+        }
+    }
+
+    /// <summary>
+    /// Activate or deactivate a toolbox talk. Narrow single-field update — does not touch
+    /// sections, questions, or trigger translation-stalening side effects.
+    /// </summary>
+    [HttpPatch("{id:guid}/active")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(typeof(ToggleToolboxTalkActiveResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ToggleActive(Guid id, [FromBody] ToggleToolboxTalkActiveRequest request)
+    {
+        try
+        {
+            var active = await _mediator.Send(new ToggleToolboxTalkActiveCommand
+            {
+                TenantId = _currentUserService.TenantId,
+                TalkId = id,
+                Active = request.Active
+            });
+            return Ok(new ToggleToolboxTalkActiveResponse { Active = active });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error toggling active state for toolbox talk {ToolboxTalkId}", id);
+            return StatusCode(500, new { message = "Error updating active state" });
         }
     }
 
@@ -2944,6 +2976,16 @@ public record StartTalkTranslationRequest
 public record UpdateLastEditedStepRequest
 {
     public int Step { get; init; }
+}
+
+public record ToggleToolboxTalkActiveRequest
+{
+    public bool Active { get; init; }
+}
+
+public record ToggleToolboxTalkActiveResponse
+{
+    public bool Active { get; init; }
 }
 
 /// <summary>Request DTO for obtaining a presigned R2 upload URL for a wizard source file.</summary>

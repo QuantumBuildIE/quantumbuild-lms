@@ -661,6 +661,14 @@ export interface UpdateToolboxTalkRequest extends CreateToolboxTalkRequest {
   id: string;
 }
 
+export interface ToggleToolboxTalkActiveRequest {
+  active: boolean;
+}
+
+export interface ToggleToolboxTalkActiveResponse {
+  active: boolean;
+}
+
 export interface CreateToolboxTalkScheduleRequest {
   toolboxTalkId: string;
   scheduledDate: string;

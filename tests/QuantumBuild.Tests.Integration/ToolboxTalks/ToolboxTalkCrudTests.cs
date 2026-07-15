@@ -1,3 +1,4 @@
+using QuantumBuild.Core.Infrastructure.Identity;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 using System.Text.Json.Serialization;
 
@@ -419,6 +420,122 @@ public class ToolboxTalkCrudTests : IntegrationTestBase
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
+
+    #endregion
+
+    #region Toggle Active Tests
+
+    [Fact]
+    public async Task ToggleActive_TargetTrue_SetsIsActiveTrue()
+    {
+        // Arrange - Create an inactive talk
+        var createCommand = new
+        {
+            Title = $"Toggle Active True Test {Guid.NewGuid()}",
+            Frequency = ToolboxTalkFrequency.Once,
+            RequiresQuiz = false,
+            IsActive = false,
+            Sections = new[]
+            {
+                new { SectionNumber = 1, Title = "Section", Content = "<p>Content</p>", RequiresAcknowledgment = true }
+            }
+        };
+        var createResponse = await AdminClient.PostAsJsonAsync("/api/toolbox-talks", createCommand);
+        var createdTalk = await createResponse.Content.ReadFromJsonAsync<ToolboxTalkDto>();
+        var talkId = createdTalk!.Id;
+
+        // Act
+        var response = await AdminClient.PatchAsJsonAsync($"/api/toolbox-talks/{talkId}/active", new { active = true });
+        var result = await response.Content.ReadFromJsonAsync<ToggleActiveResponseDto>();
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        result!.Active.Should().BeTrue();
+
+        var getResponse = await AdminClient.GetAsync($"/api/toolbox-talks/{talkId}");
+        var talk = await getResponse.Content.ReadFromJsonAsync<ToolboxTalkDto>();
+        talk!.IsActive.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ToggleActive_TargetFalse_SetsIsActiveFalse()
+    {
+        // Arrange - Create an active talk
+        var createCommand = new
+        {
+            Title = $"Toggle Active False Test {Guid.NewGuid()}",
+            Frequency = ToolboxTalkFrequency.Once,
+            RequiresQuiz = false,
+            IsActive = true,
+            Sections = new[]
+            {
+                new { SectionNumber = 1, Title = "Section", Content = "<p>Content</p>", RequiresAcknowledgment = true }
+            }
+        };
+        var createResponse = await AdminClient.PostAsJsonAsync("/api/toolbox-talks", createCommand);
+        var createdTalk = await createResponse.Content.ReadFromJsonAsync<ToolboxTalkDto>();
+        var talkId = createdTalk!.Id;
+
+        // Act
+        var response = await AdminClient.PatchAsJsonAsync($"/api/toolbox-talks/{talkId}/active", new { active = false });
+        var result = await response.Content.ReadFromJsonAsync<ToggleActiveResponseDto>();
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        result!.Active.Should().BeFalse();
+
+        var getResponse = await AdminClient.GetAsync($"/api/toolbox-talks/{talkId}");
+        var talk = await getResponse.Content.ReadFromJsonAsync<ToolboxTalkDto>();
+        talk!.IsActive.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ToggleActive_NonExistingTalk_ReturnsNotFound()
+    {
+        // Arrange
+        var nonExistentId = Guid.NewGuid();
+
+        // Act
+        var response = await AdminClient.PatchAsJsonAsync($"/api/toolbox-talks/{nonExistentId}/active", new { active = true });
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task ToggleActive_TalkBelongsToDifferentTenant_ReturnsNotFound()
+    {
+        // Arrange - create talk under Tenant A (AdminClient)
+        var createCommand = new
+        {
+            Title = $"Toggle Active Cross-Tenant Test {Guid.NewGuid()}",
+            Frequency = ToolboxTalkFrequency.Once,
+            RequiresQuiz = false,
+            IsActive = true,
+            Sections = new[]
+            {
+                new { SectionNumber = 1, Title = "Section", Content = "<p>Content</p>", RequiresAcknowledgment = true }
+            }
+        };
+        var createResponse = await AdminClient.PostAsJsonAsync("/api/toolbox-talks", createCommand);
+        var createdTalk = await createResponse.Content.ReadFromJsonAsync<ToolboxTalkDto>();
+        var talkId = createdTalk!.Id;
+
+        var tenantBClient = Factory.CreateAuthenticatedClient(
+            TestTenantConstants.TenantB.Users.Admin.Id,
+            TestTenantConstants.TenantB.Users.Admin.Email,
+            TestTenantConstants.TenantB.TenantId,
+            new[] { "Admin" },
+            Permissions.GetAll());
+
+        // Act - Tenant B tries to toggle Tenant A's talk
+        var response = await tenantBClient.PatchAsJsonAsync($"/api/toolbox-talks/{talkId}/active", new { active = false });
+
+        // Assert - tenant query filter hides the talk → 404
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    private record ToggleActiveResponseDto(bool Active);
 
     #endregion
 

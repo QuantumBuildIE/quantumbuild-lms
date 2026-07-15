@@ -10,6 +10,7 @@ import type {
   SlideDto,
   CreateToolboxTalkRequest,
   UpdateToolboxTalkRequest,
+  ToggleToolboxTalkActiveResponse,
   UpdateToolboxTalkSettingsRequest,
   UpdateToolboxTalkNotificationSettingsRequest,
   GetToolboxTalksParams,
@@ -109,6 +110,17 @@ export async function updateToolboxTalk(
 
 export async function deleteToolboxTalk(id: string): Promise<void> {
   await apiClient.delete(`/toolbox-talks/${id}`);
+}
+
+export async function toggleToolboxTalkActive(
+  id: string,
+  active: boolean
+): Promise<ToggleToolboxTalkActiveResponse> {
+  const response = await apiClient.patch<ToggleToolboxTalkActiveResponse>(
+    `/toolbox-talks/${id}/active`,
+    { active }
+  );
+  return response.data;
 }
 
 export interface PublishTalkResult {

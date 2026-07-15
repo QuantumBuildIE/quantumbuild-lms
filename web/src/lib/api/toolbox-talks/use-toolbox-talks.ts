@@ -5,6 +5,7 @@ import {
   createToolboxTalk,
   updateToolboxTalk,
   deleteToolboxTalk,
+  toggleToolboxTalkActive,
   getToolboxTalkDashboard,
   getToolboxTalkSettings,
   updateToolboxTalkSettings,
@@ -114,6 +115,19 @@ export function useDeleteToolboxTalk() {
     mutationFn: (id: string) => deleteToolboxTalk(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: TOOLBOX_TALKS_KEY });
+    },
+  });
+}
+
+export function useToggleToolboxTalkActive() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, active }: { id: string; active: boolean }) =>
+      toggleToolboxTalkActive(id, active),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: TOOLBOX_TALKS_KEY });
+      queryClient.invalidateQueries({ queryKey: [...TOOLBOX_TALKS_KEY, id] });
     },
   });
 }
