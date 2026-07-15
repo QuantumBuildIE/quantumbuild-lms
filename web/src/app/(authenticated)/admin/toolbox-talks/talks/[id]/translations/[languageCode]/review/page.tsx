@@ -2,16 +2,16 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChevronLeft } from 'lucide-react';
 import { WorkflowStateBadge } from '@/features/toolbox-talks/components/WorkflowStateBadge';
 import { ReviewScreen } from '@/features/toolbox-talks/components/ReviewScreen';
+import { useWorkflowSubscription } from '@/features/toolbox-talks/components/learning-wizard/hooks/useWorkflowSubscription';
 import {
   useToolboxTalk,
-  useWorkflowStates,
   useValidationRun,
   contentCreationKeys,
 } from '@/lib/api/toolbox-talks';
@@ -24,7 +24,10 @@ export default function TranslationReviewPage() {
   const languageCode = params.languageCode as string;
 
   const { data: talk, isLoading: talkLoading } = useToolboxTalk(talkId);
-  const { data: workflowStates, isLoading: statesLoading } = useWorkflowStates(talkId);
+  // Polls at a 5s cadence while any language is Translating/Validating — same mechanism
+  // as TranslationWorkflowPanel's fix, since the header badge here shows the same
+  // language-level workflow state.
+  const { data: workflowStates, isLoading: statesLoading } = useWorkflowSubscription(talkId);
 
   const matchedState = useMemo(
     () => workflowStates?.find((s) => s.languageCode === languageCode) ?? null,
@@ -33,10 +36,41 @@ export default function TranslationReviewPage() {
 
   const runId = matchedState?.lastValidationRunId ?? null;
 
+  // Edit/Retry enqueue a background re-validation job for a single section, which does
+  // not flip the language's overall workflow state — mirrors the `revalidating` /
+  // `hasSeenRunning` pattern in learning-wizard/steps/ValidateStep.tsx.
+  const [revalidating, setRevalidating] = useState<{
+    sectionIndex: number;
+    hasSeenRunning: boolean;
+  } | null>(null);
+
   const { data: runDetail, isLoading: runLoading } = useValidationRun(
     runId ? talkId : null,
-    runId
+    runId,
+    { refetchInterval: revalidating ? 2000 : false }
   );
+
+  useEffect(() => {
+    setRevalidating(null);
+  }, [runId]);
+
+  useEffect(() => {
+    if (!revalidating) return;
+    if (runDetail?.status === 'Running') {
+      if (!revalidating.hasSeenRunning) {
+        setRevalidating((prev) => (prev ? { ...prev, hasSeenRunning: true } : prev));
+      }
+      return;
+    }
+    if (
+      revalidating.hasSeenRunning &&
+      (runDetail?.status === 'Completed' ||
+        runDetail?.status === 'Failed' ||
+        runDetail?.status === 'Cancelled')
+    ) {
+      setRevalidating(null);
+    }
+  }, [revalidating, runDetail?.status]);
 
   const canAccept = useMemo(
     () =>
@@ -46,13 +80,19 @@ export default function TranslationReviewPage() {
     [runDetail]
   );
 
-  const onSectionsChanged = useCallback(() => {
-    if (runId) {
-      queryClient.invalidateQueries({
-        queryKey: contentCreationKeys.validationRun(talkId, runId),
-      });
-    }
-  }, [queryClient, talkId, runId]);
+  const onSectionsChanged = useCallback(
+    (info?: { sectionIndex: number; action: 'accept' | 'edit' | 'retry' }) => {
+      if (runId) {
+        queryClient.invalidateQueries({
+          queryKey: contentCreationKeys.validationRun(talkId, runId),
+        });
+      }
+      if (info && (info.action === 'edit' || info.action === 'retry')) {
+        setRevalidating({ sectionIndex: info.sectionIndex, hasSeenRunning: false });
+      }
+    },
+    [queryClient, talkId, runId]
+  );
 
   const isLoading = talkLoading || statesLoading;
 
@@ -174,6 +214,7 @@ export default function TranslationReviewPage() {
         runDetail={runDetail}
         canAccept={canAccept}
         onSectionsChanged={onSectionsChanged}
+        revalidatingSectionIndex={revalidating?.sectionIndex ?? null}
       />
     </div>
   );

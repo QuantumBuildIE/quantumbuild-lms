@@ -34,13 +34,13 @@ import { WorkflowHistoryModal } from './WorkflowHistoryModal';
 import {
   useAvailableLanguages,
   useGenerateContentTranslations,
-  useWorkflowStates,
   useValidateTranslation,
   useInitiateExternalReview,
   useCancelExternalReview,
   useAcceptTranslation,
   useValidationRun,
 } from '@/lib/api/toolbox-talks';
+import { useWorkflowSubscription } from './learning-wizard/hooks/useWorkflowSubscription';
 import { SendExternalReviewDialog } from './SendExternalReviewDialog';
 import { CancelExternalReviewDialog } from './CancelExternalReviewDialog';
 import { computeReviewCoverage } from '../lib/reviewCoverage';
@@ -91,7 +91,10 @@ export function TranslationWorkflowPanel({
 }: TranslationWorkflowPanelProps) {
   const router = useRouter();
   const { data: languagesData } = useAvailableLanguages();
-  const { data: workflowStates } = useWorkflowStates(toolboxTalkId);
+  // Polls at a 5s cadence while any language is Translating/Validating (same fallback
+  // ToolboxTalkDetail.tsx relies on for hasStaleTranslation) — this panel had no live-update
+  // mechanism at all beforehand, so background job completions only appeared on manual refresh.
+  const { data: workflowStates } = useWorkflowSubscription(toolboxTalkId);
   const generateMutation = useGenerateContentTranslations();
   const validateMutation = useValidateTranslation();
   const initiateExternalReviewMutation = useInitiateExternalReview();

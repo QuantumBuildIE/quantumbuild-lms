@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import { DownloadIcon, Loader2, ChevronLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -38,10 +38,27 @@ export function ValidationRunDetailView({
   onBack,
 }: ValidationRunDetailViewProps) {
   const router = useRouter();
-  const talkRunQuery = useValidationRun(talkId ?? null, talkId ? runId : null);
-  const courseRunQuery = useCourseValidationRun(courseId ?? null, courseId ? runId : null);
+
+  // Polls at the same 2s cadence as the sibling ValidateStep's revalidation tracking
+  // while the run is still in progress. Unlike that sibling, this is an audit viewer
+  // reached via a fixed runId (the eye icon works for Running runs too) with no user
+  // action of its own to gate on, so the trigger is the run's own status rather than
+  // an edit/retry click — no `hasSeenRunning` guard is needed since a runId only ever
+  // moves forward (Pending -> Running -> terminal), never back to a "previous job".
+  const [isActive, setIsActive] = useState(false);
+
+  const talkRunQuery = useValidationRun(talkId ?? null, talkId ? runId : null, {
+    refetchInterval: isActive ? 2000 : false,
+  });
+  const courseRunQuery = useCourseValidationRun(courseId ?? null, courseId ? runId : null, {
+    refetchInterval: isActive ? 2000 : false,
+  });
   const { data: run, isLoading, error } = courseId ? courseRunQuery : talkRunQuery;
   const downloadMutation = useDownloadValidationReport();
+
+  useEffect(() => {
+    setIsActive(run?.status === 'Running' || run?.status === 'Pending');
+  }, [run?.status]);
 
   const handleFlagDeviation = useCallback(
     (prefill: DeviationPrefill) => {
@@ -67,9 +84,16 @@ export function ValidationRunDetailView({
       review: run.reviewSections,
       fail: run.failedSections,
       running: 0,
-      pending: 0,
+      pending: isActive ? Math.max(0, run.totalSections - run.results.length) : 0,
     };
-  }, [run]);
+  }, [run, isActive]);
+
+  // Sections-complete/percent reflect the live results array while the run is still
+  // in progress; once terminal, the run is complete by definition regardless of any
+  // individual section's score.
+  const sectionsComplete = run && isActive ? run.results.length : (run?.totalSections ?? 0);
+  const percentComplete =
+    run && run.totalSections > 0 ? (sectionsComplete / run.totalSections) * 100 : isActive ? 0 : 100;
 
   const completedSectionCount = useMemo(() => {
     if (!run) return 0;
@@ -238,13 +262,13 @@ export function ValidationRunDetailView({
       {/* Progress panel (read-only) */}
       <ValidationProgressPanel
         overallScore={Math.round(run.overallScore)}
-        percentComplete={100}
-        sectionsComplete={run.totalSections}
+        percentComplete={percentComplete}
+        sectionsComplete={sectionsComplete}
         totalSections={run.totalSections}
         statusCounts={statusCounts}
         safetyVerdict={run.safetyVerdict}
         sourceDialect={run.sourceDialect}
-        progressMessage={`${run.totalSections} / ${run.totalSections} sections`}
+        progressMessage={`${sectionsComplete} / ${run.totalSections} sections`}
         passThreshold={run.passThreshold}
         isConnected={false}
       />
@@ -265,7 +289,7 @@ export function ValidationRunDetailView({
             sectionIndex={result.sectionIndex}
             sectionTitle={result.sectionTitle}
             result={result}
-            isRunning={false}
+            isRunning={isActive}
             languageCode={run.languageCode}
             passThreshold={run.passThreshold}
             onAccept={() => {}}

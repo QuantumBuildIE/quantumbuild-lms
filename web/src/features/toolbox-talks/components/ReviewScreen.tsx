@@ -23,7 +23,9 @@ interface ReviewScreenProps {
   runId: string;
   runDetail: ValidationRunDetail;
   canAccept: boolean;
-  onSectionsChanged: () => void;
+  onSectionsChanged: (info?: { sectionIndex: number; action: 'accept' | 'edit' | 'retry' }) => void;
+  /** Section index currently tracked by the parent's post-edit/retry poll, if any. */
+  revalidatingSectionIndex?: number | null;
 }
 
 export function ReviewScreen({
@@ -33,6 +35,7 @@ export function ReviewScreen({
   runDetail,
   canAccept,
   onSectionsChanged,
+  revalidatingSectionIndex = null,
 }: ReviewScreenProps) {
   const router = useRouter();
   const acceptTranslation = useAcceptTranslation();
@@ -57,7 +60,9 @@ export function ReviewScreen({
               ? 'edited & re-validating'
               : 'retrying';
         toast.success(`Section ${sectionIndex + 1} ${label}`);
-        onSectionsChanged();
+        const action =
+          pendingLabel === 'accepting' ? 'accept' : pendingLabel === 'editing' ? 'edit' : 'retry';
+        onSectionsChanged({ sectionIndex, action });
       } catch (e) {
         const isConflict = e instanceof Error && e.message.includes('409');
         toast.error(isConflict ? 'Revalidation already in progress' : 'Action failed', {
@@ -187,7 +192,8 @@ export function ReviewScreen({
             sectionIndex={result.sectionIndex}
             sectionTitle={result.sectionTitle}
             result={result}
-            isRunning={false}
+            isRunning={runDetail.status === 'Running' || runDetail.status === 'Pending'}
+            isRevalidating={revalidatingSectionIndex === result.sectionIndex}
             languageCode={runDetail.languageCode}
             passThreshold={runDetail.passThreshold}
             onAccept={() =>
