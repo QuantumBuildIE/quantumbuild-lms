@@ -1450,6 +1450,7 @@ public class ContentCreationSessionService : IContentCreationSessionService
                 draftTalk.MinimumVideoWatchPercent = courseSessionSettings?.MinimumWatchPercent ?? 90;
                 draftTalk.AutoAssignToNewEmployees = courseSessionSettings?.AutoAssign ?? false;
                 draftTalk.AutoAssignDueDays = courseSessionSettings?.AutoAssignDueDays ?? 14;
+                draftTalk.CoverImageUrl = courseSessionSettings?.CoverImageUrl;
 
                 (draftTalk.RequiresRefresher, draftTalk.RefresherIntervalMonths) =
                     RefresherFrequencyMapper.FromWizardFrequencyString(
@@ -1725,7 +1726,8 @@ public class ContentCreationSessionService : IContentCreationSessionService
             GenerateCertificate = sessionSettings?.GenerateCertificate ?? false,
             MinimumVideoWatchPercent = sessionSettings?.MinimumWatchPercent ?? 90,
             AutoAssignToNewEmployees = sessionSettings?.AutoAssign ?? false,
-            AutoAssignDueDays = sessionSettings?.AutoAssignDueDays ?? 14
+            AutoAssignDueDays = sessionSettings?.AutoAssignDueDays ?? 14,
+            CoverImageUrl = sessionSettings?.CoverImageUrl
         };
 
         (talk.RequiresRefresher, talk.RefresherIntervalMonths) =
@@ -1849,7 +1851,10 @@ public class ContentCreationSessionService : IContentCreationSessionService
             TenantId = tenantId,
             Title = request.Title,
             Description = request.Description,
-            IsActive = true,
+            IsActive = sessionSettings?.IsActiveOnPublish ?? true,
+            GenerateCertificate = sessionSettings?.GenerateCertificate ?? false,
+            AutoAssignToNewEmployees = sessionSettings?.AutoAssign ?? false,
+            AutoAssignDueDays = sessionSettings?.AutoAssignDueDays ?? 14,
             RequireSequentialCompletion = true
         };
 

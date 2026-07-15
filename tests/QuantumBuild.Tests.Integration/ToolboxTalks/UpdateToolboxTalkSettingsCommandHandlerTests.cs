@@ -469,6 +469,83 @@ public class UpdateToolboxTalkSettingsCommandHandlerTests : IntegrationTestBase
         body!.CoverImageUrl.Should().BeNull();
     }
 
+    // 19 — Settings update after a cover image is set does not clear CoverImageUrl.
+    // Regression guard for the recon's "Finding 2": UpdateToolboxTalkSettingsCommandHandler
+    // must never touch CoverImageUrl — it's owned exclusively by the cover-image endpoints.
+    [Fact]
+    public async Task SettingsUpdate_AfterCoverImageSet_DoesNotClearCoverImage()
+    {
+        var talk = await InitialiseAsync();
+
+        using (var content = new MultipartFormDataContent())
+        {
+            var imageBytes = CreateMinimalPngBytes();
+            using var imageContent = new ByteArrayContent(imageBytes);
+            imageContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
+            content.Add(imageContent, "file", "cover.png");
+
+            var uploadResponse = await AdminClient.PostAsync(
+                $"/api/toolbox-talks/{talk.Id}/cover-image", content);
+            uploadResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        }
+
+        var dbTalkAfterUpload = await GetTalkAsync(talk.Id);
+        dbTalkAfterUpload!.CoverImageUrl.Should().NotBeNullOrEmpty("upload must have set the cover image");
+
+        var response = await PutSettingsAsync(talk.Id, new
+        {
+            Title = UniqueTitle("CoverImagePreserved"),
+            RefresherFrequency = "Once",
+            IsActive = true,
+            GenerateCertificate = false,
+            MinimumVideoWatchPercent = 50,
+            AutoAssignToNewEmployees = false,
+            AutoAssignDueDays = 30,
+            GenerateSlidesFromPdf = false,
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var result = await response.Content.ReadFromJsonAsync<SettingsTalkDto>();
+        result!.CoverImageUrl.Should().Be(dbTalkAfterUpload.CoverImageUrl,
+            "the settings endpoint's response must reflect the already-uploaded cover image, not clear it");
+
+        var dbTalkAfterSettings = await GetTalkAsync(talk.Id);
+        dbTalkAfterSettings!.CoverImageUrl.Should().Be(dbTalkAfterUpload.CoverImageUrl,
+            "updating unrelated settings fields must not clear a previously-uploaded cover image");
+    }
+
+    // 20 — Explicit remove, when an image is set, clears CoverImageUrl
+    [Fact]
+    public async Task CoverImage_DeleteWhenSet_ClearsCoverImage()
+    {
+        var talk = await InitialiseAsync();
+
+        using (var content = new MultipartFormDataContent())
+        {
+            var imageBytes = CreateMinimalPngBytes();
+            using var imageContent = new ByteArrayContent(imageBytes);
+            imageContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
+            content.Add(imageContent, "file", "cover.png");
+
+            var uploadResponse = await AdminClient.PostAsync(
+                $"/api/toolbox-talks/{talk.Id}/cover-image", content);
+            uploadResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        }
+
+        var dbTalkAfterUpload = await GetTalkAsync(talk.Id);
+        dbTalkAfterUpload!.CoverImageUrl.Should().NotBeNullOrEmpty("upload must have set the cover image");
+
+        var response = await AdminClient.DeleteAsync(
+            $"/api/toolbox-talks/{talk.Id}/cover-image");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<CoverImageResponseDto>();
+        body!.CoverImageUrl.Should().BeNull();
+
+        var dbTalkAfterDelete = await GetTalkAsync(talk.Id);
+        dbTalkAfterDelete!.CoverImageUrl.Should().BeNull("the explicit remove flow must still clear a previously-set image");
+    }
+
     // ── helpers for cover image tests ─────────────────────────────────────────
 
     private static byte[] CreateMinimalPngBytes()
