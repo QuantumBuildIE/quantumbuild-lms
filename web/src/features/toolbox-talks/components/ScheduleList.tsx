@@ -243,7 +243,7 @@ export function ScheduleList({ toolboxTalkId, onEdit, basePath = '/admin/toolbox
               <EyeIcon className="mr-2 h-4 w-4" />
               View
             </DropdownMenuItem>
-            {canSchedule && item.status === 'Draft' && (
+            {canSchedule && (item.status === 'Draft' || item.status === 'Active') && (
               <DropdownMenuItem onClick={() => onEdit?.(item)}>
                 <PencilIcon className="mr-2 h-4 w-4" />
                 Edit

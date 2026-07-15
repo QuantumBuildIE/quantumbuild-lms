@@ -132,6 +132,63 @@ public class SchedulingTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task CreateSchedule_OnceFrequency_CreatesWithActiveStatus()
+    {
+        // Arrange
+        var talk = await CreateTestTalkAsync();
+
+        // Use UTC DateTime for PostgreSQL timestamptz compatibility
+        var command = new
+        {
+            ToolboxTalkId = talk.Id,
+            ScheduledDate = DateTime.UtcNow.Date.AddDays(1),
+            Frequency = ToolboxTalkFrequency.Once,
+            AssignToAllEmployees = false,
+            EmployeeIds = new[] { TestTenantConstants.Employees.Employee1 },
+            Notes = "Once-off schedule should be immediately processable"
+        };
+
+        // Act
+        var response = await AdminClient.PostAsJsonAsync("/api/toolbox-talks/schedules", command);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var schedule = await response.Content.ReadFromJsonAsync<ToolboxTalkScheduleDto>();
+        schedule.Should().NotBeNull();
+        schedule!.Status.Should().Be(ToolboxTalkScheduleStatus.Active);
+    }
+
+    [Fact]
+    public async Task CreateSchedule_RecurringFrequency_CreatesWithActiveStatus()
+    {
+        // Arrange
+        var talk = await CreateTestTalkAsync();
+
+        // Use UTC DateTime for PostgreSQL timestamptz compatibility
+        var command = new
+        {
+            ToolboxTalkId = talk.Id,
+            ScheduledDate = DateTime.UtcNow.Date,
+            EndDate = DateTime.UtcNow.Date.AddMonths(3),
+            Frequency = ToolboxTalkFrequency.Weekly,
+            AssignToAllEmployees = false,
+            EmployeeIds = new[] { TestTenantConstants.Employees.Employee1 },
+            Notes = "Recurring schedule should be immediately processable"
+        };
+
+        // Act
+        var response = await AdminClient.PostAsJsonAsync("/api/toolbox-talks/schedules", command);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var schedule = await response.Content.ReadFromJsonAsync<ToolboxTalkScheduleDto>();
+        schedule.Should().NotBeNull();
+        schedule!.Status.Should().Be(ToolboxTalkScheduleStatus.Active);
+    }
+
+    [Fact]
     public async Task CreateSchedule_InvalidTalkId_ReturnsBadRequest()
     {
         // Arrange
@@ -441,6 +498,44 @@ public class SchedulingTests : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var updated = await response.Content.ReadFromJsonAsync<ToolboxTalkScheduleDto>();
         updated!.Notes.Should().Be("Updated notes");
+    }
+
+    [Fact]
+    public async Task UpdateSchedule_ActiveStatus_ReturnsOk()
+    {
+        // Arrange - Newly created schedules are now Active by default (see CreateSchedule_OnceFrequency_CreatesWithActiveStatus)
+        var talk = await CreateTestTalkAsync();
+        var createCommand = new
+        {
+            ToolboxTalkId = talk.Id,
+            ScheduledDate = DateTime.UtcNow.Date.AddDays(7),
+            Frequency = ToolboxTalkFrequency.Once,
+            AssignToAllEmployees = false,
+            EmployeeIds = new[] { TestTenantConstants.Employees.Employee1 },
+            Notes = "Original notes"
+        };
+        var createResponse = await AdminClient.PostAsJsonAsync("/api/toolbox-talks/schedules", createCommand);
+        var schedule = await createResponse.Content.ReadFromJsonAsync<ToolboxTalkScheduleDto>();
+        schedule!.Status.Should().Be(ToolboxTalkScheduleStatus.Active);
+
+        var updateCommand = new
+        {
+            Id = schedule.Id,
+            ToolboxTalkId = talk.Id,
+            ScheduledDate = schedule.ScheduledDate,
+            Frequency = schedule.Frequency,
+            AssignToAllEmployees = schedule.AssignToAllEmployees,
+            EmployeeIds = new[] { TestTenantConstants.Employees.Employee1 },
+            Notes = "Updated notes on active schedule"
+        };
+
+        // Act
+        var response = await AdminClient.PutAsJsonAsync($"/api/toolbox-talks/schedules/{schedule.Id}", updateCommand);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var updated = await response.Content.ReadFromJsonAsync<ToolboxTalkScheduleDto>();
+        updated!.Notes.Should().Be("Updated notes on active schedule");
     }
 
     #endregion

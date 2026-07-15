@@ -41,10 +41,10 @@ public class UpdateToolboxTalkScheduleCommandHandler : IRequestHandler<UpdateToo
             throw new InvalidOperationException($"Schedule with ID '{request.Id}' not found.");
         }
 
-        // Only allow updates when status is Draft
-        if (schedule.Status != ToolboxTalkScheduleStatus.Draft)
+        // Only allow updates when status is Draft or Active (not yet processed to Completed/Cancelled)
+        if (schedule.Status != ToolboxTalkScheduleStatus.Draft && schedule.Status != ToolboxTalkScheduleStatus.Active)
         {
-            throw new InvalidOperationException($"Schedule can only be updated when in Draft status. Current status: {schedule.Status}");
+            throw new InvalidOperationException($"Schedule can only be updated when in Draft or Active status. Current status: {schedule.Status}");
         }
 
         // Supervisor-scoping: restrict to assigned operators only

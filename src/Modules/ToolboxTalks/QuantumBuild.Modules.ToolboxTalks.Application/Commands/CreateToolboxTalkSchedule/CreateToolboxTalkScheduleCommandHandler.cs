@@ -113,7 +113,7 @@ public class CreateToolboxTalkScheduleCommandHandler : IRequestHandler<CreateToo
             EndDate = request.EndDate,
             Frequency = request.Frequency,
             AssignToAllEmployees = request.AssignToAllEmployees,
-            Status = ToolboxTalkScheduleStatus.Draft,
+            Status = ToolboxTalkScheduleStatus.Active,
             NextRunDate = request.ScheduledDate,
             Notes = request.Notes
         };
