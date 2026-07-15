@@ -198,8 +198,10 @@ export function PreviewModal({ open, onOpenChange, talk }: PreviewModalProps) {
               </Card>
             )}
 
-            {/* 3. Pending: slideshow expected but not yet generated */}
-            {!slideshowHtmlData?.html && (!slides || slides.length === 0) && (talk.hasSlideshow || !!preview?.hasSlideshow) && (
+            {/* 3. Pending: slideshow expected but not yet generated. Covers both the initial-generation
+                race (generateSlidesFromPdf true, nothing generated for any language yet) and the
+                per-language translation lag (source slideshow exists but this language's doesn't yet). */}
+            {!slideshowHtmlData?.html && (!slides || slides.length === 0) && (talk.generateSlidesFromPdf || talk.hasSlideshow || !!preview?.hasSlideshow) && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-lg">

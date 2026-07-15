@@ -15,6 +15,8 @@ import {
   ExternalLinkIcon,
   EyeIcon,
   CheckCircle2Icon,
+  Presentation as PresentationIcon,
+  Loader2 as Loader2Icon,
 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -302,6 +304,33 @@ export function ToolboxTalkDetail({ talkId, onSchedule, basePath = '/admin/toolb
                         <p className="text-sm font-medium mt-0.5">{talk.questions.length}</p>
                       </div>
                     </>
+                  )}
+                  {talk.generateSlidesFromPdf && (
+                    <div>
+                      <p className="text-xs text-muted-foreground">Slideshow</p>
+                      <div className="mt-0.5 flex items-center gap-2 text-sm font-medium">
+                        {talk.hasSlideshow ? (
+                          <>
+                            <PresentationIcon className="h-4 w-4 text-muted-foreground" />
+                            <span>Available</span>
+                            {!previewMode && (
+                              <button
+                                type="button"
+                                onClick={() => setPreviewOpen(true)}
+                                className="text-primary hover:underline"
+                              >
+                                View
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <Loader2Icon className="h-4 w-4 animate-spin text-muted-foreground" />
+                            <span className="text-muted-foreground font-normal">Generating</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
                   )}
                   {talk.attachmentUrl && (
                     <div className="sm:col-span-2">
