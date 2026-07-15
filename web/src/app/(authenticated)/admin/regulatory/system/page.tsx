@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useIsSuperUser } from "@/lib/auth/use-auth";
 import { useRegulatoryDocuments } from "@/lib/api/admin/use-regulatory-ingestion";
+import { CreateRegulatoryDocumentDialog } from "@/components/admin/create-regulatory-document-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,7 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileText } from "lucide-react";
+import { FileText, Plus } from "lucide-react";
 import type { RegulatoryDocumentListItem } from "@/types/regulatory";
 
 function formatDate(dateStr: string | null): string {
@@ -49,7 +51,9 @@ function StatusBadge({ doc }: { doc: RegulatoryDocumentListItem }) {
 
 export default function RegulatorySystemPage() {
   const isSuperUser = useIsSuperUser();
+  const router = useRouter();
   const { data: documents, isLoading } = useRegulatoryDocuments();
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
   if (!isSuperUser) {
     return (
@@ -61,14 +65,28 @@ export default function RegulatorySystemPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-semibold tracking-tight">
-          Regulatory Documents
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Manage regulatory documents and AI-powered requirement ingestion
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight">
+            Regulatory Documents
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Manage regulatory documents and AI-powered requirement ingestion
+          </p>
+        </div>
+        <Button onClick={() => setCreateDialogOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          Add Regulation
+        </Button>
       </div>
+
+      <CreateRegulatoryDocumentDialog
+        open={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
+        onCreated={(documentId) =>
+          router.push(`/admin/regulatory/system/${documentId}`)
+        }
+      />
 
       <div className="rounded-md border">
         <Table>

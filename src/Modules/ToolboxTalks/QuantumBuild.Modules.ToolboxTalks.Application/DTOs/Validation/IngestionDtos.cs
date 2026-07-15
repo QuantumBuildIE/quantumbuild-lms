@@ -159,6 +159,29 @@ public record RegulatoryDocumentUploadResponseDto
 }
 
 /// <summary>
+/// A regulatory body available as a picker option when creating a new regulatory document.
+/// </summary>
+public record RegulatoryBodyDto
+{
+    public Guid Id { get; init; }
+    public string Name { get; init; } = string.Empty;
+    public string Code { get; init; } = string.Empty;
+    public string Country { get; init; } = string.Empty;
+}
+
+/// <summary>
+/// Request to create a new regulatory document. Persists with LastIngestionStatus=Idle —
+/// ingestion remains a separate, explicit action on the document's detail page.
+/// </summary>
+public record CreateRegulatoryDocumentRequest
+{
+    public Guid RegulatoryBodyId { get; init; }
+    public string Title { get; init; } = string.Empty;
+    public string Version { get; init; } = string.Empty;
+    public string? SourceUrl { get; init; }
+}
+
+/// <summary>
 /// Regulatory document with body, profiles, and requirement counts
 /// </summary>
 public record RegulatoryDocumentListDto

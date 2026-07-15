@@ -383,6 +383,79 @@ public class RequirementIngestionService : IRequirementIngestionService
         };
     }
 
+    public async Task<List<RegulatoryBodyDto>> GetRegulatoryBodiesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.RegulatoryBodies
+            .OrderBy(b => b.Name)
+            .Select(b => new RegulatoryBodyDto
+            {
+                Id = b.Id,
+                Name = b.Name,
+                Code = b.Code,
+                Country = b.Country,
+            })
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<RegulatoryDocumentListDto> CreateDocumentAsync(
+        CreateRegulatoryDocumentRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.Title))
+            throw new InvalidOperationException("Title is required.");
+
+        if (request.Title.Trim().Length > 500)
+            throw new InvalidOperationException("Title must be 500 characters or fewer.");
+
+        if (string.IsNullOrWhiteSpace(request.Version))
+            throw new InvalidOperationException("Version is required.");
+
+        if (request.Version.Trim().Length > 50)
+            throw new InvalidOperationException("Version must be 50 characters or fewer.");
+
+        var body = await _dbContext.RegulatoryBodies
+            .FirstOrDefaultAsync(b => b.Id == request.RegulatoryBodyId, cancellationToken)
+            ?? throw new InvalidOperationException($"Regulatory body {request.RegulatoryBodyId} not found");
+
+        if (!string.IsNullOrWhiteSpace(request.SourceUrl)
+            && !SourceUrlValidator.IsValid(request.SourceUrl, out var validationError))
+        {
+            throw new InvalidSourceUrlException(validationError!);
+        }
+
+        var document = new Domain.Entities.RegulatoryDocument
+        {
+            RegulatoryBodyId = request.RegulatoryBodyId,
+            Title = request.Title.Trim(),
+            Version = request.Version.Trim(),
+            SourceUrl = string.IsNullOrWhiteSpace(request.SourceUrl) ? null : request.SourceUrl.Trim(),
+        };
+
+        _dbContext.RegulatoryDocuments.Add(document);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("Created regulatory document {DocumentId}: {Title}", document.Id, document.Title);
+
+        return new RegulatoryDocumentListDto
+        {
+            Id = document.Id,
+            RegulatoryBodyName = body.Name,
+            RegulatoryBodyCode = body.Code,
+            Title = document.Title,
+            Version = document.Version,
+            Source = document.Source,
+            SourceUrl = document.SourceUrl,
+            EffectiveDate = document.EffectiveDate,
+            IsActive = document.IsActive,
+            LastIngestedAt = document.LastIngestedAt,
+            SectorKeys = new List<string>(),
+            DraftCount = 0,
+            ApprovedCount = 0,
+            RejectedCount = 0,
+        };
+    }
+
     private async Task<IngestionSessionDto> BuildIngestionSessionDto(
         Domain.Entities.RegulatoryDocument document,
         CancellationToken cancellationToken)

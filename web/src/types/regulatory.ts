@@ -75,6 +75,20 @@ export interface RegulatoryDocumentUploadResponse {
   fileSizeBytes: number;
 }
 
+export interface RegulatoryBody {
+  id: string;
+  name: string;
+  code: string;
+  country: string;
+}
+
+export interface CreateRegulatoryDocumentRequest {
+  regulatoryBodyId: string;
+  title: string;
+  version: string;
+  sourceUrl?: string;
+}
+
 export interface DraftRequirementDto {
   id: string;
   title: string;

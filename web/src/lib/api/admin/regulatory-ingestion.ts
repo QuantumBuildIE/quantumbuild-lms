@@ -10,11 +10,28 @@ import type {
   RejectRequirementRequest,
   RegulatoryBrowseBody,
   RegulatoryDocumentUploadResponse,
+  RegulatoryBody,
+  CreateRegulatoryDocumentRequest,
 } from "@/types/regulatory";
 
 export async function getRegulatoryDocuments(): Promise<RegulatoryDocumentListItem[]> {
   const response = await apiClient.get<RegulatoryDocumentListItem[]>(
     "/regulatory/documents"
+  );
+  return response.data;
+}
+
+export async function getRegulatoryBodies(): Promise<RegulatoryBody[]> {
+  const response = await apiClient.get<RegulatoryBody[]>("/regulatory/bodies");
+  return response.data;
+}
+
+export async function createRegulatoryDocument(
+  data: CreateRegulatoryDocumentRequest
+): Promise<RegulatoryDocumentListItem> {
+  const response = await apiClient.post<RegulatoryDocumentListItem>(
+    "/regulatory/documents",
+    data
   );
   return response.data;
 }

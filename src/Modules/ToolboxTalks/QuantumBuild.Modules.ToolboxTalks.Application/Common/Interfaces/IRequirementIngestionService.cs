@@ -86,4 +86,18 @@ public interface IRequirementIngestionService
         Stream fileContent,
         string originalFileName,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lists all regulatory bodies, for use in a document-creation body picker.
+    /// </summary>
+    Task<List<RegulatoryBodyDto>> GetRegulatoryBodiesAsync(
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Creates a new regulatory document. Persists with LastIngestionStatus=Idle and no
+    /// profiles — ingestion and sector-profile setup remain separate, later actions.
+    /// </summary>
+    Task<RegulatoryDocumentListDto> CreateDocumentAsync(
+        CreateRegulatoryDocumentRequest request,
+        CancellationToken cancellationToken = default);
 }

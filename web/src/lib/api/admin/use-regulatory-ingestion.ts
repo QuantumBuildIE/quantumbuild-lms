@@ -10,12 +10,15 @@ import {
   approveAllDrafts,
   getBrowsableRequirements,
   uploadRegulatoryDocument,
+  getRegulatoryBodies,
+  createRegulatoryDocument,
 } from "./regulatory-ingestion";
 import type {
   StartIngestionRequest,
   ApproveRequirementRequest,
   UpdateDraftRequirementRequest,
   RejectRequirementRequest,
+  CreateRegulatoryDocumentRequest,
 } from "@/types/regulatory";
 
 export const regulatoryKeys = {
@@ -25,6 +28,7 @@ export const regulatoryKeys = {
   draftRequirements: (documentId: string) =>
     ["regulatory-draft-requirements", documentId] as const,
   browse: () => ["regulatory-browse"] as const,
+  bodies: () => ["regulatory-bodies"] as const,
 };
 
 export function useRegulatoryDocuments() {
@@ -165,6 +169,25 @@ export function useUploadRegulatoryDocument(documentId: string) {
       queryClient.invalidateQueries({
         queryKey: regulatoryKeys.documents(),
       });
+    },
+  });
+}
+
+export function useRegulatoryBodies() {
+  return useQuery({
+    queryKey: regulatoryKeys.bodies(),
+    queryFn: () => getRegulatoryBodies(),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useCreateRegulatoryDocument() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateRegulatoryDocumentRequest) =>
+      createRegulatoryDocument(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: regulatoryKeys.documents() });
     },
   });
 }

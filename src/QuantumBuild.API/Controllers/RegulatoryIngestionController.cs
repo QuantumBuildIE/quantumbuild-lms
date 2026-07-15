@@ -54,6 +54,58 @@ public class RegulatoryIngestionController : ControllerBase
     }
 
     /// <summary>
+    /// List all regulatory bodies, for use in a document-creation body picker.
+    /// </summary>
+    [HttpGet("bodies")]
+    [ProducesResponseType(typeof(List<RegulatoryBodyDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetBodies(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var bodies = await _ingestionService.GetRegulatoryBodiesAsync(cancellationToken);
+            return Ok(bodies);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving regulatory bodies");
+            return StatusCode(500, new { message = "Error retrieving regulatory bodies" });
+        }
+    }
+
+    /// <summary>
+    /// Create a new regulatory document. Persists with LastIngestionStatus=Idle — ingestion
+    /// remains a separate, explicit action triggered later from the document's detail page.
+    /// </summary>
+    [HttpPost("documents")]
+    [ProducesResponseType(typeof(RegulatoryDocumentListDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> CreateDocument(
+        [FromBody] CreateRegulatoryDocumentRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _ingestionService.CreateDocumentAsync(request, cancellationToken);
+            return Ok(result);
+        }
+        catch (InvalidSourceUrlException ex)
+        {
+            _logger.LogWarning(ex, "Regulatory document creation rejected: invalid source URL");
+            return BadRequest(new { message = ex.Message, errorCode = InvalidSourceUrlException.ErrorCode });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Regulatory document creation failed");
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating regulatory document");
+            return StatusCode(500, new { message = "Error creating regulatory document" });
+        }
+    }
+
+    /// <summary>
     /// Upload a source PDF for a regulatory document. Stores it in R2 and updates the
     /// document's SourceUrl. Does NOT trigger ingestion — Ingest Requirements remains a
     /// separate explicit action.
