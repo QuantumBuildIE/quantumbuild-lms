@@ -75,4 +75,15 @@ public interface IRequirementIngestionService
     Task<List<RegulatoryBrowseBodyDto>> GetBrowsableRequirementsAsync(
         Guid tenantId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Uploads a source PDF for a regulatory document to storage and updates its SourceUrl.
+    /// Does NOT trigger ingestion — that remains an explicit separate action.
+    /// Returns null if the document does not exist.
+    /// </summary>
+    Task<RegulatoryDocumentUploadResponseDto?> UploadSourceDocumentAsync(
+        Guid regulatoryDocumentId,
+        Stream fileContent,
+        string originalFileName,
+        CancellationToken cancellationToken = default);
 }

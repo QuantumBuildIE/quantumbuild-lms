@@ -149,6 +149,16 @@ public record RegulatoryBrowseRequirementDto
 }
 
 /// <summary>
+/// Response after uploading a source PDF for a regulatory document
+/// </summary>
+public record RegulatoryDocumentUploadResponseDto
+{
+    public string SourceUrl { get; init; } = string.Empty;
+    public string FileName { get; init; } = string.Empty;
+    public long FileSizeBytes { get; init; }
+}
+
+/// <summary>
 /// Regulatory document with body, profiles, and requirement counts
 /// </summary>
 public record RegulatoryDocumentListDto

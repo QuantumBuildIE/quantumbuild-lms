@@ -9,6 +9,7 @@ import type {
   StartIngestionRequest,
   RejectRequirementRequest,
   RegulatoryBrowseBody,
+  RegulatoryDocumentUploadResponse,
 } from "@/types/regulatory";
 
 export async function getRegulatoryDocuments(): Promise<RegulatoryDocumentListItem[]> {
@@ -84,6 +85,20 @@ export async function approveAllDrafts(
 ): Promise<{ approved: number }> {
   const response = await apiClient.post<{ approved: number }>(
     `/regulatory/documents/${documentId}/approve-all`
+  );
+  return response.data;
+}
+
+export async function uploadRegulatoryDocument(
+  documentId: string,
+  file: File
+): Promise<RegulatoryDocumentUploadResponse> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await apiClient.post<RegulatoryDocumentUploadResponse>(
+    `/regulatory/documents/${documentId}/upload`,
+    form,
+    { headers: { "Content-Type": "multipart/form-data" } }
   );
   return response.data;
 }

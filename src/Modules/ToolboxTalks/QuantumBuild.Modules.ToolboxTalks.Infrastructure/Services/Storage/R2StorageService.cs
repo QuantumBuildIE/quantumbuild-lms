@@ -707,6 +707,59 @@ public class R2StorageService : IR2StorageService, IDisposable
 
     #endregion
 
+    #region Regulatory Documents
+
+    private const string RegulatoryFolder = "regulatory";
+
+    public async Task<R2UploadResult> UploadRegulatoryDocumentAsync(
+        Guid regulatoryDocumentId,
+        Stream content,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (content.Length > _settings.MaxPdfSizeBytes)
+            {
+                var maxMb = _settings.MaxPdfSizeBytes / 1024 / 1024;
+                var actualMb = content.Length / 1024 / 1024;
+                return R2UploadResult.FailureResult(
+                    $"PDF size ({actualMb}MB) exceeds maximum allowed ({maxMb}MB)");
+            }
+
+            // No tenant prefix — RegulatoryDocument is system-managed, unlike every other
+            // upload target in this service.
+            var key = $"{RegulatoryFolder}/{regulatoryDocumentId}/source.pdf";
+
+            _logger.LogInformation("Uploading regulatory source document to R2: {Key}", key);
+
+            var request = new PutObjectRequest
+            {
+                BucketName = _settings.BucketName,
+                Key = key,
+                InputStream = content,
+                ContentType = "application/pdf",
+                DisablePayloadSigning = true,
+                UseChunkEncoding = false
+            };
+
+            var contentLength = content.Length;
+            await _s3Client.PutObjectAsync(request, cancellationToken);
+
+            var publicUrl = GetPublicUrl(key);
+
+            _logger.LogInformation("Successfully uploaded regulatory source document: {Url}", publicUrl);
+
+            return R2UploadResult.SuccessResult(publicUrl, key, contentLength, "application/pdf");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to upload regulatory source document for {DocumentId}", regulatoryDocumentId);
+            return R2UploadResult.FailureResult($"Regulatory document upload failed: {ex.Message}");
+        }
+    }
+
+    #endregion
+
     #region Session Files
 
     private const string SessionsFolder = "sessions";

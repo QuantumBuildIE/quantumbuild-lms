@@ -9,6 +9,7 @@ import {
   updateDraftRequirement,
   approveAllDrafts,
   getBrowsableRequirements,
+  uploadRegulatoryDocument,
 } from "./regulatory-ingestion";
 import type {
   StartIngestionRequest,
@@ -150,6 +151,21 @@ export function useBrowsableRequirements() {
     queryKey: regulatoryKeys.browse(),
     queryFn: () => getBrowsableRequirements(),
     staleTime: 60 * 1000,
+  });
+}
+
+export function useUploadRegulatoryDocument(documentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => uploadRegulatoryDocument(documentId, file),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: regulatoryKeys.ingestionStatus(documentId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: regulatoryKeys.documents(),
+      });
+    },
   });
 }
 

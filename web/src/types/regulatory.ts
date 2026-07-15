@@ -69,6 +69,12 @@ export interface IngestionSessionDto {
   rejectedCount: number;
 }
 
+export interface RegulatoryDocumentUploadResponse {
+  sourceUrl: string;
+  fileName: string;
+  fileSizeBytes: number;
+}
+
 export interface DraftRequirementDto {
   id: string;
   title: string;

@@ -20,6 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { RegulatoryDocumentUpload } from "@/components/admin/regulatory-document-upload";
 import {
   Select,
   SelectContent,
@@ -639,7 +640,18 @@ export default function RegulatoryDocumentDetailPage() {
 
               <Separator />
 
-              <div className="space-y-1">
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm font-medium">Upload PDF</label>
+                  <div className="mt-1">
+                    <RegulatoryDocumentUpload
+                      documentId={documentId}
+                      currentSourceUrl={sourceUrl || currentStatus?.sourceUrl || null}
+                      onUploaded={(url) => setSourceUrl(url)}
+                    />
+                  </div>
+                </div>
+
                 <div className="flex items-end gap-3">
                   <div className="flex-1">
                     <label className="text-sm font-medium">Source URL</label>

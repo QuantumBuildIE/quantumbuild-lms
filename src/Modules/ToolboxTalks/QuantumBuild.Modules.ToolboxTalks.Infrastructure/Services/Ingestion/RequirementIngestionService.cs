@@ -1,6 +1,7 @@
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Storage;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Validation;
@@ -17,13 +18,16 @@ namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Ingestion;
 public class RequirementIngestionService : IRequirementIngestionService
 {
     private readonly IToolboxTalksDbContext _dbContext;
+    private readonly IR2StorageService _storageService;
     private readonly ILogger<RequirementIngestionService> _logger;
 
     public RequirementIngestionService(
         IToolboxTalksDbContext dbContext,
+        IR2StorageService storageService,
         ILogger<RequirementIngestionService> logger)
     {
         _dbContext = dbContext;
+        _storageService = storageService;
         _logger = logger;
     }
 
@@ -344,6 +348,39 @@ public class RequirementIngestionService : IRequirementIngestionService
             .ToList();
 
         return result;
+    }
+
+    public async Task<RegulatoryDocumentUploadResponseDto?> UploadSourceDocumentAsync(
+        Guid regulatoryDocumentId,
+        Stream fileContent,
+        string originalFileName,
+        CancellationToken cancellationToken = default)
+    {
+        var document = await _dbContext.RegulatoryDocuments
+            .FirstOrDefaultAsync(d => d.Id == regulatoryDocumentId, cancellationToken);
+
+        if (document == null)
+            return null;
+
+        var result = await _storageService.UploadRegulatoryDocumentAsync(
+            regulatoryDocumentId, fileContent, cancellationToken);
+
+        if (!result.Success)
+            throw new InvalidOperationException(result.ErrorMessage ?? "Upload failed");
+
+        document.SourceUrl = result.PublicUrl;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Uploaded source document for regulatory document {DocumentId}: {Url}",
+            regulatoryDocumentId, result.PublicUrl);
+
+        return new RegulatoryDocumentUploadResponseDto
+        {
+            SourceUrl = result.PublicUrl!,
+            FileName = originalFileName,
+            FileSizeBytes = result.FileSizeBytes!.Value
+        };
     }
 
     private async Task<IngestionSessionDto> BuildIngestionSessionDto(

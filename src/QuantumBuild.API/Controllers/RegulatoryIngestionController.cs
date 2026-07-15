@@ -20,6 +20,10 @@ public class RegulatoryIngestionController : ControllerBase
     private readonly ICurrentUserService _currentUserService;
     private readonly ILogger<RegulatoryIngestionController> _logger;
 
+    // Matches the PDF upload convention used by ToolboxTalkFilesController.
+    private const long MaxSourceDocumentSizeBytes = 50 * 1024 * 1024; // 50MB
+    private static readonly string[] AllowedSourceDocumentTypes = ["application/pdf"];
+
     public RegulatoryIngestionController(
         IRequirementIngestionService ingestionService,
         ICurrentUserService currentUserService,
@@ -46,6 +50,56 @@ public class RegulatoryIngestionController : ControllerBase
         {
             _logger.LogError(ex, "Error retrieving regulatory documents");
             return StatusCode(500, new { message = "Error retrieving regulatory documents" });
+        }
+    }
+
+    /// <summary>
+    /// Upload a source PDF for a regulatory document. Stores it in R2 and updates the
+    /// document's SourceUrl. Does NOT trigger ingestion — Ingest Requirements remains a
+    /// separate explicit action.
+    /// </summary>
+    [HttpPost("documents/{documentId:guid}/upload")]
+    [RequestSizeLimit(52428800)] // 50MB
+    [ProducesResponseType(typeof(RegulatoryDocumentUploadResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UploadSourceDocument(
+        Guid documentId,
+        IFormFile file,
+        CancellationToken cancellationToken)
+    {
+        if (file == null || file.Length == 0)
+            return BadRequest(new { message = "No file provided." });
+
+        if (!AllowedSourceDocumentTypes.Contains(file.ContentType.ToLower()))
+            return BadRequest(new { message = "Invalid file type. Only PDF files are allowed." });
+
+        if (file.Length > MaxSourceDocumentSizeBytes)
+            return BadRequest(new
+            {
+                message = $"File size ({file.Length / 1024 / 1024}MB) exceeds maximum ({MaxSourceDocumentSizeBytes / 1024 / 1024}MB)."
+            });
+
+        try
+        {
+            await using var stream = file.OpenReadStream();
+            var result = await _ingestionService.UploadSourceDocumentAsync(
+                documentId, stream, file.FileName, cancellationToken);
+
+            if (result == null)
+                return NotFound(new { message = $"Regulatory document {documentId} not found" });
+
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Upload failed for regulatory document {DocumentId}", documentId);
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error uploading source document for regulatory document {DocumentId}", documentId);
+            return StatusCode(500, new { message = "Error uploading source document" });
         }
     }
 

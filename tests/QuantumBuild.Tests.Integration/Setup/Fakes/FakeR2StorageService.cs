@@ -230,6 +230,18 @@ public class FakeR2StorageService : IR2StorageService
         return $"https://fake-r2.test/{tenantId}/{folder}/{fileName}";
     }
 
+    public Task<R2UploadResult> UploadRegulatoryDocumentAsync(
+        Guid regulatoryDocumentId,
+        Stream content,
+        CancellationToken cancellationToken = default)
+    {
+        var key = $"regulatory/{regulatoryDocumentId}/source.pdf";
+        var bytes = ReadStream(content);
+        _files[key] = bytes;
+        return Task.FromResult(R2UploadResult.SuccessResult(
+            $"https://fake-r2.test/{key}", key, bytes.Length, "application/pdf"));
+    }
+
     public Task<R2UploadResult> UploadQrCodeImageAsync(
         Guid tenantId,
         string codeToken,
