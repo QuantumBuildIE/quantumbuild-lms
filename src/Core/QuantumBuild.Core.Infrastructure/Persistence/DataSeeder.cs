@@ -605,10 +605,12 @@ public static class DataSeeder
             return;
         }
 
-        // Check if QUANTUMBUILD tenant already has training categories
+        // Check if QUANTUMBUILD tenant already has training categories.
+        // Includes soft-deleted rows: the unique index on (TenantId, CategoryId, Code)
+        // is unfiltered, so a soft-deleted row still blocks a fresh insert.
         var existingCodes = await tenantValues
             .IgnoreQueryFilters()
-            .Where(v => v.TenantId == DefaultTenantId && v.CategoryId == category.Id && !v.IsDeleted)
+            .Where(v => v.TenantId == DefaultTenantId && v.CategoryId == category.Id)
             .Select(v => v.Code)
             .ToListAsync();
 

@@ -2700,4 +2700,34 @@ straightforward.
 Blocked pending: the Radix Select a11y fix, OR a manual investigation
 of the zero-sector branch's DOM behavior during click interaction.
 
+---
+
+#### §37 — TenantLookupValue unfiltered unique index
+
+- **Priority:** P3
+- **Origin:** `[Engineering]` `[Session 2026-07-14]`
+- **Status:** Deferred
+
+TenantLookupValueConfiguration.cs:26-28 defines the unique index
+on (TenantId, CategoryId, Code) without a soft-delete filter. This
+means soft-deleted rows still block new inserts of the same code.
+
+App-level duplicate checks (LookupService.CreateTenantValueAsync,
+UpdateTenantValueAsync) currently rely on this unfiltered index to
+catch soft-deleted duplicates.
+
+The seeder was recently fixed to match this constraint. Long-term
+fix would be a filtered unique index matching the
+20260312191539_FilteredUniqueCodeIndex precedent for
+ToolboxTalks.Code, allowing a tenant to recreate a code they
+previously deleted. This requires updating CreateTenantValueAsync
+and UpdateTenantValueAsync's duplicate checks in lockstep.
+
+Also worth extending to other soft-deletable tables with
+unfiltered unique indexes if a broader survey identifies them.
+
+Same class of bug: LookupValue table (LookupValueConfiguration.cs:26-27)
+has the identical unfiltered index. No evidence of a live delete
+path today, but worth checking during the broader fix.
+
 _End of BACKLOG.md._
