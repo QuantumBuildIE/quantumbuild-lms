@@ -8,8 +8,20 @@ public record IngestionSessionDto
     public Guid RegulatoryDocumentId { get; init; }
     public string DocumentTitle { get; init; } = string.Empty;
     public string? SourceUrl { get; init; }
+
+    /// <summary>
+    /// One of "Idle", "Ingesting", "Success", "Failed" — mirrors
+    /// RegulatoryDocument.LastIngestionStatus verbatim.
+    /// </summary>
     public string Status { get; init; } = string.Empty;
     public DateTimeOffset? LastIngestedAt { get; init; }
+
+    /// <summary>Populated only when Status is "Failed".</summary>
+    public string? LastIngestionErrorMessage { get; init; }
+
+    /// <summary>Populated only when Status is "Failed": "invalid_uri", "fetch_failed", "parse_failed", or "unknown".</summary>
+    public string? LastIngestionErrorCode { get; init; }
+
     public int DraftCount { get; init; }
     public int ApprovedCount { get; init; }
     public int RejectedCount { get; init; }

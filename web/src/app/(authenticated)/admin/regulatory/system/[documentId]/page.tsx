@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useIsSuperUser } from "@/lib/auth/use-auth";
 import {
@@ -62,6 +62,103 @@ function formatDate(dateStr: string | null): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+/**
+ * Lightweight client-side guidance for the Source URL field. Backend validation
+ * (RequirementIngestionService.StartIngestionAsync via SourceUrlValidator) is authoritative —
+ * this only gives the user an earlier, friendlier signal before they submit.
+ */
+function checkSourceUrlInput(
+  value: string
+): { level: "error" | "warning"; message: string } | null {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return { level: "error", message: "Source URL is required." };
+  }
+
+  if (/^[a-zA-Z]:[\\/]/.test(trimmed) || trimmed.startsWith("/")) {
+    return {
+      level: "error",
+      message:
+        "This looks like a local file path, not a web address. Enter a public https:// URL.",
+    };
+  }
+
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return {
+        level: "warning",
+        message: `Source URL should use http or https (found "${url.protocol}").`,
+      };
+    }
+  } catch {
+    return {
+      level: "warning",
+      message:
+        "This doesn't look like a valid URL. It should start with https://",
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Maps a backend LastIngestionErrorCode onto a friendlier explanation for the reviewer.
+ * Falls back to the raw error message when the code doesn't match a known category —
+ * matches the backend's own "don't force an unknown reason into a category" rule.
+ */
+function describeIngestionError(
+  errorCode: string | null,
+  errorMessage: string | null
+): string {
+  const detail = errorMessage ? ` (${errorMessage})` : "";
+  switch (errorCode) {
+    case "invalid_uri":
+      return `Source URL must be a valid HTTPS URL, e.g. https://example.com/document.pdf.${detail}`;
+    case "fetch_failed":
+      return `Could not fetch the document from the source URL — the host may be unreachable, the URL may be broken, or the request timed out.${detail}`;
+    case "parse_failed":
+      return `The document was fetched but its content could not be read — it may be a scanned PDF with no extractable text, a corrupted file, or an unsupported format.${detail}`;
+    default:
+      return errorMessage || "An unexpected error occurred during ingestion.";
+  }
+}
+
+function StatusDisplay({
+  status,
+  isPolling,
+}: {
+  status?: string;
+  isPolling: boolean;
+}) {
+  if (status === "Failed") {
+    return (
+      <span className="flex items-center gap-1 text-destructive">
+        <XCircle className="h-3 w-3" />
+        Failed
+      </span>
+    );
+  }
+  if (status === "Success") {
+    return (
+      <span className="flex items-center gap-1 text-green-600">
+        <CheckCircle2 className="h-3 w-3" />
+        Success
+      </span>
+    );
+  }
+  if (status === "Ingesting" || isPolling) {
+    return (
+      <span className="flex items-center gap-1 text-amber-600">
+        <Loader2 className="h-3 w-3 animate-spin" />
+        Ingesting...
+      </span>
+    );
+  }
+  return <>{status || "Idle"}</>;
 }
 
 function PriorityBadge({ priority }: { priority: string }) {
@@ -433,6 +530,8 @@ export default function RegulatoryDocumentDetailPage() {
   const effectiveSourceUrl =
     sourceUrl || currentStatus?.sourceUrl || "";
 
+  const sourceUrlIssue = checkSourceUrlInput(effectiveSourceUrl);
+
   const handleStartIngestion = useCallback(() => {
     startIngestion.mutate(
       { sourceUrl: effectiveSourceUrl },
@@ -440,6 +539,8 @@ export default function RegulatoryDocumentDetailPage() {
         onSuccess: () => {
           toast.success("Ingestion job queued");
           setIsPolling(true);
+          // Safety-net timeout in case the terminal-status check below never fires
+          // (e.g. the job never updates status for some unforeseen reason).
           setTimeout(() => setIsPolling(false), 120000);
         },
         onError: (err: Error) =>
@@ -448,11 +549,15 @@ export default function RegulatoryDocumentDetailPage() {
     );
   }, [startIngestion, effectiveSourceUrl]);
 
-  const hasDrafts =
-    currentStatus?.draftCount && currentStatus.draftCount > 0;
-  if (isPolling && hasDrafts) {
-    setIsPolling(false);
-  }
+  // Stop polling as soon as the backend reports a terminal state, rather than waiting
+  // blindly for the 120s timeout. Also correctly stops for a 0-draft Success (the old
+  // "hasDrafts" heuristic never noticed those).
+  useEffect(() => {
+    if (!isPolling) return;
+    if (currentStatus?.status === "Success" || currentStatus?.status === "Failed") {
+      setIsPolling(false);
+    }
+  }, [isPolling, currentStatus?.status]);
 
   const handleApproveAll = useCallback(() => {
     approveAll.mutate(undefined, {
@@ -506,14 +611,10 @@ export default function RegulatoryDocumentDetailPage() {
                 <div>
                   <span className="text-muted-foreground">Status</span>
                   <p className="font-medium">
-                    {isPolling ? (
-                      <span className="flex items-center gap-1 text-amber-600">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        Processing...
-                      </span>
-                    ) : (
-                      currentStatus?.status || "—"
-                    )}
+                    <StatusDisplay
+                      status={currentStatus?.status}
+                      isPolling={isPolling}
+                    />
                   </p>
                 </div>
                 <div>
@@ -538,36 +639,69 @@ export default function RegulatoryDocumentDetailPage() {
 
               <Separator />
 
-              <div className="flex items-end gap-3">
-                <div className="flex-1">
-                  <label className="text-sm font-medium">Source URL</label>
-                  <Input
-                    value={sourceUrl || currentStatus?.sourceUrl || ""}
-                    onChange={(e) => setSourceUrl(e.target.value)}
-                    placeholder="https://example.com/document.pdf"
-                  />
+              <div className="space-y-1">
+                <div className="flex items-end gap-3">
+                  <div className="flex-1">
+                    <label className="text-sm font-medium">Source URL</label>
+                    <Input
+                      type="url"
+                      value={sourceUrl || currentStatus?.sourceUrl || ""}
+                      onChange={(e) => setSourceUrl(e.target.value)}
+                      placeholder="https://example.com/document.pdf"
+                      className={
+                        sourceUrlIssue?.level === "error"
+                          ? "border-destructive"
+                          : undefined
+                      }
+                    />
+                  </div>
+                  <Button
+                    onClick={handleStartIngestion}
+                    disabled={
+                      startIngestion.isPending ||
+                      isPolling ||
+                      sourceUrlIssue?.level === "error"
+                    }
+                  >
+                    {startIngestion.isPending || isPolling ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        {isPolling ? "Ingesting..." : "Starting..."}
+                      </>
+                    ) : (
+                      <>
+                        <FileText className="mr-2 h-4 w-4" />
+                        {currentStatus?.status === "Failed"
+                          ? "Retry Ingestion"
+                          : "Ingest Requirements"}
+                      </>
+                    )}
+                  </Button>
                 </div>
-                <Button
-                  onClick={handleStartIngestion}
-                  disabled={
-                    startIngestion.isPending ||
-                    isPolling ||
-                    !effectiveSourceUrl.trim()
-                  }
-                >
-                  {startIngestion.isPending || isPolling ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      {isPolling ? "Processing..." : "Starting..."}
-                    </>
-                  ) : (
-                    <>
-                      <FileText className="mr-2 h-4 w-4" />
-                      Ingest Requirements
-                    </>
-                  )}
-                </Button>
+                {sourceUrlIssue && (
+                  <p
+                    className={
+                      sourceUrlIssue.level === "error"
+                        ? "text-xs text-destructive"
+                        : "text-xs text-amber-600"
+                    }
+                  >
+                    {sourceUrlIssue.message}
+                  </p>
+                )}
               </div>
+
+              {!isPolling && currentStatus?.status === "Failed" && (
+                <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                  <p className="font-medium">Ingestion failed</p>
+                  <p>
+                    {describeIngestionError(
+                      currentStatus.lastIngestionErrorCode,
+                      currentStatus.lastIngestionErrorMessage
+                    )}
+                  </p>
+                </div>
+              )}
             </>
           )}
         </CardContent>

@@ -2,7 +2,9 @@ using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Application.Common.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Validation;
+using QuantumBuild.Modules.ToolboxTalks.Application.Exceptions;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 
@@ -44,13 +46,24 @@ public class RequirementIngestionService : IRequirementIngestionService
         if (string.IsNullOrWhiteSpace(document.SourceUrl))
             throw new InvalidOperationException("Document has no SourceUrl configured. Provide a URL to ingest from.");
 
+        // Validate before enqueueing — synchronously, within the same request, well before
+        // the job ever runs. Rejects the effective SourceUrl (whether freshly provided above
+        // or previously persisted) so a bad URL can never reach the Hangfire job silently.
+        if (!SourceUrlValidator.IsValid(document.SourceUrl, out var validationError))
+        {
+            _logger.LogWarning(
+                "Rejected ingestion start for document {DocumentId}: {Error}",
+                regulatoryDocumentId, validationError);
+            throw new InvalidSourceUrlException(validationError!);
+        }
+
         // Enqueue Hangfire background job
         BackgroundJob.Enqueue<RequirementIngestionJob>(
             job => job.ExecuteAsync(regulatoryDocumentId, CancellationToken.None));
 
         _logger.LogInformation("Enqueued ingestion job for document {DocumentId}", regulatoryDocumentId);
 
-        return await BuildIngestionSessionDto(document, "Queued", cancellationToken);
+        return await BuildIngestionSessionDto(document, cancellationToken);
     }
 
     public async Task<IngestionSessionDto> GetIngestionStatusAsync(
@@ -61,10 +74,7 @@ public class RequirementIngestionService : IRequirementIngestionService
             .FirstOrDefaultAsync(d => d.Id == regulatoryDocumentId, cancellationToken)
             ?? throw new InvalidOperationException($"Regulatory document {regulatoryDocumentId} not found");
 
-        // Determine status from LastIngestedAt and draft counts
-        var status = document.LastIngestedAt.HasValue ? "Completed" : "Idle";
-
-        return await BuildIngestionSessionDto(document, status, cancellationToken);
+        return await BuildIngestionSessionDto(document, cancellationToken);
     }
 
     public async Task<List<DraftRequirementDto>> GetDraftRequirementsAsync(
@@ -338,7 +348,6 @@ public class RequirementIngestionService : IRequirementIngestionService
 
     private async Task<IngestionSessionDto> BuildIngestionSessionDto(
         Domain.Entities.RegulatoryDocument document,
-        string status,
         CancellationToken cancellationToken)
     {
         var profileIds = await _dbContext.RegulatoryProfiles
@@ -358,8 +367,10 @@ public class RequirementIngestionService : IRequirementIngestionService
             RegulatoryDocumentId = document.Id,
             DocumentTitle = document.Title,
             SourceUrl = document.SourceUrl,
-            Status = status,
+            Status = document.LastIngestionStatus.ToString(),
             LastIngestedAt = document.LastIngestedAt,
+            LastIngestionErrorMessage = document.LastIngestionErrorMessage,
+            LastIngestionErrorCode = document.LastIngestionErrorCode,
             DraftCount = counts.FirstOrDefault(c => c.Status == RequirementIngestionStatus.Draft)?.Count ?? 0,
             ApprovedCount = counts.FirstOrDefault(c => c.Status == RequirementIngestionStatus.Approved)?.Count ?? 0,
             RejectedCount = counts.FirstOrDefault(c => c.Status == RequirementIngestionStatus.Rejected)?.Count ?? 0,

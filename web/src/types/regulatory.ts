@@ -60,8 +60,10 @@ export interface IngestionSessionDto {
   regulatoryDocumentId: string;
   documentTitle: string;
   sourceUrl: string | null;
-  status: "Idle" | "Queued" | "Processing" | "Completed" | "Failed";
+  status: "Idle" | "Ingesting" | "Success" | "Failed";
   lastIngestedAt: string | null;
+  lastIngestionErrorMessage: string | null;
+  lastIngestionErrorCode: string | null;
   draftCount: number;
   approvedCount: number;
   rejectedCount: number;

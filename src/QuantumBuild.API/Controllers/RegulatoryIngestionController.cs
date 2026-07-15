@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Validation;
+using QuantumBuild.Modules.ToolboxTalks.Application.Exceptions;
 
 namespace QuantumBuild.API.Controllers;
 
@@ -65,6 +66,11 @@ public class RegulatoryIngestionController : ControllerBase
             var result = await _ingestionService.StartIngestionAsync(
                 documentId, request.SourceUrl, cancellationToken);
             return Ok(result);
+        }
+        catch (InvalidSourceUrlException ex)
+        {
+            _logger.LogWarning(ex, "Ingestion start rejected for document {DocumentId}: invalid source URL", documentId);
+            return BadRequest(new { message = ex.Message, errorCode = InvalidSourceUrlException.ErrorCode });
         }
         catch (InvalidOperationException ex)
         {

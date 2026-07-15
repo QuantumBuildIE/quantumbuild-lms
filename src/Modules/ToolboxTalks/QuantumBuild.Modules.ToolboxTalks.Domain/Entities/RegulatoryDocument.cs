@@ -1,4 +1,5 @@
 using QuantumBuild.Core.Domain.Common;
+using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 
@@ -26,6 +27,25 @@ public class RegulatoryDocument : BaseEntity
     /// Timestamp of the last successful AI ingestion of requirements from this document.
     /// </summary>
     public DateTimeOffset? LastIngestedAt { get; set; }
+
+    /// <summary>
+    /// State of the most recent ingestion attempt (Idle/Ingesting/Success/Failed).
+    /// Set by RequirementIngestionJob at every stage — including failure paths — so
+    /// the frontend can distinguish "never run" from "ran and failed".
+    /// </summary>
+    public RegulatoryIngestionStatus LastIngestionStatus { get; set; } = RegulatoryIngestionStatus.Idle;
+
+    /// <summary>
+    /// Human-readable failure reason for the most recent ingestion attempt.
+    /// Null unless LastIngestionStatus is Failed.
+    /// </summary>
+    public string? LastIngestionErrorMessage { get; set; }
+
+    /// <summary>
+    /// Failure category for the most recent ingestion attempt: "invalid_uri",
+    /// "fetch_failed", "parse_failed", or "unknown". Null unless LastIngestionStatus is Failed.
+    /// </summary>
+    public string? LastIngestionErrorCode { get; set; }
 
     // Navigation properties
     public RegulatoryBody RegulatoryBody { get; set; } = null!;

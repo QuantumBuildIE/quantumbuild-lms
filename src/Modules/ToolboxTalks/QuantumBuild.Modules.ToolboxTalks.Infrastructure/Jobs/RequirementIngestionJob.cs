@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Pdf;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Application.Common.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 using QuantumBuild.Core.Application.Configuration;
@@ -63,10 +64,12 @@ public class RequirementIngestionJob
     {
         _logger.LogInformation("Starting requirement ingestion for document {DocumentId}", regulatoryDocumentId);
 
+        RegulatoryDocument? document = null;
+
         try
         {
             // Load document with profiles
-            var document = await _dbContext.RegulatoryDocuments
+            document = await _dbContext.RegulatoryDocuments
                 .Include(d => d.Profiles)
                     .ThenInclude(p => p.Sector)
                 .FirstOrDefaultAsync(d => d.Id == regulatoryDocumentId, cancellationToken);
@@ -77,20 +80,33 @@ public class RequirementIngestionJob
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(document.SourceUrl))
+            document.LastIngestionStatus = RegulatoryIngestionStatus.Ingesting;
+            document.LastIngestionErrorCode = null;
+            document.LastIngestionErrorMessage = null;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            // Defensive re-validation: the controller/service already reject invalid SourceUrls
+            // before enqueueing, but this guards documents whose SourceUrl was written before
+            // that validation existed (or written directly to the DB).
+            if (!SourceUrlValidator.IsValid(document.SourceUrl, out var urlError))
             {
-                _logger.LogError("Document {DocumentId} has no SourceUrl", regulatoryDocumentId);
+                await MarkFailedAsync(document, "invalid_uri", urlError!, cancellationToken);
                 return;
             }
 
             // Step 1 — Fetch and extract text
-            var extractedText = await FetchDocumentTextAsync(document.SourceUrl, cancellationToken);
-            if (string.IsNullOrWhiteSpace(extractedText))
+            var fetchResult = await FetchDocumentTextAsync(document.SourceUrl!, cancellationToken);
+            if (!fetchResult.Success || string.IsNullOrWhiteSpace(fetchResult.Text))
             {
-                _logger.LogError("Failed to extract text from document {DocumentId}", regulatoryDocumentId);
+                await MarkFailedAsync(
+                    document,
+                    fetchResult.ErrorCode ?? "fetch_failed",
+                    fetchResult.ErrorMessage ?? "Failed to extract text from document.",
+                    cancellationToken);
                 return;
             }
 
+            var extractedText = fetchResult.Text;
             _logger.LogInformation("Extracted {Length} characters from document {DocumentId}",
                 extractedText.Length, regulatoryDocumentId);
 
@@ -99,8 +115,7 @@ public class RequirementIngestionJob
             if (extractedRequirements == null || extractedRequirements.Count == 0)
             {
                 _logger.LogWarning("No requirements extracted from document {DocumentId}", regulatoryDocumentId);
-                document.LastIngestedAt = DateTimeOffset.UtcNow;
-                await _dbContext.SaveChangesAsync(cancellationToken);
+                await MarkSucceededAsync(document, cancellationToken);
                 return;
             }
 
@@ -112,8 +127,7 @@ public class RequirementIngestionJob
             if (profiles.Count == 0)
             {
                 _logger.LogWarning("Document {DocumentId} has no active profiles", regulatoryDocumentId);
-                document.LastIngestedAt = DateTimeOffset.UtcNow;
-                await _dbContext.SaveChangesAsync(cancellationToken);
+                await MarkSucceededAsync(document, cancellationToken);
                 return;
             }
 
@@ -126,8 +140,7 @@ public class RequirementIngestionJob
             }
 
             // Step 4 — Update document status
-            document.LastIngestedAt = DateTimeOffset.UtcNow;
-            await _dbContext.SaveChangesAsync(cancellationToken);
+            await MarkSucceededAsync(document, cancellationToken);
 
             _logger.LogInformation(
                 "Ingestion complete for document {DocumentId}: {Created} draft requirements created across {ProfileCount} profiles",
@@ -138,45 +151,141 @@ public class RequirementIngestionJob
             _logger.LogError(ex,
                 "Ingestion job failed for document {DocumentId}: {Message}",
                 regulatoryDocumentId, ex.Message);
-            // Don't rethrow — Hangfire job should not fail noisily
+
+            // Don't rethrow — Hangfire job should not fail noisily. But it must not swallow the
+            // failure silently either: persist a Failed status so the frontend can surface it,
+            // rather than leaving the document looking like ingestion never ran.
+            if (document != null)
+            {
+                await MarkFailedAsync(document, "unknown", ex.Message, cancellationToken);
+            }
         }
     }
 
-    private async Task<string?> FetchDocumentTextAsync(
+    /// <summary>
+    /// Marks the document as Failed with a category + message, persisted immediately.
+    /// </summary>
+    private async Task MarkFailedAsync(
+        RegulatoryDocument document,
+        string errorCode,
+        string errorMessage,
+        CancellationToken cancellationToken)
+    {
+        document.LastIngestionStatus = RegulatoryIngestionStatus.Failed;
+        document.LastIngestionErrorCode = errorCode;
+        document.LastIngestionErrorMessage = errorMessage.Length > 2000 ? errorMessage[..2000] : errorMessage;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        _logger.LogError(
+            "Ingestion marked Failed for document {DocumentId}: [{ErrorCode}] {ErrorMessage}",
+            document.Id, errorCode, document.LastIngestionErrorMessage);
+    }
+
+    /// <summary>
+    /// Marks the document as Success and stamps LastIngestedAt, clearing any prior failure state.
+    /// </summary>
+    private async Task MarkSucceededAsync(RegulatoryDocument document, CancellationToken cancellationToken)
+    {
+        document.LastIngestedAt = DateTimeOffset.UtcNow;
+        document.LastIngestionStatus = RegulatoryIngestionStatus.Success;
+        document.LastIngestionErrorCode = null;
+        document.LastIngestionErrorMessage = null;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Result of fetching + extracting text from a document's SourceUrl, with an error
+    /// category ("invalid_uri", "fetch_failed", "parse_failed", "unknown") when it fails —
+    /// letting ExecuteAsync persist an honest, distinguishable failure reason instead of the
+    /// previous silent "return null" that left LastIngestedAt untouched forever.
+    /// </summary>
+    private sealed record DocumentFetchResult(bool Success, string? Text, string? ErrorCode, string? ErrorMessage)
+    {
+        public static DocumentFetchResult Ok(string text) => new(true, text, null, null);
+        public static DocumentFetchResult Fail(string errorCode, string errorMessage) => new(false, null, errorCode, errorMessage);
+    }
+
+    private async Task<DocumentFetchResult> FetchDocumentTextAsync(
         string sourceUrl, CancellationToken cancellationToken)
     {
+        if (sourceUrl.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+        {
+            // Use existing PDF extraction service — it already categorises its own failures.
+            var result = await _pdfExtractionService.ExtractTextFromUrlAsync(sourceUrl, cancellationToken);
+            if (!result.Success || string.IsNullOrWhiteSpace(result.Text))
+            {
+                _logger.LogError("PDF extraction failed for {Url}: [{Category}] {Error}",
+                    sourceUrl, result.ErrorCategory, result.ErrorMessage);
+                return DocumentFetchResult.Fail(
+                    MapPdfErrorCategory(result.ErrorCategory),
+                    result.ErrorMessage ?? "Failed to extract text from PDF.");
+            }
+            return DocumentFetchResult.Ok(result.Text);
+        }
+
         try
         {
-            if (sourceUrl.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
-            {
-                // Use existing PDF extraction service
-                var result = await _pdfExtractionService.ExtractTextFromUrlAsync(sourceUrl, cancellationToken);
-                if (!result.Success)
-                {
-                    _logger.LogError("PDF extraction failed: {Error}", result.ErrorMessage);
-                    return null;
-                }
-                return result.Text;
-            }
-
             // Fetch HTML and strip to plain text
             _logger.LogInformation("Fetching web page: {Url}", sourceUrl);
             var response = await _httpClient.GetAsync(sourceUrl, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogError("Failed to fetch URL {Url}: {Status}", sourceUrl, response.StatusCode);
-                return null;
+                return DocumentFetchResult.Fail("fetch_failed", $"Failed to fetch URL. HTTP status: {response.StatusCode}");
             }
 
             var html = await response.Content.ReadAsStringAsync(cancellationToken);
-            return StripHtmlToText(html);
+            var text = StripHtmlToText(html);
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return DocumentFetchResult.Fail("parse_failed", "Fetched page contained no extractable text.");
+            }
+            return DocumentFetchResult.Ok(text);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Not a fetch failure — genuine cancellation should propagate.
+            throw;
+        }
+        catch (TaskCanceledException ex)
+        {
+            _logger.LogError(ex, "Timed out fetching URL {Url}", sourceUrl);
+            return DocumentFetchResult.Fail("fetch_failed", "Request to the source URL timed out.");
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "HTTP error fetching URL {Url}", sourceUrl);
+            return DocumentFetchResult.Fail("fetch_failed", $"Failed to fetch URL: {ex.Message}");
+        }
+        catch (NotSupportedException ex)
+        {
+            _logger.LogError(ex, "Unsupported URI scheme fetching URL {Url}: {Message}", sourceUrl, ex.Message);
+            return DocumentFetchResult.Fail("invalid_uri",
+                "The source URL uses a scheme that cannot be fetched. Only http and https URLs are supported.");
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Invalid URI fetching URL {Url}: {Message}", sourceUrl, ex.Message);
+            return DocumentFetchResult.Fail("invalid_uri", $"The source URL could not be used: {ex.Message}");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to fetch document from {Url}", sourceUrl);
-            return null;
+            // Anything else that isn't cancellation: log honestly, categorise as unknown rather
+            // than forcing a fit, and let ExecuteAsync's outer catch persist Failed regardless.
+            _logger.LogError(ex, "Unexpected error fetching document from {Url}: {ExceptionType} — {Message}",
+                sourceUrl, ex.GetType().Name, ex.Message);
+            return DocumentFetchResult.Fail("unknown", $"Unexpected error while fetching document: {ex.Message}");
         }
     }
+
+    private static string MapPdfErrorCategory(string? pdfErrorCategory) => pdfErrorCategory switch
+    {
+        PdfExtractionErrorCategory.UnsupportedScheme => "invalid_uri",
+        PdfExtractionErrorCategory.NetworkError => "fetch_failed",
+        PdfExtractionErrorCategory.Timeout => "fetch_failed",
+        PdfExtractionErrorCategory.ParseFailure => "parse_failed",
+        _ => "unknown"
+    };
 
     private async Task<List<ExtractedRequirement>?> ExtractRequirementsViaClaudeAsync(
         string documentText, Guid documentId, CancellationToken cancellationToken)

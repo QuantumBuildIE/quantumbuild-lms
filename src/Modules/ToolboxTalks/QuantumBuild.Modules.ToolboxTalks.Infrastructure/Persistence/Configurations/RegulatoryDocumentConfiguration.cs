@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
+using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Persistence.Configurations;
 
@@ -35,6 +36,18 @@ public class RegulatoryDocumentConfiguration : IEntityTypeConfiguration<Regulato
             .HasDefaultValue(true);
 
         builder.Property(e => e.LastIngestedAt);
+
+        builder.Property(e => e.LastIngestionStatus)
+            .IsRequired()
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .HasDefaultValue(RegulatoryIngestionStatus.Idle);
+
+        builder.Property(e => e.LastIngestionErrorMessage)
+            .HasMaxLength(2000);
+
+        builder.Property(e => e.LastIngestionErrorCode)
+            .HasMaxLength(50);
 
         // Audit fields
         builder.Property(e => e.CreatedAt)
