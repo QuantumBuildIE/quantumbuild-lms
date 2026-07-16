@@ -2730,4 +2730,30 @@ Same class of bug: LookupValue table (LookupValueConfiguration.cs:26-27)
 has the identical unfiltered index. No evidence of a live delete
 path today, but worth checking during the broader fix.
 
+---
+
+#### §38 — TestTenantSeeder operator user link gap
+
+- **Priority:** P3 (affects test coverage quality, not runtime)
+- **Origin:** `[Engineering]` `[Session 2026-07-16]`
+- **Status:** Open — deferred pre-demo
+
+TestTenantSeeder.cs never wires Employee.UserId for
+Employees.OperatorEmployee (acknowledging comment present in the
+seeder). Any handler resolving the current employee by UserId
+(MarkSectionReadCommandHandler, CompleteToolboxTalkCommandHandler,
+etc.) fails for the Operator test client with "No employee record
+found."
+
+Pre-existing operator tests use defensive early returns that
+silently skip assertions rather than exercising the flow. This
+means operator-facing completion, refresher, and quiz flows are
+less test-covered than the pass rate suggests.
+
+Fix: extend TestTenantSeeder to wire OperatorEmployee.UserId to
+a real operator user, then audit existing operator tests to
+convert defensive early returns into real assertions. The audit
+step may surface additional latent bugs, so scope for triage
+time when picking this up.
+
 _End of BACKLOG.md._

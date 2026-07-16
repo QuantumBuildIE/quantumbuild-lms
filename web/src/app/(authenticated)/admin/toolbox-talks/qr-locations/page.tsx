@@ -56,6 +56,16 @@ interface LocationFormState {
   address: string;
 }
 
+// New locations get an address pre-populated with the current origin's toolbox-talks
+// path stub — the field is really a URL, and admins only need to append the talkId.
+function emptyLocationForm(): LocationFormState {
+  return {
+    name: "",
+    description: "",
+    address: typeof window !== "undefined" ? `${window.location.origin}/toolbox-talks/` : "",
+  };
+}
+
 function LocationDialog({
   open,
   onOpenChange,
@@ -69,12 +79,10 @@ function LocationDialog({
   onSave: (data: LocationFormState) => void;
   loading: boolean;
 }) {
-  const [form, setForm] = useState<LocationFormState>(
-    initial ?? { name: "", description: "", address: "" }
-  );
+  const [form, setForm] = useState<LocationFormState>(initial ?? emptyLocationForm());
 
   useEffect(() => {
-    setForm(initial ?? { name: "", description: "", address: "" });
+    setForm(initial ?? emptyLocationForm());
   }, [initial]);
 
   const set = (k: keyof LocationFormState) => (v: string) =>
