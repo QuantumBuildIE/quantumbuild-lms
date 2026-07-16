@@ -76,6 +76,11 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
     public FakeEmailService FakeEmailService { get; } = new();
 
     /// <summary>
+    /// Fake IToolboxTalkEmailService that captures completion/certificate emails for assertion in tests.
+    /// </summary>
+    public FakeToolboxTalkEmailService FakeToolboxTalkEmailService { get; } = new();
+
+    /// <summary>
     /// Fake subtitle services for testing subtitle processing without external APIs.
     /// </summary>
     public FakeTranscriptionService FakeTranscriptionService { get; } = new();
@@ -204,6 +209,11 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
             // without actually calling MailerSend or requiring SMTP configuration.
             services.RemoveAll<IEmailService>();
             services.AddSingleton<IEmailService>(FakeEmailService);
+
+            // Replace the real IToolboxTalkEmailService so tests can assert completion/certificate
+            // emails without actually calling MailerSend or requiring SMTP configuration.
+            services.RemoveAll<QuantumBuild.Modules.ToolboxTalks.Application.Services.IToolboxTalkEmailService>();
+            services.AddSingleton<QuantumBuild.Modules.ToolboxTalks.Application.Services.IToolboxTalkEmailService>(FakeToolboxTalkEmailService);
 
             // Register fake subtitle processing services to avoid external API calls
             services.RemoveAll<ITranscriptionService>();

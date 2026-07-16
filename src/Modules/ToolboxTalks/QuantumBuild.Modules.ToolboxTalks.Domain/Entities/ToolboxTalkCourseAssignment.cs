@@ -28,6 +28,12 @@ public class ToolboxTalkCourseAssignment : TenantEntity
     public bool ReminderSent2Weeks { get; set; } = false;
     public bool ReminderSent1Week { get; set; } = false;
 
+    /// <summary>
+    /// Whether course certificate generation failed when this assignment completed.
+    /// Mirrors ScheduledTalkCompletion.CertificateGenerationFailed for the course path.
+    /// </summary>
+    public bool CertificateGenerationFailed { get; set; } = false;
+
     // Navigation properties
     public virtual ToolboxTalkCourse Course { get; set; } = null!;
     public virtual Employee Employee { get; set; } = null!;

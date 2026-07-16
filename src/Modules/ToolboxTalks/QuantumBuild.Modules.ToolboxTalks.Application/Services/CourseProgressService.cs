@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 
@@ -7,8 +8,10 @@ namespace QuantumBuild.Modules.ToolboxTalks.Application.Services;
 
 public class CourseProgressService(
     IToolboxTalksDbContext dbContext,
+    ICoreDbContext coreDbContext,
     IRefresherSchedulingService refresherSchedulingService,
     ICertificateGenerationService certificateService,
+    IToolboxTalkEmailService emailService,
     ILogger<CourseProgressService> logger) : ICourseProgressService
 {
     public async Task UpdateProgressAsync(Guid courseAssignmentId, CancellationToken cancellationToken = default)
@@ -84,14 +87,59 @@ public class CourseProgressService(
                     signature = completion?.SignatureData;
                 }
 
-                await certificateService.GenerateCourseCertificateAsync(
+                var certificate = await certificateService.GenerateCourseCertificateAsync(
                     assignment,
                     signature,
                     cancellationToken);
+
+                if (certificate != null)
+                {
+                    // Send completion confirmation email (includes certificate download link) —
+                    // only fires for a newly-created certificate, never blocks completion
+                    var employee = await coreDbContext.Employees
+                        .FirstOrDefaultAsync(e => e.Id == assignment.EmployeeId && e.TenantId == assignment.TenantId && !e.IsDeleted, cancellationToken);
+
+                    if (employee != null)
+                    {
+                        try
+                        {
+                            await emailService.SendCourseCompletionConfirmationEmailAsync(
+                                assignment, employee, certificate.PdfStoragePath, cancellationToken);
+                        }
+                        catch (Exception emailEx)
+                        {
+                            logger.LogError(emailEx,
+                                "Failed to send course completion email for CourseAssignment {AssignmentId}, " +
+                                "Employee {EmployeeId}, Certificate {CertificateId}",
+                                assignment.Id, assignment.EmployeeId, certificate.Id);
+
+                            certificate.CertificateEmailFailed = true;
+                            await dbContext.SaveChangesAsync(cancellationToken);
+                        }
+                    }
+                    else
+                    {
+                        logger.LogWarning(
+                            "Cannot send course completion email — employee not found. EmployeeId {EmployeeId}, CourseAssignmentId {CourseAssignmentId}",
+                            assignment.EmployeeId, assignment.Id);
+                    }
+                }
+                else
+                {
+                    logger.LogWarning(
+                        "Certificate generation returned null for CourseAssignment {AssignmentId} (Course {CourseId}, Employee {EmployeeId}). " +
+                        "Check CertificateGenerationService logs for the specific reason.",
+                        assignment.Id, assignment.CourseId, assignment.EmployeeId);
+
+                    assignment.CertificateGenerationFailed = true;
+                    await dbContext.SaveChangesAsync(cancellationToken);
+                }
             }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Failed to generate certificate for course assignment {AssignmentId}", assignment.Id);
+                assignment.CertificateGenerationFailed = true;
+                await dbContext.SaveChangesAsync(cancellationToken);
                 // Don't rethrow — completion should still succeed
             }
         }

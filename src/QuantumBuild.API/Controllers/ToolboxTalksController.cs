@@ -2517,6 +2517,7 @@ public class ToolboxTalksController : ControllerBase
         Guid talkId,
         Guid completionId,
         [FromServices] ICertificateGenerationService certificateService,
+        [FromServices] QuantumBuild.Modules.ToolboxTalks.Application.Services.IToolboxTalkEmailService emailService,
         [FromServices] QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces.IToolboxTalksDbContext dbContext)
     {
         try
@@ -2524,6 +2525,8 @@ public class ToolboxTalksController : ControllerBase
             var completion = await dbContext.ScheduledTalkCompletions
                 .Include(c => c.ScheduledTalk)
                     .ThenInclude(st => st.ToolboxTalk)
+                .Include(c => c.ScheduledTalk)
+                    .ThenInclude(st => st.Employee)
                 .FirstOrDefaultAsync(c => c.Id == completionId
                     && c.ScheduledTalk.ToolboxTalkId == talkId
                     && c.ScheduledTalk.TenantId == _currentUserService.TenantId);
@@ -2542,6 +2545,22 @@ public class ToolboxTalksController : ControllerBase
             completion.CertificateUrl = certificate.PdfStoragePath;
             completion.CertificateGenerationFailed = false;
             await dbContext.SaveChangesAsync(HttpContext.RequestAborted);
+
+            // Send completion confirmation email (includes certificate download link) —
+            // only fires for a newly-created certificate, never blocks the regenerate response
+            try
+            {
+                await emailService.SendCompletionConfirmationEmailAsync(completion, completion.ScheduledTalk.Employee, HttpContext.RequestAborted);
+            }
+            catch (Exception emailEx)
+            {
+                _logger.LogError(emailEx,
+                    "Failed to send completion confirmation email after regenerating certificate for completion {CompletionId}, Certificate {CertificateId}",
+                    completionId, certificate.Id);
+
+                certificate.CertificateEmailFailed = true;
+                await dbContext.SaveChangesAsync(HttpContext.RequestAborted);
+            }
 
             return Ok(new { certificateUrl = certificate.PdfStoragePath });
         }
