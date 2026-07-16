@@ -74,6 +74,37 @@ public class SchedulingTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task CreateSchedule_WithDateOnlyScheduledDateString_Succeeds()
+    {
+        // Arrange - a date-only ISO string ("2026-07-16", no time/offset) deserialises to
+        // DateTime Kind=Unspecified. Regression test for the Npgsql timestamptz rejection
+        // this used to cause (CreateToolboxTalkScheduleCommandHandler.cs).
+        var talk = await CreateTestTalkAsync();
+
+        var command = new
+        {
+            ToolboxTalkId = talk.Id,
+            ScheduledDate = DateTime.UtcNow.Date.ToString("yyyy-MM-dd"),
+            EndDate = DateTime.UtcNow.Date.AddMonths(1).ToString("yyyy-MM-dd"),
+            Frequency = ToolboxTalkFrequency.Once,
+            AssignToAllEmployees = false,
+            EmployeeIds = new[] { TestTenantConstants.Employees.Employee1 },
+            Notes = "Schedule created from date-only strings"
+        };
+
+        // Act
+        var response = await AdminClient.PostAsJsonAsync("/api/toolbox-talks/schedules", command);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var schedule = await response.Content.ReadFromJsonAsync<ToolboxTalkScheduleDto>();
+        schedule.Should().NotBeNull();
+        schedule!.ToolboxTalkId.Should().Be(talk.Id);
+        schedule.EndDate.Should().NotBeNull();
+    }
+
+    [Fact]
     public async Task CreateSchedule_RecurringWeekly_SetsFrequencyAndEndDate()
     {
         // Arrange
@@ -536,6 +567,47 @@ public class SchedulingTests : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var updated = await response.Content.ReadFromJsonAsync<ToolboxTalkScheduleDto>();
         updated!.Notes.Should().Be("Updated notes on active schedule");
+    }
+
+    [Fact]
+    public async Task UpdateSchedule_WithDateOnlyScheduledDateString_Succeeds()
+    {
+        // Arrange - a date-only ISO string ("2026-07-16", no time/offset) deserialises to
+        // DateTime Kind=Unspecified. Regression test for the Npgsql timestamptz rejection
+        // this used to cause on the update path (UpdateToolboxTalkScheduleCommandHandler.cs).
+        var talk = await CreateTestTalkAsync();
+        var createCommand = new
+        {
+            ToolboxTalkId = talk.Id,
+            ScheduledDate = DateTime.UtcNow.Date.AddDays(7),
+            Frequency = ToolboxTalkFrequency.Once,
+            AssignToAllEmployees = false,
+            EmployeeIds = new[] { TestTenantConstants.Employees.Employee1 },
+            Notes = "Original notes"
+        };
+        var createResponse = await AdminClient.PostAsJsonAsync("/api/toolbox-talks/schedules", createCommand);
+        var schedule = await createResponse.Content.ReadFromJsonAsync<ToolboxTalkScheduleDto>();
+
+        var updateCommand = new
+        {
+            Id = schedule!.Id,
+            ToolboxTalkId = talk.Id,
+            ScheduledDate = DateTime.UtcNow.Date.ToString("yyyy-MM-dd"),
+            EndDate = DateTime.UtcNow.Date.AddMonths(1).ToString("yyyy-MM-dd"),
+            Frequency = schedule.Frequency,
+            AssignToAllEmployees = schedule.AssignToAllEmployees,
+            EmployeeIds = new[] { TestTenantConstants.Employees.Employee1 },
+            Notes = "Updated from date-only strings"
+        };
+
+        // Act
+        var response = await AdminClient.PutAsJsonAsync($"/api/toolbox-talks/schedules/{schedule.Id}", updateCommand);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var updated = await response.Content.ReadFromJsonAsync<ToolboxTalkScheduleDto>();
+        updated!.EndDate.Should().NotBeNull();
+        updated.Notes.Should().Be("Updated from date-only strings");
     }
 
     #endregion

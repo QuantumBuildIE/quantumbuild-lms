@@ -2,6 +2,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using QuantumBuild.Core.Application.Features.Employees;
 using QuantumBuild.Core.Application.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Application.Common;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
@@ -104,17 +105,23 @@ public class CreateToolboxTalkScheduleCommandHandler : IRequestHandler<CreateToo
         }
 
         // Create the schedule
+        // ScheduledDate/EndDate arrive as Kind=Unspecified when a client sends a date-only
+        // string (e.g. "2026-07-16") with no offset — Npgsql rejects Unspecified DateTimes
+        // against the timestamptz columns. Normalise to Utc before persisting.
+        var scheduledDate = DateTimeUtils.EnsureUtc(request.ScheduledDate);
+        var endDate = request.EndDate.HasValue ? DateTimeUtils.EnsureUtc(request.EndDate.Value) : (DateTime?)null;
+
         var schedule = new ToolboxTalkSchedule
         {
             Id = Guid.NewGuid(),
             TenantId = request.TenantId,
             ToolboxTalkId = request.ToolboxTalkId,
-            ScheduledDate = request.ScheduledDate,
-            EndDate = request.EndDate,
+            ScheduledDate = scheduledDate,
+            EndDate = endDate,
             Frequency = request.Frequency,
             AssignToAllEmployees = request.AssignToAllEmployees,
             Status = ToolboxTalkScheduleStatus.Active,
-            NextRunDate = request.ScheduledDate,
+            NextRunDate = scheduledDate,
             Notes = request.Notes
         };
 
