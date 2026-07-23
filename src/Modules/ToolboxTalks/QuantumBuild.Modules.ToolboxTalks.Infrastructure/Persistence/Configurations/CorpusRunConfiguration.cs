@@ -62,7 +62,5 @@ public class CorpusRunConfiguration : IEntityTypeConfiguration<CorpusRun>
 
         builder.HasIndex(r => r.TenantId)
             .HasDatabaseName("ix_corpus_runs_tenant_id");
-
-        builder.HasQueryFilter(r => !r.IsDeleted);
     }
 }

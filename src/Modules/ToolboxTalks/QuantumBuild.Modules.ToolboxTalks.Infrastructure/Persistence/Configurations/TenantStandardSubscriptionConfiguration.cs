@@ -51,7 +51,5 @@ public class TenantStandardSubscriptionConfiguration : IEntityTypeConfiguration<
             .IsUnique()
             .HasDatabaseName("ix_tenant_standard_subscriptions_tenant_body");
 
-        // Query filter for soft delete (tenant filter applied in ApplicationDbContext)
-        builder.HasQueryFilter(e => !e.IsDeleted);
     }
 }
