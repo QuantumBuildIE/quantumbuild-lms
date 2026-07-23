@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
+using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Persistence.Seed;
 
@@ -40,6 +41,7 @@ public static class RegulatoryProfileSeedData
                 Code = code,
                 Name = name,
                 Country = country,
+                Kind = RegulatoryBodyKind.Regulation,
                 CreatedAt = now,
                 CreatedBy = "system"
             });
