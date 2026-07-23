@@ -17,9 +17,19 @@ public class FakeAnthropicHttpMessageHandler : HttpMessageHandler
     /// </summary>
     public string ResponseContentText { get; set; } = "[]";
 
-    protected override Task<HttpResponseMessage> SendAsync(
+    /// <summary>
+    /// The raw JSON body of the most recent request sent through this handler — lets tests
+    /// assert on what was actually sent to Claude (e.g. which candidate requirements were
+    /// included in the prompt) without needing a real API call.
+    /// </summary>
+    public string? CapturedRequestBody { get; private set; }
+
+    protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
+        if (request.Content != null)
+            CapturedRequestBody = await request.Content.ReadAsStringAsync(cancellationToken);
+
         var body = new
         {
             content = new[] { new { type = "text", text = ResponseContentText } },
@@ -31,6 +41,6 @@ public class FakeAnthropicHttpMessageHandler : HttpMessageHandler
         {
             Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json")
         };
-        return Task.FromResult(response);
+        return response;
     }
 }
