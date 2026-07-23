@@ -1,3 +1,5 @@
+using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
+
 namespace QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Validation;
 
 /// <summary>
@@ -159,7 +161,9 @@ public record RegulatoryDocumentUploadResponseDto
 }
 
 /// <summary>
-/// A regulatory body available as a picker option when creating a new regulatory document.
+/// A regulatory body available as a picker option when creating a new regulatory document,
+/// or a row in the admin catalog list. Kind/SectorId/SectorName let the frontend distinguish
+/// Regulation bodies (SectorId always null) from Standard bodies (SectorId always populated).
 /// </summary>
 public record RegulatoryBodyDto
 {
@@ -167,6 +171,24 @@ public record RegulatoryBodyDto
     public string Name { get; init; } = string.Empty;
     public string Code { get; init; } = string.Empty;
     public string Country { get; init; } = string.Empty;
+    public string Kind { get; init; } = string.Empty;
+    public Guid? SectorId { get; init; }
+    public string? SectorName { get; init; }
+}
+
+/// <summary>
+/// Request to create a new regulatory body (catalog entry) — either a Regulation (SectorId
+/// must be null) or a Standard (SectorId required). Enforced at the service layer and by a DB
+/// check constraint (see RegulatoryBodyConfiguration).
+/// </summary>
+public record CreateRegulatoryBodyRequest
+{
+    public string Name { get; init; } = string.Empty;
+    public string Code { get; init; } = string.Empty;
+    public string Country { get; init; } = string.Empty;
+    public string? Website { get; init; }
+    public RegulatoryBodyKind Kind { get; init; } = RegulatoryBodyKind.Regulation;
+    public Guid? SectorId { get; init; }
 }
 
 /// <summary>

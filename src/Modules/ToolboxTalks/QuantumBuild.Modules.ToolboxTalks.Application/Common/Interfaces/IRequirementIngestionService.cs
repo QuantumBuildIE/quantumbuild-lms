@@ -88,9 +88,11 @@ public interface IRequirementIngestionService
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Lists all regulatory bodies, for use in a document-creation body picker.
+    /// Lists regulatory bodies for the admin catalog / document-creation body picker.
+    /// Pass <paramref name="kind"/> to filter to Regulation-only or Standard-only bodies.
     /// </summary>
     Task<List<RegulatoryBodyDto>> GetRegulatoryBodiesAsync(
+        Domain.Enums.RegulatoryBodyKind? kind = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -99,5 +101,13 @@ public interface IRequirementIngestionService
     /// </summary>
     Task<RegulatoryDocumentListDto> CreateDocumentAsync(
         CreateRegulatoryDocumentRequest request,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Creates a new regulatory body (catalog entry) — a Regulation or a Standard. Enforces the
+    /// Kind/SectorId invariant at the handler layer, in addition to the DB check constraint.
+    /// </summary>
+    Task<RegulatoryBodyDto> CreateRegulatoryBodyAsync(
+        CreateRegulatoryBodyRequest request,
         CancellationToken cancellationToken = default);
 }

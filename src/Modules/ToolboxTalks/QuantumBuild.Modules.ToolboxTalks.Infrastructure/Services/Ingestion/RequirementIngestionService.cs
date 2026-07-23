@@ -384,9 +384,17 @@ public class RequirementIngestionService : IRequirementIngestionService
     }
 
     public async Task<List<RegulatoryBodyDto>> GetRegulatoryBodiesAsync(
+        RegulatoryBodyKind? kind = null,
         CancellationToken cancellationToken = default)
     {
-        return await _dbContext.RegulatoryBodies
+        var query = _dbContext.RegulatoryBodies
+            .Include(b => b.Sector)
+            .AsQueryable();
+
+        if (kind is not null)
+            query = query.Where(b => b.Kind == kind.Value);
+
+        return await query
             .OrderBy(b => b.Name)
             .Select(b => new RegulatoryBodyDto
             {
@@ -394,8 +402,88 @@ public class RequirementIngestionService : IRequirementIngestionService
                 Name = b.Name,
                 Code = b.Code,
                 Country = b.Country,
+                Kind = b.Kind.ToString(),
+                SectorId = b.SectorId,
+                SectorName = b.Sector != null ? b.Sector.Name : null,
             })
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<RegulatoryBodyDto> CreateRegulatoryBodyAsync(
+        CreateRegulatoryBodyRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+            throw new InvalidOperationException("Name is required.");
+
+        if (request.Name.Trim().Length > 100)
+            throw new InvalidOperationException("Name must be 100 characters or fewer.");
+
+        if (string.IsNullOrWhiteSpace(request.Code))
+            throw new InvalidOperationException("Code is required.");
+
+        if (request.Code.Trim().Length > 20)
+            throw new InvalidOperationException("Code must be 20 characters or fewer.");
+
+        if (string.IsNullOrWhiteSpace(request.Country))
+            throw new InvalidOperationException("Country is required.");
+
+        if (request.Country.Trim().Length > 100)
+            throw new InvalidOperationException("Country must be 100 characters or fewer.");
+
+        if (!string.IsNullOrWhiteSpace(request.Website) && request.Website.Trim().Length > 500)
+            throw new InvalidOperationException("Website must be 500 characters or fewer.");
+
+        if (request.Kind == RegulatoryBodyKind.Standard && request.SectorId is null)
+            throw new InvalidOperationException("Standard regulatory bodies must specify a SectorId.");
+
+        if (request.Kind == RegulatoryBodyKind.Regulation && request.SectorId is not null)
+            throw new InvalidOperationException("Regulation regulatory bodies must not specify a SectorId.");
+
+        var normalizedCode = request.Code.Trim();
+        var codeExists = await _dbContext.RegulatoryBodies
+            .AnyAsync(b => b.Code == normalizedCode, cancellationToken);
+
+        if (codeExists)
+            throw new InvalidOperationException($"A regulatory body with code '{normalizedCode}' already exists.");
+
+        Domain.Entities.Sector? sector = null;
+        if (request.SectorId is not null)
+        {
+            sector = await _dbContext.Sectors
+                .FirstOrDefaultAsync(s => s.Id == request.SectorId.Value, cancellationToken)
+                ?? throw new InvalidOperationException($"Sector {request.SectorId} not found");
+        }
+
+        var body = new Domain.Entities.RegulatoryBody
+        {
+            Name = request.Name.Trim(),
+            Code = normalizedCode,
+            Country = request.Country.Trim(),
+            Website = string.IsNullOrWhiteSpace(request.Website) ? null : request.Website.Trim(),
+            Kind = request.Kind,
+            SectorId = request.SectorId,
+        };
+
+        // Defence in depth alongside the DB check constraint (ck_regulatory_bodies_kind_sector).
+        body.ValidateSectorConsistency();
+
+        _dbContext.RegulatoryBodies.Add(body);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Created regulatory body {BodyId}: {Name} ({Kind})", body.Id, body.Name, body.Kind);
+
+        return new RegulatoryBodyDto
+        {
+            Id = body.Id,
+            Name = body.Name,
+            Code = body.Code,
+            Country = body.Country,
+            Kind = body.Kind.ToString(),
+            SectorId = body.SectorId,
+            SectorName = sector?.Name,
+        };
     }
 
     public async Task<RegulatoryDocumentListDto> CreateDocumentAsync(

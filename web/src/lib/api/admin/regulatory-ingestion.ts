@@ -11,7 +11,9 @@ import type {
   RegulatoryBrowseBody,
   RegulatoryDocumentUploadResponse,
   RegulatoryBody,
+  RegulatoryBodyKind,
   CreateRegulatoryDocumentRequest,
+  CreateRegulatoryBodyRequest,
 } from "@/types/regulatory";
 
 export async function getRegulatoryDocuments(): Promise<RegulatoryDocumentListItem[]> {
@@ -21,8 +23,22 @@ export async function getRegulatoryDocuments(): Promise<RegulatoryDocumentListIt
   return response.data;
 }
 
-export async function getRegulatoryBodies(): Promise<RegulatoryBody[]> {
-  const response = await apiClient.get<RegulatoryBody[]>("/regulatory/bodies");
+export async function getRegulatoryBodies(
+  kind?: RegulatoryBodyKind
+): Promise<RegulatoryBody[]> {
+  const response = await apiClient.get<RegulatoryBody[]>("/regulatory/bodies", {
+    params: kind ? { kind } : undefined,
+  });
+  return response.data;
+}
+
+export async function createRegulatoryBody(
+  data: CreateRegulatoryBodyRequest
+): Promise<RegulatoryBody> {
+  const response = await apiClient.post<RegulatoryBody>(
+    "/regulatory/bodies",
+    data
+  );
   return response.data;
 }
 

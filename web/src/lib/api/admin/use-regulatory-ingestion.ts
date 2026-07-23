@@ -12,6 +12,7 @@ import {
   uploadRegulatoryDocument,
   getRegulatoryBodies,
   createRegulatoryDocument,
+  createRegulatoryBody,
 } from "./regulatory-ingestion";
 import type {
   StartIngestionRequest,
@@ -19,6 +20,8 @@ import type {
   UpdateDraftRequirementRequest,
   RejectRequirementRequest,
   CreateRegulatoryDocumentRequest,
+  CreateRegulatoryBodyRequest,
+  RegulatoryBodyKind,
 } from "@/types/regulatory";
 
 export const regulatoryKeys = {
@@ -28,7 +31,8 @@ export const regulatoryKeys = {
   draftRequirements: (documentId: string) =>
     ["regulatory-draft-requirements", documentId] as const,
   browse: () => ["regulatory-browse"] as const,
-  bodies: () => ["regulatory-bodies"] as const,
+  bodies: (kind?: RegulatoryBodyKind) =>
+    kind ? (["regulatory-bodies", kind] as const) : (["regulatory-bodies"] as const),
 };
 
 export function useRegulatoryDocuments() {
@@ -173,11 +177,23 @@ export function useUploadRegulatoryDocument(documentId: string) {
   });
 }
 
-export function useRegulatoryBodies() {
+export function useRegulatoryBodies(kind?: RegulatoryBodyKind) {
   return useQuery({
-    queryKey: regulatoryKeys.bodies(),
-    queryFn: () => getRegulatoryBodies(),
+    queryKey: regulatoryKeys.bodies(kind),
+    queryFn: () => getRegulatoryBodies(kind),
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useCreateRegulatoryBody() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateRegulatoryBodyRequest) => createRegulatoryBody(data),
+    onSuccess: () => {
+      // Invalidates every cached bodies query, filtered or not — matches the array-prefix
+      // matching TanStack Query does when the passed key is a strict prefix of the cached one.
+      queryClient.invalidateQueries({ queryKey: ["regulatory-bodies"] });
+    },
   });
 }
 

@@ -75,11 +75,16 @@ export interface RegulatoryDocumentUploadResponse {
   fileSizeBytes: number;
 }
 
+export type RegulatoryBodyKind = "Regulation" | "Standard";
+
 export interface RegulatoryBody {
   id: string;
   name: string;
   code: string;
   country: string;
+  kind: RegulatoryBodyKind;
+  sectorId: string | null;
+  sectorName: string | null;
 }
 
 export interface CreateRegulatoryDocumentRequest {
@@ -87,6 +92,19 @@ export interface CreateRegulatoryDocumentRequest {
   title: string;
   version: string;
   sourceUrl?: string;
+}
+
+/**
+ * Standards require sectorId; Regulations must leave it undefined/null — enforced by the
+ * backend at both the service layer and a DB check constraint.
+ */
+export interface CreateRegulatoryBodyRequest {
+  name: string;
+  code: string;
+  country: string;
+  website?: string;
+  kind: RegulatoryBodyKind;
+  sectorId?: string | null;
 }
 
 export interface DraftRequirementDto {

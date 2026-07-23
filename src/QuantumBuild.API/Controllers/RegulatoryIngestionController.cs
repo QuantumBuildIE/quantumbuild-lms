@@ -4,6 +4,7 @@ using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Application.Exceptions;
+using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 
 namespace QuantumBuild.API.Controllers;
 
@@ -54,21 +55,53 @@ public class RegulatoryIngestionController : ControllerBase
     }
 
     /// <summary>
-    /// List all regulatory bodies, for use in a document-creation body picker.
+    /// List regulatory bodies for the admin catalog or a document-creation body picker.
+    /// Pass ?kind=Regulation or ?kind=Standard to filter; omit for all bodies.
     /// </summary>
     [HttpGet("bodies")]
     [ProducesResponseType(typeof(List<RegulatoryBodyDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetBodies(CancellationToken cancellationToken)
+    public async Task<IActionResult> GetBodies(
+        [FromQuery] RegulatoryBodyKind? kind,
+        CancellationToken cancellationToken)
     {
         try
         {
-            var bodies = await _ingestionService.GetRegulatoryBodiesAsync(cancellationToken);
+            var bodies = await _ingestionService.GetRegulatoryBodiesAsync(kind, cancellationToken);
             return Ok(bodies);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving regulatory bodies");
             return StatusCode(500, new { message = "Error retrieving regulatory bodies" });
+        }
+    }
+
+    /// <summary>
+    /// Create a new regulatory body (catalog entry) — a Regulation or a Standard. Standards
+    /// require a SectorId; Regulations must not carry one. Documents are attached separately
+    /// via POST /api/regulatory/documents once the body exists.
+    /// </summary>
+    [HttpPost("bodies")]
+    [ProducesResponseType(typeof(RegulatoryBodyDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> CreateBody(
+        [FromBody] CreateRegulatoryBodyRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _ingestionService.CreateRegulatoryBodyAsync(request, cancellationToken);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Regulatory body creation failed");
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating regulatory body");
+            return StatusCode(500, new { message = "Error creating regulatory body" });
         }
     }
 
