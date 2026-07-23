@@ -156,3 +156,31 @@ export interface StartIngestionRequest {
 export interface RejectRequirementRequest {
   notes: string;
 }
+
+// ============================================
+// Tenant Standard Subscription types (My Standards)
+// ============================================
+
+export interface AvailableStandardDto {
+  id: string;
+  name: string;
+  code: string;
+  country: string;
+  sectorId: string;
+  sectorName: string;
+  isSubscribed: boolean;
+  isCrossSector: boolean;
+}
+
+export interface TenantStandardSubscriptionDto {
+  id: string;
+  tenantId: string;
+  regulatoryBodyId: string;
+  name: string;
+  code: string;
+  country: string;
+  sectorId: string;
+  sectorName: string;
+  isCrossSector: boolean;
+  subscribedAt: string;
+}

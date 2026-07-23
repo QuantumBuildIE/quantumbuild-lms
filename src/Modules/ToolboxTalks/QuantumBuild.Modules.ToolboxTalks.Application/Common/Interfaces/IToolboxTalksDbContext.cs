@@ -62,6 +62,9 @@ public interface IToolboxTalksDbContext
     DbSet<Sector> Sectors { get; }
     DbSet<TenantSector> TenantSectors { get; }
 
+    // Tenant standard subscription entities
+    DbSet<TenantStandardSubscription> TenantStandardSubscriptions { get; }
+
     // Reviewer configuration entities
     DbSet<TenantReviewerConfiguration> TenantReviewerConfigurations { get; }
 

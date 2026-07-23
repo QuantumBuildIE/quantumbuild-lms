@@ -24,10 +24,12 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Mapping;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.PreFlightScan;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.SafetyTermRegistry;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Sectors;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Standards;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Reviewers;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Mapping;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Sectors;
+using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Standards;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Reviewers;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.ContentCreation;
@@ -322,6 +324,7 @@ public static class ServiceCollectionExtensions
         // Register sector services (system-wide sector lookup + tenant-sector management)
         services.AddScoped<ISectorService, SectorService>();
         services.AddScoped<ITenantSectorService, TenantSectorService>();
+        services.AddScoped<ITenantStandardSubscriptionService, TenantStandardSubscriptionService>();
 
         // Register tenant reviewer configuration service (per-language external reviewer config)
         services.AddScoped<ITenantReviewerConfigurationService, TenantReviewerConfigurationService>();

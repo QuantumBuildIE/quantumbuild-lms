@@ -11,6 +11,7 @@ const regulatoryNavItems = [
   { href: "/admin/regulatory/compliance", label: "Compliance", superUserOnly: false },
   { href: "/admin/regulatory/mappings", label: "Mappings", superUserOnly: false },
   { href: "/admin/regulatory/my-sectors", label: "My Sectors", superUserOnly: false },
+  { href: "/admin/regulatory/my-standards", label: "My Standards", superUserOnly: false },
   { href: "/admin/regulatory/system", label: "System Administration", superUserOnly: true },
 ];
 
