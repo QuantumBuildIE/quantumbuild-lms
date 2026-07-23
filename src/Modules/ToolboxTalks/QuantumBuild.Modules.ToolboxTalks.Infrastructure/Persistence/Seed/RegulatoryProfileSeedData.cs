@@ -16,10 +16,53 @@ public static class RegulatoryProfileSeedData
         var now = DateTime.UtcNow;
 
         // --- 1. Regulatory Bodies ---
-        var existingBodyCodes = await context.Set<RegulatoryBody>()
+        // TranslationInstructions text ported verbatim from the old TranslationPrompts.GetSectorInstructions
+        // switch statement (removed in the ApplicableFrameworksService refactor) — one block per body, reused
+        // for every sector the body's documents cover (e.g. HIQA covers both homecare and healthcare).
+        var bodyTranslationInstructions = new Dictionary<string, string>
+        {
+            ["HIQA"] = """
+                SECTOR-SPECIFIC REQUIREMENTS (Healthcare / Homecare — HIQA):
+                - REGULATORY CONTEXT: This is a HIQA-regulated homecare/healthcare compliance document. Regulatory precision is mandatory.
+                - SAFEGUARDING: "Safeguarding" must retain its full legal meaning — do not translate as generic "safety" or "protection".
+                - MANDATORY REPORTING: Notification deadlines (e.g. "within 3 working days") must be numerically exact.
+                - JOB TITLES: Designated Liaison Person (DLP), Person in Charge (PIC), Registered Provider — translate consistently using approved equivalents or retain in English if no standard equivalent exists.
+                - CONSENT: "Informed consent", "capacity", "advocacy" — use clinical/legal standard translations.
+                """,
+
+            ["HSA"] = """
+                SECTOR-SPECIFIC REQUIREMENTS (Construction / Manufacturing — HSA):
+                - REGULATORY CONTEXT: This is an HSA-regulated workplace safety document. Safety language precision is mandatory.
+                - PPE: All personal protective equipment terms must be translated precisely — no omissions or paraphrasing.
+                - PROHIBITIONS: "Do not", "never", "must not" must retain full imperative force — never soften to "should not" or "it is recommended".
+                - ROLES: PSDP, PSCS, competent person — translate with approved equivalents only.
+                - RISK: Hazard categories and risk levels must match source exactly.
+                """,
+
+            ["FSAI"] = """
+                SECTOR-SPECIFIC REQUIREMENTS (Food & Hospitality — FSAI):
+                - REGULATORY CONTEXT: This is an FSAI-regulated food safety document. Allergen and HACCP terminology precision is mandatory.
+                - ALLERGENS: All 14 declarable allergens must be named precisely — never paraphrased or approximated.
+                - HACCP: Critical Control Point terminology must be consistent and exact throughout.
+                - TEMPERATURES: All numeric temperature thresholds must be preserved exactly.
+                - CCP LIMITS: Critical limits must not be softened or approximated.
+                """,
+
+            ["RSA"] = """
+                SECTOR-SPECIFIC REQUIREMENTS (Transport — RSA):
+                - REGULATORY CONTEXT: This is an RSA-regulated road transport document. Numeric precision is mandatory.
+                - DRIVER HOURS: All hour and rest period requirements must be numerically exact.
+                - TACHOGRAPH: Technical terms must use approved translations only — do not improvise.
+                - LOAD LIMITS: All weight and dimension limits must be preserved exactly.
+                - PROHIBITIONS: Driving prohibitions must retain full legal force.
+                """,
+        };
+
+        var existingBodies = await context.Set<RegulatoryBody>()
             .IgnoreQueryFilters()
-            .Select(b => b.Code)
+            .Where(b => !b.IsDeleted)
             .ToListAsync();
+        var existingBodyCodes = existingBodies.Select(b => b.Code).ToHashSet();
 
         var bodySeeds = new (string Code, string Name, string Country)[]
         {
@@ -42,6 +85,7 @@ public static class RegulatoryProfileSeedData
                 Name = name,
                 Country = country,
                 Kind = RegulatoryBodyKind.Regulation,
+                TranslationInstructions = bodyTranslationInstructions.GetValueOrDefault(code),
                 CreatedAt = now,
                 CreatedBy = "system"
             });
@@ -52,6 +96,22 @@ public static class RegulatoryProfileSeedData
             await context.Set<RegulatoryBody>().AddRangeAsync(newBodies);
             await context.SaveChangesAsync();
             logger.LogInformation("Seeded {Count} regulatory bodies", newBodies.Count);
+        }
+
+        // Backfill TranslationInstructions on bodies seeded before this field existed.
+        var bodiesNeedingBackfill = existingBodies
+            .Where(b => string.IsNullOrEmpty(b.TranslationInstructions)
+                && bodyTranslationInstructions.ContainsKey(b.Code))
+            .ToList();
+        if (bodiesNeedingBackfill.Count > 0)
+        {
+            foreach (var body in bodiesNeedingBackfill)
+            {
+                body.TranslationInstructions = bodyTranslationInstructions[body.Code];
+            }
+            await context.SaveChangesAsync();
+            logger.LogInformation(
+                "Backfilled TranslationInstructions on {Count} pre-existing regulatory bodies", bodiesNeedingBackfill.Count);
         }
 
         // Reload all bodies for FK lookups
@@ -323,7 +383,8 @@ public static class RegulatoryProfileSeedData
             logger.LogInformation("Seeded {Count} regulatory criteria", newCriteria.Count);
         }
 
-        if (newBodies.Count == 0 && newDocs.Count == 0 && newProfiles.Count == 0 && newCriteria.Count == 0)
+        if (newBodies.Count == 0 && newDocs.Count == 0 && newProfiles.Count == 0 && newCriteria.Count == 0
+            && bodiesNeedingBackfill.Count == 0)
         {
             logger.LogInformation("All regulatory profile data already exists, skipping");
         }

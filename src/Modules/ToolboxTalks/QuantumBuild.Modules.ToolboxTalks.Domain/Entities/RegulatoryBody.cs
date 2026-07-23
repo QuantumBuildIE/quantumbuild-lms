@@ -28,6 +28,13 @@ public class RegulatoryBody : BaseEntity
     /// </summary>
     public Guid? SectorId { get; set; }
 
+    /// <summary>
+    /// Body-specific terminology/instructions injected into the AI translation prompt (Tier 2 —
+    /// see TranslationPrompts) when this body applies to the tenant/sector being translated.
+    /// Null means no body-specific instructions are added.
+    /// </summary>
+    public string? TranslationInstructions { get; set; }
+
     // Navigation properties
     public ICollection<RegulatoryDocument> Documents { get; set; } = new List<RegulatoryDocument>();
     public Sector? Sector { get; set; }

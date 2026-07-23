@@ -23,4 +23,14 @@ public interface IApplicableFrameworksService
     /// </summary>
     Task<List<ApplicableFrameworkDto>> GetApplicableFrameworksAsync(
         Guid tenantId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Composes AI translation-prompt instructions from the tenant's applicable frameworks
+    /// (Regulations + subscribed Standards) matching the given sector. Replaces the old
+    /// sector-hardcoded switch in TranslationPrompts.GetSectorInstructions. Returns null when
+    /// sectorKey is empty or no applicable framework carries TranslationInstructions text —
+    /// callers should treat null as "no sector-specific instructions, translate normally".
+    /// </summary>
+    Task<string?> GetTranslationInstructionsAsync(
+        Guid tenantId, string? sectorKey, CancellationToken cancellationToken = default);
 }

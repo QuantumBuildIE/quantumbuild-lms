@@ -12,6 +12,7 @@ public class ApplicableFrameworksService(IToolboxTalksDbContext dbContext) : IAp
         Guid tenantId, CancellationToken cancellationToken = default)
     {
         var sectorKeys = await dbContext.TenantSectors
+            .IgnoreQueryFilters()
             .Where(ts => ts.TenantId == tenantId && !ts.IsDeleted)
             .Select(ts => ts.Sector.Key)
             .ToListAsync(cancellationToken);
@@ -46,10 +47,11 @@ public class ApplicableFrameworksService(IToolboxTalksDbContext dbContext) : IAp
                     BodyCode = r.RegulatoryProfile.RegulatoryDocument.RegulatoryBody.Code,
                     SectorKey = r.RegulatoryProfile.SectorKey,
                     SectorName = r.RegulatoryProfile.Sector.Name,
+                    TranslationInstructions = r.RegulatoryProfile.RegulatoryDocument.RegulatoryBody.TranslationInstructions,
                 })
                 .Select(g => new ApplicableFrameworkDto(
                     g.Key.BodyId, g.Key.BodyName, g.Key.BodyCode, nameof(RegulatoryBodyKind.Regulation),
-                    g.Key.SectorKey, g.Key.SectorName, "Sector", g.Count()))
+                    g.Key.SectorKey, g.Key.SectorName, "Sector", g.Count(), g.Key.TranslationInstructions))
                 .ToListAsync(cancellationToken);
 
             result.AddRange(regulationRows);
@@ -69,10 +71,11 @@ public class ApplicableFrameworksService(IToolboxTalksDbContext dbContext) : IAp
                     BodyCode = r.RegulatoryProfile.RegulatoryDocument.RegulatoryBody.Code,
                     SectorKey = r.RegulatoryProfile.SectorKey,
                     SectorName = r.RegulatoryProfile.Sector.Name,
+                    TranslationInstructions = r.RegulatoryProfile.RegulatoryDocument.RegulatoryBody.TranslationInstructions,
                 })
                 .Select(g => new ApplicableFrameworkDto(
                     g.Key.BodyId, g.Key.BodyName, g.Key.BodyCode, nameof(RegulatoryBodyKind.Standard),
-                    g.Key.SectorKey, g.Key.SectorName, "Subscription", g.Count()))
+                    g.Key.SectorKey, g.Key.SectorName, "Subscription", g.Count(), g.Key.TranslationInstructions))
                 .ToListAsync(cancellationToken);
 
             result.AddRange(standardRows);
@@ -93,10 +96,28 @@ public class ApplicableFrameworksService(IToolboxTalksDbContext dbContext) : IAp
 
                 result.AddRange(emptyBodies.Select(b => new ApplicableFrameworkDto(
                     b.Id, b.Name, b.Code, nameof(RegulatoryBodyKind.Standard),
-                    b.Sector?.Key ?? string.Empty, b.Sector?.Name ?? string.Empty, "Subscription", 0)));
+                    b.Sector?.Key ?? string.Empty, b.Sector?.Name ?? string.Empty, "Subscription", 0,
+                    b.TranslationInstructions)));
             }
         }
 
         return result.OrderBy(f => f.Kind).ThenBy(f => f.BodyName).ToList();
+    }
+
+    public async Task<string?> GetTranslationInstructionsAsync(
+        Guid tenantId, string? sectorKey, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sectorKey))
+            return null;
+
+        var frameworks = await GetApplicableFrameworksAsync(tenantId, cancellationToken);
+
+        var instructions = frameworks
+            .Where(f => string.Equals(f.SectorKey, sectorKey, StringComparison.OrdinalIgnoreCase))
+            .Select(f => f.TranslationInstructions)
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .ToList();
+
+        return instructions.Count > 0 ? string.Join("\n\n", instructions) : null;
     }
 }

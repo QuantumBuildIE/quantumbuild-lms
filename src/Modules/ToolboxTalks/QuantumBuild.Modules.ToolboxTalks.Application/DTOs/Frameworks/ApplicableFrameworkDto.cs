@@ -13,7 +13,8 @@ public record ApplicableFrameworkDto(
     string SectorKey,
     string SectorName,
     string Source,
-    int ApprovedRequirementCount
+    int ApprovedRequirementCount,
+    string? TranslationInstructions = null
 );
 
 /// <summary>

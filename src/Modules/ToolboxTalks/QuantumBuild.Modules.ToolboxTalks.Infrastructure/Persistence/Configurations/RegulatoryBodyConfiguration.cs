@@ -37,6 +37,8 @@ public class RegulatoryBodyConfiguration : IEntityTypeConfiguration<RegulatoryBo
 
         builder.Property(e => e.SectorId);
 
+        builder.Property(e => e.TranslationInstructions);
+
         // Audit fields
         builder.Property(e => e.CreatedAt)
             .IsRequired();
