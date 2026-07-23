@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import {
@@ -48,11 +48,16 @@ import {
 } from 'lucide-react';
 import { usePermission, useAuth } from '@/lib/auth/use-auth';
 import { useTenantSectors } from '@/lib/api/admin/use-tenant-sectors';
-import { useComplianceChecklist } from '@/lib/api/admin/use-requirement-mappings';
+import {
+  useComplianceChecklist,
+  useApplicableFrameworks,
+} from '@/lib/api/admin/use-requirement-mappings';
 import { AddMappingDialog } from '@/features/toolbox-talks/components/AddMappingDialog';
 import { GenerateReportDialog } from '@/features/toolbox-talks/components/GenerateReportDialog';
+import { KindBadge } from '@/components/admin/kind-badge';
 import type {
   ComplianceRequirementDto,
+  ApplicableFrameworkDto,
 } from '@/types/requirement-mappings';
 
 // ============================================
@@ -138,6 +143,8 @@ function RequirementRow({
             <div className="flex items-center gap-2 flex-wrap">
               <h4 className="font-medium text-sm">{requirement.title}</h4>
               <PriorityBadge priority={requirement.priority} />
+              <KindBadge kind={requirement.sourceBodyKind} />
+              <span className="text-xs text-muted-foreground">{requirement.sourceBodyName}</span>
               {requirement.principle && (
                 <Badge variant="outline" className="text-xs">
                   {requirement.principle}
@@ -221,6 +228,48 @@ function RequirementRow({
               </Button>
             )}
           </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============================================
+// Applicable Frameworks Summary
+// ============================================
+
+function ApplicableFrameworksSummary() {
+  const { data: frameworks, isLoading } = useApplicableFrameworks();
+
+  if (isLoading) {
+    return <Skeleton className="h-16 w-full" />;
+  }
+
+  if (!frameworks || frameworks.length === 0) {
+    return null;
+  }
+
+  return (
+    <Card>
+      <CardContent className="pt-5 pb-4">
+        <div className="flex items-center gap-2 mb-2">
+          <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium">Applicable Frameworks</span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {frameworks.map((f: ApplicableFrameworkDto) => (
+            <div
+              key={f.regulatoryBodyId}
+              className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs"
+            >
+              <KindBadge kind={f.kind} />
+              <span className="font-medium">{f.bodyName}</span>
+              <span className="text-muted-foreground">
+                ({f.sectorName}) — {f.approvedRequirementCount} requirement
+                {f.approvedRequirementCount !== 1 ? 's' : ''}
+              </span>
+            </div>
+          ))}
         </div>
       </CardContent>
     </Card>
@@ -494,6 +543,26 @@ export default function ComplianceChecklistPage() {
   const { data: tenantSectors, isLoading: sectorsLoading } = useTenantSectors(
     user?.tenantId ?? ''
   );
+  const { data: frameworks } = useApplicableFrameworks();
+
+  const sectors = tenantSectors ?? [];
+
+  // Subscribed Standards whose own sector isn't one of the tenant's assigned sectors still
+  // need a tab to render under (subscription is sector-independent — see IsCrossSector).
+  const standardOnlySectors = useMemo(() => {
+    const tenantSectorKeys = new Set(sectors.map((s) => s.sectorKey));
+    const seen = new Set<string>();
+    const result: { sectorKey: string; sectorName: string }[] = [];
+    (frameworks ?? [])
+      .filter((f) => f.kind === 'Standard' && f.sectorKey && !tenantSectorKeys.has(f.sectorKey))
+      .forEach((f) => {
+        if (!seen.has(f.sectorKey)) {
+          seen.add(f.sectorKey);
+          result.push({ sectorKey: f.sectorKey, sectorName: f.sectorName });
+        }
+      });
+    return result;
+  }, [frameworks, sectors]);
 
   if (!hasAdminPermission) {
     return (
@@ -511,8 +580,6 @@ export default function ComplianceChecklistPage() {
       </div>
     );
   }
-
-  const sectors = tenantSectors ?? [];
 
   return (
     <div className="space-y-6">
@@ -535,6 +602,8 @@ export default function ComplianceChecklistPage() {
         </AlertDescription>
       </Alert>
 
+      <ApplicableFrameworksSummary />
+
       {sectorsLoading ? (
         <div className="space-y-4">
           <Skeleton className="h-10 w-full" />
@@ -544,7 +613,7 @@ export default function ComplianceChecklistPage() {
             ))}
           </div>
         </div>
-      ) : sectors.length === 0 ? (
+      ) : sectors.length === 0 && standardOnlySectors.length === 0 ? (
         <div className="space-y-4">
           <Card className="p-8 text-center">
             <p className="text-muted-foreground">
@@ -554,12 +623,20 @@ export default function ComplianceChecklistPage() {
           <AiTransparencyTab />
         </div>
       ) : (
-        <Tabs defaultValue={sectors.find((s) => s.isDefault)?.sectorKey ?? sectors[0].sectorKey}>
+        <Tabs defaultValue={sectors.find((s) => s.isDefault)?.sectorKey ?? sectors[0]?.sectorKey ?? standardOnlySectors[0]?.sectorKey}>
           <TabsList>
             {sectors.map((sector) => (
               <TabsTrigger key={sector.sectorKey} value={sector.sectorKey}>
                 {sector.sectorIcon && <span className="mr-1">{sector.sectorIcon}</span>}
                 {sector.sectorName}
+              </TabsTrigger>
+            ))}
+            {standardOnlySectors.map((sector) => (
+              <TabsTrigger key={sector.sectorKey} value={sector.sectorKey}>
+                {sector.sectorName}
+                <Badge variant="outline" className="ml-1.5 border-sky-500 text-sky-600 text-[10px] px-1 py-0">
+                  Standard
+                </Badge>
               </TabsTrigger>
             ))}
             <TabsTrigger value="ai-transparency">
@@ -568,6 +645,11 @@ export default function ComplianceChecklistPage() {
             </TabsTrigger>
           </TabsList>
           {sectors.map((sector) => (
+            <TabsContent key={sector.sectorKey} value={sector.sectorKey}>
+              <SectorChecklistView sectorKey={sector.sectorKey} />
+            </TabsContent>
+          ))}
+          {standardOnlySectors.map((sector) => (
             <TabsContent key={sector.sectorKey} value={sector.sectorKey}>
               <SectorChecklistView sectorKey={sector.sectorKey} />
             </TabsContent>

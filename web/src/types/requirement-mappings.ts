@@ -16,6 +16,9 @@ export interface PendingMappingDto {
   contentType: "Talk" | "Course";
   contentId: string;
   createdAt: string;
+  sourceBodyName: string;
+  sourceBodyKind: "Regulation" | "Standard";
+  isCurrentlyApplicable: boolean;
 }
 
 export interface MappingSummaryDto {
@@ -62,6 +65,8 @@ export interface ComplianceRequirementDto {
   displayOrder: number;
   coverageStatus: "Covered" | "Pending" | "Gap";
   mappings: MappingDetailDto[];
+  sourceBodyName: string;
+  sourceBodyKind: "Regulation" | "Standard";
 }
 
 export interface CompliancePrincipleGroupDto {
@@ -86,6 +91,17 @@ export interface ComplianceChecklistDto {
   coveragePercentage: number;
   principleGroups: CompliancePrincipleGroupDto[];
   lastUpdated: string;
+}
+
+export interface ApplicableFrameworkDto {
+  regulatoryBodyId: string;
+  bodyName: string;
+  bodyCode: string;
+  kind: "Regulation" | "Standard";
+  sectorKey: string;
+  sectorName: string;
+  source: "Sector" | "Subscription";
+  approvedRequirementCount: number;
 }
 
 export interface AddManualMappingRequest {

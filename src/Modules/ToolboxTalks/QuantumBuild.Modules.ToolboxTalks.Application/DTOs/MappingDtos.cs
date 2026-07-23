@@ -20,7 +20,10 @@ public record PendingMappingDto(
     string ContentTitle,
     string ContentType,
     Guid ContentId,
-    DateTimeOffset CreatedAt
+    DateTimeOffset CreatedAt,
+    string SourceBodyName,
+    string SourceBodyKind,
+    bool IsCurrentlyApplicable
 );
 
 /// <summary>
@@ -76,7 +79,9 @@ public record ComplianceRequirementDto(
     string Priority,
     int DisplayOrder,
     string CoverageStatus,
-    List<MappingDetailDto> Mappings
+    List<MappingDetailDto> Mappings,
+    string SourceBodyName,
+    string SourceBodyKind
 );
 
 /// <summary>

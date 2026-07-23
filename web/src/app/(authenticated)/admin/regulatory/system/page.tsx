@@ -10,6 +10,7 @@ import {
 } from "@/lib/api/admin/use-regulatory-ingestion";
 import { CreateRegulatoryDocumentDialog } from "@/components/admin/create-regulatory-document-dialog";
 import { CreateRegulatoryBodyDialog } from "@/components/admin/create-regulatory-body-dialog";
+import { KindBadge } from "@/components/admin/kind-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,19 +23,7 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FileText, Plus, Landmark } from "lucide-react";
-import type { RegulatoryDocumentListItem, RegulatoryBody } from "@/types/regulatory";
-
-function KindBadge({ kind }: { kind: RegulatoryBody["kind"] }) {
-  return kind === "Standard" ? (
-    <Badge variant="outline" className="border-sky-500 text-sky-600">
-      Standard
-    </Badge>
-  ) : (
-    <Badge variant="outline" className="border-slate-500 text-slate-600">
-      Regulation
-    </Badge>
-  );
-}
+import type { RegulatoryDocumentListItem } from "@/types/regulatory";
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "—";

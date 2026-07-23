@@ -1,9 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using QuantumBuild.Core.Application.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Frameworks;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Mapping;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs;
+using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Frameworks;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Mapping;
@@ -16,15 +18,18 @@ public class RequirementMappingService : IRequirementMappingService
 {
     private readonly IToolboxTalksDbContext _dbContext;
     private readonly ICurrentUserService _currentUser;
+    private readonly IApplicableFrameworksService _applicableFrameworksService;
     private readonly ILogger<RequirementMappingService> _logger;
 
     public RequirementMappingService(
         IToolboxTalksDbContext dbContext,
         ICurrentUserService currentUser,
+        IApplicableFrameworksService applicableFrameworksService,
         ILogger<RequirementMappingService> logger)
     {
         _dbContext = dbContext;
         _currentUser = currentUser;
+        _applicableFrameworksService = applicableFrameworksService;
         _logger = logger;
     }
 
@@ -32,9 +37,16 @@ public class RequirementMappingService : IRequirementMappingService
     {
         var tenantId = _currentUser.TenantId;
 
+        var entitlements = await _applicableFrameworksService.GetTenantEntitlementsAsync(tenantId, cancellationToken);
+        var tenantSectorKeys = entitlements.SectorKeys.ToHashSet();
+        var subscribedStandardBodyIds = entitlements.SubscribedStandardBodyIds.ToHashSet();
+
         var allMappings = await _dbContext.RegulatoryRequirementMappings
             .Where(m => m.TenantId == tenantId)
             .Include(m => m.RegulatoryRequirement)
+                .ThenInclude(r => r.RegulatoryProfile)
+                    .ThenInclude(p => p.RegulatoryDocument)
+                        .ThenInclude(d => d.RegulatoryBody)
             .Include(m => m.ToolboxTalk)
             .Include(m => m.Course)
             .ToListAsync(cancellationToken);
@@ -46,27 +58,7 @@ public class RequirementMappingService : IRequirementMappingService
         var pendingReview = allMappings
             .Where(m => m.MappingStatus == RequirementMappingStatus.Suggested)
             .OrderByDescending(m => m.ConfidenceScore)
-            .Select(m => new PendingMappingDto(
-                Id: m.Id,
-                RegulatoryRequirementId: m.RegulatoryRequirementId,
-                RequirementTitle: m.RegulatoryRequirement.Title,
-                RequirementDescription: m.RegulatoryRequirement.Description,
-                RequirementSection: m.RegulatoryRequirement.Section,
-                RequirementSectionLabel: m.RegulatoryRequirement.SectionLabel,
-                RequirementPrinciple: m.RegulatoryRequirement.Principle,
-                RequirementPrincipleLabel: m.RegulatoryRequirement.PrincipleLabel,
-                RequirementPriority: m.RegulatoryRequirement.Priority,
-                ConfidenceScore: m.ConfidenceScore,
-                AiReasoning: m.AiReasoning,
-                ReviewNotes: m.ReviewNotes,
-                MappingStatus: m.MappingStatus.ToString(),
-                ContentTitle: m.ToolboxTalkId.HasValue
-                    ? m.ToolboxTalk?.Title ?? "Unknown Talk"
-                    : m.Course?.Title ?? "Unknown Course",
-                ContentType: m.ToolboxTalkId.HasValue ? "Talk" : "Course",
-                ContentId: m.ToolboxTalkId ?? m.CourseId ?? Guid.Empty,
-                CreatedAt: m.CreatedAt
-            ))
+            .Select(m => ToDto(m, tenantSectorKeys, subscribedStandardBodyIds))
             .ToList();
 
         return new MappingSummaryDto(totalSuggested, totalConfirmed, totalRejected, pendingReview);
@@ -77,6 +69,9 @@ public class RequirementMappingService : IRequirementMappingService
         var mapping = await _dbContext.RegulatoryRequirementMappings
             .Where(m => m.TenantId == _currentUser.TenantId && m.Id == mappingId)
             .Include(m => m.RegulatoryRequirement)
+                .ThenInclude(r => r.RegulatoryProfile)
+                    .ThenInclude(p => p.RegulatoryDocument)
+                        .ThenInclude(d => d.RegulatoryBody)
             .Include(m => m.ToolboxTalk)
             .Include(m => m.Course)
             .FirstOrDefaultAsync(cancellationToken)
@@ -89,7 +84,8 @@ public class RequirementMappingService : IRequirementMappingService
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        return ToDto(mapping);
+        var entitlements = await _applicableFrameworksService.GetTenantEntitlementsAsync(_currentUser.TenantId, cancellationToken);
+        return ToDto(mapping, entitlements.SectorKeys.ToHashSet(), entitlements.SubscribedStandardBodyIds.ToHashSet());
     }
 
     public async Task RejectMappingAsync(Guid mappingId, string? notes, CancellationToken cancellationToken = default)
@@ -153,19 +149,40 @@ public class RequirementMappingService : IRequirementMappingService
     {
         var tenantId = _currentUser.TenantId;
 
-        // Validate tenant has this sector
-        var hasSector = await _dbContext.TenantSectors
-            .AnyAsync(ts => ts.TenantId == tenantId && ts.Sector.Key == sectorKey && !ts.IsDeleted, cancellationToken);
+        var entitlements = await _applicableFrameworksService.GetTenantEntitlementsAsync(tenantId, cancellationToken);
+        var tenantSectorKeys = entitlements.SectorKeys.ToHashSet();
+        var subscribedStandardBodyIds = entitlements.SubscribedStandardBodyIds.ToHashSet();
+
+        // A sector tab is reachable either because the tenant is assigned that sector
+        // (Regulation entitlement) or because a Standard the tenant subscribes to targets
+        // that sector via its own RegulatoryProfile (Standard entitlement, sector-independent
+        // subscription still needs a landing tab to render under).
+        var hasSector = tenantSectorKeys.Contains(sectorKey);
+        if (!hasSector)
+        {
+            hasSector = subscribedStandardBodyIds.Count > 0 && await _dbContext.RegulatoryProfiles
+                .Where(p => p.SectorKey == sectorKey
+                    && subscribedStandardBodyIds.Contains(p.RegulatoryDocument.RegulatoryBodyId))
+                .AnyAsync(cancellationToken);
+        }
+
         if (!hasSector)
             throw new UnauthorizedAccessException($"Tenant does not have sector '{sectorKey}' configured.");
 
-        // Load approved, active requirements for this sector via RegulatoryProfile
+        // Load approved, active requirements for this sector: Regulation-kind requirements gated
+        // by tenant sector assignment, Standard-kind requirements gated by subscription.
         var requirements = await _dbContext.RegulatoryRequirements
             .IgnoreQueryFilters()
             .Where(r => !r.IsDeleted
                 && r.IsActive
                 && r.IngestionStatus == RequirementIngestionStatus.Approved
-                && r.RegulatoryProfile.SectorKey == sectorKey)
+                && r.RegulatoryProfile.SectorKey == sectorKey
+                && (
+                    (r.RegulatoryProfile.RegulatoryDocument.RegulatoryBody.Kind == RegulatoryBodyKind.Regulation
+                        && tenantSectorKeys.Contains(sectorKey))
+                    || (r.RegulatoryProfile.RegulatoryDocument.RegulatoryBody.Kind == RegulatoryBodyKind.Standard
+                        && subscribedStandardBodyIds.Contains(r.RegulatoryProfile.RegulatoryDocument.RegulatoryBodyId))
+                ))
             .Include(r => r.RegulatoryProfile)
                 .ThenInclude(p => p.RegulatoryDocument)
                     .ThenInclude(d => d.RegulatoryBody)
@@ -301,6 +318,8 @@ public class RequirementMappingService : IRequirementMappingService
             else
                 coverageStatus = "Gap";
 
+            var sourceBody = req.RegulatoryProfile.RegulatoryDocument.RegulatoryBody;
+
             requirementDtos.Add(new ComplianceRequirementDto(
                 Id: req.Id,
                 Title: req.Title,
@@ -312,7 +331,9 @@ public class RequirementMappingService : IRequirementMappingService
                 Priority: req.Priority,
                 DisplayOrder: req.DisplayOrder,
                 CoverageStatus: coverageStatus,
-                Mappings: mappingDetails
+                Mappings: mappingDetails,
+                SourceBodyName: sourceBody.Name,
+                SourceBodyKind: sourceBody.Kind.ToString()
             ));
         }
 
@@ -335,9 +356,14 @@ public class RequirementMappingService : IRequirementMappingService
         var pendingCount = requirementDtos.Count(r => r.CoverageStatus == "Pending");
         var gapCount = requirementDtos.Count(r => r.CoverageStatus == "Gap");
 
-        // Get regulatory body + score label from the first profile
+        // Regulatory body header: join every distinct contributing body's name rather than
+        // arbitrarily picking the first-sorted requirement's body — a sector tab can now
+        // legitimately mix a Regulation and one or more subscribed Standards.
         var firstProfile = requirements[0].RegulatoryProfile;
-        var regulatoryBody = firstProfile.RegulatoryDocument.RegulatoryBody.Name;
+        var regulatoryBody = string.Join(", ", requirements
+            .Select(r => r.RegulatoryProfile.RegulatoryDocument.RegulatoryBody.Name)
+            .Distinct()
+            .OrderBy(name => name));
         var scoreLabel = firstProfile.ScoreLabel;
         var sectorName = firstProfile.Sector?.Name ?? sectorKey;
 
@@ -411,11 +437,20 @@ public class RequirementMappingService : IRequirementMappingService
         var mapping = await _dbContext.RegulatoryRequirementMappings
             .Where(m => m.Id == existing.Id)
             .Include(m => m.RegulatoryRequirement)
+                .ThenInclude(r => r.RegulatoryProfile)
+                    .ThenInclude(p => p.RegulatoryDocument)
+                        .ThenInclude(d => d.RegulatoryBody)
             .Include(m => m.ToolboxTalk)
             .Include(m => m.Course)
             .FirstAsync(cancellationToken);
 
-        return ToDto(mapping);
+        var entitlements = await _applicableFrameworksService.GetTenantEntitlementsAsync(tenantId, cancellationToken);
+        return ToDto(mapping, entitlements.SectorKeys.ToHashSet(), entitlements.SubscribedStandardBodyIds.ToHashSet());
+    }
+
+    public async Task<List<ApplicableFrameworkDto>> GetApplicableFrameworksAsync(CancellationToken cancellationToken = default)
+    {
+        return await _applicableFrameworksService.GetApplicableFrameworksAsync(_currentUser.TenantId, cancellationToken);
     }
 
     public async Task<List<ContentOptionDto>> GetContentOptionsAsync(CancellationToken cancellationToken = default)
@@ -441,8 +476,25 @@ public class RequirementMappingService : IRequirementMappingService
         return courses;
     }
 
-    private static PendingMappingDto ToDto(Domain.Entities.RegulatoryRequirementMapping m) =>
-        new(
+    /// <summary>
+    /// Maps a mapping entity to its DTO, attributing the source RegulatoryBody (name + Kind)
+    /// and flagging whether that body still currently applies to the tenant — a Standard's
+    /// mapping survives an unsubscribe (and a Regulation's survives a sector removal) with
+    /// IsCurrentlyApplicable = false rather than disappearing, so admins aren't left wondering
+    /// where a previously-suggested/confirmed mapping went.
+    /// </summary>
+    private static PendingMappingDto ToDto(
+        Domain.Entities.RegulatoryRequirementMapping m,
+        HashSet<string> tenantSectorKeys,
+        HashSet<Guid> subscribedStandardBodyIds)
+    {
+        var profile = m.RegulatoryRequirement.RegulatoryProfile;
+        var body = profile.RegulatoryDocument.RegulatoryBody;
+        var isCurrentlyApplicable = body.Kind == RegulatoryBodyKind.Regulation
+            ? tenantSectorKeys.Contains(profile.SectorKey)
+            : subscribedStandardBodyIds.Contains(body.Id);
+
+        return new(
             Id: m.Id,
             RegulatoryRequirementId: m.RegulatoryRequirementId,
             RequirementTitle: m.RegulatoryRequirement.Title,
@@ -461,6 +513,10 @@ public class RequirementMappingService : IRequirementMappingService
                 : m.Course?.Title ?? "Unknown Course",
             ContentType: m.ToolboxTalkId.HasValue ? "Talk" : "Course",
             ContentId: m.ToolboxTalkId ?? m.CourseId ?? Guid.Empty,
-            CreatedAt: m.CreatedAt
+            CreatedAt: m.CreatedAt,
+            SourceBodyName: body.Name,
+            SourceBodyKind: body.Kind.ToString(),
+            IsCurrentlyApplicable: isCurrentlyApplicable
         );
+    }
 }

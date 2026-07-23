@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
+import { KindBadge } from "@/components/admin/kind-badge";
 import { usePermission } from "@/lib/auth/use-auth";
 import {
   usePendingMappings,
@@ -99,6 +100,16 @@ function MappingCard({ mapping }: { mapping: PendingMappingDto }) {
           </Link>
           <Badge variant="outline">{mapping.contentType}</Badge>
           <ConfidenceBadge score={mapping.confidenceScore} />
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap text-sm">
+          <KindBadge kind={mapping.sourceBodyKind} />
+          <span className="text-muted-foreground">{mapping.sourceBodyName}</span>
+          {!mapping.isCurrentlyApplicable && (
+            <Badge variant="secondary" className="text-muted-foreground">
+              No longer applicable
+            </Badge>
+          )}
         </div>
 
         <div className="space-y-1">

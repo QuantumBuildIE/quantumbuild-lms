@@ -1,6 +1,7 @@
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Frameworks;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Storage;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Validation;
@@ -19,15 +20,18 @@ public class RequirementIngestionService : IRequirementIngestionService
 {
     private readonly IToolboxTalksDbContext _dbContext;
     private readonly IR2StorageService _storageService;
+    private readonly IApplicableFrameworksService _applicableFrameworksService;
     private readonly ILogger<RequirementIngestionService> _logger;
 
     public RequirementIngestionService(
         IToolboxTalksDbContext dbContext,
         IR2StorageService storageService,
+        IApplicableFrameworksService applicableFrameworksService,
         ILogger<RequirementIngestionService> logger)
     {
         _dbContext = dbContext;
         _storageService = storageService;
+        _applicableFrameworksService = applicableFrameworksService;
         _logger = logger;
     }
 
@@ -276,17 +280,15 @@ public class RequirementIngestionService : IRequirementIngestionService
         Guid tenantId,
         CancellationToken cancellationToken = default)
     {
-        // Resolve which sector keys this tenant has assigned
-        var tenantSectorKeys = await _dbContext.TenantSectors
-            .Where(ts => ts.TenantId == tenantId && !ts.IsDeleted)
-            .Include(ts => ts.Sector)
-            .Select(ts => ts.Sector.Key)
-            .ToListAsync(cancellationToken);
+        // Union of entitlements: Regulations apply via the tenant's assigned sectors,
+        // Standards apply via an active TenantStandardSubscription (independent of sector).
+        var entitlements = await _applicableFrameworksService.GetTenantEntitlementsAsync(tenantId, cancellationToken);
 
-        if (tenantSectorKeys.Count == 0)
+        if (entitlements.SectorKeys.Count == 0 && entitlements.SubscribedStandardBodyIds.Count == 0)
             return new List<RegulatoryBrowseBodyDto>();
 
-        // Load approved requirements whose profile matches a tenant sector key
+        // Load approved requirements whose body is a Regulation matching a tenant sector,
+        // or whose body is a Standard the tenant is subscribed to.
         var requirements = await _dbContext.RegulatoryRequirements
             .IgnoreQueryFilters()
             .Include(r => r.RegulatoryProfile)
@@ -296,7 +298,12 @@ public class RequirementIngestionService : IRequirementIngestionService
                     .ThenInclude(d => d.RegulatoryBody)
             .Where(r => !r.IsDeleted
                 && r.IngestionStatus == RequirementIngestionStatus.Approved
-                && tenantSectorKeys.Contains(r.RegulatoryProfile.SectorKey))
+                && (
+                    (r.RegulatoryProfile.RegulatoryDocument.RegulatoryBody.Kind == RegulatoryBodyKind.Regulation
+                        && entitlements.SectorKeys.Contains(r.RegulatoryProfile.SectorKey))
+                    || (r.RegulatoryProfile.RegulatoryDocument.RegulatoryBody.Kind == RegulatoryBodyKind.Standard
+                        && entitlements.SubscribedStandardBodyIds.Contains(r.RegulatoryProfile.RegulatoryDocument.RegulatoryBodyId))
+                ))
             .OrderBy(r => r.RegulatoryProfile.RegulatoryDocument.RegulatoryBody.Name)
             .ThenBy(r => r.RegulatoryProfile.RegulatoryDocument.Title)
             .ThenBy(r => r.Principle)
@@ -312,6 +319,7 @@ public class RequirementIngestionService : IRequirementIngestionService
                 Name = bodyGroup.Key.Name,
                 Code = bodyGroup.Key.Code,
                 Country = bodyGroup.Key.Country,
+                Kind = bodyGroup.Key.Kind.ToString(),
                 Documents = bodyGroup
                     .GroupBy(r => r.RegulatoryProfile.RegulatoryDocument)
                     .Select(docGroup => new RegulatoryBrowseDocumentDto

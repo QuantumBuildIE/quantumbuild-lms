@@ -9,7 +9,15 @@ import type {
   ContentOptionDto,
   GenerateInspectionReportRequest,
   InspectionReportResultDto,
+  ApplicableFrameworkDto,
 } from "@/types/requirement-mappings";
+
+export async function getApplicableFrameworks(): Promise<ApplicableFrameworkDto[]> {
+  const response = await apiClient.get<ApplicableFrameworkDto[]>(
+    "/toolbox-talks/requirement-mappings/applicable-frameworks"
+  );
+  return response.data;
+}
 
 export async function getPendingMappings(): Promise<MappingSummaryDto> {
   const response = await apiClient.get<MappingSummaryDto>(

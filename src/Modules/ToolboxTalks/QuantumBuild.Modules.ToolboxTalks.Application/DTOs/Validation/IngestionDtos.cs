@@ -119,6 +119,10 @@ public record RegulatoryBrowseBodyDto
     public string Name { get; init; } = string.Empty;
     public string Code { get; init; } = string.Empty;
     public string? Country { get; init; }
+
+    /// <summary>"Regulation" or "Standard" — Regulations apply via the tenant's sectors,
+    /// Standards apply via an active TenantStandardSubscription.</summary>
+    public string Kind { get; init; } = string.Empty;
     public List<RegulatoryBrowseDocumentDto> Documents { get; init; } = new();
 }
 

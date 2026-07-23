@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { usePermission } from "@/lib/auth/use-auth";
 import { useBrowsableRequirements } from "@/lib/api/admin/use-regulatory-ingestion";
 import {
@@ -12,6 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { KindBadge } from "@/components/admin/kind-badge";
 import { ShieldCheck } from "lucide-react";
 import type { RegulatoryBrowseBody, RegulatoryBrowseRequirement } from "@/types/regulatory";
 
@@ -108,7 +110,8 @@ export default function RegulationsPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Regulations</h1>
         <p className="text-muted-foreground">
-          Approved regulatory requirements applicable to your organisation&apos;s sectors.
+          Approved requirements from Regulations applied to your organisation&apos;s sectors,
+          plus any Standards your organisation subscribes to.
         </p>
       </div>
 
@@ -132,7 +135,12 @@ export default function RegulationsPage() {
           <div className="flex flex-col items-center gap-2">
             <ShieldCheck className="h-8 w-8 text-muted-foreground" />
             <p className="text-muted-foreground">
-              No regulatory requirements found for your sectors. Your administrator may need to ingest requirements from the System Administration page.
+              No regulatory requirements found. Requirements appear here once ingested for your
+              sectors, or subscribe to a Standard from the{" "}
+              <Link href="/admin/regulatory/my-standards" className="text-primary hover:underline">
+                My Standards
+              </Link>{" "}
+              page.
             </p>
           </div>
         </Card>
@@ -144,6 +152,7 @@ export default function RegulationsPage() {
                 <div className="flex items-center gap-3">
                   <Badge variant="secondary">{body.code}</Badge>
                   <CardTitle className="text-lg">{body.name}</CardTitle>
+                  <KindBadge kind={body.kind} />
                   {body.country && (
                     <span className="text-sm text-muted-foreground">{body.country}</span>
                   )}

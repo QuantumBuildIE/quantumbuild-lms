@@ -32,6 +32,7 @@ export interface RegulatoryBrowseBody {
   name: string;
   code: string;
   country: string | null;
+  kind: RegulatoryBodyKind;
   documents: RegulatoryBrowseDocument[];
 }
 

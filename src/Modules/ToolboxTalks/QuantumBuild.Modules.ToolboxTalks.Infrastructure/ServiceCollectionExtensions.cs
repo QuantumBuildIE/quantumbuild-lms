@@ -20,6 +20,7 @@ using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Translations;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.ArtefactScan;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.ContentCreation;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Frameworks;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Mapping;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.PreFlightScan;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.SafetyTermRegistry;
@@ -33,6 +34,7 @@ using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Standards;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Reviewers;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.ContentCreation;
+using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Frameworks;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Workflows;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Ingestion;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Workflows;
@@ -338,6 +340,10 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<ILogger<ContentParserService>>()))
         .AddPolicyHandler((sp, _) => GetAnthropicBulkheadFromDI(sp));
         services.AddScoped<IContentCreationSessionService, ContentCreationSessionService>();
+
+        // Register applicable-frameworks service (Regulations via sector + Standards via subscription —
+        // shared by compliance display, browse, and mapping-attribution read paths)
+        services.AddScoped<IApplicableFrameworksService, ApplicableFrameworksService>();
 
         // Register requirement ingestion service (AI-powered regulatory requirement extraction)
         services.AddScoped<IRequirementIngestionService, RequirementIngestionService>();
