@@ -100,6 +100,42 @@ public class ToolboxTalkSettingsConfiguration : IEntityTypeConfiguration<Toolbox
             .IsRequired()
             .HasDefaultValue(true);
 
+        builder.Property(s => s.DefaultVideoRightsConfirmed)
+            .IsRequired()
+            .HasDefaultValue(false);
+
+        builder.Property(s => s.DefaultUseQuestionPool)
+            .IsRequired()
+            .HasDefaultValue(false);
+
+        builder.Property(s => s.DefaultGenerateSlideshow)
+            .IsRequired()
+            .HasDefaultValue(false);
+
+        builder.Property(s => s.DefaultAutoAssign)
+            .IsRequired()
+            .HasDefaultValue(true);
+
+        builder.Property(s => s.DefaultPreserveSourceWording)
+            .IsRequired()
+            .HasDefaultValue(true);
+
+        builder.Property(s => s.DefaultShuffleQuestions)
+            .IsRequired()
+            .HasDefaultValue(true);
+
+        builder.Property(s => s.DefaultShuffleOptions)
+            .IsRequired()
+            .HasDefaultValue(true);
+
+        builder.Property(s => s.DefaultIncludeQuiz)
+            .IsRequired()
+            .HasDefaultValue(true);
+
+        builder.Property(s => s.DefaultAllowRetry)
+            .IsRequired()
+            .HasDefaultValue(true);
+
         // Audit fields
         builder.Property(s => s.CreatedAt)
             .IsRequired();

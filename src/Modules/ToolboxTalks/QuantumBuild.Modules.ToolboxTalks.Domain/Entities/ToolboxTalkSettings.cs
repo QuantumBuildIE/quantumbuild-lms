@@ -118,4 +118,55 @@ public class ToolboxTalkSettings : BaseEntity
     public bool NotifyOnValidationComplete { get; set; } = true;
     public bool NotifyOnFailure { get; set; } = true;
     public bool NotifyOnExternalReviewResponse { get; set; } = true;
+
+    // Learning-wizard toggle defaults — inherited by new talks at creation time (creation-time
+    // snapshot: changing a tenant default does not retroactively affect existing talks).
+    // Consumed by InitialiseToolboxTalkCommandHandler, same pattern as DefaultIsActive above.
+
+    /// <summary>
+    /// Whether the video-rights confirmation checkbox is pre-checked by default in the wizard.
+    /// UI-only gate — never persisted to ToolboxTalk (videoRightsConfirmed is not sent to the
+    /// backend), so this setting has no InitialiseToolboxTalkCommandHandler inheritance step.
+    /// </summary>
+    public bool DefaultVideoRightsConfirmed { get; set; } = false;
+
+    /// <summary>
+    /// Whether new talks randomly select quiz questions from a larger pool by default.
+    /// </summary>
+    public bool DefaultUseQuestionPool { get; set; } = false;
+
+    /// <summary>
+    /// Whether new PDF-sourced talks generate a slide-image slideshow by default.
+    /// </summary>
+    public bool DefaultGenerateSlideshow { get; set; } = false;
+
+    /// <summary>
+    /// Whether new talks are auto-assigned to new employees by default.
+    /// </summary>
+    public bool DefaultAutoAssign { get; set; } = true;
+
+    /// <summary>
+    /// Whether AI generation preserves source wording as closely as possible by default.
+    /// </summary>
+    public bool DefaultPreserveSourceWording { get; set; } = true;
+
+    /// <summary>
+    /// Whether quiz question order is shuffled per attempt by default.
+    /// </summary>
+    public bool DefaultShuffleQuestions { get; set; } = true;
+
+    /// <summary>
+    /// Whether answer option order is shuffled per question by default.
+    /// </summary>
+    public bool DefaultShuffleOptions { get; set; } = true;
+
+    /// <summary>
+    /// Whether new talks require a quiz by default.
+    /// </summary>
+    public bool DefaultIncludeQuiz { get; set; } = true;
+
+    /// <summary>
+    /// Whether employees may retake a failed quiz without rewatching the video, by default.
+    /// </summary>
+    public bool DefaultAllowRetry { get; set; } = true;
 }

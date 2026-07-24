@@ -114,25 +114,28 @@ public class InitialiseToolboxTalkCommandHandler : IRequestHandler<InitialiseToo
 
             // Generation preferences
             AudienceRole = request.AudienceRole,
-            PreserveSourceWording = request.PreserveSourceWording,
-            RequiresQuiz = request.IncludeQuiz,
+            // Explicit request value wins; otherwise fall back to the tenant default; otherwise
+            // the initial system default. See ToolboxTalkSettings.DefaultPreserveSourceWording /
+            // DefaultIncludeQuiz.
+            PreserveSourceWording = request.PreserveSourceWording ?? tenantSettings?.DefaultPreserveSourceWording ?? true,
+            RequiresQuiz = request.IncludeQuiz ?? tenantSettings?.DefaultIncludeQuiz ?? true,
 
             // Wizard shell defaults — sourced from tenant ToolboxTalkSettings
             Status = ToolboxTalkStatus.Draft,
             IsActive = tenantSettings?.DefaultIsActive ?? true,
             GenerateCertificate = tenantSettings?.DefaultGenerateCertificate ?? true,
             MinimumVideoWatchPercent = tenantSettings?.DefaultMinimumVideoWatchPercent ?? 90,
-            // No ToolboxTalkSettings escape hatch exists for this field — defaults true
-            // for every tenant on the new wizard (Chunk 3, non-retroactive: only affects
-            // employees created after this talk is saved, see AutoAssignmentService).
-            AutoAssignToNewEmployees = true,
+            AutoAssignToNewEmployees = tenantSettings?.DefaultAutoAssign ?? true,
             AutoAssignDueDays = tenantSettings?.DefaultAutoAssignDueDays ?? 14,
-            // Entity defaults for both are false — explicitly true here for the new wizard
-            // only (mirrors the AutoAssignToNewEmployees pattern above). UseQuestionPool is
-            // deliberately NOT defaulted true: it changes which questions each employee sees,
-            // which has compliance-assessment-consistency implications (see audit chunk).
-            ShuffleQuestions = true,
-            ShuffleOptions = true,
+            ShuffleQuestions = tenantSettings?.DefaultShuffleQuestions ?? true,
+            ShuffleOptions = tenantSettings?.DefaultShuffleOptions ?? true,
+            // UseQuestionPool is deliberately NOT defaulted true: it changes which questions
+            // each employee sees, which has compliance-assessment-consistency implications
+            // (see audit chunk). Tenants who accept that tradeoff can opt in via the tenant
+            // setting; the system-wide initial default stays false.
+            UseQuestionPool = tenantSettings?.DefaultUseQuestionPool ?? false,
+            AllowRetry = tenantSettings?.DefaultAllowRetry ?? true,
+            GenerateSlidesFromPdf = tenantSettings?.DefaultGenerateSlideshow ?? false,
             PassingScore = tenantSettings?.DefaultPassingScore ?? 80,
             RequiresRefresher = defaultRequiresRefresher,
             RefresherIntervalMonths = defaultRefresherIntervalMonths,

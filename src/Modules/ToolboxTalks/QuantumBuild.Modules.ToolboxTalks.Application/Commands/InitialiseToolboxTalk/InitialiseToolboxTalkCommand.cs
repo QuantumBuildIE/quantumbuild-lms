@@ -43,6 +43,9 @@ public record InitialiseToolboxTalkCommand : IRequest<ToolboxTalkDto>
 
     // Generation preferences
     public string AudienceRole { get; init; } = "Operator";
-    public bool PreserveSourceWording { get; init; } = true;
-    public bool IncludeQuiz { get; init; } = true;
+
+    // Nullable: an explicit value always wins over the tenant default (InitialiseToolboxTalkCommandHandler
+    // reads request.X ?? tenantSettings?.DefaultX ?? initial-default). Null means "caller did not specify".
+    public bool? PreserveSourceWording { get; init; }
+    public bool? IncludeQuiz { get; init; }
 }

@@ -917,7 +917,16 @@ public class ToolboxTalksController : ControllerBase
                 DefaultAutoAssignDueDays: dto.DefaultAutoAssignDueDays,
                 DefaultGenerateCertificate: dto.DefaultGenerateCertificate,
                 DefaultRefresherFrequency: dto.DefaultRefresherFrequency,
-                DefaultIsActive: dto.DefaultIsActive
+                DefaultIsActive: dto.DefaultIsActive,
+                DefaultVideoRightsConfirmed: dto.DefaultVideoRightsConfirmed,
+                DefaultUseQuestionPool: dto.DefaultUseQuestionPool,
+                DefaultGenerateSlideshow: dto.DefaultGenerateSlideshow,
+                DefaultAutoAssign: dto.DefaultAutoAssign,
+                DefaultPreserveSourceWording: dto.DefaultPreserveSourceWording,
+                DefaultShuffleQuestions: dto.DefaultShuffleQuestions,
+                DefaultShuffleOptions: dto.DefaultShuffleOptions,
+                DefaultIncludeQuiz: dto.DefaultIncludeQuiz,
+                DefaultAllowRetry: dto.DefaultAllowRetry
             );
 
             var result = await _mediator.Send(command);
@@ -2603,6 +2612,17 @@ public record UpdateToolboxTalkSettingsDto
     public bool DefaultGenerateCertificate { get; init; } = true;
     public string DefaultRefresherFrequency { get; init; } = "Once";
     public bool DefaultIsActive { get; init; } = true;
+
+    // Learning-wizard toggle defaults — nullable: omitted fields preserve the existing value.
+    public bool? DefaultVideoRightsConfirmed { get; init; }
+    public bool? DefaultUseQuestionPool { get; init; }
+    public bool? DefaultGenerateSlideshow { get; init; }
+    public bool? DefaultAutoAssign { get; init; }
+    public bool? DefaultPreserveSourceWording { get; init; }
+    public bool? DefaultShuffleQuestions { get; init; }
+    public bool? DefaultShuffleOptions { get; init; }
+    public bool? DefaultIncludeQuiz { get; init; }
+    public bool? DefaultAllowRetry { get; init; }
 }
 
 /// <summary>
