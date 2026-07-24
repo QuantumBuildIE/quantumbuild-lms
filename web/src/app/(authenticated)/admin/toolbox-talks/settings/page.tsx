@@ -10,6 +10,7 @@ import { AuditPurposeSection } from '@/features/toolbox-talks/components/setting
 import { SkipValidationSection } from '@/features/toolbox-talks/components/settings/skip-validation-section';
 import { QrLocationTrainingSection } from '@/features/toolbox-talks/components/settings/qr-location-training-section';
 import { WizardDefaultsSection } from '@/features/toolbox-talks/components/settings/wizard-defaults-section';
+import { LearningDefaultsSection } from '@/features/toolbox-talks/components/settings/learning-defaults-section';
 import { WizardToggleSection } from '@/features/toolbox-talks/components/settings/wizard-toggle-section';
 import { NotificationsSettingsSection } from '@/features/toolbox-talks/components/settings/notifications-settings-section';
 import { ExternalReviewersSection } from '@/features/toolbox-talks/components/settings/external-reviewers-section';
@@ -64,6 +65,7 @@ export default function AdminToolboxTalksSettingsPage() {
 
         <TabsContent value="general" className="space-y-6 pt-4">
           <WizardDefaultsSection />
+          <LearningDefaultsSection />
           <WizardToggleSection />
         </TabsContent>
 

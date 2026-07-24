@@ -523,6 +523,16 @@ export interface ToolboxTalkSettings {
   notifyOnValidationComplete: boolean;
   notifyOnFailure: boolean;
   notifyOnExternalReviewResponse: boolean;
+  // Learning-wizard toggle defaults
+  defaultVideoRightsConfirmed: boolean;
+  defaultUseQuestionPool: boolean;
+  defaultGenerateSlideshow: boolean;
+  defaultAutoAssign: boolean;
+  defaultPreserveSourceWording: boolean;
+  defaultShuffleQuestions: boolean;
+  defaultShuffleOptions: boolean;
+  defaultIncludeQuiz: boolean;
+  defaultAllowRetry: boolean;
 }
 
 export interface UpdateToolboxTalkNotificationSettingsRequest {
@@ -546,6 +556,16 @@ export interface UpdateToolboxTalkSettingsRequest {
   defaultGenerateCertificate?: boolean;
   defaultRefresherFrequency?: string;
   defaultIsActive?: boolean;
+  // Learning-wizard toggle defaults
+  defaultVideoRightsConfirmed?: boolean;
+  defaultUseQuestionPool?: boolean;
+  defaultGenerateSlideshow?: boolean;
+  defaultAutoAssign?: boolean;
+  defaultPreserveSourceWording?: boolean;
+  defaultShuffleQuestions?: boolean;
+  defaultShuffleOptions?: boolean;
+  defaultIncludeQuiz?: boolean;
+  defaultAllowRetry?: boolean;
 }
 
 // ============================================

@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { quizSettingsSchema, type QuizSettingsFormData } from '../schemas/quizSettingsSchema';
+import { DefaultInheritanceIndicator } from './DefaultInheritanceIndicator';
+import { useToolboxTalkSettings } from '@/lib/api/toolbox-talks/use-toolbox-talks';
 import type { ToolboxTalk } from '@/types/toolbox-talks';
 import type { UpdateTalkQuizSettingsRequest } from '@/lib/api/toolbox-talks/toolbox-talks';
 
@@ -18,6 +20,7 @@ interface QuizSettingsPanelProps {
 
 export function QuizSettingsPanel({ talk, onSave, isSaving }: QuizSettingsPanelProps) {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { data: toolboxTalkSettings } = useToolboxTalkSettings();
 
   const form = useForm<QuizSettingsFormData>({
     resolver: zodResolver(quizSettingsSchema),
@@ -115,6 +118,17 @@ export function QuizSettingsPanel({ talk, onSave, isSaving }: QuizSettingsPanelP
             scheduleSave();
           }}
           disabled={isSaving}
+          indicator={
+            toolboxTalkSettings && (
+              <DefaultInheritanceIndicator
+                isOverridden={form.watch('shuffleQuestions') !== toolboxTalkSettings.defaultShuffleQuestions}
+                onReset={() => {
+                  form.setValue('shuffleQuestions', toolboxTalkSettings.defaultShuffleQuestions);
+                  scheduleSave();
+                }}
+              />
+            )
+          }
         />
         <SettingsToggle
           id="shuffleOptions"
@@ -126,6 +140,17 @@ export function QuizSettingsPanel({ talk, onSave, isSaving }: QuizSettingsPanelP
             scheduleSave();
           }}
           disabled={isSaving}
+          indicator={
+            toolboxTalkSettings && (
+              <DefaultInheritanceIndicator
+                isOverridden={form.watch('shuffleOptions') !== toolboxTalkSettings.defaultShuffleOptions}
+                onReset={() => {
+                  form.setValue('shuffleOptions', toolboxTalkSettings.defaultShuffleOptions);
+                  scheduleSave();
+                }}
+              />
+            )
+          }
         />
         <SettingsToggle
           id="useQuestionPool"
@@ -137,6 +162,17 @@ export function QuizSettingsPanel({ talk, onSave, isSaving }: QuizSettingsPanelP
             scheduleSave();
           }}
           disabled={isSaving}
+          indicator={
+            toolboxTalkSettings && (
+              <DefaultInheritanceIndicator
+                isOverridden={form.watch('useQuestionPool') !== toolboxTalkSettings.defaultUseQuestionPool}
+                onReset={() => {
+                  form.setValue('useQuestionPool', toolboxTalkSettings.defaultUseQuestionPool);
+                  scheduleSave();
+                }}
+              />
+            )
+          }
         />
         <SettingsToggle
           id="allowRetry"
@@ -148,6 +184,17 @@ export function QuizSettingsPanel({ talk, onSave, isSaving }: QuizSettingsPanelP
             scheduleSave();
           }}
           disabled={isSaving}
+          indicator={
+            toolboxTalkSettings && (
+              <DefaultInheritanceIndicator
+                isOverridden={form.watch('allowRetry') !== toolboxTalkSettings.defaultAllowRetry}
+                onReset={() => {
+                  form.setValue('allowRetry', toolboxTalkSettings.defaultAllowRetry);
+                  scheduleSave();
+                }}
+              />
+            )
+          }
         />
       </div>
     </div>
@@ -161,14 +208,16 @@ interface SettingsToggleProps {
   checked: boolean;
   onCheckedChange: (v: boolean) => void;
   disabled?: boolean;
+  indicator?: ReactNode;
 }
 
-function SettingsToggle({ id, label, description, checked, onCheckedChange, disabled }: SettingsToggleProps) {
+function SettingsToggle({ id, label, description, checked, onCheckedChange, disabled, indicator }: SettingsToggleProps) {
   return (
     <div className="flex items-start justify-between gap-4">
       <div className="space-y-0.5">
         <Label htmlFor={id} className="cursor-pointer">{label}</Label>
         <p className="text-xs text-muted-foreground">{description}</p>
+        {indicator}
       </div>
       <Switch
         id={id}
