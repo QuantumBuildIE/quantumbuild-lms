@@ -63,16 +63,24 @@ public class ParseToolboxTalkContentCommandHandler
         if (string.IsNullOrWhiteSpace(talk.SourceText))
             return Result.Fail<ToolboxTalkDto>("Source text is required for Text mode.");
 
+        talk.Status = ToolboxTalkStatus.Processing;
+        await _dbContext.SaveChangesAsync(ct);
+
         var parseResult = await _contentParserService.ParseContentAsync(
             talk.SourceText, InputMode.Text, talk.TenantId, userId,
             talk.PreserveSourceWording, ct);
 
         if (!parseResult.Success)
+        {
+            talk.Status = ToolboxTalkStatus.Draft;
+            await _dbContext.SaveChangesAsync(ct);
             return Result.Fail<ToolboxTalkDto>(parseResult.ErrorMessage ?? "Content parsing failed.");
+        }
 
         var newSections = await MaterialiseSectionsAsync(
             talk, parseResult.Sections, ContentSource.Manual, ct);
 
+        talk.Status = ToolboxTalkStatus.Draft;
         talk.LastEditedStep = 2;
         await _dbContext.SaveChangesAsync(ct);
 
@@ -85,10 +93,17 @@ public class ParseToolboxTalkContentCommandHandler
         if (string.IsNullOrWhiteSpace(talk.SourceFileUrl))
             return Result.Fail<ToolboxTalkDto>("Source file URL is required for PDF mode.");
 
+        talk.Status = ToolboxTalkStatus.Processing;
+        await _dbContext.SaveChangesAsync(ct);
+
         var extractResult = await _pdfExtractionService.ExtractTextFromUrlAsync(talk.SourceFileUrl, ct);
         if (!extractResult.Success)
+        {
+            talk.Status = ToolboxTalkStatus.Draft;
+            await _dbContext.SaveChangesAsync(ct);
             return Result.Fail<ToolboxTalkDto>(
                 extractResult.ErrorMessage ?? "PDF text extraction failed.");
+        }
 
         talk.ExtractedPdfText = extractResult.Text;
         talk.PdfTextExtractedAt = DateTime.UtcNow;
@@ -98,12 +113,17 @@ public class ParseToolboxTalkContentCommandHandler
             talk.PreserveSourceWording, ct);
 
         if (!parseResult.Success)
+        {
+            talk.Status = ToolboxTalkStatus.Draft;
+            await _dbContext.SaveChangesAsync(ct);
             return Result.Fail<ToolboxTalkDto>(parseResult.ErrorMessage ?? "Content parsing failed.");
+        }
 
         var newSections = await MaterialiseSectionsAsync(
             talk, parseResult.Sections, ContentSource.Pdf, ct);
 
         talk.GeneratedFromPdf = true;
+        talk.Status = ToolboxTalkStatus.Draft;
         talk.LastEditedStep = 2;
         await _dbContext.SaveChangesAsync(ct);
 
@@ -116,21 +136,33 @@ public class ParseToolboxTalkContentCommandHandler
         if (string.IsNullOrWhiteSpace(talk.SourceFileUrl))
             return Result.Fail<ToolboxTalkDto>("Source file URL is required for Word document mode.");
 
+        talk.Status = ToolboxTalkStatus.Processing;
+        await _dbContext.SaveChangesAsync(ct);
+
         var extractResult = await _docxExtractionService.ExtractTextFromUrlAsync(talk.SourceFileUrl, ct);
         if (!extractResult.Success)
+        {
+            talk.Status = ToolboxTalkStatus.Draft;
+            await _dbContext.SaveChangesAsync(ct);
             return Result.Fail<ToolboxTalkDto>(
                 extractResult.ErrorMessage ?? "Word document text extraction failed.");
+        }
 
         var parseResult = await _contentParserService.ParseContentAsync(
             extractResult.Text!, InputMode.Docx, talk.TenantId, userId,
             talk.PreserveSourceWording, ct);
 
         if (!parseResult.Success)
+        {
+            talk.Status = ToolboxTalkStatus.Draft;
+            await _dbContext.SaveChangesAsync(ct);
             return Result.Fail<ToolboxTalkDto>(parseResult.ErrorMessage ?? "Content parsing failed.");
+        }
 
         var newSections = await MaterialiseSectionsAsync(
             talk, parseResult.Sections, ContentSource.Docx, ct);
 
+        talk.Status = ToolboxTalkStatus.Draft;
         talk.LastEditedStep = 2;
         await _dbContext.SaveChangesAsync(ct);
 
