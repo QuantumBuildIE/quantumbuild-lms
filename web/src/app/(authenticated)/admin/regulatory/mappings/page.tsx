@@ -28,6 +28,7 @@ import {
   AlertTriangle,
   FileText,
   BookOpen,
+  FileWarning,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -100,6 +101,15 @@ function MappingCard({ mapping }: { mapping: PendingMappingDto }) {
           </Link>
           <Badge variant="outline">{mapping.contentType}</Badge>
           <ConfidenceBadge score={mapping.confidenceScore} />
+          {!mapping.targetIsLive && (
+            <Badge
+              variant="outline"
+              className="gap-1 border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-400"
+            >
+              <FileWarning className="h-3 w-3" />
+              {mapping.contentType === "Talk" ? "Talk not live" : "Course not live"}
+            </Badge>
+          )}
         </div>
 
         <div className="flex items-center gap-2 flex-wrap text-sm">

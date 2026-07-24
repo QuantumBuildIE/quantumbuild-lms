@@ -55,6 +55,10 @@ public class RequirementMappingService : IRequirementMappingService
         var totalConfirmed = allMappings.Count(m => m.MappingStatus == RequirementMappingStatus.Confirmed);
         var totalRejected = allMappings.Count(m => m.MappingStatus == RequirementMappingStatus.Rejected);
 
+        // Mappings tab is an admin review/curation tool — non-live targets stay visible with a
+        // badge (see ToDto's TargetIsLive) rather than being hidden, so admins can still act on
+        // (or re-map) a mapping to a Draft or deactivated talk/course.
+
         var pendingReview = allMappings
             .Where(m => m.MappingStatus == RequirementMappingStatus.Suggested)
             .OrderByDescending(m => m.ConfidenceScore)
@@ -109,9 +113,15 @@ public class RequirementMappingService : IRequirementMappingService
 
         var suggestedMappings = await _dbContext.RegulatoryRequirementMappings
             .Where(m => m.TenantId == tenantId && m.MappingStatus == RequirementMappingStatus.Suggested)
+            .Include(m => m.ToolboxTalk)
+            .Include(m => m.Course)
             .ToListAsync(cancellationToken);
 
-        foreach (var mapping in suggestedMappings)
+        // Bulk-confirm only mappings to live content — non-live Suggested mappings remain
+        // Suggested and stay visible (with a badge) in the Mappings tab for individual review.
+        var liveMappings = suggestedMappings.Where(IsMappingTargetLive).ToList();
+
+        foreach (var mapping in liveMappings)
         {
             mapping.MappingStatus = RequirementMappingStatus.Confirmed;
             mapping.ReviewedBy = _currentUser.UserName;
@@ -120,10 +130,12 @@ public class RequirementMappingService : IRequirementMappingService
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        _logger.LogInformation("Confirmed {Count} suggested mappings for tenant {TenantId}",
-            suggestedMappings.Count, tenantId);
+        var skippedCount = suggestedMappings.Count - liveMappings.Count;
+        _logger.LogInformation(
+            "Confirmed {Count} suggested mappings for tenant {TenantId} ({SkippedCount} skipped: target not live)",
+            liveMappings.Count, tenantId, skippedCount);
 
-        return suggestedMappings.Count;
+        return liveMappings.Count;
     }
 
     public async Task<int> GetUnconfirmedCountAsync(
@@ -215,12 +227,17 @@ public class RequirementMappingService : IRequirementMappingService
 
         var requirementIds = requirements.Select(r => r.Id).ToList();
 
-        // Load tenant mappings for these requirements
-        var mappings = await _dbContext.RegulatoryRequirementMappings
+        // Load tenant mappings for these requirements. Compliance is an operational/audit-readiness
+        // view whose output also feeds the Training Evidence Pack PDF (InspectionReportService
+        // calls this method directly) — mappings to non-live content are hard-excluded here so a
+        // Draft, deactivated, or deleted talk/course can never register as "Covered".
+        var mappings = (await _dbContext.RegulatoryRequirementMappings
             .Where(m => m.TenantId == tenantId && requirementIds.Contains(m.RegulatoryRequirementId))
             .Include(m => m.ToolboxTalk)
             .Include(m => m.Course)
-            .ToListAsync(cancellationToken);
+            .ToListAsync(cancellationToken))
+            .Where(IsMappingTargetLive)
+            .ToList();
 
         // Load validation runs for mapped content to determine "approved" validation
         var talkIds = mappings.Where(m => m.ToolboxTalkId.HasValue).Select(m => m.ToolboxTalkId!.Value).Distinct().ToList();
@@ -458,15 +475,15 @@ public class RequirementMappingService : IRequirementMappingService
         var tenantId = _currentUser.TenantId;
 
         var talks = await _dbContext.ToolboxTalks
-            .Where(t => t.TenantId == tenantId
-                && t.Status == ToolboxTalkStatus.Published)
+            .Where(t => t.TenantId == tenantId)
+            .Where(Domain.Entities.ToolboxTalk.IsLiveExpression)
             .OrderBy(t => t.Title)
             .Select(t => new ContentOptionDto(t.Id, t.Title, "Talk"))
             .ToListAsync(cancellationToken);
 
         var courses = await _dbContext.ToolboxTalkCourses
-            .Where(c => c.TenantId == tenantId
-                && c.IsActive)
+            .Where(c => c.TenantId == tenantId)
+            .Where(Domain.Entities.ToolboxTalkCourse.IsLiveExpression)
             .OrderBy(c => c.Title)
             .Select(c => new ContentOptionDto(c.Id, c.Title, "Course"))
             .ToListAsync(cancellationToken);
@@ -477,11 +494,25 @@ public class RequirementMappingService : IRequirementMappingService
     }
 
     /// <summary>
+    /// Single source of truth for "is this mapping's target live" — Talk: Published, active,
+    /// not deleted (<see cref="Domain.Entities.ToolboxTalk.IsLive"/>); Course: active, not
+    /// deleted (<see cref="Domain.Entities.ToolboxTalkCourse.IsLive"/>). A null navigation
+    /// (e.g. the target was soft-deleted and excluded by the entity's own query filter) counts
+    /// as not live. Requires the mapping's ToolboxTalk/Course navigation to be loaded.
+    /// </summary>
+    private static bool IsMappingTargetLive(Domain.Entities.RegulatoryRequirementMapping m) =>
+        m.ToolboxTalkId.HasValue
+            ? m.ToolboxTalk != null && Domain.Entities.ToolboxTalk.IsLive(m.ToolboxTalk)
+            : m.Course != null && Domain.Entities.ToolboxTalkCourse.IsLive(m.Course);
+
+    /// <summary>
     /// Maps a mapping entity to its DTO, attributing the source RegulatoryBody (name + Kind)
     /// and flagging whether that body still currently applies to the tenant — a Standard's
     /// mapping survives an unsubscribe (and a Regulation's survives a sector removal) with
     /// IsCurrentlyApplicable = false rather than disappearing, so admins aren't left wondering
-    /// where a previously-suggested/confirmed mapping went.
+    /// where a previously-suggested/confirmed mapping went. TargetIsLive similarly flags (but
+    /// does not hide) a mapping whose talk/course is Draft, deactivated, or deleted — the
+    /// Mappings tab shows everything so admins can still act on non-live targets.
     /// </summary>
     private static PendingMappingDto ToDto(
         Domain.Entities.RegulatoryRequirementMapping m,
@@ -516,7 +547,8 @@ public class RequirementMappingService : IRequirementMappingService
             CreatedAt: m.CreatedAt,
             SourceBodyName: body.Name,
             SourceBodyKind: body.Kind.ToString(),
-            IsCurrentlyApplicable: isCurrentlyApplicable
+            IsCurrentlyApplicable: isCurrentlyApplicable,
+            TargetIsLive: IsMappingTargetLive(m)
         );
     }
 }

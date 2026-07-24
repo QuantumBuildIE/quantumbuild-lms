@@ -23,7 +23,8 @@ public record PendingMappingDto(
     DateTimeOffset CreatedAt,
     string SourceBodyName,
     string SourceBodyKind,
-    bool IsCurrentlyApplicable
+    bool IsCurrentlyApplicable,
+    bool TargetIsLive
 );
 
 /// <summary>

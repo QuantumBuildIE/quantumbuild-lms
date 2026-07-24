@@ -19,6 +19,7 @@ export interface PendingMappingDto {
   sourceBodyName: string;
   sourceBodyKind: "Regulation" | "Standard";
   isCurrentlyApplicable: boolean;
+  targetIsLive: boolean;
 }
 
 export interface MappingSummaryDto {
