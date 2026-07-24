@@ -84,6 +84,16 @@ const DEFAULT_AUDIT_PURPOSES = [
   'Onboarding',
 ];
 
+// Derives a default title from an uploaded filename: strips the extension
+// (splitting on the LAST dot, so "foo.bar.pdf" -> "foo.bar"), leaves the rest
+// verbatim (no case/underscore/hyphen reformatting), and caps it at the
+// title field's 200-char limit.
+function deriveTitleFromFilename(fileName: string): string {
+  const lastDotIndex = fileName.lastIndexOf('.');
+  const withoutExtension = lastDotIndex > 0 ? fileName.slice(0, lastDotIndex) : fileName;
+  return withoutExtension.slice(0, 200);
+}
+
 // ============================================
 // Component
 // ============================================
@@ -158,7 +168,7 @@ export function InputConfigStep() {
       passThreshold: defaultPassThreshold,
       includeQuiz: true,
       audienceRole: 'Operator',
-      preserveSourceWording: false,
+      preserveSourceWording: true,
       sectorKey: undefined,
       reviewerName: user ? `${user.firstName} ${user.lastName}`.trim() : '',
       reviewerOrg: '',
@@ -213,6 +223,20 @@ export function InputConfigStep() {
       }
     }
   }, [tenantSectors, tenantSectorsLoading, tenantSectorsError, form]);
+
+  // Auto-populate title from the uploaded filename — fires only when
+  // sourceFileName changes (i.e. an actual upload/selection event), and only
+  // when the title is still empty, so a typed or previously-derived title is
+  // never overwritten.
+  useEffect(() => {
+    if (!sourceFileName) return;
+    const currentTitle = form.getValues('title');
+    if (currentTitle && currentTitle.trim().length > 0) return;
+    const derivedTitle = deriveTitleFromFilename(sourceFileName);
+    if (derivedTitle) {
+      form.setValue('title', derivedTitle, { shouldDirty: false, shouldValidate: true });
+    }
+  }, [sourceFileName, form]);
 
   // Reset file state when mode changes
   const handleModeChange = useCallback(

@@ -127,6 +127,12 @@ public class InitialiseToolboxTalkCommandHandler : IRequestHandler<InitialiseToo
             // employees created after this talk is saved, see AutoAssignmentService).
             AutoAssignToNewEmployees = true,
             AutoAssignDueDays = tenantSettings?.DefaultAutoAssignDueDays ?? 14,
+            // Entity defaults for both are false — explicitly true here for the new wizard
+            // only (mirrors the AutoAssignToNewEmployees pattern above). UseQuestionPool is
+            // deliberately NOT defaulted true: it changes which questions each employee sees,
+            // which has compliance-assessment-consistency implications (see audit chunk).
+            ShuffleQuestions = true,
+            ShuffleOptions = true,
             PassingScore = tenantSettings?.DefaultPassingScore ?? 80,
             RequiresRefresher = defaultRequiresRefresher,
             RefresherIntervalMonths = defaultRefresherIntervalMonths,

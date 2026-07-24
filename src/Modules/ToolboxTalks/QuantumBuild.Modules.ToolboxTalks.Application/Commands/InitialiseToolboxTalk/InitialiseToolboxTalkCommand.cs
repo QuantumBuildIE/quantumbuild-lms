@@ -43,6 +43,6 @@ public record InitialiseToolboxTalkCommand : IRequest<ToolboxTalkDto>
 
     // Generation preferences
     public string AudienceRole { get; init; } = "Operator";
-    public bool PreserveSourceWording { get; init; } = false;
+    public bool PreserveSourceWording { get; init; } = true;
     public bool IncludeQuiz { get; init; } = true;
 }

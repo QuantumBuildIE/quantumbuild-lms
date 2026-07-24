@@ -440,6 +440,88 @@ public class InitialiseToolboxTalkCommandHandlerTests : IntegrationTestBase
         result.GenerateSlidesFromPdf.Should().BeFalse();
     }
 
+    // 15 — Full toggle audit (this chunk): ShuffleQuestions and ShuffleOptions now
+    // default true on the new wizard (explicit handler assignment — entity default is
+    // false). UseQuestionPool stays false (flagged "genuinely questionable" — changes
+    // which questions each employee sees, a compliance-assessment-consistency concern).
+    // AllowRetry was already true pre-chunk (entity default) — asserted here for
+    // completeness of the "every wizard toggle" audit, not because it changed.
+    [Fact]
+    public async Task NewTalk_DefaultsShuffleQuestionsAndShuffleOptionsTrue_UseQuestionPoolFalse()
+    {
+        var result = await InitialiseAsync(MinimalRequest(UniqueTitle("Quiz Toggle Defaults Talk")));
+
+        var talk = await GetTalkFromDbAsync(result.Id);
+        talk.Should().NotBeNull();
+        talk!.ShuffleQuestions.Should().BeTrue();
+        talk.ShuffleOptions.Should().BeTrue();
+        talk.UseQuestionPool.Should().BeFalse();
+        talk.AllowRetry.Should().BeTrue();
+    }
+
+    // 16 — PreserveSourceWording now defaults true when the caller omits it entirely
+    // (Command-level default). MinimalRequest always sends it explicitly, so this test
+    // constructs a request without the field to exercise the Command's own default.
+    [Fact]
+    public async Task NewTalk_OmittingPreserveSourceWording_DefaultsTrue()
+    {
+        var request = new
+        {
+            Title = UniqueTitle("Preserve Wording Default Talk"),
+            InputMode = "Text",
+            SourceLanguageCode = "en",
+            SourceText = "Some content here.",
+            TargetLanguageCodes = new[] { "fr" },
+            AudienceRole = "Operator",
+            IncludeQuiz = true,
+            // PreserveSourceWording intentionally omitted
+        };
+
+        var result = await InitialiseAsync(request);
+
+        result.PreserveSourceWording.Should().BeTrue();
+    }
+
+    // 17 — Admin can still explicitly override ShuffleQuestions/ShuffleOptions/
+    // PreserveSourceWording to false at creation time (all three are read straight
+    // from the request/Command, not hardcoded) — confirms the new true defaults
+    // don't clobber an explicit false.
+    [Fact]
+    public async Task ShuffleAndPreserveWordingDefaultsTrue_CanBeExplicitlyOverriddenFalseAtCreation()
+    {
+        var request = new
+        {
+            Title = UniqueTitle("Explicit False Overrides Talk"),
+            InputMode = "Text",
+            SourceLanguageCode = "en",
+            SourceText = "Some content here.",
+            TargetLanguageCodes = new[] { "fr" },
+            AudienceRole = "Operator",
+            PreserveSourceWording = false,
+            IncludeQuiz = true,
+        };
+
+        var result = await InitialiseAsync(request);
+        result.PreserveSourceWording.Should().BeFalse();
+
+        // ShuffleQuestions/ShuffleOptions have no InitialiseToolboxTalkCommand fields —
+        // override happens post-creation via the Quiz step's UpdateToolboxTalkQuizSettings
+        // command, same pattern as test 14 for the Settings-step toggles.
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var talk = await db.Set<ToolboxTalk>()
+            .IgnoreQueryFilters()
+            .FirstAsync(t => t.Id == result.Id);
+        talk.ShuffleQuestions = false;
+        talk.ShuffleOptions = false;
+        await db.SaveChangesAsync();
+
+        var refetched = await GetTalkFromDbAsync(result.Id);
+        refetched.Should().NotBeNull();
+        refetched!.ShuffleQuestions.Should().BeFalse();
+        refetched.ShuffleOptions.Should().BeFalse();
+    }
+
     // 14 — Admin can still explicitly override any of the new true defaults to false
     // by editing settings after creation (Step 4 of the wizard) — verified at the
     // entity level since InitialiseToolboxTalkCommand has no fields for these toggles.
