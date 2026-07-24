@@ -3,6 +3,8 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useQueryClient } from '@tanstack/react-query';
+import axios from 'axios';
 import { toast } from 'sonner';
 import { Loader2, Wand2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -22,6 +24,7 @@ import { SectionList, toSectionDrafts } from '../components/SectionList';
 import { useParseTalk } from '../hooks/useParseTalk';
 import { useUpdateTalkSections } from '../hooks/useUpdateTalkSections';
 import { useTalkStatusPolling } from '../hooks/useTalkStatusPolling';
+import { useAutoStartStep } from '../hooks/useAutoStartStep';
 import {
   parseStepSchema,
   type ParseStepFormValues,
@@ -59,6 +62,7 @@ export function ParseStep({ talkId, onContinue }: ParseStepProps) {
   const { data: talk, isLoading } = useTalkStatusPolling(talkId, true);
   const parseMutation = useParseTalk(talkId);
   const updateSectionsMutation = useUpdateTalkSections(talkId);
+  const queryClient = useQueryClient();
   const [showReparseConfirm, setShowReparseConfirm] = useState(false);
 
   const form = useForm<ParseStepFormValues>({
@@ -108,10 +112,19 @@ export function ParseStep({ talkId, onContinue }: ParseStepProps) {
       prevStatusRef.current = null;
       form.reset({ sections: [] });
       await parseMutation.mutateAsync();
-    } catch {
+    } catch (err) {
+      // 409 means parsing is already running (another tab, or a race with a prior
+      // request) — not a real failure. Drop the mutation's error state and refetch
+      // so the "Parsing…" view picks up the in-progress status instead of showing
+      // a scary error for something that's actually working.
+      if (axios.isAxiosError(err) && err.response?.status === 409) {
+        parseMutation.reset();
+        queryClient.invalidateQueries({ queryKey: ['learnings', talkId] });
+        return;
+      }
       toast.error('Failed to start parsing. Please try again.');
     }
-  }, [parseMutation, form]);
+  }, [parseMutation, form, queryClient, talkId]);
 
   const handleReparseClick = useCallback(() => {
     const sections = form.getValues('sections');
@@ -176,6 +189,21 @@ export function ParseStep({ talkId, onContinue }: ParseStepProps) {
   const hasSections = sections.length > 0;
   const isReady = !isLoading && !isParsing && !parseMutation.isError;
   const isSaving = updateSectionsMutation.isPending;
+
+  // Auto-start: fire Parse as soon as the step loads a fresh Draft talk with no
+  // sections yet. Skipped once sections exist (already parsed) or after a failure
+  // this session (see useAutoStartStep) — the manual button below covers the retry.
+  useAutoStartStep({
+    storageKey: `learning-wizard:autostart:parse:${talkId}`,
+    shouldStart:
+      !isLoading &&
+      !!talk &&
+      talk.status === 'Draft' &&
+      !hasSections &&
+      !parseMutation.isPending &&
+      !parseMutation.isError,
+    onStart: handleParse,
+  });
 
   // ── Loading skeleton ──────────────────────────────────────────────────────
 
