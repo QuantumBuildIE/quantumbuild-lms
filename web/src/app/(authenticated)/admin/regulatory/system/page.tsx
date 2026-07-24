@@ -160,7 +160,7 @@ export default function RegulatorySystemPage() {
         </div>
         <Button onClick={() => setCreateDialogOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
-          Add Regulation
+          Add Document
         </Button>
       </div>
 

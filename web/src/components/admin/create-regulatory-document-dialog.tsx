@@ -125,7 +125,7 @@ export function CreateRegulatoryDocumentDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Add Regulation</DialogTitle>
+          <DialogTitle>Add Document</DialogTitle>
           <DialogDescription>
             Create a new regulatory document. You can upload or paste a source
             document and trigger ingestion afterwards from its detail page.
