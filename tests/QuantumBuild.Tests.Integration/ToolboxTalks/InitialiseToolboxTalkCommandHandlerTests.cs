@@ -427,12 +427,54 @@ public class InitialiseToolboxTalkCommandHandlerTests : IntegrationTestBase
 
     // ── local DTOs ────────────────────────────────────────────────────────────
 
+    // 13 — Chunk 3: isActiveOnPublish, generateCertificate, autoAssign default true;
+    // generateSlideshow stays false (deferred pending boss sign-off on AI-spend tradeoff).
+    [Fact]
+    public async Task NewTalk_DefaultsIsActiveGenerateCertificateAndAutoAssignTrue_SlideshowFalse()
+    {
+        var result = await InitialiseAsync(MinimalRequest(UniqueTitle("Default Toggles Talk")));
+
+        result.IsActive.Should().BeTrue();
+        result.GenerateCertificate.Should().BeTrue();
+        result.AutoAssignToNewEmployees.Should().BeTrue();
+        result.GenerateSlidesFromPdf.Should().BeFalse();
+    }
+
+    // 14 — Admin can still explicitly override any of the new true defaults to false
+    // by editing settings after creation (Step 4 of the wizard) — verified at the
+    // entity level since InitialiseToolboxTalkCommand has no fields for these toggles.
+    [Fact]
+    public async Task AutoAssignDefaultTrue_CanBeExplicitlyToggledOffAfterCreation()
+    {
+        var result = await InitialiseAsync(MinimalRequest(UniqueTitle("Override Default Talk")));
+        result.AutoAssignToNewEmployees.Should().BeTrue();
+
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var talk = await db.Set<ToolboxTalk>()
+            .IgnoreQueryFilters()
+            .FirstAsync(t => t.Id == result.Id);
+        talk.AutoAssignToNewEmployees = false;
+        talk.GenerateCertificate = false;
+        talk.IsActive = false;
+        await db.SaveChangesAsync();
+
+        var refetched = await GetTalkFromDbAsync(result.Id);
+        refetched.Should().NotBeNull();
+        refetched!.AutoAssignToNewEmployees.Should().BeFalse();
+        refetched.GenerateCertificate.Should().BeFalse();
+        refetched.IsActive.Should().BeFalse();
+    }
+
     private record InitialisedTalkDto(
         Guid Id,
         string Title,
         [property: JsonConverter(typeof(JsonStringEnumConverter))]
         ToolboxTalkStatus Status,
         bool IsActive,
+        bool GenerateCertificate,
+        bool AutoAssignToNewEmployees,
+        bool GenerateSlidesFromPdf,
         int? LastEditedStep,
         string? SourceFileUrl,
         string? SourceFileName,

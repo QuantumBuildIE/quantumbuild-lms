@@ -122,6 +122,10 @@ public class InitialiseToolboxTalkCommandHandler : IRequestHandler<InitialiseToo
             IsActive = tenantSettings?.DefaultIsActive ?? true,
             GenerateCertificate = tenantSettings?.DefaultGenerateCertificate ?? true,
             MinimumVideoWatchPercent = tenantSettings?.DefaultMinimumVideoWatchPercent ?? 90,
+            // No ToolboxTalkSettings escape hatch exists for this field — defaults true
+            // for every tenant on the new wizard (Chunk 3, non-retroactive: only affects
+            // employees created after this talk is saved, see AutoAssignmentService).
+            AutoAssignToNewEmployees = true,
             AutoAssignDueDays = tenantSettings?.DefaultAutoAssignDueDays ?? 14,
             PassingScore = tenantSettings?.DefaultPassingScore ?? 80,
             RequiresRefresher = defaultRequiresRefresher,
