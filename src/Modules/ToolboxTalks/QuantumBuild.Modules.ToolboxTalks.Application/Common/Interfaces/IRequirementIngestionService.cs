@@ -110,4 +110,16 @@ public interface IRequirementIngestionService
     Task<RegulatoryBodyDto> CreateRegulatoryBodyAsync(
         CreateRegulatoryBodyRequest request,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Attaches a sector to a regulatory document by creating a RegulatoryProfile. Restores a
+    /// previously soft-deleted profile for the same document/sector pair rather than inserting
+    /// a duplicate — the unique index on {RegulatoryDocumentId, SectorId} has no soft-delete
+    /// filter, so a soft-deleted row still occupies the constrained slot. Does NOT trigger
+    /// ingestion — that remains a separate, explicit action.
+    /// </summary>
+    Task<RegulatoryProfileDto> CreateProfileAsync(
+        Guid regulatoryDocumentId,
+        Guid sectorId,
+        CancellationToken cancellationToken = default);
 }

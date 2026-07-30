@@ -108,6 +108,29 @@ export interface CreateRegulatoryBodyRequest {
   sectorId?: string | null;
 }
 
+/**
+ * Request to attach a sector to a regulatory document by creating a RegulatoryProfile.
+ * Does not trigger ingestion — that remains a separate, explicit action.
+ */
+export interface CreateRegulatoryProfileRequest {
+  sectorId: string;
+}
+
+/**
+ * A RegulatoryProfile — the attachment of a Sector to a RegulatoryDocument.
+ */
+export interface RegulatoryProfileDto {
+  id: string;
+  regulatoryDocumentId: string;
+  sectorId: string;
+  sectorKey: string;
+  sectorName: string;
+  scoreLabel: string;
+  exportLabel: string;
+  description: string;
+  isActive: boolean;
+}
+
 export interface DraftRequirementDto {
   id: string;
   title: string;

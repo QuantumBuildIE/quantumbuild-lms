@@ -13,6 +13,7 @@ import {
   getRegulatoryBodies,
   createRegulatoryDocument,
   createRegulatoryBody,
+  createRegulatoryProfile,
 } from "./regulatory-ingestion";
 import type {
   StartIngestionRequest,
@@ -21,6 +22,7 @@ import type {
   RejectRequirementRequest,
   CreateRegulatoryDocumentRequest,
   CreateRegulatoryBodyRequest,
+  CreateRegulatoryProfileRequest,
   RegulatoryBodyKind,
 } from "@/types/regulatory";
 
@@ -204,6 +206,20 @@ export function useCreateRegulatoryDocument() {
       createRegulatoryDocument(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: regulatoryKeys.documents() });
+    },
+  });
+}
+
+export function useCreateRegulatoryProfile(documentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateRegulatoryProfileRequest) =>
+      createRegulatoryProfile(documentId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: regulatoryKeys.documents() });
+      queryClient.invalidateQueries({
+        queryKey: regulatoryKeys.ingestionStatus(documentId),
+      });
     },
   });
 }

@@ -552,6 +552,79 @@ public class RequirementIngestionService : IRequirementIngestionService
         };
     }
 
+    public async Task<RegulatoryProfileDto> CreateProfileAsync(
+        Guid regulatoryDocumentId,
+        Guid sectorId,
+        CancellationToken cancellationToken = default)
+    {
+        var document = await _dbContext.RegulatoryDocuments
+            .Include(d => d.RegulatoryBody)
+            .FirstOrDefaultAsync(d => d.Id == regulatoryDocumentId, cancellationToken)
+            ?? throw new InvalidOperationException($"Regulatory document {regulatoryDocumentId} not found");
+
+        var sector = await _dbContext.Sectors
+            .FirstOrDefaultAsync(s => s.Id == sectorId, cancellationToken)
+            ?? throw new InvalidOperationException($"Sector {sectorId} not found");
+
+        // Soft-delete collision handling: the unique index on {RegulatoryDocumentId, SectorId}
+        // has no soft-delete filter, so a previously soft-deleted profile for this exact pair
+        // still occupies the constrained slot. Restore it instead of inserting a duplicate.
+        var existing = await _dbContext.RegulatoryProfiles
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(
+                p => p.RegulatoryDocumentId == regulatoryDocumentId && p.SectorId == sectorId,
+                cancellationToken);
+
+        Domain.Entities.RegulatoryProfile profile;
+        if (existing is not null)
+        {
+            if (!existing.IsDeleted)
+                throw new InvalidOperationException(
+                    $"A profile already exists for this document and sector '{sector.Name}'.");
+
+            // Restore soft-deleted record (restore-on-reassign pattern).
+            existing.IsDeleted = false;
+            profile = existing;
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation(
+                "Restored soft-deleted regulatory profile {ProfileId} for document {DocumentId}, sector {SectorKey}",
+                profile.Id, regulatoryDocumentId, sector.Key);
+        }
+        else
+        {
+            profile = new Domain.Entities.RegulatoryProfile
+            {
+                RegulatoryDocumentId = regulatoryDocumentId,
+                SectorId = sectorId,
+                SectorKey = sector.Key,
+                ScoreLabel = $"{document.RegulatoryBody.Code} Regulatory Score",
+                ExportLabel = $"{document.RegulatoryBody.Code} Inspection Export",
+            };
+
+            _dbContext.RegulatoryProfiles.Add(profile);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation(
+                "Created regulatory profile {ProfileId} for document {DocumentId}, sector {SectorKey}",
+                profile.Id, regulatoryDocumentId, sector.Key);
+        }
+
+        return new RegulatoryProfileDto
+        {
+            Id = profile.Id,
+            RegulatoryDocumentId = profile.RegulatoryDocumentId,
+            SectorId = profile.SectorId,
+            SectorKey = profile.SectorKey,
+            SectorName = sector.Name,
+            ScoreLabel = profile.ScoreLabel,
+            ExportLabel = profile.ExportLabel,
+            Description = profile.Description,
+            IsActive = profile.IsActive,
+        };
+    }
+
     private async Task<IngestionSessionDto> BuildIngestionSessionDto(
         Domain.Entities.RegulatoryDocument document,
         CancellationToken cancellationToken)

@@ -14,6 +14,8 @@ import type {
   RegulatoryBodyKind,
   CreateRegulatoryDocumentRequest,
   CreateRegulatoryBodyRequest,
+  CreateRegulatoryProfileRequest,
+  RegulatoryProfileDto,
 } from "@/types/regulatory";
 
 export async function getRegulatoryDocuments(): Promise<RegulatoryDocumentListItem[]> {
@@ -47,6 +49,17 @@ export async function createRegulatoryDocument(
 ): Promise<RegulatoryDocumentListItem> {
   const response = await apiClient.post<RegulatoryDocumentListItem>(
     "/regulatory/documents",
+    data
+  );
+  return response.data;
+}
+
+export async function createRegulatoryProfile(
+  documentId: string,
+  data: CreateRegulatoryProfileRequest
+): Promise<RegulatoryProfileDto> {
+  const response = await apiClient.post<RegulatoryProfileDto>(
+    `/regulatory/documents/${documentId}/profiles`,
     data
   );
   return response.data;

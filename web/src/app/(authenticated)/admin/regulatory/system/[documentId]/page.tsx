@@ -12,7 +12,10 @@ import {
   useRejectRequirement,
   useUpdateDraftRequirement,
   useApproveAllDrafts,
+  useRegulatoryDocuments,
+  useCreateRegulatoryProfile,
 } from "@/lib/api/admin/use-regulatory-ingestion";
+import { useAvailableSectors } from "@/lib/api/admin/use-tenant-sectors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -50,6 +53,7 @@ import {
   FileText,
   CheckCircle2,
   XCircle,
+  Plus,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { DraftRequirementDto } from "@/types/regulatory";
@@ -501,6 +505,108 @@ function DraftRequirementCard({
   );
 }
 
+function DocumentSectorsCard({
+  documentId,
+  sectorKeys,
+}: {
+  documentId: string;
+  sectorKeys: string[];
+}) {
+  const { data: sectors, isLoading: loadingSectors } = useAvailableSectors();
+  const createProfile = useCreateRegulatoryProfile(documentId);
+  const [selectedSectorId, setSelectedSectorId] = useState("");
+
+  const availableSectors = (sectors ?? []).filter(
+    (sector) => !sectorKeys.includes(sector.key)
+  );
+
+  const handleAddSector = useCallback(() => {
+    if (!selectedSectorId) return;
+    createProfile.mutate(
+      { sectorId: selectedSectorId },
+      {
+        onSuccess: () => {
+          toast.success("Sector attached");
+          setSelectedSectorId("");
+        },
+        onError: (error: unknown) => {
+          let message = "Failed to attach sector";
+          if (error && typeof error === "object" && "response" in error) {
+            const axiosError = error as {
+              response?: { data?: { message?: string } };
+            };
+            if (axiosError.response?.data?.message) {
+              message = axiosError.response.data.message;
+            }
+          } else if (error instanceof Error) {
+            message = error.message;
+          }
+          toast.error("Error", { description: message });
+        },
+      }
+    );
+  }, [createProfile, selectedSectorId]);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Sectors</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-wrap gap-2">
+          {sectorKeys.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No sectors attached yet.
+            </p>
+          ) : (
+            sectorKeys.map((key) => (
+              <Badge key={key} variant="outline">
+                {key}
+              </Badge>
+            ))
+          )}
+        </div>
+
+        <div className="flex items-end gap-3">
+          <div className="flex-1">
+            <label className="text-sm font-medium">Add Sector</label>
+            {loadingSectors ? (
+              <Skeleton className="mt-1 h-9 w-full" />
+            ) : (
+              <Select
+                value={selectedSectorId}
+                onValueChange={setSelectedSectorId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a sector" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableSectors.map((sector) => (
+                    <SelectItem key={sector.id} value={sector.id}>
+                      {sector.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          <Button
+            onClick={handleAddSector}
+            disabled={!selectedSectorId || createProfile.isPending}
+          >
+            {createProfile.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Plus className="mr-2 h-4 w-4" />
+            )}
+            Add Sector
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function RegulatoryDocumentDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -524,6 +630,9 @@ export default function RegulatoryDocumentDetailPage() {
 
   const { data: drafts, isLoading: draftsLoading } =
     useDraftRequirements(documentId);
+
+  const { data: documents } = useRegulatoryDocuments();
+  const currentDocument = documents?.find((d) => d.id === documentId);
 
   const startIngestion = useStartIngestion(documentId);
   const approveAll = useApproveAllDrafts(documentId);
@@ -718,6 +827,11 @@ export default function RegulatoryDocumentDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      <DocumentSectorsCard
+        documentId={documentId}
+        sectorKeys={currentDocument?.sectorKeys ?? []}
+      />
 
       {(drafts && drafts.length > 0) && (
         <Card>

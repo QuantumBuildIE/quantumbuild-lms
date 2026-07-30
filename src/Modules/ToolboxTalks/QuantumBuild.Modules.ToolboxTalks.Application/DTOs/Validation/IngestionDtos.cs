@@ -231,3 +231,29 @@ public record RegulatoryDocumentListDto
     public int ApprovedCount { get; init; }
     public int RejectedCount { get; init; }
 }
+
+/// <summary>
+/// Request to attach a sector to a regulatory document by creating a RegulatoryProfile.
+/// Does NOT trigger ingestion — that remains a separate, explicit action on the document's
+/// detail page.
+/// </summary>
+public record CreateRegulatoryProfileRequest
+{
+    public Guid SectorId { get; init; }
+}
+
+/// <summary>
+/// A RegulatoryProfile — the attachment of a Sector to a RegulatoryDocument.
+/// </summary>
+public record RegulatoryProfileDto
+{
+    public Guid Id { get; init; }
+    public Guid RegulatoryDocumentId { get; init; }
+    public Guid SectorId { get; init; }
+    public string SectorKey { get; init; } = string.Empty;
+    public string SectorName { get; init; } = string.Empty;
+    public string ScoreLabel { get; init; } = string.Empty;
+    public string ExportLabel { get; init; } = string.Empty;
+    public string Description { get; init; } = string.Empty;
+    public bool IsActive { get; init; }
+}

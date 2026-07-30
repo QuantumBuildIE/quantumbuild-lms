@@ -139,6 +139,36 @@ public class RegulatoryIngestionController : ControllerBase
     }
 
     /// <summary>
+    /// Attach a sector to a regulatory document by creating a RegulatoryProfile. Restores a
+    /// previously soft-deleted profile for the same document/sector pair. Does NOT trigger
+    /// ingestion — that remains a separate explicit action.
+    /// </summary>
+    [HttpPost("documents/{documentId:guid}/profiles")]
+    [ProducesResponseType(typeof(RegulatoryProfileDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> CreateProfile(
+        Guid documentId,
+        [FromBody] CreateRegulatoryProfileRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _ingestionService.CreateProfileAsync(documentId, request.SectorId, cancellationToken);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Regulatory profile creation failed for document {DocumentId}", documentId);
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating regulatory profile for document {DocumentId}", documentId);
+            return StatusCode(500, new { message = "Error creating regulatory profile" });
+        }
+    }
+
+    /// <summary>
     /// Upload a source PDF for a regulatory document. Stores it in R2 and updates the
     /// document's SourceUrl. Does NOT trigger ingestion — Ingest Requirements remains a
     /// separate explicit action.
