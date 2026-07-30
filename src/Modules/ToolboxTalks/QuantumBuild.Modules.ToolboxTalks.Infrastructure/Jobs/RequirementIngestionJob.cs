@@ -110,32 +110,63 @@ public class RequirementIngestionJob
             _logger.LogInformation("Extracted {Length} characters from document {DocumentId}",
                 extractedText.Length, regulatoryDocumentId);
 
-            // Step 2 — Claude extraction
-            var extraction = await ExtractRequirementsViaClaudeAsync(extractedText, regulatoryDocumentId, cancellationToken);
+            // Step 2 — Claude extraction, segmented by principle. A single whole-document call
+            // truncates against the token cap on a real ~75-page/~150-requirement document, so
+            // each of the document's principles gets its own call over the full document text,
+            // scoped by prompt instruction to extract only that principle's requirements (mirrors
+            // TranslationValidationJob's per-section call pattern). All segments are extracted and
+            // validated in memory first — nothing is persisted until every segment has succeeded
+            // (all-or-nothing: one failed segment fails the whole document, see MapSegmentFailures).
+            //
+            // Every principle is attempted regardless of an earlier segment's failure (run-all,
+            // not fail-fast). Ingestion is rare, so the extra Claude calls on a failing document
+            // are worth paying for a complete diagnosis of every principle that failed, rather
+            // than only ever seeing the first one.
+            var segmentOutcomes = new List<SegmentExtractionOutcome>();
 
-            if (extraction.Failure == ExtractionFailureReason.Truncated)
+            foreach (var principleNumber in PrincipleNumbers)
             {
-                await MarkFailedAsync(
-                    document,
-                    "extraction_truncated",
-                    $"Claude's response was truncated (stop_reason=max_tokens) on both the initial attempt and the retry — the {MaxTokens}-token output limit was too small for this document. No requirements were persisted.",
-                    cancellationToken);
+                var outcome = await ExtractPrincipleSegmentAsync(extractedText, principleNumber, regulatoryDocumentId, cancellationToken);
+                segmentOutcomes.Add(outcome);
+
+                if (outcome.Failure != SegmentFailureReason.None)
+                {
+                    _logger.LogWarning(
+                        "Principle {Principle} segment for document {DocumentId} failed ({Failure}); continuing to attempt remaining principles",
+                        principleNumber, regulatoryDocumentId, outcome.Failure);
+                    continue;
+                }
+
+                _logger.LogInformation(
+                    "Principle {Principle} segment for document {DocumentId} extracted {Count} requirement(s)",
+                    principleNumber, regulatoryDocumentId, outcome.Requirements!.Count);
+            }
+
+            var failedSegments = segmentOutcomes.Where(o => o.Failure != SegmentFailureReason.None).ToList();
+
+            if (failedSegments.Count > 0)
+            {
+                var (errorCode, errorMessage) = MapSegmentFailures(failedSegments);
+                await MarkFailedAsync(document, errorCode, errorMessage, cancellationToken);
                 return;
             }
 
-            if (extraction.Failure == ExtractionFailureReason.InvalidJson)
+            // Assemble: concatenate segments in principle order and assign a single coherent
+            // DisplayOrder across the whole document. Each segment's own model-supplied
+            // displayOrder is only meaningful within that principle (see BuildExtractionPrompt)
+            // and would collide across segments if trusted here, so it's always overwritten.
+            var extractedRequirements = segmentOutcomes
+                .SelectMany(o => o.Requirements ?? new List<ExtractedRequirement>())
+                .ToList();
+
+            for (var i = 0; i < extractedRequirements.Count; i++)
             {
-                await MarkFailedAsync(
-                    document,
-                    "extraction_invalid_json",
-                    "Claude's response could not be parsed as valid JSON on either the initial attempt or the retry. No requirements were persisted.",
-                    cancellationToken);
-                return;
+                extractedRequirements[i].DisplayOrder = i + 1;
             }
 
-            var extractedRequirements = extraction.Requirements ?? new List<ExtractedRequirement>();
-            _logger.LogInformation("Extracted {Count} requirements from document {DocumentId}",
-                extractedRequirements.Count, regulatoryDocumentId);
+            _logger.LogInformation(
+                "Extracted {Count} requirements across {PrincipleCount} principles from document {DocumentId}",
+                extractedRequirements.Count, PrincipleNumbers.Length, regulatoryDocumentId);
 
             // Step 3 — Persist as drafts for each matching profile
             var profiles = document.Profiles.Where(p => p.IsActive).ToList();
@@ -342,76 +373,268 @@ public class RequirementIngestionJob
     };
 
     /// <summary>
-    /// Why extraction produced no usable requirements. None means <c>Requirements</c> is a
-    /// valid (possibly empty) list; Truncated/InvalidJson mean the response could not be
-    /// trusted at all and <c>Requirements</c> is null.
+    /// The document's principles — one Claude call per principle, each scoped to the full
+    /// document text but instructed to extract only that principle's requirements (see
+    /// BuildExtractionPrompt). Principle-level segmentation only, not per-standard — the design
+    /// trades 4x input cost for robustness against the whole-document truncation problem;
+    /// ingestion is rare enough that this trade is intentional.
     /// </summary>
-    private enum ExtractionFailureReason
+    private static readonly int[] PrincipleNumbers = { 1, 2, 3, 4 };
+
+    /// <summary>
+    /// Expected standard IDs per principle, used by the per-segment completeness check below: a
+    /// segment can return valid, non-truncated JSON that is simply short (the model silently
+    /// missed standards within the principle). THIS MAP IS HIQA-SPECIFIC — it encodes the
+    /// structure of the single regulatory document currently seeded (RegulatoryRequirementSeedData:
+    /// HIQA homecare). A second regulatory document with a different structure will need its own
+    /// map (ideally derived from RegulatoryProfile config rather than hardcoded here) before it
+    /// can be ingested through this job — do not assume this generalises as-is.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<int, string[]> HiqaExpectedStandardsByPrinciple =
+        new Dictionary<int, string[]>
+        {
+            [1] = new[] { "1.1", "1.2", "1.3", "1.4" },
+            [2] = new[] { "2.1", "2.2", "2.3", "2.4", "2.5" },
+            [3] = new[] { "3.1", "3.2", "3.3" },
+            [4] = new[] { "4.1", "4.2", "4.3", "4.4", "4.5" },
+        };
+
+    /// <summary>
+    /// Why a principle segment produced nothing usable. None means <c>Requirements</c> is a
+    /// valid, complete (per the expected-standards check) list; the other three mean the segment
+    /// must be treated as a failure of the whole document — see the all-or-nothing persistence
+    /// rule in ExecuteAsync and MapSegmentFailure.
+    /// </summary>
+    private enum SegmentFailureReason
     {
         None,
         Truncated,
-        InvalidJson
+        InvalidJson,
+        Incomplete
     }
 
-    private sealed record ClaudeExtractionOutcome(List<ExtractedRequirement>? Requirements, ExtractionFailureReason Failure)
+    private sealed record SegmentExtractionOutcome(
+        int PrincipleNumber,
+        List<ExtractedRequirement>? Requirements,
+        SegmentFailureReason Failure,
+        IReadOnlyList<string>? MissingStandards)
     {
-        public static ClaudeExtractionOutcome Success(List<ExtractedRequirement> requirements) =>
-            new(requirements, ExtractionFailureReason.None);
+        public static SegmentExtractionOutcome Success(int principleNumber, List<ExtractedRequirement> requirements) =>
+            new(principleNumber, requirements, SegmentFailureReason.None, null);
 
-        public static ClaudeExtractionOutcome Truncated() => new(null, ExtractionFailureReason.Truncated);
+        public static SegmentExtractionOutcome Truncated(int principleNumber) =>
+            new(principleNumber, null, SegmentFailureReason.Truncated, null);
 
-        public static ClaudeExtractionOutcome InvalidJson() => new(null, ExtractionFailureReason.InvalidJson);
+        public static SegmentExtractionOutcome InvalidJson(int principleNumber) =>
+            new(principleNumber, null, SegmentFailureReason.InvalidJson, null);
+
+        public static SegmentExtractionOutcome Incomplete(int principleNumber, List<ExtractedRequirement> requirements, IReadOnlyList<string> missingStandards) =>
+            new(principleNumber, requirements, SegmentFailureReason.Incomplete, missingStandards);
     }
 
-    private async Task<ClaudeExtractionOutcome> ExtractRequirementsViaClaudeAsync(
-        string documentText, Guid documentId, CancellationToken cancellationToken)
+    /// <summary>
+    /// Extracts one principle's requirements, retrying once (same shape as the prior
+    /// whole-document retry) if the first attempt is truncated, unparseable, or — new in the
+    /// segmented design — parseable but missing expected standards for this principle.
+    /// </summary>
+    private async Task<SegmentExtractionOutcome> ExtractPrincipleSegmentAsync(
+        string documentText, int principleNumber, Guid documentId, CancellationToken cancellationToken)
     {
-        var prompt = BuildExtractionPrompt(documentText);
+        var prompt = BuildExtractionPrompt(documentText, principleNumber);
 
         // First attempt
         var (responseText, stopReason) = await CallClaudeAsync(prompt, documentId, cancellationToken);
         var requirements = TryParseRequirements(responseText);
         var truncated = stopReason == "max_tokens";
+        List<string>? missingStandards = null;
 
         if (requirements != null && !truncated)
-            return ClaudeExtractionOutcome.Success(requirements);
+        {
+            missingStandards = FindMissingStandards(principleNumber, requirements);
+            if (missingStandards.Count == 0)
+                return SegmentExtractionOutcome.Success(principleNumber, requirements);
 
-        if (truncated)
+            _logger.LogWarning(
+                "Principle {Principle} segment for document {DocumentId} is missing expected standards [{Missing}]; retrying",
+                principleNumber, documentId, string.Join(", ", missingStandards));
+        }
+        else if (truncated)
         {
             _logger.LogWarning(
-                "Extraction attempt for document {DocumentId} was truncated (stop_reason=max_tokens); retrying",
-                documentId);
+                "Principle {Principle} extraction attempt for document {DocumentId} was truncated (stop_reason=max_tokens); retrying",
+                principleNumber, documentId);
         }
         else
         {
-            _logger.LogWarning("First extraction attempt returned invalid JSON, retrying with stricter prompt");
+            _logger.LogWarning(
+                "Principle {Principle} extraction attempt for document {DocumentId} returned invalid JSON, retrying with stricter prompt",
+                principleNumber, documentId);
         }
 
-        // Retry with stricter prompt
-        var stricterPrompt = prompt + "\n\nIMPORTANT: Your previous response was not valid JSON. You MUST respond with ONLY a JSON array. No text before or after. No markdown code fences. Just the raw JSON array starting with [ and ending with ].";
+        // Retry — same segment prompt, stricter instruction appended. When the first attempt was
+        // incomplete rather than truncated/unparseable, the retry names the missing standards.
+        var stricterPrompt = BuildStricterPrompt(prompt, missingStandards);
 
         var (retryResponseText, retryStopReason) = await CallClaudeAsync(stricterPrompt, documentId, cancellationToken);
         var retryRequirements = TryParseRequirements(retryResponseText);
         var retryTruncated = retryStopReason == "max_tokens";
 
         if (retryRequirements != null && !retryTruncated)
-            return ClaudeExtractionOutcome.Success(retryRequirements);
+        {
+            var retryMissing = FindMissingStandards(principleNumber, retryRequirements);
+            if (retryMissing.Count == 0)
+                return SegmentExtractionOutcome.Success(principleNumber, retryRequirements);
+
+            _logger.LogError(
+                "Principle {Principle} segment retry for document {DocumentId} is still missing expected standards [{Missing}]",
+                principleNumber, documentId, string.Join(", ", retryMissing));
+            return SegmentExtractionOutcome.Incomplete(principleNumber, retryRequirements, retryMissing);
+        }
 
         if (retryTruncated)
         {
             _logger.LogError(
-                "Extraction retry for document {DocumentId} was also truncated (stop_reason=max_tokens)",
-                documentId);
-            return ClaudeExtractionOutcome.Truncated();
+                "Principle {Principle} extraction retry for document {DocumentId} was also truncated (stop_reason=max_tokens)",
+                principleNumber, documentId);
+            return SegmentExtractionOutcome.Truncated(principleNumber);
         }
 
-        _logger.LogError("Failed to parse requirements from Claude response after retry");
-        return ClaudeExtractionOutcome.InvalidJson();
+        _logger.LogError(
+            "Failed to parse Principle {Principle} requirements from Claude response for document {DocumentId} after retry",
+            principleNumber, documentId);
+        return SegmentExtractionOutcome.InvalidJson(principleNumber);
     }
 
-    private static string BuildExtractionPrompt(string documentText)
+    private static string BuildStricterPrompt(string basePrompt, List<string>? missingStandards)
     {
-        return $@"You are a regulatory compliance expert. Analyse the following regulatory document and extract all requirements that relate to staff training, competency, or compliance obligations.
+        if (missingStandards is { Count: > 0 })
+        {
+            return basePrompt +
+                "\n\nIMPORTANT: Your previous response did not include a requirement for every standard in this principle. " +
+                $"It was missing: {string.Join(", ", missingStandards)}. You MUST extract at least one requirement for EVERY standard under this principle. " +
+                "Respond ONLY with a valid JSON array — no preamble, no markdown, no explanation.";
+        }
+
+        return basePrompt +
+            "\n\nIMPORTANT: Your previous response was not valid JSON. You MUST respond with ONLY a JSON array. " +
+            "No text before or after. No markdown code fences. Just the raw JSON array starting with [ and ending with ].";
+    }
+
+    /// <summary>
+    /// Returns the expected standard IDs for <paramref name="principleNumber"/> (per
+    /// HiqaExpectedStandardsByPrinciple) that don't appear in any extracted requirement's Section
+    /// field. Matching is a literal substring search with digit-boundary guards (e.g. "1.1" won't
+    /// match inside "11.1") since Section is free text like "Standard 1.1" — there is no
+    /// structured standard-ID field on the extraction DTO. An unmapped principle number (no entry
+    /// in the map) always returns no missing standards: the check is skipped, not failed, for
+    /// documents whose structure hasn't been mapped yet.
+    /// </summary>
+    private static List<string> FindMissingStandards(int principleNumber, List<ExtractedRequirement> requirements)
+    {
+        if (!HiqaExpectedStandardsByPrinciple.TryGetValue(principleNumber, out var expectedStandards))
+            return new List<string>();
+
+        var sections = requirements
+            .Where(r => !string.IsNullOrWhiteSpace(r.Section))
+            .Select(r => r.Section!)
+            .ToList();
+
+        var missing = new List<string>();
+        foreach (var standardId in expectedStandards)
+        {
+            var pattern = $@"(?<!\d){System.Text.RegularExpressions.Regex.Escape(standardId)}(?!\d)";
+            var found = sections.Any(s => System.Text.RegularExpressions.Regex.IsMatch(s, pattern));
+            if (!found)
+                missing.Add(standardId);
+        }
+
+        return missing;
+    }
+
+    /// <summary>
+    /// Priority order used to pick the single LastIngestionErrorCode when failed segments have
+    /// different failure reasons, ranked least to most diagnosable on its own: InvalidJson means
+    /// no parseable output was returned at all; Truncated means some output arrived but hit the
+    /// hard token limit; Incomplete means the model understood the task and returned valid,
+    /// parseable JSON that was merely missing a standard. The highest-ranked reason present wins
+    /// the single-valued code. This ranking only affects which code is stored — the full
+    /// per-principle detail for every failure always lands in LastIngestionErrorMessage regardless
+    /// of which code wins here.
+    /// </summary>
+    private static readonly SegmentFailureReason[] ReasonPriority =
+    {
+        SegmentFailureReason.InvalidJson,
+        SegmentFailureReason.Truncated,
+        SegmentFailureReason.Incomplete
+    };
+
+    private static string ErrorCodeFor(SegmentFailureReason reason) => reason switch
+    {
+        SegmentFailureReason.Truncated => "extraction_truncated",
+        SegmentFailureReason.InvalidJson => "extraction_invalid_json",
+        SegmentFailureReason.Incomplete => "extraction_incomplete",
+        _ => "unknown"
+    };
+
+    /// <summary>
+    /// Describes a single failed segment's reason, without the "No requirements were persisted"
+    /// closing sentence — that belongs once, at the end of the aggregated message built by
+    /// MapSegmentFailures, not repeated per principle.
+    /// </summary>
+    private static string DescribeSegmentReason(SegmentExtractionOutcome outcome) => outcome.Failure switch
+    {
+        SegmentFailureReason.Truncated =>
+            $"response was truncated (stop_reason=max_tokens) on both the initial attempt and the retry - the {MaxTokens}-token output limit was too small for this segment",
+
+        SegmentFailureReason.InvalidJson =>
+            "response could not be parsed as valid JSON on either the initial attempt or the retry",
+
+        SegmentFailureReason.Incomplete =>
+            $"response was missing expected standards ({string.Join(", ", outcome.MissingStandards ?? new List<string>())}) after a retry - the segment appears incomplete rather than truncated",
+
+        _ => "failed for an unrecognised reason"
+    };
+
+    /// <summary>
+    /// Builds the aggregated failure code/message across every principle segment that failed
+    /// (run-all-collect-failures: every principle is attempted before this is called, see
+    /// ExecuteAsync). Two shapes:
+    ///
+    /// - Common root cause: every failed segment failed for the identical reason (e.g. the whole
+    ///   document's text is malformed and every principle truncates identically). Reads as one
+    ///   failure story naming all affected principles, not N unrelated failures.
+    /// - Mixed reasons: failed segments enumerated individually, each naming its own principle
+    ///   and reason, so no distinct failure is lost to the single-valued error code.
+    /// </summary>
+    private static (string ErrorCode, string ErrorMessage) MapSegmentFailures(
+        IReadOnlyList<SegmentExtractionOutcome> failedSegments)
+    {
+        var distinctReasons = failedSegments.Select(f => f.Failure).Distinct().ToList();
+        var primaryReason = distinctReasons.Count == 1
+            ? distinctReasons[0]
+            : ReasonPriority.First(distinctReasons.Contains);
+        var errorCode = ErrorCodeFor(primaryReason);
+
+        if (distinctReasons.Count == 1 && failedSegments.Count > 1)
+        {
+            var principles = string.Join(", ", failedSegments.Select(f => f.PrincipleNumber));
+            var sharedReason = DescribeSegmentReason(failedSegments[0]);
+            return (errorCode,
+                $"All {failedSegments.Count} of {PrincipleNumbers.Length} principles ({principles}) failed for the same reason: {sharedReason}. No requirements were persisted for any principle.");
+        }
+
+        var perPrincipleDetails = string.Join("; ", failedSegments.Select(f =>
+            $"Principle {f.PrincipleNumber}: {DescribeSegmentReason(f)}"));
+
+        return (errorCode,
+            $"{failedSegments.Count} of {PrincipleNumbers.Length} principles failed extraction. {perPrincipleDetails}. No requirements were persisted for any principle.");
+    }
+
+    private static string BuildExtractionPrompt(string documentText, int principleNumber)
+    {
+        return $@"You are a regulatory compliance expert. Analyse the following regulatory document and extract only the requirements under Principle {principleNumber} that relate to staff training, competency, or compliance obligations.
+
+The document below contains multiple principles. You are extracting ONLY Principle {principleNumber}'s requirements — do not extract requirements belonging to any other principle, and do not skip any standard within Principle {principleNumber}.
 
 For each requirement, extract:
 - title: A concise title (max 200 chars) for the training/competency requirement
@@ -421,7 +644,7 @@ For each requirement, extract:
 - principle: A short category label grouping this requirement (e.g. ""P2"", ""Staff Competency"", ""Food Safety Management""). If not explicitly stated in the document, infer from the requirement's subject matter. This field is MANDATORY — never return null or omit it
 - principleLabel: The full description of the principle category. MUST use one of the exact canonical labels below when applicable, or derive a descriptive label from the requirement's subject matter
 - priority: ""high"" for safety-critical requirements, ""med"" for standard compliance, ""low"" for best-practice/advisory
-- displayOrder: Sequential numbering starting from 1
+- displayOrder: Sequential numbering within THIS principle's requirements, starting from 1 (final numbering across the whole document is assigned separately once all principles are extracted)
 
 CANONICAL PRINCIPLE LABELS (use these exact strings — do not paraphrase or reword):
 - P2 — ""Safety & Wellbeing""
@@ -432,7 +655,7 @@ If the document uses different wording (e.g. ""Safety and Wellbeing""), map it t
 If the principle does not match any of these, set principleLabel to the document's exact text.
 
 IMPORTANT RULES:
-- Extract ONLY requirements related to staff training, competency, skills, or compliance obligations
+- Extract ONLY requirements belonging to Principle {principleNumber} that relate to staff training, competency, skills, or compliance obligations
 - Do NOT include general policy statements, organisational structure requirements, or non-training items
 - Each requirement should be actionable as a training topic
 - The fields section, sectionLabel, principle, and principleLabel are ALL MANDATORY — never return null or omit them. If the document does not explicitly state them, infer reasonable values from the requirement's context and subject matter

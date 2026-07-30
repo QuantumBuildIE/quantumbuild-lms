@@ -30,25 +30,47 @@ public class FakeAnthropicHttpMessageHandler : HttpMessageHandler
     /// </summary>
     public string? CapturedRequestBody { get; private set; }
 
+    /// <summary>
+    /// Every request body sent through this handler, in call order — lets tests assert how many
+    /// Claude calls were made (e.g. fail-fast segmentation stopping after one failed segment)
+    /// and inspect each one (e.g. which principle a segmented prompt targeted).
+    /// </summary>
+    public List<string> RequestBodies { get; } = new();
+
+    /// <summary>
+    /// When set, overrides ResponseContentText/StopReason for every call, computing the response
+    /// from the request body instead — lets tests vary the canned response per call (e.g.
+    /// RequirementIngestionJob's one-call-per-principle segmentation) rather than returning the
+    /// same fixed text for every request the handler ever sees.
+    /// </summary>
+    public Func<string, (string Text, string? StopReason)>? Responder { get; set; }
+
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
         if (request.Content != null)
+        {
             CapturedRequestBody = await request.Content.ReadAsStringAsync(cancellationToken);
+            RequestBodies.Add(CapturedRequestBody);
+        }
 
-        object body = StopReason == null
+        var (responseText, stopReason) = Responder != null
+            ? Responder(CapturedRequestBody ?? string.Empty)
+            : (ResponseContentText, StopReason);
+
+        object body = stopReason == null
             ? new
             {
-                content = new[] { new { type = "text", text = ResponseContentText } },
+                content = new[] { new { type = "text", text = responseText } },
                 usage = new { input_tokens = 10, output_tokens = 5 },
                 model = "claude-test-model"
             }
             : new
             {
-                content = new[] { new { type = "text", text = ResponseContentText } },
+                content = new[] { new { type = "text", text = responseText } },
                 usage = new { input_tokens = 10, output_tokens = 5 },
                 model = "claude-test-model",
-                stop_reason = StopReason
+                stop_reason = stopReason
             };
 
         var response = new HttpResponseMessage(HttpStatusCode.OK)
