@@ -111,14 +111,29 @@ public class RequirementIngestionJob
                 extractedText.Length, regulatoryDocumentId);
 
             // Step 2 — Claude extraction
-            var extractedRequirements = await ExtractRequirementsViaClaudeAsync(extractedText, regulatoryDocumentId, cancellationToken);
-            if (extractedRequirements == null || extractedRequirements.Count == 0)
+            var extraction = await ExtractRequirementsViaClaudeAsync(extractedText, regulatoryDocumentId, cancellationToken);
+
+            if (extraction.Failure == ExtractionFailureReason.Truncated)
             {
-                _logger.LogWarning("No requirements extracted from document {DocumentId}", regulatoryDocumentId);
-                await MarkSucceededAsync(document, cancellationToken);
+                await MarkFailedAsync(
+                    document,
+                    "extraction_truncated",
+                    $"Claude's response was truncated (stop_reason=max_tokens) on both the initial attempt and the retry — the {MaxTokens}-token output limit was too small for this document. No requirements were persisted.",
+                    cancellationToken);
                 return;
             }
 
+            if (extraction.Failure == ExtractionFailureReason.InvalidJson)
+            {
+                await MarkFailedAsync(
+                    document,
+                    "extraction_invalid_json",
+                    "Claude's response could not be parsed as valid JSON on either the initial attempt or the retry. No requirements were persisted.",
+                    cancellationToken);
+                return;
+            }
+
+            var extractedRequirements = extraction.Requirements ?? new List<ExtractedRequirement>();
             _logger.LogInformation("Extracted {Count} requirements from document {DocumentId}",
                 extractedRequirements.Count, regulatoryDocumentId);
 
@@ -126,8 +141,25 @@ public class RequirementIngestionJob
             var profiles = document.Profiles.Where(p => p.IsActive).ToList();
             if (profiles.Count == 0)
             {
-                _logger.LogWarning("Document {DocumentId} has no active profiles", regulatoryDocumentId);
-                await MarkSucceededAsync(document, cancellationToken);
+                _logger.LogWarning(
+                    "Document {DocumentId} has no active profiles — skipping persistence of {Count} extracted requirement(s)",
+                    regulatoryDocumentId, extractedRequirements.Count);
+                await MarkSkippedAsync(
+                    document,
+                    "no_active_profiles",
+                    $"Extraction ran and returned {extractedRequirements.Count} candidate requirement(s), but this document has no active RegulatoryProfile to attach them to. Nothing was persisted.",
+                    cancellationToken);
+                return;
+            }
+
+            if (extractedRequirements.Count == 0)
+            {
+                _logger.LogWarning("Claude returned a well-formed but empty result for document {DocumentId}", regulatoryDocumentId);
+                await MarkFailedAsync(
+                    document,
+                    "extraction_zero_requirements",
+                    "Claude's response was valid JSON but contained zero requirements. No requirements were persisted.",
+                    cancellationToken);
                 return;
             }
 
@@ -191,6 +223,28 @@ public class RequirementIngestionJob
         document.LastIngestionErrorCode = null;
         document.LastIngestionErrorMessage = null;
         await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Marks the document as Skipped — the run completed without error but had nothing to
+    /// persist to (e.g. no active RegulatoryProfile). Distinct from both Success (which implies
+    /// there was somewhere for a result to land) and Failed (which implies something went wrong).
+    /// </summary>
+    private async Task MarkSkippedAsync(
+        RegulatoryDocument document,
+        string errorCode,
+        string errorMessage,
+        CancellationToken cancellationToken)
+    {
+        document.LastIngestedAt = DateTimeOffset.UtcNow;
+        document.LastIngestionStatus = RegulatoryIngestionStatus.Skipped;
+        document.LastIngestionErrorCode = errorCode;
+        document.LastIngestionErrorMessage = errorMessage.Length > 2000 ? errorMessage[..2000] : errorMessage;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        _logger.LogWarning(
+            "Ingestion marked Skipped for document {DocumentId}: [{ErrorCode}] {ErrorMessage}",
+            document.Id, errorCode, document.LastIngestionErrorMessage);
     }
 
     /// <summary>
@@ -287,31 +341,72 @@ public class RequirementIngestionJob
         _ => "unknown"
     };
 
-    private async Task<List<ExtractedRequirement>?> ExtractRequirementsViaClaudeAsync(
+    /// <summary>
+    /// Why extraction produced no usable requirements. None means <c>Requirements</c> is a
+    /// valid (possibly empty) list; Truncated/InvalidJson mean the response could not be
+    /// trusted at all and <c>Requirements</c> is null.
+    /// </summary>
+    private enum ExtractionFailureReason
+    {
+        None,
+        Truncated,
+        InvalidJson
+    }
+
+    private sealed record ClaudeExtractionOutcome(List<ExtractedRequirement>? Requirements, ExtractionFailureReason Failure)
+    {
+        public static ClaudeExtractionOutcome Success(List<ExtractedRequirement> requirements) =>
+            new(requirements, ExtractionFailureReason.None);
+
+        public static ClaudeExtractionOutcome Truncated() => new(null, ExtractionFailureReason.Truncated);
+
+        public static ClaudeExtractionOutcome InvalidJson() => new(null, ExtractionFailureReason.InvalidJson);
+    }
+
+    private async Task<ClaudeExtractionOutcome> ExtractRequirementsViaClaudeAsync(
         string documentText, Guid documentId, CancellationToken cancellationToken)
     {
         var prompt = BuildExtractionPrompt(documentText);
 
         // First attempt
-        var responseText = await CallClaudeAsync(prompt, documentId, cancellationToken);
+        var (responseText, stopReason) = await CallClaudeAsync(prompt, documentId, cancellationToken);
         var requirements = TryParseRequirements(responseText);
+        var truncated = stopReason == "max_tokens";
 
-        if (requirements != null)
-            return requirements;
+        if (requirements != null && !truncated)
+            return ClaudeExtractionOutcome.Success(requirements);
 
-        // Retry with stricter prompt
-        _logger.LogWarning("First extraction attempt returned invalid JSON, retrying with stricter prompt");
-        var stricterPrompt = prompt + "\n\nIMPORTANT: Your previous response was not valid JSON. You MUST respond with ONLY a JSON array. No text before or after. No markdown code fences. Just the raw JSON array starting with [ and ending with ].";
-
-        responseText = await CallClaudeAsync(stricterPrompt, documentId, cancellationToken);
-        requirements = TryParseRequirements(responseText);
-
-        if (requirements == null)
+        if (truncated)
         {
-            _logger.LogError("Failed to parse requirements from Claude response after retry");
+            _logger.LogWarning(
+                "Extraction attempt for document {DocumentId} was truncated (stop_reason=max_tokens); retrying",
+                documentId);
+        }
+        else
+        {
+            _logger.LogWarning("First extraction attempt returned invalid JSON, retrying with stricter prompt");
         }
 
-        return requirements;
+        // Retry with stricter prompt
+        var stricterPrompt = prompt + "\n\nIMPORTANT: Your previous response was not valid JSON. You MUST respond with ONLY a JSON array. No text before or after. No markdown code fences. Just the raw JSON array starting with [ and ending with ].";
+
+        var (retryResponseText, retryStopReason) = await CallClaudeAsync(stricterPrompt, documentId, cancellationToken);
+        var retryRequirements = TryParseRequirements(retryResponseText);
+        var retryTruncated = retryStopReason == "max_tokens";
+
+        if (retryRequirements != null && !retryTruncated)
+            return ClaudeExtractionOutcome.Success(retryRequirements);
+
+        if (retryTruncated)
+        {
+            _logger.LogError(
+                "Extraction retry for document {DocumentId} was also truncated (stop_reason=max_tokens)",
+                documentId);
+            return ClaudeExtractionOutcome.Truncated();
+        }
+
+        _logger.LogError("Failed to parse requirements from Claude response after retry");
+        return ClaudeExtractionOutcome.InvalidJson();
     }
 
     private static string BuildExtractionPrompt(string documentText)
@@ -347,7 +442,8 @@ DOCUMENT TEXT:
 {documentText}";
     }
 
-    private async Task<string> CallClaudeAsync(string prompt, Guid documentId, CancellationToken cancellationToken)
+    private async Task<(string ContentText, string? StopReason)> CallClaudeAsync(
+        string prompt, Guid documentId, CancellationToken cancellationToken)
     {
         var requestBody = new
         {
@@ -377,6 +473,7 @@ DOCUMENT TEXT:
         }
 
         var parsed = AnthropicResponseParser.Parse(responseBody);
+        var stopReason = ExtractStopReason(responseBody);
 
         await _aiUsageLogger.LogAsync(
             Guid.Empty,
@@ -389,9 +486,25 @@ DOCUMENT TEXT:
             referenceEntityId: documentId,
             cancellationToken);
 
-        return parsed.ContentText;
+        return (parsed.ContentText, stopReason);
     }
 
+    // Mirrors AiSlideshowGenerationService.ExtractStopReason — AnthropicResponseParser doesn't
+    // carry stop_reason, so it's read directly off the raw response body here too.
+    private static string? ExtractStopReason(string responseBody)
+    {
+        using var jsonDoc = JsonDocument.Parse(responseBody);
+        return jsonDoc.RootElement.TryGetProperty("stop_reason", out var stopEl)
+            ? stopEl.GetString()
+            : null;
+    }
+
+    /// <summary>
+    /// Returns null only when the response could not be parsed as JSON at all (garbage text,
+    /// markdown-wrapped non-JSON, or truncated mid-object). A syntactically valid but empty
+    /// array ("[]") returns an empty list, not null — callers must not conflate "unparseable"
+    /// with "parsed cleanly to nothing", since only the former is a retry-worthy failure.
+    /// </summary>
     private List<ExtractedRequirement>? TryParseRequirements(string responseText)
     {
         if (string.IsNullOrWhiteSpace(responseText))
@@ -409,8 +522,7 @@ DOCUMENT TEXT:
                 json = json.Trim();
             }
 
-            var requirements = JsonSerializer.Deserialize<List<ExtractedRequirement>>(json, CamelCaseOptions);
-            return requirements?.Count > 0 ? requirements : null;
+            return JsonSerializer.Deserialize<List<ExtractedRequirement>>(json, CamelCaseOptions);
         }
         catch (JsonException ex)
         {

@@ -18,6 +18,12 @@ public class FakeAnthropicHttpMessageHandler : HttpMessageHandler
     public string ResponseContentText { get; set; } = "[]";
 
     /// <summary>
+    /// The Anthropic API's stop_reason for the canned response, e.g. "end_turn" or "max_tokens".
+    /// Null omits the field entirely, matching older fixtures that predate stop_reason checks.
+    /// </summary>
+    public string? StopReason { get; set; }
+
+    /// <summary>
     /// The raw JSON body of the most recent request sent through this handler — lets tests
     /// assert on what was actually sent to Claude (e.g. which candidate requirements were
     /// included in the prompt) without needing a real API call.
@@ -30,12 +36,20 @@ public class FakeAnthropicHttpMessageHandler : HttpMessageHandler
         if (request.Content != null)
             CapturedRequestBody = await request.Content.ReadAsStringAsync(cancellationToken);
 
-        var body = new
-        {
-            content = new[] { new { type = "text", text = ResponseContentText } },
-            usage = new { input_tokens = 10, output_tokens = 5 },
-            model = "claude-test-model"
-        };
+        object body = StopReason == null
+            ? new
+            {
+                content = new[] { new { type = "text", text = ResponseContentText } },
+                usage = new { input_tokens = 10, output_tokens = 5 },
+                model = "claude-test-model"
+            }
+            : new
+            {
+                content = new[] { new { type = "text", text = ResponseContentText } },
+                usage = new { input_tokens = 10, output_tokens = 5 },
+                model = "claude-test-model",
+                stop_reason = StopReason
+            };
 
         var response = new HttpResponseMessage(HttpStatusCode.OK)
         {

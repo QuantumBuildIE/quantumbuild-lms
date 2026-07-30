@@ -37,6 +37,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Queries.GetToolboxTalkSlides
 using QuantumBuild.Modules.ToolboxTalks.Application.Queries.GetToolboxTalks;
 using QuantumBuild.Modules.ToolboxTalks.Application.Queries.GetToolboxTalkSettings;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services;
+using QuantumBuild.Modules.ToolboxTalks.Application.Services.Scorm;
 using QuantumBuild.Modules.ToolboxTalks.Application.Features.Certificates.DTOs;
 using QuantumBuild.Modules.ToolboxTalks.Application.Features.Certificates.Queries;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Storage;
@@ -73,6 +74,7 @@ public class ToolboxTalksController : ControllerBase
     private readonly ISupervisorAssignmentService _supervisorAssignmentService;
     private readonly ITenantSectorService _tenantSectorService;
     private readonly ITranslationWorkflowService _workflowService;
+    private readonly IScormPackageService _scormPackageService;
     private readonly UserManager<User> _userManager;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<ToolboxTalksController> _logger;
@@ -89,6 +91,7 @@ public class ToolboxTalksController : ControllerBase
         ISupervisorAssignmentService supervisorAssignmentService,
         ITenantSectorService tenantSectorService,
         ITranslationWorkflowService workflowService,
+        IScormPackageService scormPackageService,
         UserManager<User> userManager,
         IHttpClientFactory httpClientFactory,
         ILogger<ToolboxTalksController> logger)
@@ -104,6 +107,7 @@ public class ToolboxTalksController : ControllerBase
         _supervisorAssignmentService = supervisorAssignmentService;
         _tenantSectorService = tenantSectorService;
         _workflowService = workflowService;
+        _scormPackageService = scormPackageService;
         _userManager = userManager;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
@@ -2578,6 +2582,48 @@ public class ToolboxTalksController : ControllerBase
             _logger.LogError(ex, "Failed to regenerate certificate for completion {CompletionId}", completionId);
             return UnprocessableEntity(new { message = $"Certificate generation failed: {ex.Message}" });
         }
+    }
+
+    #endregion
+
+    #region SCORM Export
+
+    /// <summary>
+    /// Generates and downloads a minimal SCORM 1.2 package for this toolbox talk (Chunk 1 —
+    /// proof of concept: one section, English only, no quiz/video, completion-only JS bridge).
+    /// </summary>
+    /// <param name="id">Toolbox talk ID</param>
+    [HttpPost("{id:guid}/scorm-export")]
+    [Authorize(Policy = "Learnings.Admin")]
+    [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ExportScormPackage(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            var result = await _scormPackageService.GenerateMinimalPackageAsync(
+                id, _currentUserService.TenantId, "en", ct);
+
+            if (result == null)
+            {
+                return NotFound(new { message = "Toolbox talk not found" });
+            }
+
+            var fileName = $"{ToSafeFileNameSegment(result.TalkTitle)}-scorm.zip";
+            return File(result.ZipBytes, "application/zip", fileName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating SCORM package for toolbox talk {ToolboxTalkId}", id);
+            return StatusCode(500, new { message = "Error generating SCORM package" });
+        }
+    }
+
+    private static string ToSafeFileNameSegment(string value)
+    {
+        var invalidChars = Path.GetInvalidFileNameChars();
+        var sanitized = new string(value.Select(c => invalidChars.Contains(c) ? '-' : c).ToArray()).Trim();
+        return string.IsNullOrWhiteSpace(sanitized) ? "toolbox-talk" : sanitized;
     }
 
     #endregion

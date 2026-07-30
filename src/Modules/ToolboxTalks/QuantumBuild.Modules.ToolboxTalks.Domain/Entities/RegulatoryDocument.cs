@@ -29,21 +29,24 @@ public class RegulatoryDocument : BaseEntity
     public DateTimeOffset? LastIngestedAt { get; set; }
 
     /// <summary>
-    /// State of the most recent ingestion attempt (Idle/Ingesting/Success/Failed).
+    /// State of the most recent ingestion attempt (Idle/Ingesting/Success/Failed/Skipped).
     /// Set by RequirementIngestionJob at every stage — including failure paths — so
-    /// the frontend can distinguish "never run" from "ran and failed".
+    /// the frontend can distinguish "never run" from "ran and failed" from "ran but had
+    /// nothing to persist to".
     /// </summary>
     public RegulatoryIngestionStatus LastIngestionStatus { get; set; } = RegulatoryIngestionStatus.Idle;
 
     /// <summary>
-    /// Human-readable failure reason for the most recent ingestion attempt.
-    /// Null unless LastIngestionStatus is Failed.
+    /// Human-readable failure/skip reason for the most recent ingestion attempt.
+    /// Null unless LastIngestionStatus is Failed or Skipped.
     /// </summary>
     public string? LastIngestionErrorMessage { get; set; }
 
     /// <summary>
-    /// Failure category for the most recent ingestion attempt: "invalid_uri",
-    /// "fetch_failed", "parse_failed", or "unknown". Null unless LastIngestionStatus is Failed.
+    /// Failure/skip category for the most recent ingestion attempt: "invalid_uri",
+    /// "fetch_failed", "parse_failed", "extraction_truncated", "extraction_invalid_json",
+    /// "extraction_zero_requirements", "no_active_profiles", or "unknown". Null unless
+    /// LastIngestionStatus is Failed or Skipped.
     /// </summary>
     public string? LastIngestionErrorCode { get; set; }
 

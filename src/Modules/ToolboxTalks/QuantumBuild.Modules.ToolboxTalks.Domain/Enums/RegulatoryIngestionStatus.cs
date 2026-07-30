@@ -27,5 +27,14 @@ public enum RegulatoryIngestionStatus
     /// The most recent ingestion attempt failed. See LastIngestionErrorCode and
     /// LastIngestionErrorMessage on RegulatoryDocument for details.
     /// </summary>
-    Failed = 4
+    Failed = 4,
+
+    /// <summary>
+    /// The most recent ingestion attempt did not persist anything because the document had no
+    /// active RegulatoryProfile to attach requirements to — a non-fatal, expected state for a
+    /// freshly created document, not an extraction failure. Distinct from Failed so it reads as
+    /// "nothing to do here" rather than "something went wrong". See LastIngestionErrorCode and
+    /// LastIngestionErrorMessage on RegulatoryDocument for details.
+    /// </summary>
+    Skipped = 5
 }

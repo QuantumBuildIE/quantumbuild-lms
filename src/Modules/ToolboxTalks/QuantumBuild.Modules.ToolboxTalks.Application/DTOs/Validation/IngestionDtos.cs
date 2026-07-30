@@ -12,16 +12,20 @@ public record IngestionSessionDto
     public string? SourceUrl { get; init; }
 
     /// <summary>
-    /// One of "Idle", "Ingesting", "Success", "Failed" — mirrors
+    /// One of "Idle", "Ingesting", "Success", "Failed", "Skipped" — mirrors
     /// RegulatoryDocument.LastIngestionStatus verbatim.
     /// </summary>
     public string Status { get; init; } = string.Empty;
     public DateTimeOffset? LastIngestedAt { get; init; }
 
-    /// <summary>Populated only when Status is "Failed".</summary>
+    /// <summary>Populated only when Status is "Failed" or "Skipped".</summary>
     public string? LastIngestionErrorMessage { get; init; }
 
-    /// <summary>Populated only when Status is "Failed": "invalid_uri", "fetch_failed", "parse_failed", or "unknown".</summary>
+    /// <summary>
+    /// Populated only when Status is "Failed" or "Skipped": "invalid_uri", "fetch_failed",
+    /// "parse_failed", "extraction_truncated", "extraction_invalid_json",
+    /// "extraction_zero_requirements", "no_active_profiles", or "unknown".
+    /// </summary>
     public string? LastIngestionErrorCode { get; init; }
 
     public int DraftCount { get; init; }
