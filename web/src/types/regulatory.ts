@@ -61,7 +61,7 @@ export interface IngestionSessionDto {
   regulatoryDocumentId: string;
   documentTitle: string;
   sourceUrl: string | null;
-  status: "Idle" | "Ingesting" | "Success" | "Failed";
+  status: "Idle" | "Ingesting" | "Success" | "Failed" | "Skipped";
   lastIngestedAt: string | null;
   lastIngestionErrorMessage: string | null;
   lastIngestionErrorCode: string | null;

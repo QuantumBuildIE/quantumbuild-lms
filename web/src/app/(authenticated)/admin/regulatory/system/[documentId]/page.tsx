@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useIsSuperUser } from "@/lib/auth/use-auth";
 import {
   useIngestionStatus,
-  useIngestionStatusPolling,
   useDraftRequirements,
   useStartIngestion,
   useApproveRequirement,
@@ -14,6 +14,9 @@ import {
   useApproveAllDrafts,
   useRegulatoryDocuments,
   useCreateRegulatoryProfile,
+  isTerminalIngestionStatus,
+  INGESTION_BOOTSTRAP_CEILING_MS,
+  regulatoryKeys,
 } from "@/lib/api/admin/use-regulatory-ingestion";
 import { useAvailableSectors } from "@/lib/api/admin/use-tenant-sectors";
 import { Button } from "@/components/ui/button";
@@ -53,6 +56,7 @@ import {
   FileText,
   CheckCircle2,
   XCircle,
+  AlertCircle,
   Plus,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -134,11 +138,29 @@ function describeIngestionError(
 
 function StatusDisplay({
   status,
-  isPolling,
+  inProgress,
+  timedOut,
 }: {
   status?: string;
-  isPolling: boolean;
+  inProgress: boolean;
+  timedOut: boolean;
 }) {
+  if (inProgress) {
+    return (
+      <span className="flex items-center gap-1 text-amber-600">
+        <Loader2 className="h-3 w-3 animate-spin" />
+        Ingesting...
+      </span>
+    );
+  }
+  if (timedOut) {
+    return (
+      <span className="flex items-center gap-1 text-amber-600">
+        <AlertCircle className="h-3 w-3" />
+        Status unknown
+      </span>
+    );
+  }
   if (status === "Failed") {
     return (
       <span className="flex items-center gap-1 text-destructive">
@@ -147,19 +169,19 @@ function StatusDisplay({
       </span>
     );
   }
+  if (status === "Skipped") {
+    return (
+      <span className="flex items-center gap-1 text-amber-600">
+        <AlertCircle className="h-3 w-3" />
+        Skipped
+      </span>
+    );
+  }
   if (status === "Success") {
     return (
       <span className="flex items-center gap-1 text-green-600">
         <CheckCircle2 className="h-3 w-3" />
         Success
-      </span>
-    );
-  }
-  if (status === "Ingesting" || isPolling) {
-    return (
-      <span className="flex items-center gap-1 text-amber-600">
-        <Loader2 className="h-3 w-3 animate-spin" />
-        Ingesting...
       </span>
     );
   }
@@ -177,6 +199,24 @@ function PriorityBadge({ priority }: { priority: string }) {
       {priority}
     </Badge>
   );
+}
+
+/**
+ * Ticks every `intervalMs` while `enabled`, so a component can re-derive a wall-clock-relative
+ * value (e.g. "has N minutes elapsed since X") on each render without calling Date.now()
+ * directly in the render body — reading the clock only happens inside the interval callback,
+ * the sanctioned "subscribe to an external system" effect shape.
+ */
+function useNow(intervalMs: number, enabled: boolean): number {
+  const [now, setNow] = useState(0);
+  useEffect(() => {
+    if (!enabled) return;
+    const tick = () => setNow(Date.now());
+    tick();
+    const id = setInterval(tick, intervalMs);
+    return () => clearInterval(id);
+  }, [enabled, intervalMs]);
+  return now;
 }
 
 interface EditState {
@@ -622,19 +662,67 @@ export default function RegulatoryDocumentDetailPage() {
   const isSuperUser = useIsSuperUser();
 
   const [sourceUrl, setSourceUrl] = useState("");
-  const [isPolling, setIsPolling] = useState(false);
+  const queryClient = useQueryClient();
+
+  const startIngestion = useStartIngestion(documentId);
+
+  // submittedAt is stamped the instant .mutate() is called (not on success), and is 0
+  // until the first call this session. Only trust it as "an attempt is in flight" while
+  // that mutate call hasn't come back as an error — a rejected start (e.g. no sector
+  // attached) must not make the page look like it's ingesting.
+  const attemptStartedAt = startIngestion.submittedAt;
+  const hasLiveAttempt =
+    attemptStartedAt > 0 && (startIngestion.isPending || startIngestion.isSuccess);
 
   const {
-    data: status,
+    data: currentStatus,
     isLoading: statusLoading,
-  } = useIngestionStatus(documentId, !isPolling);
+    dataUpdatedAt: statusUpdatedAt,
+  } = useIngestionStatus(documentId, attemptStartedAt);
 
-  const { data: pollingStatus } = useIngestionStatusPolling(
-    documentId,
-    isPolling
-  );
+  // A fetch is "for this attempt" once it lands after the attempt started — only then
+  // can a terminal status in it be trusted (otherwise it may just be the stale status
+  // from before Start/Retry was clicked).
+  const confirmedTerminalForAttempt =
+    hasLiveAttempt &&
+    statusUpdatedAt > attemptStartedAt &&
+    isTerminalIngestionStatus(currentStatus?.status);
 
-  const currentStatus = isPolling ? pollingStatus : status;
+  const backendConfirmedRunning = currentStatus?.status === "Ingesting";
+
+  // Only need the clock while a start/retry attempt is unconfirmed either way — ticks
+  // just often enough to flip the bootstrap-timeout display promptly once it elapses.
+  const awaitingConfirmation =
+    hasLiveAttempt && !backendConfirmedRunning && !confirmedTerminalForAttempt;
+  const now = useNow(5000, awaitingConfirmation);
+
+  const bootstrapping =
+    awaitingConfirmation && now - attemptStartedAt < INGESTION_BOOTSTRAP_CEILING_MS;
+
+  const bootstrapTimedOut =
+    awaitingConfirmation && now - attemptStartedAt >= INGESTION_BOOTSTRAP_CEILING_MS;
+
+  const isIngestionInProgress = backendConfirmedRunning || bootstrapping;
+
+  // Once a terminal status is confirmed for this attempt, the newly (or no-longer)
+  // created drafts and the document's draft/approved counts need to be pulled in
+  // without a manual refresh. This talks to an external system (the query cache), not
+  // React state, so it belongs in an effect — guarded by a ref so it fires once per
+  // completed attempt rather than on every render while terminal.
+  const notifiedTerminalRef = useRef(false);
+  useEffect(() => {
+    if (confirmedTerminalForAttempt) {
+      if (!notifiedTerminalRef.current) {
+        notifiedTerminalRef.current = true;
+        queryClient.invalidateQueries({
+          queryKey: regulatoryKeys.draftRequirements(documentId),
+        });
+        queryClient.invalidateQueries({ queryKey: regulatoryKeys.documents() });
+      }
+    } else {
+      notifiedTerminalRef.current = false;
+    }
+  }, [confirmedTerminalForAttempt, documentId, queryClient]);
 
   const { data: drafts, isLoading: draftsLoading } =
     useDraftRequirements(documentId);
@@ -642,7 +730,6 @@ export default function RegulatoryDocumentDetailPage() {
   const { data: documents } = useRegulatoryDocuments();
   const currentDocument = documents?.find((d) => d.id === documentId);
 
-  const startIngestion = useStartIngestion(documentId);
   const approveAll = useApproveAllDrafts(documentId);
 
   const attachedSectorKeys = currentDocument?.sectorKeys ?? [];
@@ -665,26 +752,12 @@ export default function RegulatoryDocumentDetailPage() {
       {
         onSuccess: () => {
           toast.success("Ingestion job queued");
-          setIsPolling(true);
-          // Safety-net timeout in case the terminal-status check below never fires
-          // (e.g. the job never updates status for some unforeseen reason).
-          setTimeout(() => setIsPolling(false), 120000);
         },
         onError: (err: Error) =>
           toast.error(err.message || "Failed to start ingestion"),
       }
     );
   }, [startIngestion, effectiveSourceUrl, hasAttachedSector]);
-
-  // Stop polling as soon as the backend reports a terminal state, rather than waiting
-  // blindly for the 120s timeout. Also correctly stops for a 0-draft Success (the old
-  // "hasDrafts" heuristic never noticed those).
-  useEffect(() => {
-    if (!isPolling) return;
-    if (currentStatus?.status === "Success" || currentStatus?.status === "Failed") {
-      setIsPolling(false);
-    }
-  }, [isPolling, currentStatus?.status]);
 
   const handleApproveAll = useCallback(() => {
     approveAll.mutate(undefined, {
@@ -740,7 +813,8 @@ export default function RegulatoryDocumentDetailPage() {
                   <p className="font-medium">
                     <StatusDisplay
                       status={currentStatus?.status}
-                      isPolling={isPolling}
+                      inProgress={isIngestionInProgress}
+                      timedOut={bootstrapTimedOut}
                     />
                   </p>
                 </div>
@@ -824,15 +898,15 @@ export default function RegulatoryDocumentDetailPage() {
                   onClick={handleStartIngestion}
                   disabled={
                     startIngestion.isPending ||
-                    isPolling ||
+                    isIngestionInProgress ||
                     sourceUrlIssue?.level === "error" ||
                     !hasAttachedSector
                   }
                 >
-                  {startIngestion.isPending || isPolling ? (
+                  {startIngestion.isPending || isIngestionInProgress ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      {isPolling ? "Ingesting..." : "Starting..."}
+                      {isIngestionInProgress ? "Ingesting..." : "Starting..."}
                     </>
                   ) : (
                     <>
@@ -845,9 +919,32 @@ export default function RegulatoryDocumentDetailPage() {
                 </Button>
               </div>
 
-              {!isPolling && currentStatus?.status === "Failed" && (
+              {!isIngestionInProgress && bootstrapTimedOut && (
+                <div className="rounded-md border border-amber-500/50 bg-amber-50 p-3 text-sm text-amber-800">
+                  <p className="font-medium">Ingestion status unknown</p>
+                  <p>
+                    The job was queued but hasn&apos;t reported back yet. It may
+                    still be running — refresh this page in a few minutes to
+                    check its status.
+                  </p>
+                </div>
+              )}
+
+              {!isIngestionInProgress && currentStatus?.status === "Failed" && (
                 <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
                   <p className="font-medium">Ingestion failed</p>
+                  <p>
+                    {describeIngestionError(
+                      currentStatus.lastIngestionErrorCode,
+                      currentStatus.lastIngestionErrorMessage
+                    )}
+                  </p>
+                </div>
+              )}
+
+              {!isIngestionInProgress && currentStatus?.status === "Skipped" && (
+                <div className="rounded-md border border-amber-500/50 bg-amber-50 p-3 text-sm text-amber-800">
+                  <p className="font-medium">Ingestion skipped</p>
                   <p>
                     {describeIngestionError(
                       currentStatus.lastIngestionErrorCode,

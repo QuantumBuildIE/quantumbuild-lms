@@ -45,24 +45,52 @@ export function useRegulatoryDocuments() {
   });
 }
 
-export function useIngestionStatus(documentId: string, enabled = true) {
-  return useQuery({
-    queryKey: regulatoryKeys.ingestionStatus(documentId),
-    queryFn: () => getIngestionStatus(documentId),
-    enabled: !!documentId && enabled,
-    refetchInterval: false,
-  });
+const TERMINAL_INGESTION_STATUSES = new Set(["Success", "Failed", "Skipped"]);
+
+export function isTerminalIngestionStatus(status: string | undefined): boolean {
+  return !!status && TERMINAL_INGESTION_STATUSES.has(status);
 }
 
-export function useIngestionStatusPolling(
-  documentId: string,
-  isPolling: boolean
-) {
+/**
+ * How long to keep polling after a start/retry attempt before the backend has ever
+ * confirmed the job reached "Ingesting" for that attempt. Once "Ingesting" is observed,
+ * polling continues with no ceiling — a real ingest can legitimately run several minutes
+ * and must not be abandoned as stale mid-run. This ceiling only guards the (normally
+ * sub-second) window between enqueueing the Hangfire job and it actually starting.
+ */
+export const INGESTION_BOOTSTRAP_CEILING_MS = 3 * 60 * 1000;
+
+/**
+ * Live ingestion status for a document. Always fetches on mount/documentId change.
+ * Polls every 3s while the backend confirms a job is actively "Ingesting", or while a
+ * just-started/retried attempt (attemptStartedAt, from useStartIngestion's
+ * mutation.submittedAt) hasn't yet been confirmed one way or the other. Stops the
+ * instant a fetch lands with a terminal status dated after attemptStartedAt — Success,
+ * Failed, and Skipped are all terminal.
+ */
+export function useIngestionStatus(documentId: string, attemptStartedAt: number) {
   return useQuery({
     queryKey: regulatoryKeys.ingestionStatus(documentId),
     queryFn: () => getIngestionStatus(documentId),
-    enabled: !!documentId && isPolling,
-    refetchInterval: isPolling ? 3000 : false,
+    enabled: !!documentId,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      if (status === "Ingesting") return 3000;
+
+      if (attemptStartedAt > 0) {
+        const confirmedTerminalForAttempt =
+          query.state.dataUpdatedAt > attemptStartedAt &&
+          isTerminalIngestionStatus(status);
+        if (
+          !confirmedTerminalForAttempt &&
+          Date.now() - attemptStartedAt < INGESTION_BOOTSTRAP_CEILING_MS
+        ) {
+          return 3000;
+        }
+      }
+
+      return false;
+    },
   });
 }
 
