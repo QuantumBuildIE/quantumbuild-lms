@@ -505,7 +505,13 @@ function DraftRequirementCard({
   );
 }
 
-function DocumentSectorsCard({
+/**
+ * Attach-sector step, embedded inside the "Document Details & Ingestion" panel
+ * rather than a standalone card. Attaching a sector (creating a RegulatoryProfile)
+ * is a required precondition for ingestion — this section is framed as step 1,
+ * directly above the Ingest action, so the two can't be mistaken for unrelated panels.
+ */
+function SectorAttachSection({
   documentId,
   sectorKeys,
 }: {
@@ -520,7 +526,7 @@ function DocumentSectorsCard({
     (sector) => !sectorKeys.includes(sector.key)
   );
 
-  const handleAddSector = useCallback(() => {
+  const handleAttachSector = useCallback(() => {
     if (!selectedSectorId) return;
     createProfile.mutate(
       { sectorId: selectedSectorId },
@@ -548,62 +554,64 @@ function DocumentSectorsCard({
   }, [createProfile, selectedSectorId]);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Sectors</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex flex-wrap gap-2">
-          {sectorKeys.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No sectors attached yet.
-            </p>
+    <div className="space-y-3">
+      <div>
+        <label className="text-sm font-medium">Sector</label>
+        <p className="text-xs text-muted-foreground">
+          Attach at least one sector before ingesting.
+        </p>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {sectorKeys.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No sectors attached yet.
+          </p>
+        ) : (
+          sectorKeys.map((key) => (
+            <Badge key={key} variant="outline">
+              {key}
+            </Badge>
+          ))
+        )}
+      </div>
+
+      <div className="flex items-end gap-3">
+        <div className="flex-1">
+          {loadingSectors ? (
+            <Skeleton className="h-9 w-full" />
           ) : (
-            sectorKeys.map((key) => (
-              <Badge key={key} variant="outline">
-                {key}
-              </Badge>
-            ))
+            <Select
+              value={selectedSectorId}
+              onValueChange={setSelectedSectorId}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a sector to attach" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableSectors.map((sector) => (
+                  <SelectItem key={sector.id} value={sector.id}>
+                    {sector.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
         </div>
-
-        <div className="flex items-end gap-3">
-          <div className="flex-1">
-            <label className="text-sm font-medium">Add Sector</label>
-            {loadingSectors ? (
-              <Skeleton className="mt-1 h-9 w-full" />
-            ) : (
-              <Select
-                value={selectedSectorId}
-                onValueChange={setSelectedSectorId}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a sector" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableSectors.map((sector) => (
-                    <SelectItem key={sector.id} value={sector.id}>
-                      {sector.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
-          <Button
-            onClick={handleAddSector}
-            disabled={!selectedSectorId || createProfile.isPending}
-          >
-            {createProfile.isPending ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Plus className="mr-2 h-4 w-4" />
-            )}
-            Add Sector
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+        <Button
+          variant="secondary"
+          onClick={handleAttachSector}
+          disabled={!selectedSectorId || createProfile.isPending}
+        >
+          {createProfile.isPending ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Plus className="mr-2 h-4 w-4" />
+          )}
+          Attach sector
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -637,12 +645,21 @@ export default function RegulatoryDocumentDetailPage() {
   const startIngestion = useStartIngestion(documentId);
   const approveAll = useApproveAllDrafts(documentId);
 
+  const attachedSectorKeys = currentDocument?.sectorKeys ?? [];
+  const hasAttachedSector = attachedSectorKeys.length > 0;
+
   const effectiveSourceUrl =
     sourceUrl || currentStatus?.sourceUrl || "";
 
   const sourceUrlIssue = checkSourceUrlInput(effectiveSourceUrl);
 
   const handleStartIngestion = useCallback(() => {
+    // Defensive check even though the button is already gated below — belt and
+    // braces so a race or stale render can't fire a profile-less ingest.
+    if (!hasAttachedSector) {
+      toast.error("Attach a sector before ingesting");
+      return;
+    }
     startIngestion.mutate(
       { sourceUrl: effectiveSourceUrl },
       {
@@ -657,7 +674,7 @@ export default function RegulatoryDocumentDetailPage() {
           toast.error(err.message || "Failed to start ingestion"),
       }
     );
-  }, [startIngestion, effectiveSourceUrl]);
+  }, [startIngestion, effectiveSourceUrl, hasAttachedSector]);
 
   // Stop polling as soon as the backend reports a terminal state, rather than waiting
   // blindly for the 120s timeout. Also correctly stops for a 0-draft Success (the old
@@ -761,55 +778,71 @@ export default function RegulatoryDocumentDetailPage() {
                   </div>
                 </div>
 
-                <div className="flex items-end gap-3">
-                  <div className="flex-1">
-                    <label className="text-sm font-medium">Source URL</label>
-                    <Input
-                      type="url"
-                      value={sourceUrl || currentStatus?.sourceUrl || ""}
-                      onChange={(e) => setSourceUrl(e.target.value)}
-                      placeholder="https://example.com/document.pdf"
-                      className={
-                        sourceUrlIssue?.level === "error"
-                          ? "border-destructive"
-                          : undefined
-                      }
-                    />
-                  </div>
-                  <Button
-                    onClick={handleStartIngestion}
-                    disabled={
-                      startIngestion.isPending ||
-                      isPolling ||
-                      sourceUrlIssue?.level === "error"
-                    }
-                  >
-                    {startIngestion.isPending || isPolling ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        {isPolling ? "Ingesting..." : "Starting..."}
-                      </>
-                    ) : (
-                      <>
-                        <FileText className="mr-2 h-4 w-4" />
-                        {currentStatus?.status === "Failed"
-                          ? "Retry Ingestion"
-                          : "Ingest Requirements"}
-                      </>
-                    )}
-                  </Button>
-                </div>
-                {sourceUrlIssue && (
-                  <p
+                <div>
+                  <label className="text-sm font-medium">Source URL</label>
+                  <Input
+                    type="url"
+                    value={sourceUrl || currentStatus?.sourceUrl || ""}
+                    onChange={(e) => setSourceUrl(e.target.value)}
+                    placeholder="https://example.com/document.pdf"
                     className={
-                      sourceUrlIssue.level === "error"
-                        ? "text-xs text-destructive"
-                        : "text-xs text-amber-600"
+                      sourceUrlIssue?.level === "error"
+                        ? "border-destructive"
+                        : undefined
                     }
-                  >
-                    {sourceUrlIssue.message}
+                  />
+                  {sourceUrlIssue && (
+                    <p
+                      className={
+                        sourceUrlIssue.level === "error"
+                          ? "mt-1 text-xs text-destructive"
+                          : "mt-1 text-xs text-amber-600"
+                      }
+                    >
+                      {sourceUrlIssue.message}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <Separator />
+
+              <SectorAttachSection
+                documentId={documentId}
+                sectorKeys={attachedSectorKeys}
+              />
+
+              <Separator />
+
+              <div className="flex items-center justify-end gap-3">
+                {!hasAttachedSector && (
+                  <p className="text-xs text-muted-foreground">
+                    Attach a sector before ingesting
                   </p>
                 )}
+                <Button
+                  onClick={handleStartIngestion}
+                  disabled={
+                    startIngestion.isPending ||
+                    isPolling ||
+                    sourceUrlIssue?.level === "error" ||
+                    !hasAttachedSector
+                  }
+                >
+                  {startIngestion.isPending || isPolling ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      {isPolling ? "Ingesting..." : "Starting..."}
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="mr-2 h-4 w-4" />
+                      {currentStatus?.status === "Failed"
+                        ? "Retry Ingestion"
+                        : "Ingest Requirements"}
+                    </>
+                  )}
+                </Button>
               </div>
 
               {!isPolling && currentStatus?.status === "Failed" && (
@@ -827,11 +860,6 @@ export default function RegulatoryDocumentDetailPage() {
           )}
         </CardContent>
       </Card>
-
-      <DocumentSectorsCard
-        documentId={documentId}
-        sectorKeys={currentDocument?.sectorKeys ?? []}
-      />
 
       {(drafts && drafts.length > 0) && (
         <Card>
