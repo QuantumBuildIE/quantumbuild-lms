@@ -23,12 +23,14 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.ContentCreation
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Frameworks;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Mapping;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.PreFlightScan;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Regulatory;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.SafetyTermRegistry;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Sectors;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Standards;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Reviewers;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Mapping;
+using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Regulatory;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Sectors;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Standards;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Reviewers;
@@ -344,6 +346,12 @@ public static class ServiceCollectionExtensions
         // Register applicable-frameworks service (Regulations via sector + Standards via subscription —
         // shared by compliance display, browse, and mapping-attribution read paths)
         services.AddScoped<IApplicableFrameworksService, ApplicableFrameworksService>();
+
+        // Register per-document structure map dispatch (faithful extraction foundation — not yet
+        // wired into RequirementIngestionJob, see RegulatoryStructureMapProvider). DB-backed via
+        // IToolboxTalksDbContext, so this must be Scoped, not Singleton.
+        services.AddScoped<IRegulatoryStructureMapProvider, RegulatoryStructureMapProvider>();
+        services.AddScoped<IRegulatoryStructureMapVerificationService, RegulatoryStructureMapVerificationService>();
 
         // Register requirement ingestion service (AI-powered regulatory requirement extraction)
         services.AddScoped<IRequirementIngestionService, RequirementIngestionService>();

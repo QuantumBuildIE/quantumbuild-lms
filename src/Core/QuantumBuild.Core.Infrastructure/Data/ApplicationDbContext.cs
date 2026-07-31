@@ -109,6 +109,10 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
     public DbSet<ValidationRegulatoryScore> ValidationRegulatoryScores => Set<ValidationRegulatoryScore>();
     public DbSet<RegulatoryRequirement> RegulatoryRequirements => Set<RegulatoryRequirement>();
     public DbSet<RegulatoryRequirementMapping> RegulatoryRequirementMappings => Set<RegulatoryRequirementMapping>();
+    public DbSet<RegulatoryStructureMap> RegulatoryStructureMaps => Set<RegulatoryStructureMap>();
+    public DbSet<RegulatoryStructureMapPrinciple> RegulatoryStructureMapPrinciples => Set<RegulatoryStructureMapPrinciple>();
+    public DbSet<RegulatoryStructureMapStandard> RegulatoryStructureMapStandards => Set<RegulatoryStructureMapStandard>();
+    public DbSet<RegulatoryStructureMapFeature> RegulatoryStructureMapFeatures => Set<RegulatoryStructureMapFeature>();
     public DbSet<TenantStandardSubscription> TenantStandardSubscriptions => Set<TenantStandardSubscription>();
 
     // AI usage tracking DbSets
@@ -296,6 +300,10 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.ApplyConfiguration(new ValidationRegulatoryScoreConfiguration());
         modelBuilder.ApplyConfiguration(new RegulatoryRequirementConfiguration());
         modelBuilder.ApplyConfiguration(new RegulatoryRequirementMappingConfiguration());
+        modelBuilder.ApplyConfiguration(new RegulatoryStructureMapConfiguration());
+        modelBuilder.ApplyConfiguration(new RegulatoryStructureMapPrincipleConfiguration());
+        modelBuilder.ApplyConfiguration(new RegulatoryStructureMapStandardConfiguration());
+        modelBuilder.ApplyConfiguration(new RegulatoryStructureMapFeatureConfiguration());
         modelBuilder.ApplyConfiguration(new TenantStandardSubscriptionConfiguration());
         modelBuilder.ApplyConfiguration(new AiUsageLogConfiguration());
         modelBuilder.ApplyConfiguration(new AiUsageSummaryConfiguration());

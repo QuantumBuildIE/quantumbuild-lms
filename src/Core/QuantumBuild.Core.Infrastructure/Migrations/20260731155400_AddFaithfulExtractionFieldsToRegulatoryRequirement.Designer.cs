@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using QuantumBuild.Core.Infrastructure.Data;
@@ -11,9 +12,11 @@ using QuantumBuild.Core.Infrastructure.Data;
 namespace QuantumBuild.Core.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260731155400_AddFaithfulExtractionFieldsToRegulatoryRequirement")]
+    partial class AddFaithfulExtractionFieldsToRegulatoryRequirement
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -3097,220 +3100,6 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                         {
                             t.HasCheckConstraint("ck_regulatory_requirement_mappings_talk_or_course", "(\"ToolboxTalkId\" IS NOT NULL AND \"CourseId\" IS NULL) OR (\"ToolboxTalkId\" IS NULL AND \"CourseId\" IS NOT NULL)");
                         });
-                });
-
-            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.RegulatoryStructureMap", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("CreatedBy")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<string>("DeletedBy")
-                        .HasColumnType("text");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<Guid>("RegulatoryDocumentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasDefaultValue("Draft");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<DateTimeOffset?>("VerifiedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("VerifiedBy")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RegulatoryDocumentId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_regulatory_structure_maps_document");
-
-                    b.ToTable("RegulatoryStructureMaps", "toolbox_talks");
-                });
-
-            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.RegulatoryStructureMapFeature", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Block")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("CreatedBy")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<string>("DeletedBy")
-                        .HasColumnType("text");
-
-                    b.Property<int>("DisplayOrder")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("FootnoteDefinition")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<string>("Identifier")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<Guid>("RegulatoryStructureMapStandardId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<string>("VerbatimText")
-                        .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RegulatoryStructureMapStandardId", "Block", "Identifier")
-                        .IsUnique()
-                        .HasDatabaseName("ix_regulatory_structure_map_features_standard_block_identifier");
-
-                    b.ToTable("RegulatoryStructureMapFeatures", "toolbox_talks");
-                });
-
-            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.RegulatoryStructureMapPrinciple", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("CreatedBy")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<string>("DeletedBy")
-                        .HasColumnType("text");
-
-                    b.Property<int>("DisplayOrder")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<int>("Number")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("RegulatoryStructureMapId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RegulatoryStructureMapId", "Number")
-                        .IsUnique()
-                        .HasDatabaseName("ix_regulatory_structure_map_principles_map_number");
-
-                    b.ToTable("RegulatoryStructureMapPrinciples", "toolbox_talks");
-                });
-
-            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.RegulatoryStructureMapStandard", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("CreatedBy")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<string>("DeletedBy")
-                        .HasColumnType("text");
-
-                    b.Property<int>("DisplayOrder")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<Guid>("RegulatoryStructureMapPrincipleId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("StandardId")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RegulatoryStructureMapPrincipleId", "StandardId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_regulatory_structure_map_standards_principle_standard");
-
-                    b.ToTable("RegulatoryStructureMapStandards", "toolbox_talks");
                 });
 
             modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.SafetyGlossary", b =>
@@ -7139,50 +6928,6 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                     b.Navigation("ToolboxTalk");
                 });
 
-            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.RegulatoryStructureMap", b =>
-                {
-                    b.HasOne("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.RegulatoryDocument", "RegulatoryDocument")
-                        .WithMany()
-                        .HasForeignKey("RegulatoryDocumentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("RegulatoryDocument");
-                });
-
-            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.RegulatoryStructureMapFeature", b =>
-                {
-                    b.HasOne("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.RegulatoryStructureMapStandard", "RegulatoryStructureMapStandard")
-                        .WithMany("Features")
-                        .HasForeignKey("RegulatoryStructureMapStandardId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("RegulatoryStructureMapStandard");
-                });
-
-            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.RegulatoryStructureMapPrinciple", b =>
-                {
-                    b.HasOne("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.RegulatoryStructureMap", "RegulatoryStructureMap")
-                        .WithMany("Principles")
-                        .HasForeignKey("RegulatoryStructureMapId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("RegulatoryStructureMap");
-                });
-
-            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.RegulatoryStructureMapStandard", b =>
-                {
-                    b.HasOne("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.RegulatoryStructureMapPrinciple", "RegulatoryStructureMapPrinciple")
-                        .WithMany("Standards")
-                        .HasForeignKey("RegulatoryStructureMapPrincipleId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("RegulatoryStructureMapPrinciple");
-                });
-
             modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.SafetyGlossaryTerm", b =>
                 {
                     b.HasOne("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.SafetyGlossary", "Glossary")
@@ -7700,21 +7445,6 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
             modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.RegulatoryRequirement", b =>
                 {
                     b.Navigation("Mappings");
-                });
-
-            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.RegulatoryStructureMap", b =>
-                {
-                    b.Navigation("Principles");
-                });
-
-            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.RegulatoryStructureMapPrinciple", b =>
-                {
-                    b.Navigation("Standards");
-                });
-
-            modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.RegulatoryStructureMapStandard", b =>
-                {
-                    b.Navigation("Features");
                 });
 
             modelBuilder.Entity("QuantumBuild.Modules.ToolboxTalks.Domain.Entities.SafetyGlossary", b =>

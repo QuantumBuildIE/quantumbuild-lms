@@ -81,6 +81,12 @@ public interface IToolboxTalksDbContext
     DbSet<RegulatoryRequirement> RegulatoryRequirements { get; }
     DbSet<RegulatoryRequirementMapping> RegulatoryRequirementMappings { get; }
 
+    // Regulatory structure map entities
+    DbSet<RegulatoryStructureMap> RegulatoryStructureMaps { get; }
+    DbSet<RegulatoryStructureMapPrinciple> RegulatoryStructureMapPrinciples { get; }
+    DbSet<RegulatoryStructureMapStandard> RegulatoryStructureMapStandards { get; }
+    DbSet<RegulatoryStructureMapFeature> RegulatoryStructureMapFeatures { get; }
+
     // AI usage tracking entities
     DbSet<AiUsageLog> AiUsageLogs { get; }
     DbSet<AiUsageSummary> AiUsageSummaries { get; }

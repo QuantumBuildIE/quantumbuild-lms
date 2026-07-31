@@ -511,6 +511,7 @@ static async Task SeedToolboxTalksDataAsync(IServiceProvider serviceProvider)
         await SectorSeedData.SeedAsync(context, logger);
         await RegulatoryProfileSeedData.SeedAsync(context, logger);
         await RegulatoryRequirementSeedData.SeedAsync(context, logger);
+        await RegulatoryStructureMapSeedData.SeedAsync(context, logger);
 
         // Ensure the active pipeline version record exists on first startup
         var pipelineVersionService = services.GetRequiredService<IPipelineVersionService>();
