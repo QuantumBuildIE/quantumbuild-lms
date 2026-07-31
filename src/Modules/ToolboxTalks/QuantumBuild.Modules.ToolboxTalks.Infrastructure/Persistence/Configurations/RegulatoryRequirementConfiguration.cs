@@ -72,6 +72,10 @@ public class RegulatoryRequirementConfiguration : IEntityTypeConfiguration<Regul
         builder.Property(e => e.FootnoteDefinition)
             .HasMaxLength(1000);
 
+        builder.Property(e => e.IsProvisional)
+            .IsRequired()
+            .HasDefaultValue(false);
+
         // Audit fields
         builder.Property(e => e.CreatedAt)
             .IsRequired();

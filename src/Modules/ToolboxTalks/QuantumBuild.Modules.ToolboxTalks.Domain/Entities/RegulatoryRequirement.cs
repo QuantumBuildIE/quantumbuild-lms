@@ -76,6 +76,16 @@ public class RegulatoryRequirement : BaseEntity
     /// </summary>
     public string? FootnoteDefinition { get; set; }
 
+    /// <summary>
+    /// True when this requirement was extracted against a structure map that was still Draft
+    /// (unverified by a human) at extraction time — see RegulatoryStructureMap.Status. Extraction
+    /// is not blocked on an unverified map (that would stop all testing before the first human
+    /// review), but the result must carry a visible marker that the structure it transcribed
+    /// against is not yet human-confirmed. False for requirements extracted against a Verified
+    /// map, and for requirements not sourced from a structure map at all (e.g. manually created).
+    /// </summary>
+    public bool IsProvisional { get; set; }
+
     // Navigation properties
     public RegulatoryProfile RegulatoryProfile { get; set; } = null!;
     public ICollection<RegulatoryRequirementMapping> Mappings { get; set; } = new List<RegulatoryRequirementMapping>();

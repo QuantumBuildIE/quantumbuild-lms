@@ -347,8 +347,8 @@ public static class ServiceCollectionExtensions
         // shared by compliance display, browse, and mapping-attribution read paths)
         services.AddScoped<IApplicableFrameworksService, ApplicableFrameworksService>();
 
-        // Register per-document structure map dispatch (faithful extraction foundation — not yet
-        // wired into RequirementIngestionJob, see RegulatoryStructureMapProvider). DB-backed via
+        // Register per-document structure map dispatch — wired into RequirementIngestionJob via
+        // constructor injection (see RegulatoryStructureMapProvider). DB-backed via
         // IToolboxTalksDbContext, so this must be Scoped, not Singleton.
         services.AddScoped<IRegulatoryStructureMapProvider, RegulatoryStructureMapProvider>();
         services.AddScoped<IRegulatoryStructureMapVerificationService, RegulatoryStructureMapVerificationService>();

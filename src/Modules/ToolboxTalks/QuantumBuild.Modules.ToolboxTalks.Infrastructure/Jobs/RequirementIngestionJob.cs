@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Pdf;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Regulatory;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
@@ -17,8 +18,26 @@ using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services;
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 
 /// <summary>
-/// Background job that fetches a regulatory document, extracts text via AI,
-/// and persists draft RegulatoryRequirement records for SuperUser review.
+/// Background job that fetches a regulatory document, transcribes it via AI against the
+/// document's structure map, and persists draft RegulatoryRequirement records for review.
+///
+/// MAP-DRIVEN VERBATIM TRANSCRIPTION (docs/faithful-extraction-build-recon.md). This job no
+/// longer asks the model to judge what requirements exist. The document's structure map
+/// (IRegulatoryStructureMapProvider) is the authoritative list of every feature the document
+/// defines — identifier, block (person-experience vs provider), and which standard it belongs
+/// to. Extraction's only job is to locate each declared feature's exact printed text in the
+/// freshly-fetched document and transcribe it verbatim; the model cannot add features the map
+/// doesn't declare or drop ones it does, because persistence is driven by walking the map's own
+/// feature list, not by whatever the model happens to return (see PersistDraftRequirementsAsync —
+/// any extra/unrecognised items in a model response are simply never looked up and so never
+/// persisted, regardless of whether the model obeyed the "don't invent features" instruction).
+///
+/// A document with no registered structure map fails loudly ("no_structure_map") rather than
+/// silently no-op'ing — there is nothing to drive extraction or completeness-check without one.
+/// A document whose map is still Draft (unverified) is NOT blocked — that would stop all testing
+/// before the first human review — but every requirement persisted from it carries
+/// IsProvisional = true, a visible marker that the structure it transcribed against is not yet
+/// human-confirmed.
 /// </summary>
 public class RequirementIngestionJob
 {
@@ -33,6 +52,7 @@ public class RequirementIngestionJob
 
     private readonly IToolboxTalksDbContext _dbContext;
     private readonly IPdfExtractionService _pdfExtractionService;
+    private readonly IRegulatoryStructureMapProvider _structureMapProvider;
     private readonly HttpClient _httpClient;
     private readonly SubtitleProcessingSettings _settings;
     private readonly IAiUsageLogger _aiUsageLogger;
@@ -41,6 +61,7 @@ public class RequirementIngestionJob
     public RequirementIngestionJob(
         IToolboxTalksDbContext dbContext,
         IPdfExtractionService pdfExtractionService,
+        IRegulatoryStructureMapProvider structureMapProvider,
         HttpClient httpClient,
         IOptions<SubtitleProcessingSettings> settings,
         IAiUsageLogger aiUsageLogger,
@@ -49,6 +70,7 @@ public class RequirementIngestionJob
     {
         _dbContext = dbContext;
         _pdfExtractionService = pdfExtractionService;
+        _structureMapProvider = structureMapProvider;
         _httpClient = httpClient;
         _settings = settings.Value;
         _aiUsageLogger = aiUsageLogger;
@@ -94,7 +116,37 @@ public class RequirementIngestionJob
                 return;
             }
 
-            // Step 1 — Fetch and extract text
+            // Step 1 — Resolve the document's structure map. Extraction is bounded transcription
+            // against this map's declared features, not free judgment — a document with no map
+            // has nothing to drive extraction or completeness-checking against, and must fail
+            // loudly rather than silently no-op the way the old per-principle expected-standards
+            // fallback used to for an unmapped principle number.
+            var (mapFound, structureMap) = await _structureMapProvider.TryGetStructureMapAsync(
+                document.Id, cancellationToken);
+
+            if (!mapFound || structureMap == null)
+            {
+                await MarkFailedAsync(
+                    document.Id,
+                    RegulatoryStructureMapNotFoundException.ErrorCode,
+                    $"No structure map is registered for document '{document.Title}' ({document.Id}). " +
+                    "Extraction cannot proceed without a per-document structure map declaring its features.",
+                    cancellationToken);
+                return;
+            }
+
+            // A Draft (unverified) map does not block extraction — every requirement persisted
+            // from it is simply flagged IsProvisional so downstream review knows the structure
+            // it was transcribed against has not yet been human-confirmed.
+            var isProvisional = !structureMap.IsVerified;
+            if (isProvisional)
+            {
+                _logger.LogWarning(
+                    "Structure map for document {DocumentId} is still Draft (unverified) — extraction will proceed, but every persisted requirement will be flagged IsProvisional",
+                    regulatoryDocumentId);
+            }
+
+            // Step 2 — Fetch and extract text
             var fetchResult = await FetchDocumentTextAsync(document.SourceUrl!, cancellationToken);
             if (!fetchResult.Success || string.IsNullOrWhiteSpace(fetchResult.Text))
             {
@@ -110,86 +162,125 @@ public class RequirementIngestionJob
             _logger.LogInformation("Extracted {Length} characters from document {DocumentId}",
                 extractedText.Length, regulatoryDocumentId);
 
-            // Step 2 — Claude extraction, segmented by principle. A single whole-document call
-            // truncates against the token cap on a real ~75-page/~150-requirement document, so
-            // each of the document's principles gets its own call over the full document text,
-            // scoped by prompt instruction to extract only that principle's requirements (mirrors
-            // TranslationValidationJob's per-section call pattern). All segments are extracted and
-            // validated in memory first — nothing is persisted until every segment has succeeded
-            // (all-or-nothing: one failed segment fails the whole document, see MapSegmentFailures).
+            // Step 3 — Claude transcription, segmented per standard. Segmentation granularity is
+            // per-standard (not per-principle, as it was before the map-driven rework) — verbatim
+            // text is materially longer than the free-judged title/description pairs the old
+            // prompt asked for, so keeping each call's declared-feature set to a single standard's
+            // person+provider blocks (at most 13 features for HIQA, ~500 chars of verbatim text
+            // each) keeps every call's output well within the token cap, rather than risking
+            // truncation by asking for a whole principle's worth of verbatim text in one call.
+            // This also generalises to any mapped document (17 calls for HIQA today, however many
+            // standards a future document's map declares tomorrow) rather than assuming a fixed
+            // principle count. All segments are extracted and validated in memory first — nothing
+            // is persisted until every segment has succeeded (all-or-nothing: one failed segment
+            // fails the whole document, see MapSegmentFailures).
             //
-            // Every principle is attempted regardless of an earlier segment's failure (run-all,
+            // Every standard is attempted regardless of an earlier segment's failure (run-all,
             // not fail-fast). Ingestion is rare, so the extra Claude calls on a failing document
-            // are worth paying for a complete diagnosis of every principle that failed, rather
+            // are worth paying for a complete diagnosis of every standard that failed, rather
             // than only ever seeing the first one.
             var segmentOutcomes = new List<SegmentExtractionOutcome>();
+            var totalStandards = structureMap.AllStandards.Count();
 
-            foreach (var principleNumber in PrincipleNumbers)
+            foreach (var principle in structureMap.Principles)
             {
-                var outcome = await ExtractPrincipleSegmentAsync(extractedText, principleNumber, regulatoryDocumentId, cancellationToken);
-                segmentOutcomes.Add(outcome);
-
-                if (outcome.Failure != SegmentFailureReason.None)
+                foreach (var standard in principle.Standards)
                 {
-                    _logger.LogWarning(
-                        "Principle {Principle} segment for document {DocumentId} failed ({Failure}); continuing to attempt remaining principles",
-                        principleNumber, regulatoryDocumentId, outcome.Failure);
-                    continue;
-                }
+                    var outcome = await ExtractStandardSegmentAsync(
+                        extractedText, principle.Number, standard, regulatoryDocumentId, cancellationToken);
+                    segmentOutcomes.Add(outcome);
 
-                _logger.LogInformation(
-                    "Principle {Principle} segment for document {DocumentId} extracted {Count} requirement(s)",
-                    principleNumber, regulatoryDocumentId, outcome.Requirements!.Count);
+                    if (outcome.Failure != SegmentFailureReason.None)
+                    {
+                        _logger.LogWarning(
+                            "Standard {StandardId} (Principle {Principle}) segment for document {DocumentId} failed ({Failure}); continuing to attempt remaining standards",
+                            standard.Id, principle.Number, regulatoryDocumentId, outcome.Failure);
+                        continue;
+                    }
+
+                    _logger.LogInformation(
+                        "Standard {StandardId} (Principle {Principle}) segment for document {DocumentId} transcribed {Count} feature(s)",
+                        standard.Id, principle.Number, regulatoryDocumentId, outcome.Features!.Count);
+                }
             }
 
             var failedSegments = segmentOutcomes.Where(o => o.Failure != SegmentFailureReason.None).ToList();
 
             if (failedSegments.Count > 0)
             {
-                var (errorCode, errorMessage) = MapSegmentFailures(failedSegments);
+                var (errorCode, errorMessage) = MapSegmentFailures(failedSegments, totalStandards);
                 await MarkFailedAsync(document.Id, errorCode, errorMessage, cancellationToken);
                 return;
             }
 
-            // Assemble: concatenate segments in principle order and assign a single coherent
-            // DisplayOrder across the whole document. Each segment's own model-supplied
-            // displayOrder is only meaningful within that principle (see BuildExtractionPrompt)
-            // and would collide across segments if trusted here, so it's always overwritten.
-            var extractedRequirements = segmentOutcomes
-                .SelectMany(o => o.Requirements ?? new List<ExtractedRequirement>())
-                .ToList();
-
-            for (var i = 0; i < extractedRequirements.Count; i++)
+            // Assemble: walk the map's own declared order (principle -> standard -> feature,
+            // person-then-provider per the map's authored order) and pair each declared feature
+            // with the verbatim text its segment's extraction produced for it. DisplayOrder is
+            // therefore stable across runs — it derives from the fixed map, not from per-call
+            // model output, so there is no restart-per-segment collision risk.
+            var transcribed = new List<TranscribedFeature>();
+            foreach (var outcome in segmentOutcomes)
             {
-                extractedRequirements[i].DisplayOrder = i + 1;
+                var byKey = new Dictionary<(string Identifier, RequirementBlock Block), string>();
+                foreach (var extractedFeature in outcome.Features!)
+                {
+                    var block = ParseBlock(extractedFeature.Block);
+                    if (block == null ||
+                        string.IsNullOrWhiteSpace(extractedFeature.Identifier) ||
+                        string.IsNullOrWhiteSpace(extractedFeature.VerbatimText))
+                        continue;
+
+                    // First occurrence wins if the model duplicates a feature — deterministic,
+                    // and avoids a crash on a duplicate-key insert.
+                    byKey.TryAdd((extractedFeature.Identifier.Trim(), block.Value), extractedFeature.VerbatimText);
+                }
+
+                foreach (var mapFeature in outcome.Standard.Features)
+                {
+                    // Guaranteed present — the per-segment completeness check above (FindMissingFeatures)
+                    // already confirmed every map-declared feature has a matching, non-empty entry.
+                    var verbatimText = byKey[(mapFeature.Identifier, mapFeature.Block)];
+                    transcribed.Add(new TranscribedFeature
+                    {
+                        PrincipleNumber = outcome.PrincipleNumber,
+                        StandardId = outcome.Standard.Id,
+                        MapFeature = mapFeature,
+                        VerbatimText = verbatimText
+                    });
+                }
+            }
+
+            for (var i = 0; i < transcribed.Count; i++)
+            {
+                transcribed[i].DisplayOrder = i + 1;
             }
 
             _logger.LogInformation(
-                "Extracted {Count} requirements across {PrincipleCount} principles from document {DocumentId}",
-                extractedRequirements.Count, PrincipleNumbers.Length, regulatoryDocumentId);
+                "Transcribed {Count} features across {StandardCount} standards from document {DocumentId}",
+                transcribed.Count, totalStandards, regulatoryDocumentId);
 
-            // Step 3 — Persist as drafts for each matching profile
+            // Step 4 — Persist as drafts for each matching profile
             var profiles = document.Profiles.Where(p => p.IsActive).ToList();
             if (profiles.Count == 0)
             {
                 _logger.LogWarning(
-                    "Document {DocumentId} has no active profiles — skipping persistence of {Count} extracted requirement(s)",
-                    regulatoryDocumentId, extractedRequirements.Count);
+                    "Document {DocumentId} has no active profiles — skipping persistence of {Count} transcribed feature(s)",
+                    regulatoryDocumentId, transcribed.Count);
                 await MarkSkippedAsync(
                     document,
                     "no_active_profiles",
-                    $"Extraction ran and returned {extractedRequirements.Count} candidate requirement(s), but this document has no active RegulatoryProfile to attach them to. Nothing was persisted.",
+                    $"Extraction ran and transcribed {transcribed.Count} feature(s), but this document has no active RegulatoryProfile to attach them to. Nothing was persisted.",
                     cancellationToken);
                 return;
             }
 
-            if (extractedRequirements.Count == 0)
+            if (transcribed.Count == 0)
             {
-                _logger.LogWarning("Claude returned a well-formed but empty result for document {DocumentId}", regulatoryDocumentId);
+                _logger.LogWarning("Structure map for document {DocumentId} declares zero features", regulatoryDocumentId);
                 await MarkFailedAsync(
                     document.Id,
                     "extraction_zero_requirements",
-                    "Claude's response was valid JSON but contained zero requirements. No requirements were persisted.",
+                    "The document's structure map declares zero features. No requirements were persisted.",
                     cancellationToken);
                 return;
             }
@@ -198,11 +289,11 @@ public class RequirementIngestionJob
             foreach (var profile in profiles)
             {
                 var created = await PersistDraftRequirementsAsync(
-                    profile, extractedRequirements, cancellationToken);
+                    profile, transcribed, isProvisional, cancellationToken);
                 totalCreated += created;
             }
 
-            // Step 4 — Update document status
+            // Step 5 — Update document status
             await MarkSucceededAsync(document, cancellationToken);
 
             _logger.LogInformation(
@@ -227,13 +318,13 @@ public class RequirementIngestionJob
             // recorded every run as Succeeded regardless of outcome, making the retry attribute
             // dead code. Safe specifically because extraction is all-or-nothing:
             // PersistDraftRequirementsAsync (below) checks existing (including soft-deleted)
-            // requirement titles per profile before inserting, so a retry that redoes the
-            // fetch+extraction from scratch cannot double-persist requirements for titles a
-            // prior attempt already created. Every *expected* non-fatal outcome (invalid_uri,
-            // fetch/parse failures, the extraction_* segment failures, the no_active_profiles
-            // skip, zero-requirements) returns from inside the try block above via its own
-            // Mark*Async call — none of those throw, so none of them reach this catch or get
-            // rethrown here. Only genuine unexpected exceptions do.
+            // requirement (FeatureIdentifier, Block) pairs per profile before inserting, so a
+            // retry that redoes the fetch+extraction from scratch cannot double-persist a feature
+            // a prior attempt already created. Every *expected* non-fatal outcome (invalid_uri,
+            // no_structure_map, fetch/parse failures, the extraction_* segment failures, the
+            // no_active_profiles skip, zero-requirements) returns from inside the try block above
+            // via its own Mark*Async call — none of those throw, so none of them reach this catch
+            // or get rethrown here. Only genuine unexpected exceptions do.
             throw;
         }
     }
@@ -417,37 +508,10 @@ public class RequirementIngestionJob
     };
 
     /// <summary>
-    /// The document's principles — one Claude call per principle, each scoped to the full
-    /// document text but instructed to extract only that principle's requirements (see
-    /// BuildExtractionPrompt). Principle-level segmentation only, not per-standard — the design
-    /// trades 4x input cost for robustness against the whole-document truncation problem;
-    /// ingestion is rare enough that this trade is intentional.
-    /// </summary>
-    private static readonly int[] PrincipleNumbers = { 1, 2, 3, 4 };
-
-    /// <summary>
-    /// Expected standard IDs per principle, used by the per-segment completeness check below: a
-    /// segment can return valid, non-truncated JSON that is simply short (the model silently
-    /// missed standards within the principle). THIS MAP IS HIQA-SPECIFIC — it encodes the
-    /// structure of the single regulatory document currently seeded (RegulatoryRequirementSeedData:
-    /// HIQA homecare). A second regulatory document with a different structure will need its own
-    /// map (ideally derived from RegulatoryProfile config rather than hardcoded here) before it
-    /// can be ingested through this job — do not assume this generalises as-is.
-    /// </summary>
-    private static readonly IReadOnlyDictionary<int, string[]> HiqaExpectedStandardsByPrinciple =
-        new Dictionary<int, string[]>
-        {
-            [1] = new[] { "1.1", "1.2", "1.3", "1.4" },
-            [2] = new[] { "2.1", "2.2", "2.3", "2.4", "2.5" },
-            [3] = new[] { "3.1", "3.2", "3.3" },
-            [4] = new[] { "4.1", "4.2", "4.3", "4.4", "4.5" },
-        };
-
-    /// <summary>
-    /// Why a principle segment produced nothing usable. None means <c>Requirements</c> is a
-    /// valid, complete (per the expected-standards check) list; the other three mean the segment
-    /// must be treated as a failure of the whole document — see the all-or-nothing persistence
-    /// rule in ExecuteAsync and MapSegmentFailure.
+    /// Why a standard segment produced nothing usable. None means <c>Features</c> is a valid,
+    /// complete (every feature the map declares for this standard is present) list; the other
+    /// three mean the segment must be treated as a failure of the whole document — see the
+    /// all-or-nothing persistence rule in ExecuteAsync and MapSegmentFailures.
     /// </summary>
     private enum SegmentFailureReason
     {
@@ -459,103 +523,105 @@ public class RequirementIngestionJob
 
     private sealed record SegmentExtractionOutcome(
         int PrincipleNumber,
-        List<ExtractedRequirement>? Requirements,
+        StructureStandard Standard,
+        List<ExtractedFeature>? Features,
         SegmentFailureReason Failure,
-        IReadOnlyList<string>? MissingStandards)
+        IReadOnlyList<string>? MissingFeatures)
     {
-        public static SegmentExtractionOutcome Success(int principleNumber, List<ExtractedRequirement> requirements) =>
-            new(principleNumber, requirements, SegmentFailureReason.None, null);
+        public static SegmentExtractionOutcome Success(int principleNumber, StructureStandard standard, List<ExtractedFeature> features) =>
+            new(principleNumber, standard, features, SegmentFailureReason.None, null);
 
-        public static SegmentExtractionOutcome Truncated(int principleNumber) =>
-            new(principleNumber, null, SegmentFailureReason.Truncated, null);
+        public static SegmentExtractionOutcome Truncated(int principleNumber, StructureStandard standard) =>
+            new(principleNumber, standard, null, SegmentFailureReason.Truncated, null);
 
-        public static SegmentExtractionOutcome InvalidJson(int principleNumber) =>
-            new(principleNumber, null, SegmentFailureReason.InvalidJson, null);
+        public static SegmentExtractionOutcome InvalidJson(int principleNumber, StructureStandard standard) =>
+            new(principleNumber, standard, null, SegmentFailureReason.InvalidJson, null);
 
-        public static SegmentExtractionOutcome Incomplete(int principleNumber, List<ExtractedRequirement> requirements, IReadOnlyList<string> missingStandards) =>
-            new(principleNumber, requirements, SegmentFailureReason.Incomplete, missingStandards);
+        public static SegmentExtractionOutcome Incomplete(int principleNumber, StructureStandard standard, List<ExtractedFeature> features, IReadOnlyList<string> missingFeatures) =>
+            new(principleNumber, standard, features, SegmentFailureReason.Incomplete, missingFeatures);
     }
 
     /// <summary>
-    /// Extracts one principle's requirements, retrying once (same shape as the prior
-    /// whole-document retry) if the first attempt is truncated, unparseable, or — new in the
-    /// segmented design — parseable but missing expected standards for this principle.
+    /// Transcribes one standard's declared features (both person and provider blocks together),
+    /// retrying once (same shape as the prior per-principle retry) if the first attempt is
+    /// truncated, unparseable, or — the map-driven completeness check — parseable but missing a
+    /// verbatim entry for one or more of the standard's declared features.
     /// </summary>
-    private async Task<SegmentExtractionOutcome> ExtractPrincipleSegmentAsync(
-        string documentText, int principleNumber, Guid documentId, CancellationToken cancellationToken)
+    private async Task<SegmentExtractionOutcome> ExtractStandardSegmentAsync(
+        string documentText, int principleNumber, StructureStandard standard, Guid documentId, CancellationToken cancellationToken)
     {
-        var prompt = BuildExtractionPrompt(documentText, principleNumber);
+        var prompt = BuildExtractionPrompt(documentText, principleNumber, standard);
 
         // First attempt
         var (responseText, stopReason) = await CallClaudeAsync(prompt, documentId, cancellationToken);
-        var requirements = TryParseRequirements(responseText);
+        var features = TryParseFeatures(responseText);
         var truncated = stopReason == "max_tokens";
-        List<string>? missingStandards = null;
+        List<string>? missingFeatures = null;
 
-        if (requirements != null && !truncated)
+        if (features != null && !truncated)
         {
-            missingStandards = FindMissingStandards(principleNumber, requirements);
-            if (missingStandards.Count == 0)
-                return SegmentExtractionOutcome.Success(principleNumber, requirements);
+            missingFeatures = FindMissingFeatures(standard, features);
+            if (missingFeatures.Count == 0)
+                return SegmentExtractionOutcome.Success(principleNumber, standard, features);
 
             _logger.LogWarning(
-                "Principle {Principle} segment for document {DocumentId} is missing expected standards [{Missing}]; retrying",
-                principleNumber, documentId, string.Join(", ", missingStandards));
+                "Standard {StandardId} segment for document {DocumentId} is missing declared features [{Missing}]; retrying",
+                standard.Id, documentId, string.Join(", ", missingFeatures));
         }
         else if (truncated)
         {
             _logger.LogWarning(
-                "Principle {Principle} extraction attempt for document {DocumentId} was truncated (stop_reason=max_tokens); retrying",
-                principleNumber, documentId);
+                "Standard {StandardId} extraction attempt for document {DocumentId} was truncated (stop_reason=max_tokens); retrying",
+                standard.Id, documentId);
         }
         else
         {
             _logger.LogWarning(
-                "Principle {Principle} extraction attempt for document {DocumentId} returned invalid JSON, retrying with stricter prompt",
-                principleNumber, documentId);
+                "Standard {StandardId} extraction attempt for document {DocumentId} returned invalid JSON, retrying with stricter prompt",
+                standard.Id, documentId);
         }
 
         // Retry — same segment prompt, stricter instruction appended. When the first attempt was
-        // incomplete rather than truncated/unparseable, the retry names the missing standards.
-        var stricterPrompt = BuildStricterPrompt(prompt, missingStandards);
+        // incomplete rather than truncated/unparseable, the retry names the missing features.
+        var stricterPrompt = BuildStricterPrompt(prompt, missingFeatures);
 
         var (retryResponseText, retryStopReason) = await CallClaudeAsync(stricterPrompt, documentId, cancellationToken);
-        var retryRequirements = TryParseRequirements(retryResponseText);
+        var retryFeatures = TryParseFeatures(retryResponseText);
         var retryTruncated = retryStopReason == "max_tokens";
 
-        if (retryRequirements != null && !retryTruncated)
+        if (retryFeatures != null && !retryTruncated)
         {
-            var retryMissing = FindMissingStandards(principleNumber, retryRequirements);
+            var retryMissing = FindMissingFeatures(standard, retryFeatures);
             if (retryMissing.Count == 0)
-                return SegmentExtractionOutcome.Success(principleNumber, retryRequirements);
+                return SegmentExtractionOutcome.Success(principleNumber, standard, retryFeatures);
 
             _logger.LogError(
-                "Principle {Principle} segment retry for document {DocumentId} is still missing expected standards [{Missing}]",
-                principleNumber, documentId, string.Join(", ", retryMissing));
-            return SegmentExtractionOutcome.Incomplete(principleNumber, retryRequirements, retryMissing);
+                "Standard {StandardId} segment retry for document {DocumentId} is still missing declared features [{Missing}]",
+                standard.Id, documentId, string.Join(", ", retryMissing));
+            return SegmentExtractionOutcome.Incomplete(principleNumber, standard, retryFeatures, retryMissing);
         }
 
         if (retryTruncated)
         {
             _logger.LogError(
-                "Principle {Principle} extraction retry for document {DocumentId} was also truncated (stop_reason=max_tokens)",
-                principleNumber, documentId);
-            return SegmentExtractionOutcome.Truncated(principleNumber);
+                "Standard {StandardId} extraction retry for document {DocumentId} was also truncated (stop_reason=max_tokens)",
+                standard.Id, documentId);
+            return SegmentExtractionOutcome.Truncated(principleNumber, standard);
         }
 
         _logger.LogError(
-            "Failed to parse Principle {Principle} requirements from Claude response for document {DocumentId} after retry",
-            principleNumber, documentId);
-        return SegmentExtractionOutcome.InvalidJson(principleNumber);
+            "Failed to parse Standard {StandardId} features from Claude response for document {DocumentId} after retry",
+            standard.Id, documentId);
+        return SegmentExtractionOutcome.InvalidJson(principleNumber, standard);
     }
 
-    private static string BuildStricterPrompt(string basePrompt, List<string>? missingStandards)
+    private static string BuildStricterPrompt(string basePrompt, List<string>? missingFeatures)
     {
-        if (missingStandards is { Count: > 0 })
+        if (missingFeatures is { Count: > 0 })
         {
             return basePrompt +
-                "\n\nIMPORTANT: Your previous response did not include a requirement for every standard in this principle. " +
-                $"It was missing: {string.Join(", ", missingStandards)}. You MUST extract at least one requirement for EVERY standard under this principle. " +
+                "\n\nIMPORTANT: Your previous response did not include every declared feature for this standard. " +
+                $"It was missing: {string.Join(", ", missingFeatures)}. You MUST transcribe EVERY feature listed above, exactly once each. " +
                 "Respond ONLY with a valid JSON array — no preamble, no markdown, no explanation.";
         }
 
@@ -565,31 +631,43 @@ public class RequirementIngestionJob
     }
 
     /// <summary>
-    /// Returns the expected standard IDs for <paramref name="principleNumber"/> (per
-    /// HiqaExpectedStandardsByPrinciple) that don't appear in any extracted requirement's Section
-    /// field. Matching is a literal substring search with digit-boundary guards (e.g. "1.1" won't
-    /// match inside "11.1") since Section is free text like "Standard 1.1" — there is no
-    /// structured standard-ID field on the extraction DTO. An unmapped principle number (no entry
-    /// in the map) always returns no missing standards: the check is skipped, not failed, for
-    /// documents whose structure hasn't been mapped yet.
+    /// Maps a model-returned block string ("Person"/"Provider", case-insensitive) to
+    /// RequirementBlock. Returns null for anything unrecognised — an item with a null block is
+    /// treated the same as one with a missing identifier or verbatim text: it cannot be matched
+    /// to a map-declared feature, so it contributes nothing and cannot cause a duplicate-key
+    /// crash.
     /// </summary>
-    private static List<string> FindMissingStandards(int principleNumber, List<ExtractedRequirement> requirements)
+    private static RequirementBlock? ParseBlock(string? raw) => raw?.Trim().ToLowerInvariant() switch
     {
-        if (!HiqaExpectedStandardsByPrinciple.TryGetValue(principleNumber, out var expectedStandards))
-            return new List<string>();
+        "person" => RequirementBlock.Person,
+        "provider" => RequirementBlock.Provider,
+        _ => null
+    };
 
-        var sections = requirements
-            .Where(r => !string.IsNullOrWhiteSpace(r.Section))
-            .Select(r => r.Section!)
-            .ToList();
+    /// <summary>
+    /// Returns the map-declared (block, identifier) pairs for <paramref name="standard"/> that
+    /// don't appear — with a non-empty verbatim text — anywhere in <paramref name="extracted"/>.
+    /// Matching is an exact (identifier, block) pair comparison, not the old regex substring
+    /// search against free-text Section — the extraction schema now returns a structured
+    /// identifier + block per item, so there is no ambiguity to guard against.
+    /// </summary>
+    private static List<string> FindMissingFeatures(StructureStandard standard, List<ExtractedFeature> extracted)
+    {
+        var actual = new HashSet<(string Identifier, RequirementBlock Block)>();
+        foreach (var item in extracted)
+        {
+            var block = ParseBlock(item.Block);
+            if (block == null || string.IsNullOrWhiteSpace(item.Identifier) || string.IsNullOrWhiteSpace(item.VerbatimText))
+                continue;
+
+            actual.Add((item.Identifier.Trim(), block.Value));
+        }
 
         var missing = new List<string>();
-        foreach (var standardId in expectedStandards)
+        foreach (var feature in standard.Features)
         {
-            var pattern = $@"(?<!\d){System.Text.RegularExpressions.Regex.Escape(standardId)}(?!\d)";
-            var found = sections.Any(s => System.Text.RegularExpressions.Regex.IsMatch(s, pattern));
-            if (!found)
-                missing.Add(standardId);
+            if (!actual.Contains((feature.Identifier, feature.Block)))
+                missing.Add($"{feature.Block} {feature.Identifier}");
         }
 
         return missing;
@@ -600,10 +678,10 @@ public class RequirementIngestionJob
     /// different failure reasons, ranked least to most diagnosable on its own: InvalidJson means
     /// no parseable output was returned at all; Truncated means some output arrived but hit the
     /// hard token limit; Incomplete means the model understood the task and returned valid,
-    /// parseable JSON that was merely missing a standard. The highest-ranked reason present wins
-    /// the single-valued code. This ranking only affects which code is stored — the full
-    /// per-principle detail for every failure always lands in LastIngestionErrorMessage regardless
-    /// of which code wins here.
+    /// parseable JSON that was merely missing a declared feature. The highest-ranked reason
+    /// present wins the single-valued code. This ranking only affects which code is stored — the
+    /// full per-standard detail for every failure always lands in LastIngestionErrorMessage
+    /// regardless of which code wins here.
     /// </summary>
     private static readonly SegmentFailureReason[] ReasonPriority =
     {
@@ -623,7 +701,7 @@ public class RequirementIngestionJob
     /// <summary>
     /// Describes a single failed segment's reason, without the "No requirements were persisted"
     /// closing sentence — that belongs once, at the end of the aggregated message built by
-    /// MapSegmentFailures, not repeated per principle.
+    /// MapSegmentFailures, not repeated per standard.
     /// </summary>
     private static string DescribeSegmentReason(SegmentExtractionOutcome outcome) => outcome.Failure switch
     {
@@ -634,24 +712,24 @@ public class RequirementIngestionJob
             "response could not be parsed as valid JSON on either the initial attempt or the retry",
 
         SegmentFailureReason.Incomplete =>
-            $"response was missing expected standards ({string.Join(", ", outcome.MissingStandards ?? new List<string>())}) after a retry - the segment appears incomplete rather than truncated",
+            $"response was missing declared features ({string.Join(", ", outcome.MissingFeatures ?? new List<string>())}) after a retry - the segment appears incomplete rather than truncated",
 
         _ => "failed for an unrecognised reason"
     };
 
     /// <summary>
-    /// Builds the aggregated failure code/message across every principle segment that failed
-    /// (run-all-collect-failures: every principle is attempted before this is called, see
+    /// Builds the aggregated failure code/message across every standard segment that failed
+    /// (run-all-collect-failures: every standard is attempted before this is called, see
     /// ExecuteAsync). Two shapes:
     ///
     /// - Common root cause: every failed segment failed for the identical reason (e.g. the whole
-    ///   document's text is malformed and every principle truncates identically). Reads as one
-    ///   failure story naming all affected principles, not N unrelated failures.
-    /// - Mixed reasons: failed segments enumerated individually, each naming its own principle
+    ///   document's text is malformed and every standard truncates identically). Reads as one
+    ///   failure story naming all affected standards, not N unrelated failures.
+    /// - Mixed reasons: failed segments enumerated individually, each naming its own standard
     ///   and reason, so no distinct failure is lost to the single-valued error code.
     /// </summary>
     private static (string ErrorCode, string ErrorMessage) MapSegmentFailures(
-        IReadOnlyList<SegmentExtractionOutcome> failedSegments)
+        IReadOnlyList<SegmentExtractionOutcome> failedSegments, int totalSegments)
     {
         var distinctReasons = failedSegments.Select(f => f.Failure).Distinct().ToList();
         var primaryReason = distinctReasons.Count == 1
@@ -661,49 +739,46 @@ public class RequirementIngestionJob
 
         if (distinctReasons.Count == 1 && failedSegments.Count > 1)
         {
-            var principles = string.Join(", ", failedSegments.Select(f => f.PrincipleNumber));
+            var standards = string.Join(", ", failedSegments.Select(f => $"{f.Standard.Id} (P{f.PrincipleNumber})"));
             var sharedReason = DescribeSegmentReason(failedSegments[0]);
             return (errorCode,
-                $"All {failedSegments.Count} of {PrincipleNumbers.Length} principles ({principles}) failed for the same reason: {sharedReason}. No requirements were persisted for any principle.");
+                $"All {failedSegments.Count} of {totalSegments} standards ({standards}) failed for the same reason: {sharedReason}. No requirements were persisted for any standard.");
         }
 
-        var perPrincipleDetails = string.Join("; ", failedSegments.Select(f =>
-            $"Principle {f.PrincipleNumber}: {DescribeSegmentReason(f)}"));
+        var perStandardDetails = string.Join("; ", failedSegments.Select(f =>
+            $"Standard {f.Standard.Id} (Principle {f.PrincipleNumber}): {DescribeSegmentReason(f)}"));
 
         return (errorCode,
-            $"{failedSegments.Count} of {PrincipleNumbers.Length} principles failed extraction. {perPrincipleDetails}. No requirements were persisted for any principle.");
+            $"{failedSegments.Count} of {totalSegments} standards failed extraction. {perStandardDetails}. No requirements were persisted for any standard.");
     }
 
-    private static string BuildExtractionPrompt(string documentText, int principleNumber)
+    private static string BuildExtractionPrompt(string documentText, int principleNumber, StructureStandard standard)
     {
-        return $@"You are a regulatory compliance expert. Analyse the following regulatory document and extract only the requirements under Principle {principleNumber} that relate to staff training, competency, or compliance obligations.
+        var personLines = string.Join("\n", standard.PersonFeatures.Select(f => $"- {f.Identifier}"));
+        var providerLines = string.Join("\n", standard.ProviderFeatures.Select(f => $"- {f.Identifier}"));
+        var totalCount = standard.Features.Count;
 
-The document below contains multiple principles. You are extracting ONLY Principle {principleNumber}'s requirements — do not extract requirements belonging to any other principle, and do not skip any standard within Principle {principleNumber}.
+        return $@"You are transcribing verbatim text from a regulatory document. A structure map — authored and reviewed separately, NOT by you — has already determined exactly which features this document defines for Standard {standard.Id} (Principle {principleNumber}). Your ONLY task is to locate each declared feature's exact printed text in the document below and copy it. Do not judge whether a feature belongs, do not paraphrase, summarise, reorder, merge, or omit any of them.
 
-For each requirement, extract:
-- title: A concise title (max 200 chars) for the training/competency requirement
-- description: A detailed description (max 2000 chars) of what the requirement entails
-- section: The section or article reference from the document (e.g. ""Standard 2.3"", ""Article 4"", ""§7""). Use the standard numbering from the source document. If not explicitly stated, use the document section heading or ""General"". This field is MANDATORY — never return null or omit it
-- sectionLabel: A short descriptive label for the section (e.g. ""Incident Reporting"", ""Staff Training"", ""MAR Management""). Derive from context if not explicit. This field is MANDATORY — never return null or omit it
-- principle: A short category label grouping this requirement (e.g. ""P2"", ""Staff Competency"", ""Food Safety Management""). If not explicitly stated in the document, infer from the requirement's subject matter. This field is MANDATORY — never return null or omit it
-- principleLabel: The full description of the principle category. MUST use one of the exact canonical labels below when applicable, or derive a descriptive label from the requirement's subject matter
-- priority: ""high"" for safety-critical requirements, ""med"" for standard compliance, ""low"" for best-practice/advisory
-- displayOrder: Sequential numbering within THIS principle's requirements, starting from 1 (final numbering across the whole document is assigned separately once all principles are extracted)
+The structure map declares these features for Standard {standard.Id}:
 
-CANONICAL PRINCIPLE LABELS (use these exact strings — do not paraphrase or reword):
-- P2 — ""Safety & Wellbeing""
-- P3 — ""Responsiveness""
-- P4 — ""Accountability""
+Person-experience features (numbered items describing what the person receiving the service experiences):
+{personLines}
 
-If the document uses different wording (e.g. ""Safety and Wellbeing""), map it to the canonical label above.
-If the principle does not match any of these, set principleLabel to the document's exact text.
+Provider features (numbered items describing what the service provider must have in place):
+{providerLines}
+
+For EACH of the {totalCount} features listed above, find its exact verbatim text in the document text below (search near ""Standard {standard.Id}"" and its person-experience/provider feature lists) and transcribe it exactly as printed. Exclude footnote marker glyphs and footnote text itself — footnotes are handled separately from this transcription.
+
+Respond ONLY with a valid JSON array of exactly {totalCount} objects, one per feature listed above (any order), each shaped as:
+{{""identifier"": ""<exact identifier exactly as listed above, unchanged>"", ""block"": ""Person"" or ""Provider"", ""verbatimText"": ""<the feature's exact printed text>""}}
 
 IMPORTANT RULES:
-- Extract ONLY requirements belonging to Principle {principleNumber} that relate to staff training, competency, skills, or compliance obligations
-- Do NOT include general policy statements, organisational structure requirements, or non-training items
-- Each requirement should be actionable as a training topic
-- The fields section, sectionLabel, principle, and principleLabel are ALL MANDATORY — never return null or omit them. If the document does not explicitly state them, infer reasonable values from the requirement's context and subject matter
-- Respond ONLY with a valid JSON array — no preamble, no markdown, no explanation
+- Copy text EXACTLY as printed in the document — no paraphrasing, no summarising, no correcting grammar or punctuation
+- Use the identifier strings exactly as listed above, unchanged (including any trailing punctuation)
+- Do NOT invent, split, merge, or omit any feature listed above
+- Do NOT include any feature that is not listed above, even if the document contains other numbered items nearby
+- Respond ONLY with the JSON array — no preamble, no markdown, no explanation
 
 DOCUMENT TEXT:
 {documentText}";
@@ -772,7 +847,7 @@ DOCUMENT TEXT:
     /// array ("[]") returns an empty list, not null — callers must not conflate "unparseable"
     /// with "parsed cleanly to nothing", since only the former is a retry-worthy failure.
     /// </summary>
-    private List<ExtractedRequirement>? TryParseRequirements(string responseText)
+    private List<ExtractedFeature>? TryParseFeatures(string responseText)
     {
         if (string.IsNullOrWhiteSpace(responseText))
             return null;
@@ -789,7 +864,7 @@ DOCUMENT TEXT:
                 json = json.Trim();
             }
 
-            return JsonSerializer.Deserialize<List<ExtractedRequirement>>(json, CamelCaseOptions);
+            return JsonSerializer.Deserialize<List<ExtractedFeature>>(json, CamelCaseOptions);
         }
         catch (JsonException ex)
         {
@@ -799,59 +874,117 @@ DOCUMENT TEXT:
         }
     }
 
+    /// <summary>
+    /// One map-declared feature paired with the verbatim text its standard's segment produced
+    /// for it, plus the document-order DisplayOrder assigned once every segment has succeeded.
+    /// </summary>
+    private sealed class TranscribedFeature
+    {
+        public int PrincipleNumber { get; init; }
+        public string StandardId { get; init; } = string.Empty;
+        public StructureFeature MapFeature { get; init; } = null!;
+        public string VerbatimText { get; init; } = string.Empty;
+        public int DisplayOrder { get; set; }
+    }
+
+    /// <summary>
+    /// Canonical principle display labels for HIQA's four principles — closes the pre-existing
+    /// gap where Principle 1 had no canonical label entry (the old model-inferred scheme only
+    /// covered P2-P4). These are now deterministic lookups rather than model-composed text,
+    /// matching the map-driven design: Principle/PrincipleLabel are derived facts about the
+    /// document's structure, not requirement content the model judges. HIQA-specific for now —
+    /// a future non-HIQA document's principle labels would need their own source (the map schema
+    /// doesn't carry principle-level text today), falling back to a generic "Principle {N}" label.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<int, string> HiqaCanonicalPrincipleLabels =
+        new Dictionary<int, string>
+        {
+            [1] = "A Human Rights-based Approach",
+            [2] = "Safety & Wellbeing",
+            [3] = "Responsiveness",
+            [4] = "Accountability",
+        };
+
+    private static string PrincipleLabelFor(int principleNumber) =>
+        HiqaCanonicalPrincipleLabels.TryGetValue(principleNumber, out var label) ? label : $"Principle {principleNumber}";
+
     private async Task<int> PersistDraftRequirementsAsync(
         RegulatoryProfile profile,
-        List<ExtractedRequirement> extractedRequirements,
+        List<TranscribedFeature> transcribedFeatures,
+        bool isProvisional,
         CancellationToken cancellationToken)
     {
-        // Load existing titles for duplicate check (include soft-deleted)
-        var existingTitles = await _dbContext.RegulatoryRequirements
+        // Dedup key is (FeatureIdentifier, Block), not the free-text Title the pre-rework code
+        // used — Title is no longer a stable identity now that it's a deterministic truncation of
+        // verbatim text (see below), and (FeatureIdentifier, Block) is a far more precise natural
+        // key now that extraction is map-driven: a retry or re-ingestion that transcribes the same
+        // declared feature again must be recognised as the same requirement even if the model's
+        // wording differs slightly between calls.
+        var existingKeys = await _dbContext.RegulatoryRequirements
             .IgnoreQueryFilters()
-            .Where(r => r.RegulatoryProfileId == profile.Id)
-            .Select(r => r.Title.ToLower())
+            .Where(r => r.RegulatoryProfileId == profile.Id && r.FeatureIdentifier != null && r.Block != null)
+            .Select(r => new { r.FeatureIdentifier, r.Block })
             .ToListAsync(cancellationToken);
 
-        var existingTitleSet = new HashSet<string>(existingTitles);
+        var existingKeySet = new HashSet<(string Identifier, RequirementBlock Block)>(
+            existingKeys.Select(k => (k.FeatureIdentifier!, k.Block!.Value)));
+
         var created = 0;
 
-        foreach (var extracted in extractedRequirements)
+        foreach (var item in transcribedFeatures)
         {
-            if (string.IsNullOrWhiteSpace(extracted.Title))
+            var key = (item.MapFeature.Identifier, item.MapFeature.Block);
+            if (existingKeySet.Contains(key))
             {
-                _logger.LogWarning("Skipping requirement with empty title");
+                _logger.LogDebug("Skipping already-persisted feature {Block} {Identifier}",
+                    item.MapFeature.Block, item.MapFeature.Identifier);
                 continue;
             }
 
-            if (existingTitleSet.Contains(extracted.Title.ToLower()))
-            {
-                _logger.LogDebug("Skipping duplicate requirement: {Title}", extracted.Title);
-                continue;
-            }
+            var verbatimText = item.VerbatimText.Length > 2000 ? item.VerbatimText[..2000] : item.VerbatimText;
+
+            // Title is NOT authoritative content — it is a deterministic truncation of the
+            // verbatim text, kept only so existing list/detail views have something to display in
+            // that slot. The feature's real content lives in VerbatimText/FeatureIdentifier/Block.
+            var title = verbatimText.Length > 200 ? verbatimText[..197] + "..." : verbatimText;
+
+            var footnote = item.MapFeature.FootnoteDefinition;
+            if (footnote != null && footnote.Length > 1000)
+                footnote = footnote[..1000];
 
             var requirement = new RegulatoryRequirement
             {
                 RegulatoryProfileId = profile.Id,
-                Title = extracted.Title.Length > 200 ? extracted.Title[..200] : extracted.Title,
-                Description = string.IsNullOrWhiteSpace(extracted.Description)
-                    ? extracted.Title
-                    : extracted.Description.Length > 2000
-                        ? extracted.Description[..2000]
-                        : extracted.Description,
-                Section = extracted.Section?.Length > 20 ? extracted.Section[..20] : extracted.Section,
-                SectionLabel = extracted.SectionLabel?.Length > 200 ? extracted.SectionLabel[..200] : extracted.SectionLabel,
-                Principle = extracted.Principle?.Length > 20 ? extracted.Principle[..20] : extracted.Principle,
-                PrincipleLabel = extracted.PrincipleLabel?.Length > 200 ? extracted.PrincipleLabel[..200] : extracted.PrincipleLabel,
-                Priority = ValidatePriority(extracted.Priority),
-                DisplayOrder = extracted.DisplayOrder > 0 ? extracted.DisplayOrder : created + 1,
+                Title = title,
+                // Description mirrors VerbatimText rather than an authored paraphrase — this
+                // chunk does not invent a separate gloss of what the feature "entails" (that
+                // would itself be non-authoritative content). Existing consumers that read
+                // Description continue to work unchanged, now seeing verbatim text instead of a
+                // model-composed summary.
+                Description = verbatimText,
+                Section = $"Standard {item.StandardId}",
+                SectionLabel = null,
+                Principle = $"P{item.PrincipleNumber}",
+                PrincipleLabel = PrincipleLabelFor(item.PrincipleNumber),
+                // No per-feature signal exists in the structure map to derive Priority from —
+                // that was previously a model judgment call, which the map-driven design
+                // deliberately removes. Reviewers can still adjust it when approving.
+                Priority = "med",
+                DisplayOrder = item.DisplayOrder,
                 IngestionSource = RequirementIngestionSource.Automated,
                 IngestionStatus = RequirementIngestionStatus.Draft,
                 IsActive = true,
+                FeatureIdentifier = item.MapFeature.Identifier,
+                Block = item.MapFeature.Block,
+                VerbatimText = verbatimText,
+                FootnoteDefinition = footnote,
+                IsProvisional = isProvisional,
                 CreatedBy = "system",
                 CreatedAt = DateTime.UtcNow,
             };
 
             _dbContext.RegulatoryRequirements.Add(requirement);
-            existingTitleSet.Add(extracted.Title.ToLower());
+            existingKeySet.Add(key);
             created++;
         }
 
@@ -863,16 +996,6 @@ DOCUMENT TEXT:
         }
 
         return created;
-    }
-
-    private static string ValidatePriority(string? priority)
-    {
-        return priority?.ToLower() switch
-        {
-            "high" => "high",
-            "low" => "low",
-            _ => "med"
-        };
     }
 
     private static string StripHtmlToText(string html)
@@ -892,17 +1015,16 @@ DOCUMENT TEXT:
     }
 
     /// <summary>
-    /// Intermediate DTO for deserialization of Claude's JSON response
+    /// Intermediate DTO for deserialization of Claude's JSON response — a transcription of one
+    /// map-declared feature, not a free-judged requirement. Block is read as its raw string
+    /// ("Person"/"Provider") and parsed via ParseBlock rather than a JsonStringEnumConverter, so
+    /// an unrecognised value degrades to "this item can't be matched" rather than a deserialization
+    /// exception that would fail the whole segment.
     /// </summary>
-    private class ExtractedRequirement
+    private class ExtractedFeature
     {
-        public string Title { get; set; } = string.Empty;
-        public string Description { get; set; } = string.Empty;
-        public string? Section { get; set; }
-        public string? SectionLabel { get; set; }
-        public string? Principle { get; set; }
-        public string? PrincipleLabel { get; set; }
-        public string? Priority { get; set; }
-        public int DisplayOrder { get; set; }
+        public string Identifier { get; set; } = string.Empty;
+        public string? Block { get; set; }
+        public string VerbatimText { get; set; } = string.Empty;
     }
 }
