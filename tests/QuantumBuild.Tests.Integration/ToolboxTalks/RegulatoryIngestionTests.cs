@@ -662,6 +662,39 @@ public class RegulatoryIngestionTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task ExecuteAsync_UnexpectedClaudeApiError_SetsStatusFailedAndRethrows()
+    {
+        // A genuine unexpected exception (Claude API 500) is distinct from every expected,
+        // non-throwing failure outcome exercised above (fetch_failed, extraction_truncated,
+        // etc.) — those all return from inside the try block via their own Mark*Async call and
+        // never reach ExecuteAsync's catch. This is the one path that does: CallClaudeAsync
+        // throws InvalidOperationException on a non-success HTTP status, which must now (1)
+        // still persist Failed on the document and (2) rethrow so Hangfire's
+        // [AutomaticRetry(Attempts = 1)] can actually see the failure and fire — previously the
+        // catch swallowed every exception, so Hangfire recorded the run as Succeeded regardless.
+        var context = GetDbContext();
+        var document = await CreateDocumentWithProfileAsync(context, "https://example.test/document.pdf");
+
+        var fakePdf = new FakePdfExtractionService
+        {
+            ShouldFail = false,
+            NextExtractedText = "This regulation requires staff to complete manual handling training annually."
+        };
+
+        var (job, handler) = BuildJobWithHandler(context, fakePdf);
+        handler.FailWithStatusCode = HttpStatusCode.InternalServerError;
+
+        var act = async () => await job.ExecuteAsync(document.Id, CancellationToken.None);
+        await act.Should().ThrowAsync<InvalidOperationException>();
+
+        var reloaded = await context.RegulatoryDocuments.FirstAsync(d => d.Id == document.Id);
+
+        reloaded.LastIngestionStatus.Should().Be(RegulatoryIngestionStatus.Failed);
+        reloaded.LastIngestionErrorCode.Should().Be("unknown");
+        reloaded.LastIngestionErrorMessage.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
     public async Task ExecuteAsync_InvalidUriAlreadyPersisted_SetsStatusFailedWithInvalidUri()
     {
         // Defensive re-check inside the job itself: a document whose SourceUrl was written

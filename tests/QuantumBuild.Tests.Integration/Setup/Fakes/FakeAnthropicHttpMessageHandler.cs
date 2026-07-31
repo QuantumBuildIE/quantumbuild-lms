@@ -45,6 +45,15 @@ public class FakeAnthropicHttpMessageHandler : HttpMessageHandler
     /// </summary>
     public Func<string, (string Text, string? StopReason)>? Responder { get; set; }
 
+    /// <summary>
+    /// When set, every call returns this HTTP status with an empty error body instead of a
+    /// canned success response — simulates a genuine Claude API error (e.g. 500), which
+    /// RequirementIngestionJob.CallClaudeAsync turns into an InvalidOperationException. Used to
+    /// exercise the job's unexpected-exception path (Failed + rethrow) rather than one of its
+    /// expected, non-throwing failure outcomes.
+    /// </summary>
+    public HttpStatusCode? FailWithStatusCode { get; set; }
+
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
@@ -52,6 +61,14 @@ public class FakeAnthropicHttpMessageHandler : HttpMessageHandler
         {
             CapturedRequestBody = await request.Content.ReadAsStringAsync(cancellationToken);
             RequestBodies.Add(CapturedRequestBody);
+        }
+
+        if (FailWithStatusCode.HasValue)
+        {
+            return new HttpResponseMessage(FailWithStatusCode.Value)
+            {
+                Content = new StringContent("{\"error\": \"simulated failure\"}", Encoding.UTF8, "application/json")
+            };
         }
 
         var (responseText, stopReason) = Responder != null

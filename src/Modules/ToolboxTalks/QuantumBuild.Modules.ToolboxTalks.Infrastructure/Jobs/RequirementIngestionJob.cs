@@ -90,7 +90,7 @@ public class RequirementIngestionJob
             // that validation existed (or written directly to the DB).
             if (!SourceUrlValidator.IsValid(document.SourceUrl, out var urlError))
             {
-                await MarkFailedAsync(document, "invalid_uri", urlError!, cancellationToken);
+                await MarkFailedAsync(document.Id, "invalid_uri", urlError!, cancellationToken);
                 return;
             }
 
@@ -99,7 +99,7 @@ public class RequirementIngestionJob
             if (!fetchResult.Success || string.IsNullOrWhiteSpace(fetchResult.Text))
             {
                 await MarkFailedAsync(
-                    document,
+                    document.Id,
                     fetchResult.ErrorCode ?? "fetch_failed",
                     fetchResult.ErrorMessage ?? "Failed to extract text from document.",
                     cancellationToken);
@@ -147,7 +147,7 @@ public class RequirementIngestionJob
             if (failedSegments.Count > 0)
             {
                 var (errorCode, errorMessage) = MapSegmentFailures(failedSegments);
-                await MarkFailedAsync(document, errorCode, errorMessage, cancellationToken);
+                await MarkFailedAsync(document.Id, errorCode, errorMessage, cancellationToken);
                 return;
             }
 
@@ -187,7 +187,7 @@ public class RequirementIngestionJob
             {
                 _logger.LogWarning("Claude returned a well-formed but empty result for document {DocumentId}", regulatoryDocumentId);
                 await MarkFailedAsync(
-                    document,
+                    document.Id,
                     "extraction_zero_requirements",
                     "Claude's response was valid JSON but contained zero requirements. No requirements were persisted.",
                     cancellationToken);
@@ -215,33 +215,77 @@ public class RequirementIngestionJob
                 "Ingestion job failed for document {DocumentId}: {Message}",
                 regulatoryDocumentId, ex.Message);
 
-            // Don't rethrow — Hangfire job should not fail noisily. But it must not swallow the
-            // failure silently either: persist a Failed status so the frontend can surface it,
-            // rather than leaving the document looking like ingestion never ran.
-            if (document != null)
-            {
-                await MarkFailedAsync(document, "unknown", ex.Message, cancellationToken);
-            }
+            // Always attempt to record Failed by id rather than trusting the local `document`
+            // reference — MarkFailedAsync re-queries internally, so this covers both the common
+            // case (document loaded, then something later failed) and the narrow pre-load gap
+            // (the exception happened during the very first load above, so `document` is still
+            // null) with a single call. See docs/ingestion-terminal-state-recon.md (a).
+            await MarkFailedAsync(regulatoryDocumentId, "unknown", ex.Message, cancellationToken);
+
+            // Rethrow so Hangfire sees the failure and [AutomaticRetry(Attempts = 1)] can
+            // actually fire — previously this catch swallowed every exception, so Hangfire
+            // recorded every run as Succeeded regardless of outcome, making the retry attribute
+            // dead code. Safe specifically because extraction is all-or-nothing:
+            // PersistDraftRequirementsAsync (below) checks existing (including soft-deleted)
+            // requirement titles per profile before inserting, so a retry that redoes the
+            // fetch+extraction from scratch cannot double-persist requirements for titles a
+            // prior attempt already created. Every *expected* non-fatal outcome (invalid_uri,
+            // fetch/parse failures, the extraction_* segment failures, the no_active_profiles
+            // skip, zero-requirements) returns from inside the try block above via its own
+            // Mark*Async call — none of those throw, so none of them reach this catch or get
+            // rethrown here. Only genuine unexpected exceptions do.
+            throw;
         }
     }
 
     /// <summary>
     /// Marks the document as Failed with a category + message, persisted immediately.
+    /// Re-queries the document by id (mirrors TranslationValidationJob.UpdateRunStatusAsync)
+    /// rather than accepting an already-loaded reference, so this single method covers both the
+    /// normal case and the pre-document-load exception window where no tracked instance exists
+    /// yet. The save itself is nested in its own try/catch: a failure to persist the Failed
+    /// status must not itself escape uncaught (e.g. a DB blip at the exact moment of this write)
+    /// — if it does fail, the document remains on Ingesting until either the caller's rethrow
+    /// lets Hangfire's automatic retry re-run the job cleanly, or the staleness sweep
+    /// (StaleIngestionSweepJob) eventually force-terminates it.
     /// </summary>
     private async Task MarkFailedAsync(
-        RegulatoryDocument document,
+        Guid documentId,
         string errorCode,
         string errorMessage,
         CancellationToken cancellationToken)
     {
-        document.LastIngestionStatus = RegulatoryIngestionStatus.Failed;
-        document.LastIngestionErrorCode = errorCode;
-        document.LastIngestionErrorMessage = errorMessage.Length > 2000 ? errorMessage[..2000] : errorMessage;
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        var truncatedMessage = errorMessage.Length > 2000 ? errorMessage[..2000] : errorMessage;
 
-        _logger.LogError(
-            "Ingestion marked Failed for document {DocumentId}: [{ErrorCode}] {ErrorMessage}",
-            document.Id, errorCode, document.LastIngestionErrorMessage);
+        try
+        {
+            var document = await _dbContext.RegulatoryDocuments
+                .FirstOrDefaultAsync(d => d.Id == documentId, cancellationToken);
+
+            if (document == null)
+            {
+                _logger.LogError(
+                    "Cannot mark ingestion Failed for document {DocumentId} — document no longer exists",
+                    documentId);
+                return;
+            }
+
+            document.LastIngestionStatus = RegulatoryIngestionStatus.Failed;
+            document.LastIngestionErrorCode = errorCode;
+            document.LastIngestionErrorMessage = truncatedMessage;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            _logger.LogError(
+                "Ingestion marked Failed for document {DocumentId}: [{ErrorCode}] {ErrorMessage}",
+                documentId, errorCode, truncatedMessage);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Failed to persist Failed status for document {DocumentId} — it may remain on " +
+                "Ingesting until the next automatic retry or the staleness sweep clears it",
+                documentId);
+        }
     }
 
     /// <summary>

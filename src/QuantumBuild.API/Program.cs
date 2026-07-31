@@ -152,6 +152,7 @@ builder.Services.AddScoped<LessonParseJob>();
 builder.Services.AddScoped<VideoTranscriptionJob>();
 builder.Services.AddScoped<ContentCreationParseJob>();
 builder.Services.AddScoped<RequirementIngestionJob>();
+builder.Services.AddScoped<StaleIngestionSweepJob>();
 builder.Services.AddScoped<AggregateAiUsageJob>();
 builder.Services.AddScoped<IGenerateEmployeePinsJob, GenerateEmployeePinsJob>();
 builder.Services.AddScoped<IBulkEmployeeImportJob, BulkEmployeeImportJob>();
@@ -479,6 +480,11 @@ using (var scope = app.Services.CreateScope())
         "expired-session-cleanup",
         job => job.ExecuteAsync(CancellationToken.None),
         Cron.Daily(3, 0)); // 3am UTC daily
+
+    recurringJobManager.AddOrUpdate<StaleIngestionSweepJob>(
+        "stale-ingestion-sweep",
+        job => job.ExecuteAsync(CancellationToken.None),
+        Cron.Daily(4, 0)); // 4am UTC daily
 
     recurringJobManager.AddOrUpdate<AggregateAiUsageJob>(
         "aggregate-ai-usage",
