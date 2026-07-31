@@ -14,6 +14,7 @@ using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 using QuantumBuild.Core.Application.Configuration;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services;
+using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Regulatory;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 
@@ -258,6 +259,26 @@ public class RequirementIngestionJob
             _logger.LogInformation(
                 "Transcribed {Count} features across {StandardCount} standards from document {DocumentId}",
                 transcribed.Count, totalStandards, regulatoryDocumentId);
+
+            // Step 3.5 — Feature-level completeness + attribution check against the FULL map
+            // (docs/faithful-extraction-build-recon.md, sub-chunk 3). The per-segment check above
+            // (FindMissingFeatures) already guarantees each standard's own response is complete
+            // before assembly runs, and map-driven assembly structurally cannot introduce
+            // unexpected or misattributed candidates today — but MapCoverageVerifier makes that an
+            // explicit, checked property of the whole document rather than an implicit guarantee of
+            // how assembly happens to be coded. Runs unconditionally, regardless of isProvisional —
+            // see MapCoverageVerifier's remarks for why Draft vs Verified never enters this check.
+            var candidates = transcribed
+                .Select(t => new CandidateFeature(t.MapFeature.Identifier, t.MapFeature.Block, t.StandardId, t.PrincipleNumber))
+                .ToList();
+            var coverage = MapCoverageVerifier.Verify(structureMap, candidates);
+
+            if (!coverage.IsComplete)
+            {
+                var (coverageErrorCode, coverageErrorMessage) = DescribeCoverageFailure(coverage);
+                await MarkFailedAsync(document.Id, coverageErrorCode, coverageErrorMessage, cancellationToken);
+                return;
+            }
 
             // Step 4 — Persist as drafts for each matching profile
             var profiles = document.Profiles.Where(p => p.IsActive).ToList();
@@ -750,6 +771,55 @@ public class RequirementIngestionJob
 
         return (errorCode,
             $"{failedSegments.Count} of {totalSegments} standards failed extraction. {perStandardDetails}. No requirements were persisted for any standard.");
+    }
+
+    /// <summary>
+    /// Builds the error code/message for a failed MapCoverageVerifier result. Priority when more
+    /// than one category is non-empty (rare — under today's map-driven assembly, missing is the
+    /// only category that can actually fire via the real pipeline, since the per-segment check
+    /// above already prevents an incomplete segment from reaching assembly, and assembly itself
+    /// cannot invent unexpected or misattributed candidates; MapCoverageVerifier's unexpected/
+    /// misattributed detection exists as an explicit, independently-tested safety net rather than
+    /// a currently-reachable path): misattributed first, since wrong attribution is the more
+    /// actionable defect to surface distinctly; then unexpected; then missing. Every category
+    /// present is still named in full in the message regardless of which one wins the
+    /// single-valued code — mirrors MapSegmentFailures' approach for per-segment failures.
+    /// </summary>
+    private static (string ErrorCode, string ErrorMessage) DescribeCoverageFailure(MapCoverageResult coverage)
+    {
+        var parts = new List<string>();
+
+        if (coverage.Missing.Count > 0)
+        {
+            parts.Add(
+                $"{coverage.Missing.Count} map-declared feature(s) missing from the transcription: " +
+                string.Join(", ", coverage.Missing));
+        }
+
+        if (coverage.Unexpected.Count > 0)
+        {
+            parts.Add(
+                $"{coverage.Unexpected.Count} feature(s) not declared anywhere in the structure map: " +
+                string.Join(", ", coverage.Unexpected));
+        }
+
+        if (coverage.Misattributed.Count > 0)
+        {
+            var misattributedDetails = string.Join(", ", coverage.Misattributed.Select(f =>
+                $"{f.Block} {f.Identifier} (map declares Standard {f.DeclaredStandardId}/Principle {f.DeclaredPrincipleNumber}, transcribed as Standard {f.ActualStandardId}/Principle {f.ActualPrincipleNumber})"));
+            parts.Add($"{coverage.Misattributed.Count} feature(s) misattributed: {misattributedDetails}");
+        }
+
+        var errorCode = coverage.Misattributed.Count > 0
+            ? "extraction_misattributed"
+            : coverage.Unexpected.Count > 0
+                ? "extraction_unexpected"
+                : "extraction_incomplete";
+
+        var message =
+            $"Feature-level completeness check against the structure map failed: {string.Join("; ", parts)}. No requirements were persisted.";
+
+        return (errorCode, message);
     }
 
     private static string BuildExtractionPrompt(string documentText, int principleNumber, StructureStandard standard)
