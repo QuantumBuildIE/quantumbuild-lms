@@ -160,6 +160,9 @@ public class BulkSopImportJobTests : IntegrationTestBase
             talk.Sections.Count(s => !s.IsDeleted).Should().BeGreaterThan(0,
                 "the parse step must have created sections");
             talk.Questions.Should().NotBeEmpty("the quiz-generate step must have created questions");
+            talk.BulkTranslationPendingSince.Should().NotBeNull(
+                "a successfully-created bulk learning must be flagged for " +
+                "BulkLearningTranslationSweepJob to pick up (Bulk SOP Learnings, Chunk 2)");
         }
     }
 }

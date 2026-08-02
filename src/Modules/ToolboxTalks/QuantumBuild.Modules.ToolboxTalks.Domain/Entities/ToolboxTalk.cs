@@ -312,6 +312,14 @@ public class ToolboxTalk : TenantEntity
     /// </summary>
     public string? CoverImageUrl { get; set; }
 
+    /// <summary>
+    /// Set when a bulk SOP import creates this talk as Draft, marking it eligible for the
+    /// off-peak BulkLearningTranslationSweepJob to pick up. Null means either not bulk-created
+    /// or already swept (the sweep job clears this once it enqueues MissingTranslationsJob).
+    /// The timestamp doubles as a FIFO ordering key so older bulk items are swept first.
+    /// </summary>
+    public DateTimeOffset? BulkTranslationPendingSince { get; set; }
+
     // Navigation properties
 
     /// <summary>

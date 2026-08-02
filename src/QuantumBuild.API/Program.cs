@@ -148,6 +148,7 @@ builder.Services.AddScoped<UpdateOverdueToolboxTalksJob>();
 builder.Services.AddScoped<ContentGenerationJob>();
 builder.Services.AddScoped<TranslationValidationJob>();
 builder.Services.AddScoped<DailyTranslationScanJob>();
+builder.Services.AddScoped<BulkLearningTranslationSweepJob>();
 builder.Services.AddScoped<ExpiredSessionCleanupJob>();
 builder.Services.AddScoped<LessonParseJob>();
 builder.Services.AddScoped<VideoTranscriptionJob>();
@@ -477,6 +478,11 @@ using (var scope = app.Services.CreateScope())
         "daily-translation-scan",
         job => job.ExecuteAsync(CancellationToken.None),
         Cron.Daily(2, 0)); // 2am UTC daily
+
+    recurringJobManager.AddOrUpdate<BulkLearningTranslationSweepJob>(
+        "bulk-learning-translation-sweep",
+        job => job.ExecuteAsync(CancellationToken.None),
+        Cron.Daily(1, 0)); // 1am UTC daily — off-peak, ahead of the 2am/3am/4am sweep block
 
     recurringJobManager.AddOrUpdate<ExpiredSessionCleanupJob>(
         "expired-session-cleanup",

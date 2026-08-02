@@ -26,8 +26,9 @@ namespace QuantumBuild.Core.Infrastructure.Jobs;
 /// learning per PDF, reusing the new learning-wizard's own initialise -> parse -> quiz-generate
 /// command chain (InitialiseToolboxTalkCommand, ParseToolboxTalkContentCommand,
 /// GenerateToolboxTalkQuizCommand) so generated content is identical to what a human using the
-/// wizard would produce. Translation is out of scope — learnings land as Draft with no target
-/// languages set, exactly as a wizard user would leave them before starting translation.
+/// wizard would produce. This job itself does not translate — each successfully-created talk is
+/// flagged via BulkTranslationPendingSince for BulkLearningTranslationSweepJob to pick up
+/// off-peak, throttled, into the tenant's employee languages.
 ///
 /// Partial-failure model: each PDF is independent. A per-item failure is recorded and the job
 /// continues to the next PDF. The session transitions to Completed once the job finishes (even
@@ -281,6 +282,18 @@ public class BulkSopImportJob : IBulkSopImportJob
                 _logger.LogWarning(
                     "BulkSopImportJob: item {Index} ('{Title}') quiz generation failed for session {SessionId}: {Reason}",
                     file.ItemIndex, title, sessionId, warning);
+            }
+
+            // Flag the new Draft learning as pending bulk-translation. BulkLearningTranslationSweepJob
+            // picks these up off-peak, throttled, and clears the flag once it enqueues
+            // MissingTranslationsJob — this job never translates directly.
+            var createdTalk = await toolboxTalksDb.ToolboxTalks
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(t => t.Id == talk.Id && t.TenantId == tenantId, ct);
+            if (createdTalk is not null)
+            {
+                createdTalk.BulkTranslationPendingSince = DateTimeOffset.UtcNow;
+                await toolboxTalksDb.SaveChangesAsync(ct);
             }
 
             return new BulkSopImportItemOutcome
