@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { format } from 'date-fns';
-import { PlusIcon, EyeIcon, PencilIcon, TrashIcon, CalendarClockIcon, SearchIcon, SendIcon, PowerIcon, PowerOffIcon } from 'lucide-react';
+import { PlusIcon, EyeIcon, PencilIcon, TrashIcon, CalendarClockIcon, SearchIcon, SendIcon, PowerIcon, PowerOffIcon, UploadIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -432,16 +432,22 @@ export function ToolboxTalkList({ onSchedule, basePath = '/admin/toolbox-talks' 
           </Select>
         </div>
 
-        {/* Create button */}
+        {/* Bulk import + Create buttons */}
         {canManage && (
-          <Button onClick={() => router.push(
-            wizardPreference === 'new'
-              ? '/admin/toolbox-talks/learnings/new'
-              : `${basePath}/create`
-          )}>
-            <PlusIcon className="mr-2 h-4 w-4" />
-            Create New
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => router.push('/admin/toolbox-talks/bulk-sop-import')}>
+              <UploadIcon className="mr-2 h-4 w-4" />
+              Bulk Import
+            </Button>
+            <Button onClick={() => router.push(
+              wizardPreference === 'new'
+                ? '/admin/toolbox-talks/learnings/new'
+                : `${basePath}/create`
+            )}>
+              <PlusIcon className="mr-2 h-4 w-4" />
+              Create New
+            </Button>
+          </div>
         )}
       </div>
 

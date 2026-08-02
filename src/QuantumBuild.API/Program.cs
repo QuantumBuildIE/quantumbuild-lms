@@ -104,6 +104,7 @@ builder.Services.AddHttpClient("ClaudeApi", client =>
 
 // Register Infrastructure services
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+builder.Services.AddScoped<IJobTenantContextAccessor, JobTenantContextAccessor>();
 builder.Services.AddScoped<ITenantRepository, TenantRepository>();
 builder.Services.AddScoped<ISystemAuditLogger, SystemAuditLogger>();
 

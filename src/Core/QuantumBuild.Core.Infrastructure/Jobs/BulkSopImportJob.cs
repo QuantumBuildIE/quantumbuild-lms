@@ -17,6 +17,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Commands.InitialiseToolboxTa
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.ParseToolboxTalkContent;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
+using QuantumBuild.Core.Infrastructure.Services;
 
 namespace QuantumBuild.Core.Infrastructure.Jobs;
 
@@ -190,6 +191,19 @@ public class BulkSopImportJob : IBulkSopImportJob
             var title = DeriveTitle(file.FileName, file.ItemIndex);
 
             await using var itemScope = _scopeFactory.CreateAsyncScope();
+
+            // Hangfire has no HttpContext, so ICurrentUserService.TenantId would otherwise
+            // resolve to Guid.Empty inside this scope — the EF Core tenant query filter on
+            // ToolboxTalks (and everything else the wizard handlers below touch) would then
+            // match nothing, even for a row this very job just created with the correct
+            // explicit TenantId. Setting the tenant here, before anything else is resolved
+            // from this scope, makes the ambient filter resolve correctly for the unmodified
+            // wizard command handlers — mirroring the explicit-tenant approach
+            // TranslationWorkflowService uses for the same Hangfire/HttpContext gap, applied
+            // via scoped DI context instead of a method parameter since the shared handlers
+            // must not change.
+            itemScope.ServiceProvider.GetRequiredService<IJobTenantContextAccessor>().TenantId = tenantId;
+
             var sender = itemScope.ServiceProvider.GetRequiredService<ISender>();
             var toolboxTalksDb = itemScope.ServiceProvider.GetRequiredService<IToolboxTalksDbContext>();
 
@@ -222,8 +236,12 @@ public class BulkSopImportJob : IBulkSopImportJob
             }
 
             await using var entryStream = entry.Open();
+            await using var seekableStream = new MemoryStream();
+            await entryStream.CopyToAsync(seekableStream, ct);
+            seekableStream.Position = 0;
+
             var uploadResult = await _storageService.UploadSessionFileAsync(
-                tenantId, sessionId, entryStream, $"{file.ItemIndex:D3}_{file.FileName}", "application/pdf", ct);
+                tenantId, sessionId, seekableStream, $"{file.ItemIndex:D3}_{file.FileName}", "application/pdf", ct);
 
             if (!uploadResult.Success || string.IsNullOrEmpty(uploadResult.PublicUrl))
             {
