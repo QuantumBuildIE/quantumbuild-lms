@@ -156,6 +156,7 @@ builder.Services.AddScoped<StaleIngestionSweepJob>();
 builder.Services.AddScoped<AggregateAiUsageJob>();
 builder.Services.AddScoped<IGenerateEmployeePinsJob, GenerateEmployeePinsJob>();
 builder.Services.AddScoped<IBulkEmployeeImportJob, BulkEmployeeImportJob>();
+builder.Services.AddScoped<IBulkSopImportJob, BulkSopImportJob>();
 
 // Add Hangfire with PostgreSQL storage
 builder.Services.AddHangfire(config => config

@@ -55,6 +55,7 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
     public DbSet<TenantModule> TenantModules => Set<TenantModule>();
     public DbSet<DpaAcceptance> DpaAcceptances => Set<DpaAcceptance>();
     public DbSet<BulkImportSession> BulkImportSessions => Set<BulkImportSession>();
+    public DbSet<BulkSopImportSession> BulkSopImportSessions => Set<BulkSopImportSession>();
 
     // Settings DbSets
     public DbSet<TenantSetting> TenantSettings => Set<TenantSetting>();
@@ -250,6 +251,7 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.ApplyConfiguration(new TenantModuleConfiguration());
         modelBuilder.ApplyConfiguration(new DpaAcceptanceConfiguration());
         modelBuilder.ApplyConfiguration(new BulkImportSessionConfiguration());
+        modelBuilder.ApplyConfiguration(new BulkSopImportSessionConfiguration());
 
         // Apply Settings entity configurations
         modelBuilder.ApplyConfiguration(new TenantSettingConfiguration());
@@ -345,6 +347,7 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.Entity<QrSession>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<DpaAcceptance>().HasQueryFilter(e => !e.IsDeleted);
         modelBuilder.Entity<BulkImportSession>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
+        modelBuilder.Entity<BulkSopImportSession>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
 
         // Toolbox Talks tenant + soft-delete filters (centralised here — removed from entity configurations)
         modelBuilder.Entity<ToolboxTalk>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
