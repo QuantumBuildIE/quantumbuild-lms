@@ -1,3 +1,5 @@
+using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
+
 namespace QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Validation;
 
 /// <summary>
@@ -8,8 +10,24 @@ public record IngestionSessionDto
     public Guid RegulatoryDocumentId { get; init; }
     public string DocumentTitle { get; init; } = string.Empty;
     public string? SourceUrl { get; init; }
+
+    /// <summary>
+    /// One of "Idle", "Ingesting", "Success", "Failed", "Skipped" — mirrors
+    /// RegulatoryDocument.LastIngestionStatus verbatim.
+    /// </summary>
     public string Status { get; init; } = string.Empty;
     public DateTimeOffset? LastIngestedAt { get; init; }
+
+    /// <summary>Populated only when Status is "Failed" or "Skipped".</summary>
+    public string? LastIngestionErrorMessage { get; init; }
+
+    /// <summary>
+    /// Populated only when Status is "Failed" or "Skipped": "invalid_uri", "fetch_failed",
+    /// "parse_failed", "extraction_truncated", "extraction_invalid_json",
+    /// "extraction_zero_requirements", "no_active_profiles", or "unknown".
+    /// </summary>
+    public string? LastIngestionErrorCode { get; init; }
+
     public int DraftCount { get; init; }
     public int ApprovedCount { get; init; }
     public int RejectedCount { get; init; }
@@ -105,6 +123,10 @@ public record RegulatoryBrowseBodyDto
     public string Name { get; init; } = string.Empty;
     public string Code { get; init; } = string.Empty;
     public string? Country { get; init; }
+
+    /// <summary>"Regulation" or "Standard" — Regulations apply via the tenant's sectors,
+    /// Standards apply via an active TenantStandardSubscription.</summary>
+    public string Kind { get; init; } = string.Empty;
     public List<RegulatoryBrowseDocumentDto> Documents { get; init; } = new();
 }
 
@@ -137,6 +159,59 @@ public record RegulatoryBrowseRequirementDto
 }
 
 /// <summary>
+/// Response after uploading a source PDF for a regulatory document
+/// </summary>
+public record RegulatoryDocumentUploadResponseDto
+{
+    public string SourceUrl { get; init; } = string.Empty;
+    public string FileName { get; init; } = string.Empty;
+    public long FileSizeBytes { get; init; }
+}
+
+/// <summary>
+/// A regulatory body available as a picker option when creating a new regulatory document,
+/// or a row in the admin catalog list. Kind/SectorId/SectorName let the frontend distinguish
+/// Regulation bodies (SectorId always null) from Standard bodies (SectorId always populated).
+/// </summary>
+public record RegulatoryBodyDto
+{
+    public Guid Id { get; init; }
+    public string Name { get; init; } = string.Empty;
+    public string Code { get; init; } = string.Empty;
+    public string Country { get; init; } = string.Empty;
+    public string Kind { get; init; } = string.Empty;
+    public Guid? SectorId { get; init; }
+    public string? SectorName { get; init; }
+}
+
+/// <summary>
+/// Request to create a new regulatory body (catalog entry) — either a Regulation (SectorId
+/// must be null) or a Standard (SectorId required). Enforced at the service layer and by a DB
+/// check constraint (see RegulatoryBodyConfiguration).
+/// </summary>
+public record CreateRegulatoryBodyRequest
+{
+    public string Name { get; init; } = string.Empty;
+    public string Code { get; init; } = string.Empty;
+    public string Country { get; init; } = string.Empty;
+    public string? Website { get; init; }
+    public RegulatoryBodyKind Kind { get; init; } = RegulatoryBodyKind.Regulation;
+    public Guid? SectorId { get; init; }
+}
+
+/// <summary>
+/// Request to create a new regulatory document. Persists with LastIngestionStatus=Idle —
+/// ingestion remains a separate, explicit action on the document's detail page.
+/// </summary>
+public record CreateRegulatoryDocumentRequest
+{
+    public Guid RegulatoryBodyId { get; init; }
+    public string Title { get; init; } = string.Empty;
+    public string Version { get; init; } = string.Empty;
+    public string? SourceUrl { get; init; }
+}
+
+/// <summary>
 /// Regulatory document with body, profiles, and requirement counts
 /// </summary>
 public record RegulatoryDocumentListDto
@@ -155,4 +230,30 @@ public record RegulatoryDocumentListDto
     public int DraftCount { get; init; }
     public int ApprovedCount { get; init; }
     public int RejectedCount { get; init; }
+}
+
+/// <summary>
+/// Request to attach a sector to a regulatory document by creating a RegulatoryProfile.
+/// Does NOT trigger ingestion — that remains a separate, explicit action on the document's
+/// detail page.
+/// </summary>
+public record CreateRegulatoryProfileRequest
+{
+    public Guid SectorId { get; init; }
+}
+
+/// <summary>
+/// A RegulatoryProfile — the attachment of a Sector to a RegulatoryDocument.
+/// </summary>
+public record RegulatoryProfileDto
+{
+    public Guid Id { get; init; }
+    public Guid RegulatoryDocumentId { get; init; }
+    public Guid SectorId { get; init; }
+    public string SectorKey { get; init; } = string.Empty;
+    public string SectorName { get; init; } = string.Empty;
+    public string ScoreLabel { get; init; } = string.Empty;
+    public string ExportLabel { get; init; } = string.Empty;
+    public string Description { get; init; } = string.Empty;
+    public bool IsActive { get; init; }
 }

@@ -20,6 +20,7 @@ public class CompleteToolboxTalkCommandHandler : IRequestHandler<CompleteToolbox
     private readonly ICourseProgressService _courseProgressService;
     private readonly IRefresherSchedulingService _refresherSchedulingService;
     private readonly ICertificateGenerationService _certificateService;
+    private readonly IToolboxTalkEmailService _emailService;
     private readonly ILogger<CompleteToolboxTalkCommandHandler> _logger;
 
     public CompleteToolboxTalkCommandHandler(
@@ -30,6 +31,7 @@ public class CompleteToolboxTalkCommandHandler : IRequestHandler<CompleteToolbox
         ICourseProgressService courseProgressService,
         IRefresherSchedulingService refresherSchedulingService,
         ICertificateGenerationService certificateService,
+        IToolboxTalkEmailService emailService,
         ILogger<CompleteToolboxTalkCommandHandler> logger)
     {
         _dbContext = dbContext;
@@ -39,6 +41,7 @@ public class CompleteToolboxTalkCommandHandler : IRequestHandler<CompleteToolbox
         _courseProgressService = courseProgressService;
         _refresherSchedulingService = refresherSchedulingService;
         _certificateService = certificateService;
+        _emailService = emailService;
         _logger = logger;
     }
 
@@ -218,6 +221,24 @@ public class CompleteToolboxTalkCommandHandler : IRequestHandler<CompleteToolbox
                 {
                     completion.CertificateUrl = certificate.PdfStoragePath;
                     await _dbContext.SaveChangesAsync(cancellationToken);
+
+                    // Send completion confirmation email (includes certificate download link) —
+                    // only fires for a newly-created certificate, never blocks completion
+                    try
+                    {
+                        completion.ScheduledTalk = scheduledTalk;
+                        await _emailService.SendCompletionConfirmationEmailAsync(completion, employee, cancellationToken);
+                    }
+                    catch (Exception emailEx)
+                    {
+                        _logger.LogError(emailEx,
+                            "Failed to send completion confirmation email for ScheduledTalk {ScheduledTalkId}, " +
+                            "Employee {EmployeeId}, Certificate {CertificateId}",
+                            scheduledTalk.Id, employee.Id, certificate.Id);
+
+                        certificate.CertificateEmailFailed = true;
+                        await _dbContext.SaveChangesAsync(cancellationToken);
+                    }
                 }
                 else
                 {
@@ -236,7 +257,8 @@ public class CompleteToolboxTalkCommandHandler : IRequestHandler<CompleteToolbox
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to generate certificate for scheduled talk {TalkId}", scheduledTalk.Id);
-                // Don't rethrow — completion should still succeed
+                completion.CertificateGenerationFailed = true;
+                await _dbContext.SaveChangesAsync(cancellationToken);
             }
         }
 

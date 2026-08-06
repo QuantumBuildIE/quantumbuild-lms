@@ -98,6 +98,17 @@ public class ParseToolboxTalkContentCommandHandlerTests : IntegrationTestBase
             .ToListAsync();
     }
 
+    /// <summary>Read the talk's current status directly from the DB for assertion.</summary>
+    private async Task<ToolboxTalkStatus> GetTalkStatusInDbAsync(Guid talkId)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var talk = await db.Set<ToolboxTalk>()
+            .IgnoreQueryFilters()
+            .FirstAsync(t => t.Id == talkId);
+        return talk.Status;
+    }
+
     // ── parse tests ───────────────────────────────────────────────────────────
 
     // 1 — Text mode happy path → 200, 2 sections in response and persisted to DB
@@ -297,6 +308,87 @@ public class ParseToolboxTalkContentCommandHandlerTests : IntegrationTestBase
         db.Should().HaveCount(3);
         db.Should().Contain(s => s.Title == "Second Pass A");
         db.Should().NotContain(s => s.Title == "First Pass A");
+    }
+
+    // ── concurrent-call idempotency guard tests ────────────────────────────────
+
+    // 10 — A second call arriving while the talk is mid-parse (Status = Processing) is
+    //      rejected with 409, instead of firing a duplicate Claude call. Simulates the
+    //      in-flight window by forcing Processing in the DB, mirroring how test 4 simulates
+    //      a non-Draft state.
+    [Fact]
+    public async Task TextMode_ConcurrentCallWhileProcessing_Returns409Conflict()
+    {
+        var init = await InitialiseAsync(UniqueTitle("Concurrent Parse"), "Text",
+            sourceText: "Source text for concurrency test.");
+        await SetStatusInDbAsync(init.Id, ToolboxTalkStatus.Processing);
+
+        var response = await AdminClient.PostAsync(
+            $"/api/toolbox-talks/{init.Id}/parse", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+    }
+
+    // 11 — Text mode: a failed Claude call reverts Status to Draft rather than leaving the
+    //      talk stuck in Processing, so the user can retry without creating a new session.
+    [Fact]
+    public async Task TextMode_ParseFailure_RevertsToDraftAndAllowsRetry()
+    {
+        var init = await InitialiseAsync(UniqueTitle("Text Failure"), "Text",
+            sourceText: "Source text for failure test.");
+
+        Factory.FakeContentParserService.ShouldFail = true;
+        var failResponse = await AdminClient.PostAsync(
+            $"/api/toolbox-talks/{init.Id}/parse", null);
+        failResponse.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        (await GetTalkStatusInDbAsync(init.Id)).Should().Be(ToolboxTalkStatus.Draft);
+
+        // Retry succeeds — status was not left stuck in Processing
+        Factory.FakeContentParserService.ShouldFail = false;
+        Factory.FakeContentParserService.NextSections =
+        [
+            new("Retry Section", "<p>Retry content.</p>", 1),
+        ];
+        var retryResponse = await AdminClient.PostAsync(
+            $"/api/toolbox-talks/{init.Id}/parse", null);
+        retryResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var result = await retryResponse.Content.ReadFromJsonAsync<TalkResult>();
+        result!.Status.Should().Be("Draft");
+        result.Sections.Should().ContainSingle(s => s.Title == "Retry Section");
+    }
+
+    // 12 — PDF mode: a failed extraction (before the Claude call is even reached) also
+    //      reverts Status to Draft rather than leaving the talk stuck in Processing.
+    [Fact]
+    public async Task PdfMode_ExtractionFailure_RevertsToDraftAndAllowsRetry()
+    {
+        var init = await InitialiseAsync(UniqueTitle("PDF Failure"), "Pdf",
+            sourceText: null,
+            sourceFileUrl: "https://pub-xxx.r2.dev/uploads/test/bad.pdf",
+            sourceFileType: "application/pdf");
+
+        Factory.FakePdfExtractionService.ShouldFail = true;
+        var failResponse = await AdminClient.PostAsync(
+            $"/api/toolbox-talks/{init.Id}/parse", null);
+        failResponse.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        (await GetTalkStatusInDbAsync(init.Id)).Should().Be(ToolboxTalkStatus.Draft);
+
+        // Retry succeeds — status was not left stuck in Processing
+        Factory.FakePdfExtractionService.ShouldFail = false;
+        Factory.FakeContentParserService.NextSections =
+        [
+            new("Recovered Section", "<p>Recovered content.</p>", 1),
+        ];
+        var retryResponse = await AdminClient.PostAsync(
+            $"/api/toolbox-talks/{init.Id}/parse", null);
+        retryResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var result = await retryResponse.Content.ReadFromJsonAsync<TalkResult>();
+        result!.Status.Should().Be("Draft");
+        result.Sections.Should().ContainSingle(s => s.Title == "Recovered Section");
     }
 
     // ── update-sections tests ────────────────────────────────────────────────

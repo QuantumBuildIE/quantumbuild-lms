@@ -7,7 +7,8 @@ public record PdfExtractionResult(
     bool Success,
     string? Text,
     int PageCount,
-    string? ErrorMessage)
+    string? ErrorMessage,
+    string? ErrorCategory = null)
 {
     /// <summary>
     /// Creates a successful extraction result
@@ -17,15 +18,21 @@ public record PdfExtractionResult(
             Success: true,
             Text: text,
             PageCount: pageCount,
-            ErrorMessage: null);
+            ErrorMessage: null,
+            ErrorCategory: null);
 
     /// <summary>
-    /// Creates a failed extraction result
+    /// Creates a failed extraction result. <paramref name="errorCategory"/> should be one of
+    /// the <see cref="PdfExtractionErrorCategory"/> constants — defaults to Unknown so a caller
+    /// that forgets to categorise still gets an honest "unknown" rather than a false category.
     /// </summary>
-    public static PdfExtractionResult FailureResult(string errorMessage) =>
+    public static PdfExtractionResult FailureResult(
+        string errorMessage,
+        string errorCategory = PdfExtractionErrorCategory.Unknown) =>
         new(
             Success: false,
             Text: null,
             PageCount: 0,
-            ErrorMessage: errorMessage);
+            ErrorMessage: errorMessage,
+            ErrorCategory: errorCategory);
 }

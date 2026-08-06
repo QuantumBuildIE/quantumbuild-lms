@@ -55,6 +55,28 @@ public class UpdateToolboxTalkTenantDefaultsCommandHandler
         settings.DefaultGenerateCertificate = request.DefaultGenerateCertificate;
         settings.DefaultRefresherFrequency = request.DefaultRefresherFrequency;
         settings.DefaultIsActive = request.DefaultIsActive;
+
+        // Learning-wizard toggle defaults — optional/nullable: omitted fields preserve
+        // the existing stored value rather than being reset.
+        if (request.DefaultVideoRightsConfirmed.HasValue)
+            settings.DefaultVideoRightsConfirmed = request.DefaultVideoRightsConfirmed.Value;
+        if (request.DefaultUseQuestionPool.HasValue)
+            settings.DefaultUseQuestionPool = request.DefaultUseQuestionPool.Value;
+        if (request.DefaultGenerateSlideshow.HasValue)
+            settings.DefaultGenerateSlideshow = request.DefaultGenerateSlideshow.Value;
+        if (request.DefaultAutoAssign.HasValue)
+            settings.DefaultAutoAssign = request.DefaultAutoAssign.Value;
+        if (request.DefaultPreserveSourceWording.HasValue)
+            settings.DefaultPreserveSourceWording = request.DefaultPreserveSourceWording.Value;
+        if (request.DefaultShuffleQuestions.HasValue)
+            settings.DefaultShuffleQuestions = request.DefaultShuffleQuestions.Value;
+        if (request.DefaultShuffleOptions.HasValue)
+            settings.DefaultShuffleOptions = request.DefaultShuffleOptions.Value;
+        if (request.DefaultIncludeQuiz.HasValue)
+            settings.DefaultIncludeQuiz = request.DefaultIncludeQuiz.Value;
+        if (request.DefaultAllowRetry.HasValue)
+            settings.DefaultAllowRetry = request.DefaultAllowRetry.Value;
+
         settings.UpdatedAt = DateTime.UtcNow;
         settings.UpdatedBy = _currentUser.UserId;
 
@@ -81,6 +103,15 @@ public class UpdateToolboxTalkTenantDefaultsCommandHandler
             DefaultGenerateCertificate = settings.DefaultGenerateCertificate,
             DefaultRefresherFrequency = settings.DefaultRefresherFrequency,
             DefaultIsActive = settings.DefaultIsActive,
+            DefaultVideoRightsConfirmed = settings.DefaultVideoRightsConfirmed,
+            DefaultUseQuestionPool = settings.DefaultUseQuestionPool,
+            DefaultGenerateSlideshow = settings.DefaultGenerateSlideshow,
+            DefaultAutoAssign = settings.DefaultAutoAssign,
+            DefaultPreserveSourceWording = settings.DefaultPreserveSourceWording,
+            DefaultShuffleQuestions = settings.DefaultShuffleQuestions,
+            DefaultShuffleOptions = settings.DefaultShuffleOptions,
+            DefaultIncludeQuiz = settings.DefaultIncludeQuiz,
+            DefaultAllowRetry = settings.DefaultAllowRetry,
         });
     }
 }

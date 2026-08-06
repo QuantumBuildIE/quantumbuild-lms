@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Validation;
+using QuantumBuild.Modules.ToolboxTalks.Application.Exceptions;
+using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 
 namespace QuantumBuild.API.Controllers;
 
@@ -18,6 +20,10 @@ public class RegulatoryIngestionController : ControllerBase
     private readonly IRequirementIngestionService _ingestionService;
     private readonly ICurrentUserService _currentUserService;
     private readonly ILogger<RegulatoryIngestionController> _logger;
+
+    // Matches the PDF upload convention used by ToolboxTalkFilesController.
+    private const long MaxSourceDocumentSizeBytes = 50 * 1024 * 1024; // 50MB
+    private static readonly string[] AllowedSourceDocumentTypes = ["application/pdf"];
 
     public RegulatoryIngestionController(
         IRequirementIngestionService ingestionService,
@@ -49,6 +55,170 @@ public class RegulatoryIngestionController : ControllerBase
     }
 
     /// <summary>
+    /// List regulatory bodies for the admin catalog or a document-creation body picker.
+    /// Pass ?kind=Regulation or ?kind=Standard to filter; omit for all bodies.
+    /// </summary>
+    [HttpGet("bodies")]
+    [ProducesResponseType(typeof(List<RegulatoryBodyDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetBodies(
+        [FromQuery] RegulatoryBodyKind? kind,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var bodies = await _ingestionService.GetRegulatoryBodiesAsync(kind, cancellationToken);
+            return Ok(bodies);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving regulatory bodies");
+            return StatusCode(500, new { message = "Error retrieving regulatory bodies" });
+        }
+    }
+
+    /// <summary>
+    /// Create a new regulatory body (catalog entry) — a Regulation or a Standard. Standards
+    /// require a SectorId; Regulations must not carry one. Documents are attached separately
+    /// via POST /api/regulatory/documents once the body exists.
+    /// </summary>
+    [HttpPost("bodies")]
+    [ProducesResponseType(typeof(RegulatoryBodyDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> CreateBody(
+        [FromBody] CreateRegulatoryBodyRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _ingestionService.CreateRegulatoryBodyAsync(request, cancellationToken);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Regulatory body creation failed");
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating regulatory body");
+            return StatusCode(500, new { message = "Error creating regulatory body" });
+        }
+    }
+
+    /// <summary>
+    /// Create a new regulatory document. Persists with LastIngestionStatus=Idle — ingestion
+    /// remains a separate, explicit action triggered later from the document's detail page.
+    /// </summary>
+    [HttpPost("documents")]
+    [ProducesResponseType(typeof(RegulatoryDocumentListDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> CreateDocument(
+        [FromBody] CreateRegulatoryDocumentRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _ingestionService.CreateDocumentAsync(request, cancellationToken);
+            return Ok(result);
+        }
+        catch (InvalidSourceUrlException ex)
+        {
+            _logger.LogWarning(ex, "Regulatory document creation rejected: invalid source URL");
+            return BadRequest(new { message = ex.Message, errorCode = InvalidSourceUrlException.ErrorCode });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Regulatory document creation failed");
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating regulatory document");
+            return StatusCode(500, new { message = "Error creating regulatory document" });
+        }
+    }
+
+    /// <summary>
+    /// Attach a sector to a regulatory document by creating a RegulatoryProfile. Restores a
+    /// previously soft-deleted profile for the same document/sector pair. Does NOT trigger
+    /// ingestion — that remains a separate explicit action.
+    /// </summary>
+    [HttpPost("documents/{documentId:guid}/profiles")]
+    [ProducesResponseType(typeof(RegulatoryProfileDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> CreateProfile(
+        Guid documentId,
+        [FromBody] CreateRegulatoryProfileRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _ingestionService.CreateProfileAsync(documentId, request.SectorId, cancellationToken);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Regulatory profile creation failed for document {DocumentId}", documentId);
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating regulatory profile for document {DocumentId}", documentId);
+            return StatusCode(500, new { message = "Error creating regulatory profile" });
+        }
+    }
+
+    /// <summary>
+    /// Upload a source PDF for a regulatory document. Stores it in R2 and updates the
+    /// document's SourceUrl. Does NOT trigger ingestion — Ingest Requirements remains a
+    /// separate explicit action.
+    /// </summary>
+    [HttpPost("documents/{documentId:guid}/upload")]
+    [RequestSizeLimit(52428800)] // 50MB
+    [ProducesResponseType(typeof(RegulatoryDocumentUploadResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UploadSourceDocument(
+        Guid documentId,
+        IFormFile file,
+        CancellationToken cancellationToken)
+    {
+        if (file == null || file.Length == 0)
+            return BadRequest(new { message = "No file provided." });
+
+        if (!AllowedSourceDocumentTypes.Contains(file.ContentType.ToLower()))
+            return BadRequest(new { message = "Invalid file type. Only PDF files are allowed." });
+
+        if (file.Length > MaxSourceDocumentSizeBytes)
+            return BadRequest(new
+            {
+                message = $"File size ({file.Length / 1024 / 1024}MB) exceeds maximum ({MaxSourceDocumentSizeBytes / 1024 / 1024}MB)."
+            });
+
+        try
+        {
+            await using var stream = file.OpenReadStream();
+            var result = await _ingestionService.UploadSourceDocumentAsync(
+                documentId, stream, file.FileName, cancellationToken);
+
+            if (result == null)
+                return NotFound(new { message = $"Regulatory document {documentId} not found" });
+
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Upload failed for regulatory document {DocumentId}", documentId);
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error uploading source document for regulatory document {DocumentId}", documentId);
+            return StatusCode(500, new { message = "Error uploading source document" });
+        }
+    }
+
+    /// <summary>
     /// Start AI ingestion of requirements from a regulatory document URL
     /// </summary>
     [HttpPost("documents/{documentId:guid}/ingest")]
@@ -65,6 +235,11 @@ public class RegulatoryIngestionController : ControllerBase
             var result = await _ingestionService.StartIngestionAsync(
                 documentId, request.SourceUrl, cancellationToken);
             return Ok(result);
+        }
+        catch (InvalidSourceUrlException ex)
+        {
+            _logger.LogWarning(ex, "Ingestion start rejected for document {DocumentId}: invalid source URL", documentId);
+            return BadRequest(new { message = ex.Message, errorCode = InvalidSourceUrlException.ErrorCode });
         }
         catch (InvalidOperationException ex)
         {

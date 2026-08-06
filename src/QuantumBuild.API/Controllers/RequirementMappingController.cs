@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Mapping;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs;
+using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Frameworks;
 
 namespace QuantumBuild.API.Controllers;
 
@@ -142,6 +143,27 @@ public class RequirementMappingController : ControllerBase
         {
             _logger.LogError(ex, "Error getting unconfirmed mapping count");
             return StatusCode(500, new { message = "Error getting unconfirmed count" });
+        }
+    }
+
+    /// <summary>
+    /// Get the regulatory frameworks (Regulations via sector + Standards via subscription)
+    /// currently applicable to the current tenant, with approved requirement counts.
+    /// Powers the compliance page's top-level summary.
+    /// </summary>
+    [HttpGet("applicable-frameworks")]
+    [ProducesResponseType(typeof(List<ApplicableFrameworkDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetApplicableFrameworks(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var frameworks = await _mappingService.GetApplicableFrameworksAsync(cancellationToken);
+            return Ok(frameworks);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving applicable frameworks");
+            return StatusCode(500, new { message = "Error retrieving applicable frameworks" });
         }
     }
 

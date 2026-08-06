@@ -301,6 +301,90 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
         }
     }
 
+    public async Task SendCourseCompletionConfirmationEmailAsync(
+        ToolboxTalkCourseAssignment courseAssignment,
+        Employee employee,
+        string? certificateUrl,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(employee.Email))
+        {
+            _logger.LogWarning(
+                "Cannot send course completion email: Employee {EmployeeId} has no email address",
+                employee.Id);
+            return;
+        }
+
+        var teamName = await GetTeamNameAsync(courseAssignment.TenantId, cancellationToken);
+        var subject = $"Course Completed: {courseAssignment.Course.Title}";
+
+        var certificateSection = "";
+        if (!string.IsNullOrEmpty(certificateUrl))
+        {
+            certificateSection = $@"
+            <p><a href='{certificateUrl}' style='color: #007bff;'>Download your completion certificate</a></p>";
+        }
+
+        var body = $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8'>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background-color: #28a745; color: white; padding: 20px; text-align: center; }}
+        .content {{ padding: 20px; background-color: #f9f9f9; }}
+        .footer {{ padding: 20px; text-align: center; color: #666; font-size: 12px; }}
+        .success-icon {{ font-size: 48px; }}
+    </style>
+</head>
+<body>
+    <div class='container'>
+        <div class='header'>
+            <div class='success-icon'>&#10004;</div>
+            <h1>Course Completed</h1>
+        </div>
+        <div class='content'>
+            <p>Dear {employee.FirstName},</p>
+            <p>Thank you for completing the training course:</p>
+            <p><strong>{courseAssignment.Course.Title}</strong></p>
+            <p><strong>Completed:</strong> {courseAssignment.CompletedAt:dd MMM yyyy HH:mm}</p>
+            {certificateSection}
+            <p>Your completion has been recorded.</p>
+        </div>
+        <div class='footer'>
+            <p>Thank you,<br>{teamName}</p>
+            <p>This is an automated message. Please do not reply to this email.</p>
+        </div>
+    </div>
+</body>
+</html>";
+
+        var emailMessage = new EmailMessage
+        {
+            ToEmail = employee.Email,
+            ToName = $"{employee.FirstName} {employee.LastName}",
+            Subject = subject,
+            HtmlBody = body
+        };
+
+        var result = await _emailProvider.SendAsync(emailMessage, cancellationToken);
+
+        if (result.Success)
+        {
+            _logger.LogInformation(
+                "Toolbox Talk course completion email sent to {Email} for course assignment {AssignmentId}",
+                employee.Email, courseAssignment.Id);
+        }
+        else
+        {
+            _logger.LogWarning(
+                "Failed to send Toolbox Talk course completion email to {Email}: {Error}",
+                employee.Email, result.ErrorMessage);
+        }
+    }
+
     public async Task SendEscalationEmailAsync(
         ScheduledTalk scheduledTalk,
         Employee employee,

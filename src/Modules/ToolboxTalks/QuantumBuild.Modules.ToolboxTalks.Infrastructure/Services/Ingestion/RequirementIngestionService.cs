@@ -1,8 +1,12 @@
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Frameworks;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Storage;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Application.Common.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Validation;
+using QuantumBuild.Modules.ToolboxTalks.Application.Exceptions;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 
@@ -15,13 +19,19 @@ namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Ingestion;
 public class RequirementIngestionService : IRequirementIngestionService
 {
     private readonly IToolboxTalksDbContext _dbContext;
+    private readonly IR2StorageService _storageService;
+    private readonly IApplicableFrameworksService _applicableFrameworksService;
     private readonly ILogger<RequirementIngestionService> _logger;
 
     public RequirementIngestionService(
         IToolboxTalksDbContext dbContext,
+        IR2StorageService storageService,
+        IApplicableFrameworksService applicableFrameworksService,
         ILogger<RequirementIngestionService> logger)
     {
         _dbContext = dbContext;
+        _storageService = storageService;
+        _applicableFrameworksService = applicableFrameworksService;
         _logger = logger;
     }
 
@@ -44,13 +54,24 @@ public class RequirementIngestionService : IRequirementIngestionService
         if (string.IsNullOrWhiteSpace(document.SourceUrl))
             throw new InvalidOperationException("Document has no SourceUrl configured. Provide a URL to ingest from.");
 
+        // Validate before enqueueing — synchronously, within the same request, well before
+        // the job ever runs. Rejects the effective SourceUrl (whether freshly provided above
+        // or previously persisted) so a bad URL can never reach the Hangfire job silently.
+        if (!SourceUrlValidator.IsValid(document.SourceUrl, out var validationError))
+        {
+            _logger.LogWarning(
+                "Rejected ingestion start for document {DocumentId}: {Error}",
+                regulatoryDocumentId, validationError);
+            throw new InvalidSourceUrlException(validationError!);
+        }
+
         // Enqueue Hangfire background job
         BackgroundJob.Enqueue<RequirementIngestionJob>(
             job => job.ExecuteAsync(regulatoryDocumentId, CancellationToken.None));
 
         _logger.LogInformation("Enqueued ingestion job for document {DocumentId}", regulatoryDocumentId);
 
-        return await BuildIngestionSessionDto(document, "Queued", cancellationToken);
+        return await BuildIngestionSessionDto(document, cancellationToken);
     }
 
     public async Task<IngestionSessionDto> GetIngestionStatusAsync(
@@ -61,10 +82,7 @@ public class RequirementIngestionService : IRequirementIngestionService
             .FirstOrDefaultAsync(d => d.Id == regulatoryDocumentId, cancellationToken)
             ?? throw new InvalidOperationException($"Regulatory document {regulatoryDocumentId} not found");
 
-        // Determine status from LastIngestedAt and draft counts
-        var status = document.LastIngestedAt.HasValue ? "Completed" : "Idle";
-
-        return await BuildIngestionSessionDto(document, status, cancellationToken);
+        return await BuildIngestionSessionDto(document, cancellationToken);
     }
 
     public async Task<List<DraftRequirementDto>> GetDraftRequirementsAsync(
@@ -262,17 +280,15 @@ public class RequirementIngestionService : IRequirementIngestionService
         Guid tenantId,
         CancellationToken cancellationToken = default)
     {
-        // Resolve which sector keys this tenant has assigned
-        var tenantSectorKeys = await _dbContext.TenantSectors
-            .Where(ts => ts.TenantId == tenantId && !ts.IsDeleted)
-            .Include(ts => ts.Sector)
-            .Select(ts => ts.Sector.Key)
-            .ToListAsync(cancellationToken);
+        // Union of entitlements: Regulations apply via the tenant's assigned sectors,
+        // Standards apply via an active TenantStandardSubscription (independent of sector).
+        var entitlements = await _applicableFrameworksService.GetTenantEntitlementsAsync(tenantId, cancellationToken);
 
-        if (tenantSectorKeys.Count == 0)
+        if (entitlements.SectorKeys.Count == 0 && entitlements.SubscribedStandardBodyIds.Count == 0)
             return new List<RegulatoryBrowseBodyDto>();
 
-        // Load approved requirements whose profile matches a tenant sector key
+        // Load approved requirements whose body is a Regulation matching a tenant sector,
+        // or whose body is a Standard the tenant is subscribed to.
         var requirements = await _dbContext.RegulatoryRequirements
             .IgnoreQueryFilters()
             .Include(r => r.RegulatoryProfile)
@@ -282,7 +298,12 @@ public class RequirementIngestionService : IRequirementIngestionService
                     .ThenInclude(d => d.RegulatoryBody)
             .Where(r => !r.IsDeleted
                 && r.IngestionStatus == RequirementIngestionStatus.Approved
-                && tenantSectorKeys.Contains(r.RegulatoryProfile.SectorKey))
+                && (
+                    (r.RegulatoryProfile.RegulatoryDocument.RegulatoryBody.Kind == RegulatoryBodyKind.Regulation
+                        && entitlements.SectorKeys.Contains(r.RegulatoryProfile.SectorKey))
+                    || (r.RegulatoryProfile.RegulatoryDocument.RegulatoryBody.Kind == RegulatoryBodyKind.Standard
+                        && entitlements.SubscribedStandardBodyIds.Contains(r.RegulatoryProfile.RegulatoryDocument.RegulatoryBodyId))
+                ))
             .OrderBy(r => r.RegulatoryProfile.RegulatoryDocument.RegulatoryBody.Name)
             .ThenBy(r => r.RegulatoryProfile.RegulatoryDocument.Title)
             .ThenBy(r => r.Principle)
@@ -298,6 +319,7 @@ public class RequirementIngestionService : IRequirementIngestionService
                 Name = bodyGroup.Key.Name,
                 Code = bodyGroup.Key.Code,
                 Country = bodyGroup.Key.Country,
+                Kind = bodyGroup.Key.Kind.ToString(),
                 Documents = bodyGroup
                     .GroupBy(r => r.RegulatoryProfile.RegulatoryDocument)
                     .Select(docGroup => new RegulatoryBrowseDocumentDto
@@ -336,9 +358,275 @@ public class RequirementIngestionService : IRequirementIngestionService
         return result;
     }
 
+    public async Task<RegulatoryDocumentUploadResponseDto?> UploadSourceDocumentAsync(
+        Guid regulatoryDocumentId,
+        Stream fileContent,
+        string originalFileName,
+        CancellationToken cancellationToken = default)
+    {
+        var document = await _dbContext.RegulatoryDocuments
+            .FirstOrDefaultAsync(d => d.Id == regulatoryDocumentId, cancellationToken);
+
+        if (document == null)
+            return null;
+
+        var result = await _storageService.UploadRegulatoryDocumentAsync(
+            regulatoryDocumentId, fileContent, cancellationToken);
+
+        if (!result.Success)
+            throw new InvalidOperationException(result.ErrorMessage ?? "Upload failed");
+
+        document.SourceUrl = result.PublicUrl;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Uploaded source document for regulatory document {DocumentId}: {Url}",
+            regulatoryDocumentId, result.PublicUrl);
+
+        return new RegulatoryDocumentUploadResponseDto
+        {
+            SourceUrl = result.PublicUrl!,
+            FileName = originalFileName,
+            FileSizeBytes = result.FileSizeBytes!.Value
+        };
+    }
+
+    public async Task<List<RegulatoryBodyDto>> GetRegulatoryBodiesAsync(
+        RegulatoryBodyKind? kind = null,
+        CancellationToken cancellationToken = default)
+    {
+        var query = _dbContext.RegulatoryBodies
+            .Include(b => b.Sector)
+            .AsQueryable();
+
+        if (kind is not null)
+            query = query.Where(b => b.Kind == kind.Value);
+
+        return await query
+            .OrderBy(b => b.Name)
+            .Select(b => new RegulatoryBodyDto
+            {
+                Id = b.Id,
+                Name = b.Name,
+                Code = b.Code,
+                Country = b.Country,
+                Kind = b.Kind.ToString(),
+                SectorId = b.SectorId,
+                SectorName = b.Sector != null ? b.Sector.Name : null,
+            })
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<RegulatoryBodyDto> CreateRegulatoryBodyAsync(
+        CreateRegulatoryBodyRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+            throw new InvalidOperationException("Name is required.");
+
+        if (request.Name.Trim().Length > 100)
+            throw new InvalidOperationException("Name must be 100 characters or fewer.");
+
+        if (string.IsNullOrWhiteSpace(request.Code))
+            throw new InvalidOperationException("Code is required.");
+
+        if (request.Code.Trim().Length > 20)
+            throw new InvalidOperationException("Code must be 20 characters or fewer.");
+
+        if (string.IsNullOrWhiteSpace(request.Country))
+            throw new InvalidOperationException("Country is required.");
+
+        if (request.Country.Trim().Length > 100)
+            throw new InvalidOperationException("Country must be 100 characters or fewer.");
+
+        if (!string.IsNullOrWhiteSpace(request.Website) && request.Website.Trim().Length > 500)
+            throw new InvalidOperationException("Website must be 500 characters or fewer.");
+
+        if (request.Kind == RegulatoryBodyKind.Standard && request.SectorId is null)
+            throw new InvalidOperationException("Standard regulatory bodies must specify a SectorId.");
+
+        if (request.Kind == RegulatoryBodyKind.Regulation && request.SectorId is not null)
+            throw new InvalidOperationException("Regulation regulatory bodies must not specify a SectorId.");
+
+        var normalizedCode = request.Code.Trim();
+        var codeExists = await _dbContext.RegulatoryBodies
+            .AnyAsync(b => b.Code == normalizedCode, cancellationToken);
+
+        if (codeExists)
+            throw new InvalidOperationException($"A regulatory body with code '{normalizedCode}' already exists.");
+
+        Domain.Entities.Sector? sector = null;
+        if (request.SectorId is not null)
+        {
+            sector = await _dbContext.Sectors
+                .FirstOrDefaultAsync(s => s.Id == request.SectorId.Value, cancellationToken)
+                ?? throw new InvalidOperationException($"Sector {request.SectorId} not found");
+        }
+
+        var body = new Domain.Entities.RegulatoryBody
+        {
+            Name = request.Name.Trim(),
+            Code = normalizedCode,
+            Country = request.Country.Trim(),
+            Website = string.IsNullOrWhiteSpace(request.Website) ? null : request.Website.Trim(),
+            Kind = request.Kind,
+            SectorId = request.SectorId,
+        };
+
+        // Defence in depth alongside the DB check constraint (ck_regulatory_bodies_kind_sector).
+        body.ValidateSectorConsistency();
+
+        _dbContext.RegulatoryBodies.Add(body);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Created regulatory body {BodyId}: {Name} ({Kind})", body.Id, body.Name, body.Kind);
+
+        return new RegulatoryBodyDto
+        {
+            Id = body.Id,
+            Name = body.Name,
+            Code = body.Code,
+            Country = body.Country,
+            Kind = body.Kind.ToString(),
+            SectorId = body.SectorId,
+            SectorName = sector?.Name,
+        };
+    }
+
+    public async Task<RegulatoryDocumentListDto> CreateDocumentAsync(
+        CreateRegulatoryDocumentRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.Title))
+            throw new InvalidOperationException("Title is required.");
+
+        if (request.Title.Trim().Length > 500)
+            throw new InvalidOperationException("Title must be 500 characters or fewer.");
+
+        if (string.IsNullOrWhiteSpace(request.Version))
+            throw new InvalidOperationException("Version is required.");
+
+        if (request.Version.Trim().Length > 50)
+            throw new InvalidOperationException("Version must be 50 characters or fewer.");
+
+        var body = await _dbContext.RegulatoryBodies
+            .FirstOrDefaultAsync(b => b.Id == request.RegulatoryBodyId, cancellationToken)
+            ?? throw new InvalidOperationException($"Regulatory body {request.RegulatoryBodyId} not found");
+
+        if (!string.IsNullOrWhiteSpace(request.SourceUrl)
+            && !SourceUrlValidator.IsValid(request.SourceUrl, out var validationError))
+        {
+            throw new InvalidSourceUrlException(validationError!);
+        }
+
+        var document = new Domain.Entities.RegulatoryDocument
+        {
+            RegulatoryBodyId = request.RegulatoryBodyId,
+            Title = request.Title.Trim(),
+            Version = request.Version.Trim(),
+            SourceUrl = string.IsNullOrWhiteSpace(request.SourceUrl) ? null : request.SourceUrl.Trim(),
+        };
+
+        _dbContext.RegulatoryDocuments.Add(document);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("Created regulatory document {DocumentId}: {Title}", document.Id, document.Title);
+
+        return new RegulatoryDocumentListDto
+        {
+            Id = document.Id,
+            RegulatoryBodyName = body.Name,
+            RegulatoryBodyCode = body.Code,
+            Title = document.Title,
+            Version = document.Version,
+            Source = document.Source,
+            SourceUrl = document.SourceUrl,
+            EffectiveDate = document.EffectiveDate,
+            IsActive = document.IsActive,
+            LastIngestedAt = document.LastIngestedAt,
+            SectorKeys = new List<string>(),
+            DraftCount = 0,
+            ApprovedCount = 0,
+            RejectedCount = 0,
+        };
+    }
+
+    public async Task<RegulatoryProfileDto> CreateProfileAsync(
+        Guid regulatoryDocumentId,
+        Guid sectorId,
+        CancellationToken cancellationToken = default)
+    {
+        var document = await _dbContext.RegulatoryDocuments
+            .Include(d => d.RegulatoryBody)
+            .FirstOrDefaultAsync(d => d.Id == regulatoryDocumentId, cancellationToken)
+            ?? throw new InvalidOperationException($"Regulatory document {regulatoryDocumentId} not found");
+
+        var sector = await _dbContext.Sectors
+            .FirstOrDefaultAsync(s => s.Id == sectorId, cancellationToken)
+            ?? throw new InvalidOperationException($"Sector {sectorId} not found");
+
+        // Soft-delete collision handling: the unique index on {RegulatoryDocumentId, SectorId}
+        // has no soft-delete filter, so a previously soft-deleted profile for this exact pair
+        // still occupies the constrained slot. Restore it instead of inserting a duplicate.
+        var existing = await _dbContext.RegulatoryProfiles
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(
+                p => p.RegulatoryDocumentId == regulatoryDocumentId && p.SectorId == sectorId,
+                cancellationToken);
+
+        Domain.Entities.RegulatoryProfile profile;
+        if (existing is not null)
+        {
+            if (!existing.IsDeleted)
+                throw new InvalidOperationException(
+                    $"A profile already exists for this document and sector '{sector.Name}'.");
+
+            // Restore soft-deleted record (restore-on-reassign pattern).
+            existing.IsDeleted = false;
+            profile = existing;
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation(
+                "Restored soft-deleted regulatory profile {ProfileId} for document {DocumentId}, sector {SectorKey}",
+                profile.Id, regulatoryDocumentId, sector.Key);
+        }
+        else
+        {
+            profile = new Domain.Entities.RegulatoryProfile
+            {
+                RegulatoryDocumentId = regulatoryDocumentId,
+                SectorId = sectorId,
+                SectorKey = sector.Key,
+                ScoreLabel = $"{document.RegulatoryBody.Code} Regulatory Score",
+                ExportLabel = $"{document.RegulatoryBody.Code} Inspection Export",
+            };
+
+            _dbContext.RegulatoryProfiles.Add(profile);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation(
+                "Created regulatory profile {ProfileId} for document {DocumentId}, sector {SectorKey}",
+                profile.Id, regulatoryDocumentId, sector.Key);
+        }
+
+        return new RegulatoryProfileDto
+        {
+            Id = profile.Id,
+            RegulatoryDocumentId = profile.RegulatoryDocumentId,
+            SectorId = profile.SectorId,
+            SectorKey = profile.SectorKey,
+            SectorName = sector.Name,
+            ScoreLabel = profile.ScoreLabel,
+            ExportLabel = profile.ExportLabel,
+            Description = profile.Description,
+            IsActive = profile.IsActive,
+        };
+    }
+
     private async Task<IngestionSessionDto> BuildIngestionSessionDto(
         Domain.Entities.RegulatoryDocument document,
-        string status,
         CancellationToken cancellationToken)
     {
         var profileIds = await _dbContext.RegulatoryProfiles
@@ -358,8 +646,10 @@ public class RequirementIngestionService : IRequirementIngestionService
             RegulatoryDocumentId = document.Id,
             DocumentTitle = document.Title,
             SourceUrl = document.SourceUrl,
-            Status = status,
+            Status = document.LastIngestionStatus.ToString(),
             LastIngestedAt = document.LastIngestedAt,
+            LastIngestionErrorMessage = document.LastIngestionErrorMessage,
+            LastIngestionErrorCode = document.LastIngestionErrorCode,
             DraftCount = counts.FirstOrDefault(c => c.Status == RequirementIngestionStatus.Draft)?.Count ?? 0,
             ApprovedCount = counts.FirstOrDefault(c => c.Status == RequirementIngestionStatus.Approved)?.Count ?? 0,
             RejectedCount = counts.FirstOrDefault(c => c.Status == RequirementIngestionStatus.Rejected)?.Count ?? 0,

@@ -32,6 +32,7 @@ export interface RegulatoryBrowseBody {
   name: string;
   code: string;
   country: string | null;
+  kind: RegulatoryBodyKind;
   documents: RegulatoryBrowseDocument[];
 }
 
@@ -60,11 +61,74 @@ export interface IngestionSessionDto {
   regulatoryDocumentId: string;
   documentTitle: string;
   sourceUrl: string | null;
-  status: "Idle" | "Queued" | "Processing" | "Completed" | "Failed";
+  status: "Idle" | "Ingesting" | "Success" | "Failed" | "Skipped";
   lastIngestedAt: string | null;
+  lastIngestionErrorMessage: string | null;
+  lastIngestionErrorCode: string | null;
   draftCount: number;
   approvedCount: number;
   rejectedCount: number;
+}
+
+export interface RegulatoryDocumentUploadResponse {
+  sourceUrl: string;
+  fileName: string;
+  fileSizeBytes: number;
+}
+
+export type RegulatoryBodyKind = "Regulation" | "Standard";
+
+export interface RegulatoryBody {
+  id: string;
+  name: string;
+  code: string;
+  country: string;
+  kind: RegulatoryBodyKind;
+  sectorId: string | null;
+  sectorName: string | null;
+}
+
+export interface CreateRegulatoryDocumentRequest {
+  regulatoryBodyId: string;
+  title: string;
+  version: string;
+  sourceUrl?: string;
+}
+
+/**
+ * Standards require sectorId; Regulations must leave it undefined/null — enforced by the
+ * backend at both the service layer and a DB check constraint.
+ */
+export interface CreateRegulatoryBodyRequest {
+  name: string;
+  code: string;
+  country: string;
+  website?: string;
+  kind: RegulatoryBodyKind;
+  sectorId?: string | null;
+}
+
+/**
+ * Request to attach a sector to a regulatory document by creating a RegulatoryProfile.
+ * Does not trigger ingestion — that remains a separate, explicit action.
+ */
+export interface CreateRegulatoryProfileRequest {
+  sectorId: string;
+}
+
+/**
+ * A RegulatoryProfile — the attachment of a Sector to a RegulatoryDocument.
+ */
+export interface RegulatoryProfileDto {
+  id: string;
+  regulatoryDocumentId: string;
+  sectorId: string;
+  sectorKey: string;
+  sectorName: string;
+  scoreLabel: string;
+  exportLabel: string;
+  description: string;
+  isActive: boolean;
 }
 
 export interface DraftRequirementDto {
@@ -115,4 +179,32 @@ export interface StartIngestionRequest {
 
 export interface RejectRequirementRequest {
   notes: string;
+}
+
+// ============================================
+// Tenant Standard Subscription types (My Standards)
+// ============================================
+
+export interface AvailableStandardDto {
+  id: string;
+  name: string;
+  code: string;
+  country: string;
+  sectorId: string;
+  sectorName: string;
+  isSubscribed: boolean;
+  isCrossSector: boolean;
+}
+
+export interface TenantStandardSubscriptionDto {
+  id: string;
+  tenantId: string;
+  regulatoryBodyId: string;
+  name: string;
+  code: string;
+  country: string;
+  sectorId: string;
+  sectorName: string;
+  isCrossSector: boolean;
+  subscribedAt: string;
 }

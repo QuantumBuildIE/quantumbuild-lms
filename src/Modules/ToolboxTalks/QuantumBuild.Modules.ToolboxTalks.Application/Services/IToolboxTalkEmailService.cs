@@ -34,6 +34,15 @@ public interface IToolboxTalkEmailService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Sends a confirmation email when an employee completes a training course
+    /// </summary>
+    Task SendCourseCompletionConfirmationEmailAsync(
+        ToolboxTalkCourseAssignment courseAssignment,
+        Employee employee,
+        string? certificateUrl,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Sends an escalation email to the employee's manager when a talk remains overdue
     /// </summary>
     Task SendEscalationEmailAsync(

@@ -9,6 +9,7 @@ import {
   addManualMapping,
   getContentOptions,
   generateInspectionReport,
+  getApplicableFrameworks,
 } from "./requirement-mappings";
 import type {
   AddManualMappingRequest,
@@ -22,6 +23,7 @@ export const requirementMappingKeys = {
   complianceChecklist: (sectorKey: string) =>
     ["requirement-mappings", "compliance", sectorKey] as const,
   contentOptions: () => ["requirement-mappings", "content-options"] as const,
+  applicableFrameworks: () => ["requirement-mappings", "applicable-frameworks"] as const,
 };
 
 export function usePendingMappings() {
@@ -110,6 +112,14 @@ export function useAddManualMapping() {
         queryKey: requirementMappingKeys.pending(),
       });
     },
+  });
+}
+
+export function useApplicableFrameworks() {
+  return useQuery({
+    queryKey: requirementMappingKeys.applicableFrameworks(),
+    queryFn: () => getApplicableFrameworks(),
+    staleTime: 30 * 1000,
   });
 }
 

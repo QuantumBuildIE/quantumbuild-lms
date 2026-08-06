@@ -93,7 +93,5 @@ public class RegulatoryRequirementMappingConfiguration : IEntityTypeConfiguratio
         builder.HasIndex(e => new { e.TenantId, e.MappingStatus })
             .HasDatabaseName("ix_regulatory_requirement_mappings_tenant_status");
 
-        // Query filter for soft delete (tenant filter applied in ApplicationDbContext)
-        builder.HasQueryFilter(e => !e.IsDeleted);
     }
 }

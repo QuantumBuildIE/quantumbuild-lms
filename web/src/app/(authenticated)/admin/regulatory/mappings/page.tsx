@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
+import { KindBadge } from "@/components/admin/kind-badge";
 import { usePermission } from "@/lib/auth/use-auth";
 import {
   usePendingMappings,
@@ -27,6 +28,7 @@ import {
   AlertTriangle,
   FileText,
   BookOpen,
+  FileWarning,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -99,6 +101,25 @@ function MappingCard({ mapping }: { mapping: PendingMappingDto }) {
           </Link>
           <Badge variant="outline">{mapping.contentType}</Badge>
           <ConfidenceBadge score={mapping.confidenceScore} />
+          {!mapping.targetIsLive && (
+            <Badge
+              variant="outline"
+              className="gap-1 border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-400"
+            >
+              <FileWarning className="h-3 w-3" />
+              {mapping.contentType === "Talk" ? "Talk not live" : "Course not live"}
+            </Badge>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap text-sm">
+          <KindBadge kind={mapping.sourceBodyKind} />
+          <span className="text-muted-foreground">{mapping.sourceBodyName}</span>
+          {!mapping.isCurrentlyApplicable && (
+            <Badge variant="secondary" className="text-muted-foreground">
+              No longer applicable
+            </Badge>
+          )}
         </div>
 
         <div className="space-y-1">

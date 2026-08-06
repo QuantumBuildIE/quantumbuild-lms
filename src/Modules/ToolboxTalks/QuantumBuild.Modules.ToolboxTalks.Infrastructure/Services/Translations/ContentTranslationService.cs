@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using QuantumBuild.Core.Application.Configuration;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Frameworks;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Translations;
 using QuantumBuild.Modules.ToolboxTalks.Application.Prompts;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
@@ -21,6 +22,7 @@ public class ContentTranslationService : IContentTranslationService
     private readonly SubtitleProcessingSettings _settings;
     private readonly string _claudeModel;
     private readonly IAiUsageLogger _aiUsageLogger;
+    private readonly IApplicableFrameworksService _applicableFrameworksService;
     private readonly ILogger<ContentTranslationService> _logger;
 
     public ContentTranslationService(
@@ -28,12 +30,14 @@ public class ContentTranslationService : IContentTranslationService
         IOptions<SubtitleProcessingSettings> settings,
         IOptions<AIProviderOptions> aiProviders,
         IAiUsageLogger aiUsageLogger,
+        IApplicableFrameworksService applicableFrameworksService,
         ILogger<ContentTranslationService> logger)
     {
         _httpClient = httpClient;
         _settings = settings.Value;
         _claudeModel = aiProviders.Value.Anthropic.Models.Sonnet;
         _aiUsageLogger = aiUsageLogger;
+        _applicableFrameworksService = applicableFrameworksService;
         _logger = logger;
     }
 
@@ -74,8 +78,12 @@ public class ContentTranslationService : IContentTranslationService
                 useTiered, sectorKey ?? "(none)", isSafetyCritical,
                 text.Length > 80 ? text.Substring(0, 80) + "..." : text);
 
+            var sectorInstructions = sectorKey != null
+                ? await _applicableFrameworksService.GetTranslationInstructionsAsync(tenantId, sectorKey, cancellationToken)
+                : null;
+
             var prompt = useTiered
-                ? TranslationPrompts.BuildTranslationPrompt(text, source, targetLanguage, isHtml, sectorKey, isSafetyCritical, glossaryTerms)
+                ? TranslationPrompts.BuildTranslationPrompt(text, source, targetLanguage, isHtml, sectorInstructions, isSafetyCritical, glossaryTerms)
                 : TranslationPrompts.BuildGenericTranslationPrompt(text, source, targetLanguage, isHtml);
             var parsed = await CallClaudeApiAsync(prompt, cancellationToken);
 
@@ -210,7 +218,11 @@ public class ContentTranslationService : IContentTranslationService
         {
             _logger.LogInformation("Translating batch of {Count} items from {Source} to {Language}", itemsList.Count, source, targetLanguage);
 
-            var prompt = TranslationPrompts.BuildBatchTranslationPrompt(itemsList, source, targetLanguage, sectorKey, isSafetyCritical, glossaryTerms);
+            var sectorInstructions = sectorKey != null
+                ? await _applicableFrameworksService.GetTranslationInstructionsAsync(tenantId, sectorKey, cancellationToken)
+                : null;
+
+            var prompt = TranslationPrompts.BuildBatchTranslationPrompt(itemsList, source, targetLanguage, sectorInstructions, isSafetyCritical, glossaryTerms);
             var parsed = await CallClaudeApiAsync(prompt, cancellationToken);
 
             await _aiUsageLogger.LogAsync(

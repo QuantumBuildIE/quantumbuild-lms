@@ -275,6 +275,8 @@ public class ToolboxTalkConfiguration : IEntityTypeConfiguration<ToolboxTalk>
         builder.Property(t => t.CoverImageUrl)
             .HasMaxLength(500);
 
+        builder.Property(t => t.BulkTranslationPendingSince);
+
         // Indexes
         builder.HasIndex(t => new { t.TenantId, t.Code })
             .IsUnique()
@@ -298,6 +300,11 @@ public class ToolboxTalkConfiguration : IEntityTypeConfiguration<ToolboxTalk>
         builder.HasIndex(t => new { t.TenantId, t.VideoFileHash })
             .HasDatabaseName("ix_toolbox_talks_tenant_video_hash")
             .HasFilter("\"VideoFileHash\" IS NOT NULL");
+
+        // Sweep query for BulkLearningTranslationSweepJob: pending items per tenant, oldest first
+        builder.HasIndex(t => new { t.TenantId, t.BulkTranslationPendingSince })
+            .HasDatabaseName("ix_toolbox_talks_tenant_bulk_translation_pending")
+            .HasFilter("\"BulkTranslationPendingSince\" IS NOT NULL");
 
     }
 }

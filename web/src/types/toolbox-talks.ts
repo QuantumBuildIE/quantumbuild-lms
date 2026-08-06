@@ -1,3 +1,5 @@
+import type { TranslationWorkflowState } from './workflows';
+
 // ============================================
 // Enums
 // ============================================
@@ -61,6 +63,12 @@ export interface ToolboxTalkCompletionStats {
   pendingCount: number;
   inProgressCount: number;
   completionRate: number;
+}
+
+export interface ToolboxTalkValidationFailStats {
+  sectionFailCount: number;
+  failingLanguageCount: number;
+  hasValidationRuns: boolean;
 }
 
 export interface ToolboxTalkTranslation {
@@ -171,6 +179,7 @@ export interface ToolboxTalkListItem {
   statusDisplay: string;
   autoAssignToNewEmployees: boolean;
   completionStats: ToolboxTalkCompletionStats | null;
+  validationFailStats: ToolboxTalkValidationFailStats;
   createdAt: string;
   createdBy: string;
   createdByName: string | null;
@@ -514,6 +523,16 @@ export interface ToolboxTalkSettings {
   notifyOnValidationComplete: boolean;
   notifyOnFailure: boolean;
   notifyOnExternalReviewResponse: boolean;
+  // Learning-wizard toggle defaults
+  defaultVideoRightsConfirmed: boolean;
+  defaultUseQuestionPool: boolean;
+  defaultGenerateSlideshow: boolean;
+  defaultAutoAssign: boolean;
+  defaultPreserveSourceWording: boolean;
+  defaultShuffleQuestions: boolean;
+  defaultShuffleOptions: boolean;
+  defaultIncludeQuiz: boolean;
+  defaultAllowRetry: boolean;
 }
 
 export interface UpdateToolboxTalkNotificationSettingsRequest {
@@ -537,6 +556,16 @@ export interface UpdateToolboxTalkSettingsRequest {
   defaultGenerateCertificate?: boolean;
   defaultRefresherFrequency?: string;
   defaultIsActive?: boolean;
+  // Learning-wizard toggle defaults
+  defaultVideoRightsConfirmed?: boolean;
+  defaultUseQuestionPool?: boolean;
+  defaultGenerateSlideshow?: boolean;
+  defaultAutoAssign?: boolean;
+  defaultPreserveSourceWording?: boolean;
+  defaultShuffleQuestions?: boolean;
+  defaultShuffleOptions?: boolean;
+  defaultIncludeQuiz?: boolean;
+  defaultAllowRetry?: boolean;
 }
 
 // ============================================
@@ -650,6 +679,14 @@ export interface CreateToolboxTalkRequest {
 
 export interface UpdateToolboxTalkRequest extends CreateToolboxTalkRequest {
   id: string;
+}
+
+export interface ToggleToolboxTalkActiveRequest {
+  active: boolean;
+}
+
+export interface ToggleToolboxTalkActiveResponse {
+  active: boolean;
 }
 
 export interface CreateToolboxTalkScheduleRequest {
@@ -1115,4 +1152,65 @@ export interface SmartGenerateContentResult {
   // Background job info (if AI generation was needed)
   generationJobQueued: boolean;
   generationJobId?: string;
+}
+
+// ============================================
+// Send for Review
+// ============================================
+
+/** How a language's reviewer was resolved against TenantReviewerConfiguration. */
+export type ReviewerResolutionSource = 'LanguageSpecific' | 'Fallback' | 'None';
+
+export interface FailingSectionDto {
+  /** 0-indexed section position in the validation run. */
+  index: number;
+  /** TranslationValidationResult.FinalScore — the post-consensus score (0-100) that caused the Fail. */
+  score: number;
+  title: string | null;
+}
+
+export interface PreviewLanguageDto {
+  languageCode: string;
+  /** Sections with a Fail outcome in this language's most recent validation run, ordered by index. */
+  failingSections: FailingSectionDto[];
+  failingSectionCount: number;
+  resolvedReviewerEmail: string | null;
+  resolvedReviewerName: string | null;
+  resolutionSource: ReviewerResolutionSource;
+  /** True when this language's current workflow state permits InitiateExternalReview. */
+  workflowStateEligible: boolean;
+  /** This language's current workflow state, for surfacing state-specific guidance when ineligible. */
+  currentWorkflowState: TranslationWorkflowState;
+}
+
+export interface PreviewSendForReviewDto {
+  talkId: string;
+  languages: PreviewLanguageDto[];
+  /** True if any listed language is missing a resolved reviewer or is not in an eligible workflow state. */
+  blocked: boolean;
+}
+
+export interface BlockedLanguageDto {
+  languageCode: string;
+  reviewerMissing: boolean;
+  workflowStateIneligible: boolean;
+  /** The language's current workflow state, for surfacing state-specific guidance when workflowStateIneligible. */
+  currentWorkflowState: TranslationWorkflowState;
+}
+
+export interface SendForReviewLanguageResultDto {
+  languageCode: string;
+  success: boolean;
+  invitationId: string | null;
+  errorMessage: string | null;
+}
+
+export interface SendForReviewResultDto {
+  /** True only when not blocked and every language's invitation was initiated successfully. */
+  success: boolean;
+  /** True when the server-recomputed preview found a blocking issue; nothing was initiated. */
+  blocked: boolean;
+  blockedLanguages: BlockedLanguageDto[];
+  /** Per-language outcome of the InitiateExternalReview calls. Empty when blocked is true. */
+  languageResults: SendForReviewLanguageResultDto[];
 }

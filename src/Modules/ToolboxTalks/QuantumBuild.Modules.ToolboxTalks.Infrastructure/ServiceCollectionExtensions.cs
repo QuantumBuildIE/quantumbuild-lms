@@ -20,15 +20,23 @@ using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Translations;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.ArtefactScan;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.ContentCreation;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Frameworks;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Mapping;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.PreFlightScan;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Regulatory;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.SafetyTermRegistry;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Sectors;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Standards;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Reviewers;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Mapping;
+using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Regulatory;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Sectors;
+using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Standards;
+using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Reviewers;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Validation;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.ContentCreation;
+using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Frameworks;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Workflows;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Ingestion;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Workflows;
@@ -320,6 +328,10 @@ public static class ServiceCollectionExtensions
         // Register sector services (system-wide sector lookup + tenant-sector management)
         services.AddScoped<ISectorService, SectorService>();
         services.AddScoped<ITenantSectorService, TenantSectorService>();
+        services.AddScoped<ITenantStandardSubscriptionService, TenantStandardSubscriptionService>();
+
+        // Register tenant reviewer configuration service (per-language external reviewer config)
+        services.AddScoped<ITenantReviewerConfigurationService, TenantReviewerConfigurationService>();
 
         // Register content creation session services (Phase 7 — creation wizard pipeline)
         services.AddHttpClient<IContentParserService, ContentParserService>(client =>
@@ -330,6 +342,16 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<ILogger<ContentParserService>>()))
         .AddPolicyHandler((sp, _) => GetAnthropicBulkheadFromDI(sp));
         services.AddScoped<IContentCreationSessionService, ContentCreationSessionService>();
+
+        // Register applicable-frameworks service (Regulations via sector + Standards via subscription —
+        // shared by compliance display, browse, and mapping-attribution read paths)
+        services.AddScoped<IApplicableFrameworksService, ApplicableFrameworksService>();
+
+        // Register per-document structure map dispatch — wired into RequirementIngestionJob via
+        // constructor injection (see RegulatoryStructureMapProvider). DB-backed via
+        // IToolboxTalksDbContext, so this must be Scoped, not Singleton.
+        services.AddScoped<IRegulatoryStructureMapProvider, RegulatoryStructureMapProvider>();
+        services.AddScoped<IRegulatoryStructureMapVerificationService, RegulatoryStructureMapVerificationService>();
 
         // Register requirement ingestion service (AI-powered regulatory requirement extraction)
         services.AddScoped<IRequirementIngestionService, RequirementIngestionService>();

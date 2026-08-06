@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using QuantumBuild.Core.Infrastructure.Data;
+using QuantumBuild.Core.Infrastructure.Identity;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 using System.Net;
@@ -109,6 +110,34 @@ public class InitialiseToolboxTalkCommandHandlerTests : IntegrationTestBase
         var db = await GetTalkFromDbAsync(result.Id);
         db.Should().NotBeNull();
         db!.Sections.Should().BeNullOrEmpty();
+    }
+
+    // 1a — No ToolboxTalkSettings row for the tenant → IsActive still defaults true
+    // (InitialiseToolboxTalkCommandHandler's tenantSettings?.DefaultIsActive fallback is
+    // now ?? true, matching the legacy wizard and the entity/DB defaults).
+    // Tenant B is never seeded a ToolboxTalkSettings row (only the primary test tenant is —
+    // see TestTenantSeeder.SeedToolboxTalkSettingsAsync), so it's a genuine "no settings row"
+    // tenant without needing to mutate the shared seeded row (which ApplicationDbContext's
+    // soft-delete interceptor would turn into a soft-delete, not a real removal, breaking
+    // Respawner-based reset for every subsequent test in the run).
+    [Fact]
+    public async Task NoToolboxTalkSettingsRow_DefaultsIsActiveTrue()
+    {
+        var tenantBClient = Factory.CreateAuthenticatedClient(
+            TestTenantConstants.TenantB.Users.Admin.Id,
+            TestTenantConstants.TenantB.Users.Admin.Email,
+            TestTenantConstants.TenantB.TenantId,
+            new[] { "Admin" },
+            Permissions.GetAll());
+
+        var response = await tenantBClient.PostAsJsonAsync(
+            "/api/toolbox-talks/initialise", MinimalRequest(UniqueTitle("No Settings Row Talk")));
+        response.EnsureSuccessStatusCode();
+
+        var result = await response.Content.ReadFromJsonAsync<InitialisedTalkDto>()
+            ?? throw new InvalidOperationException("Initialise returned null");
+
+        result.IsActive.Should().BeTrue();
     }
 
     // 2 — Happy path (Pdf mode) → 201, SourceFileUrl persisted
@@ -398,12 +427,136 @@ public class InitialiseToolboxTalkCommandHandlerTests : IntegrationTestBase
 
     // ── local DTOs ────────────────────────────────────────────────────────────
 
+    // 13 — Chunk 3: isActiveOnPublish, generateCertificate, autoAssign default true;
+    // generateSlideshow stays false (deferred pending boss sign-off on AI-spend tradeoff).
+    [Fact]
+    public async Task NewTalk_DefaultsIsActiveGenerateCertificateAndAutoAssignTrue_SlideshowFalse()
+    {
+        var result = await InitialiseAsync(MinimalRequest(UniqueTitle("Default Toggles Talk")));
+
+        result.IsActive.Should().BeTrue();
+        result.GenerateCertificate.Should().BeTrue();
+        result.AutoAssignToNewEmployees.Should().BeTrue();
+        result.GenerateSlidesFromPdf.Should().BeFalse();
+    }
+
+    // 15 — Full toggle audit (this chunk): ShuffleQuestions and ShuffleOptions now
+    // default true on the new wizard (explicit handler assignment — entity default is
+    // false). UseQuestionPool stays false (flagged "genuinely questionable" — changes
+    // which questions each employee sees, a compliance-assessment-consistency concern).
+    // AllowRetry was already true pre-chunk (entity default) — asserted here for
+    // completeness of the "every wizard toggle" audit, not because it changed.
+    [Fact]
+    public async Task NewTalk_DefaultsShuffleQuestionsAndShuffleOptionsTrue_UseQuestionPoolFalse()
+    {
+        var result = await InitialiseAsync(MinimalRequest(UniqueTitle("Quiz Toggle Defaults Talk")));
+
+        var talk = await GetTalkFromDbAsync(result.Id);
+        talk.Should().NotBeNull();
+        talk!.ShuffleQuestions.Should().BeTrue();
+        talk.ShuffleOptions.Should().BeTrue();
+        talk.UseQuestionPool.Should().BeFalse();
+        talk.AllowRetry.Should().BeTrue();
+    }
+
+    // 16 — PreserveSourceWording now defaults true when the caller omits it entirely
+    // (Command-level default). MinimalRequest always sends it explicitly, so this test
+    // constructs a request without the field to exercise the Command's own default.
+    [Fact]
+    public async Task NewTalk_OmittingPreserveSourceWording_DefaultsTrue()
+    {
+        var request = new
+        {
+            Title = UniqueTitle("Preserve Wording Default Talk"),
+            InputMode = "Text",
+            SourceLanguageCode = "en",
+            SourceText = "Some content here.",
+            TargetLanguageCodes = new[] { "fr" },
+            AudienceRole = "Operator",
+            IncludeQuiz = true,
+            // PreserveSourceWording intentionally omitted
+        };
+
+        var result = await InitialiseAsync(request);
+
+        result.PreserveSourceWording.Should().BeTrue();
+    }
+
+    // 17 — Admin can still explicitly override ShuffleQuestions/ShuffleOptions/
+    // PreserveSourceWording to false at creation time (all three are read straight
+    // from the request/Command, not hardcoded) — confirms the new true defaults
+    // don't clobber an explicit false.
+    [Fact]
+    public async Task ShuffleAndPreserveWordingDefaultsTrue_CanBeExplicitlyOverriddenFalseAtCreation()
+    {
+        var request = new
+        {
+            Title = UniqueTitle("Explicit False Overrides Talk"),
+            InputMode = "Text",
+            SourceLanguageCode = "en",
+            SourceText = "Some content here.",
+            TargetLanguageCodes = new[] { "fr" },
+            AudienceRole = "Operator",
+            PreserveSourceWording = false,
+            IncludeQuiz = true,
+        };
+
+        var result = await InitialiseAsync(request);
+        result.PreserveSourceWording.Should().BeFalse();
+
+        // ShuffleQuestions/ShuffleOptions have no InitialiseToolboxTalkCommand fields —
+        // override happens post-creation via the Quiz step's UpdateToolboxTalkQuizSettings
+        // command, same pattern as test 14 for the Settings-step toggles.
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var talk = await db.Set<ToolboxTalk>()
+            .IgnoreQueryFilters()
+            .FirstAsync(t => t.Id == result.Id);
+        talk.ShuffleQuestions = false;
+        talk.ShuffleOptions = false;
+        await db.SaveChangesAsync();
+
+        var refetched = await GetTalkFromDbAsync(result.Id);
+        refetched.Should().NotBeNull();
+        refetched!.ShuffleQuestions.Should().BeFalse();
+        refetched.ShuffleOptions.Should().BeFalse();
+    }
+
+    // 14 — Admin can still explicitly override any of the new true defaults to false
+    // by editing settings after creation (Step 4 of the wizard) — verified at the
+    // entity level since InitialiseToolboxTalkCommand has no fields for these toggles.
+    [Fact]
+    public async Task AutoAssignDefaultTrue_CanBeExplicitlyToggledOffAfterCreation()
+    {
+        var result = await InitialiseAsync(MinimalRequest(UniqueTitle("Override Default Talk")));
+        result.AutoAssignToNewEmployees.Should().BeTrue();
+
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var talk = await db.Set<ToolboxTalk>()
+            .IgnoreQueryFilters()
+            .FirstAsync(t => t.Id == result.Id);
+        talk.AutoAssignToNewEmployees = false;
+        talk.GenerateCertificate = false;
+        talk.IsActive = false;
+        await db.SaveChangesAsync();
+
+        var refetched = await GetTalkFromDbAsync(result.Id);
+        refetched.Should().NotBeNull();
+        refetched!.AutoAssignToNewEmployees.Should().BeFalse();
+        refetched.GenerateCertificate.Should().BeFalse();
+        refetched.IsActive.Should().BeFalse();
+    }
+
     private record InitialisedTalkDto(
         Guid Id,
         string Title,
         [property: JsonConverter(typeof(JsonStringEnumConverter))]
         ToolboxTalkStatus Status,
         bool IsActive,
+        bool GenerateCertificate,
+        bool AutoAssignToNewEmployees,
+        bool GenerateSlidesFromPdf,
         int? LastEditedStep,
         string? SourceFileUrl,
         string? SourceFileName,

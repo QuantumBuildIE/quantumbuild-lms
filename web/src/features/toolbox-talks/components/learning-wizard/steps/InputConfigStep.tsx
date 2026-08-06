@@ -50,11 +50,13 @@ import { useAllCompanies } from '@/lib/api/admin/use-companies';
 import { useTenantSectors, useAvailableSectors } from '@/lib/api/admin/use-tenant-sectors';
 import { useTenantSettings } from '@/lib/api/admin/use-tenant-settings';
 import { useAvailableLanguages } from '@/lib/api/toolbox-talks/use-subtitle-processing';
+import { useToolboxTalkSettings } from '@/lib/api/toolbox-talks/use-toolbox-talks';
 import type { SectorDto, TenantSectorDto } from '@/types/admin';
 import { useInitialiseToolboxTalk } from '../hooks/useInitialiseToolboxTalk';
 import { useUploadSourceFile } from '../hooks/useUploadSourceFile';
 import { inputConfigSchema, type InputConfigValues } from '../schemas/inputConfigSchema';
 import { getStepUrl } from '../lib/urlState';
+import { DefaultInheritanceIndicator } from '../components/DefaultInheritanceIndicator';
 
 // ============================================
 // Constants
@@ -84,6 +86,16 @@ const DEFAULT_AUDIT_PURPOSES = [
   'Onboarding',
 ];
 
+// Derives a default title from an uploaded filename: strips the extension
+// (splitting on the LAST dot, so "foo.bar.pdf" -> "foo.bar"), leaves the rest
+// verbatim (no case/underscore/hyphen reformatting), and caps it at the
+// title field's 200-char limit.
+function deriveTitleFromFilename(fileName: string): string {
+  const lastDotIndex = fileName.lastIndexOf('.');
+  const withoutExtension = lastDotIndex > 0 ? fileName.slice(0, lastDotIndex) : fileName;
+  return withoutExtension.slice(0, 200);
+}
+
 // ============================================
 // Component
 // ============================================
@@ -93,6 +105,7 @@ export function InputConfigStep() {
   const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectedFileRef = useRef<File | null>(null);
+  const tenantDefaultsAppliedRef = useRef(false);
   const [isDragging, setIsDragging] = useState(false);
   const [auditPurposeMode, setAuditPurposeMode] = useState<'preset' | 'custom'>('preset');
   const [customAuditPurpose, setCustomAuditPurpose] = useState('');
@@ -101,6 +114,7 @@ export function InputConfigStep() {
   const { data: languages = [], isLoading: languagesLoading } = useLookupValues('Language');
   const { data: availableLanguages } = useAvailableLanguages();
   const { data: tenantSettings } = useTenantSettings();
+  const { data: toolboxTalkSettings } = useToolboxTalkSettings();
   const { data: companies = [], isLoading: companiesLoading } = useAllCompanies();
   const tenantId = user?.tenantId ?? '';
   const {
@@ -158,7 +172,7 @@ export function InputConfigStep() {
       passThreshold: defaultPassThreshold,
       includeQuiz: true,
       audienceRole: 'Operator',
-      preserveSourceWording: false,
+      preserveSourceWording: true,
       sectorKey: undefined,
       reviewerName: user ? `${user.firstName} ${user.lastName}`.trim() : '',
       reviewerOrg: '',
@@ -213,6 +227,43 @@ export function InputConfigStep() {
       }
     }
   }, [tenantSectors, tenantSectorsLoading, tenantSectorsError, form]);
+
+  // Auto-populate title from the uploaded filename — fires only when
+  // sourceFileName changes (i.e. an actual upload/selection event), and only
+  // when the title is still empty, so a typed or previously-derived title is
+  // never overwritten.
+  useEffect(() => {
+    if (!sourceFileName) return;
+    const currentTitle = form.getValues('title');
+    if (currentTitle && currentTitle.trim().length > 0) return;
+    const derivedTitle = deriveTitleFromFilename(sourceFileName);
+    if (derivedTitle) {
+      form.setValue('title', derivedTitle, { shouldDirty: false, shouldValidate: true });
+    }
+  }, [sourceFileName, form]);
+
+  // Pre-check toggles from tenant defaults once, on first load — only for fields the
+  // user has not already touched. This is a one-time convenience pre-fill, not
+  // bidirectional inheritance: once the admin changes a value, it stays changed on
+  // any remount / navigation return (tenantDefaultsAppliedRef never resets).
+  useEffect(() => {
+    if (!toolboxTalkSettings || tenantDefaultsAppliedRef.current) return;
+    tenantDefaultsAppliedRef.current = true;
+    const dirty = form.formState.dirtyFields;
+    if (!dirty.videoRightsConfirmed) {
+      form.setValue('videoRightsConfirmed', toolboxTalkSettings.defaultVideoRightsConfirmed, {
+        shouldDirty: false,
+      });
+    }
+    if (!dirty.includeQuiz) {
+      form.setValue('includeQuiz', toolboxTalkSettings.defaultIncludeQuiz, { shouldDirty: false });
+    }
+    if (!dirty.preserveSourceWording) {
+      form.setValue('preserveSourceWording', toolboxTalkSettings.defaultPreserveSourceWording, {
+        shouldDirty: false,
+      });
+    }
+  }, [toolboxTalkSettings, form]);
 
   // Reset file state when mode changes
   const handleModeChange = useCallback(
@@ -707,6 +758,12 @@ export function InputConfigStep() {
                         I confirm I have the rights to use this video for training purposes
                       </Label>
                       <FormMessage id="rights-error" role="alert" />
+                      {toolboxTalkSettings && (
+                        <DefaultInheritanceIndicator
+                          isOverridden={field.value !== toolboxTalkSettings.defaultVideoRightsConfirmed}
+                          onReset={() => field.onChange(toolboxTalkSettings.defaultVideoRightsConfirmed)}
+                        />
+                      )}
                     </div>
                   </FormItem>
                 )}
@@ -792,6 +849,12 @@ export function InputConfigStep() {
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Generate quiz questions for this content. When disabled, the Quiz step is skipped.
                   </p>
+                  {toolboxTalkSettings && (
+                    <DefaultInheritanceIndicator
+                      isOverridden={field.value !== toolboxTalkSettings.defaultIncludeQuiz}
+                      onReset={() => field.onChange(toolboxTalkSettings.defaultIncludeQuiz)}
+                    />
+                  )}
                 </div>
                 <FormControl>
                   <Switch
@@ -851,6 +914,12 @@ export function InputConfigStep() {
                     When on, the AI keeps your source text exactly as written instead of rewriting for clarity.
                     Useful for SOPs or approved policy text that must not be paraphrased.
                   </p>
+                  {toolboxTalkSettings && (
+                    <DefaultInheritanceIndicator
+                      isOverridden={field.value !== toolboxTalkSettings.defaultPreserveSourceWording}
+                      onReset={() => field.onChange(toolboxTalkSettings.defaultPreserveSourceWording)}
+                    />
+                  )}
                 </div>
                 <FormControl>
                   <Switch

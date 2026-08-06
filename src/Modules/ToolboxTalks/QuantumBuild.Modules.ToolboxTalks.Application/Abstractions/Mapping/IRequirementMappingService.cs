@@ -1,4 +1,5 @@
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs;
+using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Frameworks;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Mapping;
 
@@ -16,4 +17,11 @@ public interface IRequirementMappingService
     Task<ComplianceChecklistDto> GetComplianceChecklistAsync(string sectorKey, CancellationToken cancellationToken = default);
     Task<PendingMappingDto> AddManualMappingAsync(AddManualMappingRequest request, CancellationToken cancellationToken = default);
     Task<List<ContentOptionDto>> GetContentOptionsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Regulatory frameworks (Regulations via sector + Standards via subscription) currently
+    /// applicable to the current tenant, with approved requirement counts — powers the
+    /// compliance page's top-level summary.
+    /// </summary>
+    Task<List<ApplicableFrameworkDto>> GetApplicableFrameworksAsync(CancellationToken cancellationToken = default);
 }

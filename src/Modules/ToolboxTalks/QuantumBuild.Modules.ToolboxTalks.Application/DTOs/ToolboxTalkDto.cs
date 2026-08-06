@@ -119,6 +119,18 @@ public record ToolboxTalkCompletionStatsDto
 }
 
 /// <summary>
+/// Section-language validation failure counts for a toolbox talk, derived from the
+/// most recent TranslationValidationRun per language. HasValidationRuns distinguishes
+/// "never validated" from "validated with zero failures".
+/// </summary>
+public record ToolboxTalkValidationFailStatsDto
+{
+    public int SectionFailCount { get; init; }
+    public int FailingLanguageCount { get; init; }
+    public bool HasValidationRuns { get; init; }
+}
+
+/// <summary>
 /// DTO for a toolbox talk content translation
 /// </summary>
 public record ToolboxTalkTranslationDto

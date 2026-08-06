@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -13,10 +14,27 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { cn } from '@/lib/utils';
+import {
+  getWorkflowStateIneligibilityMessage,
+  isWorkflowStateEligibleForExternalReview,
+} from '../lib/workflowStateMessages';
+import type { ValidationOutcome } from '@/types/content-creation';
+import type { TranslationWorkflowState } from '@/types/workflows';
 
 interface SendExternalReviewDialogSection {
   title: string;
+  /** TranslationValidationResult.FinalScore for this section in the language's most recent validation run, if any. */
+  score?: number;
+  outcome?: ValidationOutcome;
 }
+
+const outcomeScoreClass: Record<ValidationOutcome, string> = {
+  Pass: 'text-green-700 dark:text-green-500',
+  Review: 'text-amber-700 dark:text-amber-500',
+  Fail: 'text-red-700 dark:text-red-500',
+};
 
 interface SendExternalReviewDialogProps {
   open: boolean;
@@ -26,6 +44,14 @@ interface SendExternalReviewDialogProps {
   flaggedWordCount: number;
   languageName: string;
   sections: SendExternalReviewDialogSection[];
+  /** This language's current workflow state. When ineligible, the send form is replaced with a blocked message. */
+  state: TranslationWorkflowState;
+  /**
+   * Set when a send attempt raced the workflow state changing between dialog-open and submit
+   * (409 response). Takes priority over `state` so the blocked view reflects what actually
+   * happened at send time, not just the state as of dialog-open.
+   */
+  raceState?: TranslationWorkflowState | null;
 }
 
 export function SendExternalReviewDialog({
@@ -36,9 +62,13 @@ export function SendExternalReviewDialog({
   flaggedWordCount,
   languageName,
   sections,
+  state,
+  raceState,
 }: SendExternalReviewDialogProps) {
   const [email, setEmail] = useState('');
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
+
+  const ineligibleState = raceState ?? (isWorkflowStateEligibleForExternalReview(state) ? null : state);
 
   useEffect(() => {
     if (open) {
@@ -67,6 +97,33 @@ export function SendExternalReviewDialog({
 
   const selectAll = () => setSelectedIndices(new Set(sections.map((_, index) => index)));
   const deselectAll = () => setSelectedIndices(new Set());
+
+  if (ineligibleState) {
+    const { title, suggestion } = getWorkflowStateIneligibilityMessage(ineligibleState);
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send for External Review</DialogTitle>
+            <DialogDescription>
+              <span className="font-medium text-foreground">{languageName}</span> cannot be sent for
+              external review right now.
+            </DialogDescription>
+          </DialogHeader>
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>{title}</AlertTitle>
+            <AlertDescription>{suggestion}</AlertDescription>
+          </Alert>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -137,9 +194,19 @@ export function SendExternalReviewDialog({
                     disabled={isLoading}
                   />
                   <span className="text-xs text-muted-foreground tabular-nums">{index + 1}.</span>
-                  <span className="truncate">
+                  <span className="flex-1 truncate">
                     {section.title || <span className="italic text-muted-foreground">Untitled section</span>}
                   </span>
+                  {section.score !== undefined && (
+                    <span
+                      className={cn(
+                        'shrink-0 tabular-nums text-xs font-semibold',
+                        section.outcome && outcomeScoreClass[section.outcome]
+                      )}
+                    >
+                      {section.score}
+                    </span>
+                  )}
                 </label>
               ))}
             </div>

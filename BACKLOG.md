@@ -2700,4 +2700,101 @@ straightforward.
 Blocked pending: the Radix Select a11y fix, OR a manual investigation
 of the zero-sector branch's DOM behavior during click interaction.
 
+---
+
+#### §37 — TenantLookupValue unfiltered unique index
+
+- **Priority:** P3
+- **Origin:** `[Engineering]` `[Session 2026-07-14]`
+- **Status:** Deferred
+
+TenantLookupValueConfiguration.cs:26-28 defines the unique index
+on (TenantId, CategoryId, Code) without a soft-delete filter. This
+means soft-deleted rows still block new inserts of the same code.
+
+App-level duplicate checks (LookupService.CreateTenantValueAsync,
+UpdateTenantValueAsync) currently rely on this unfiltered index to
+catch soft-deleted duplicates.
+
+The seeder was recently fixed to match this constraint. Long-term
+fix would be a filtered unique index matching the
+20260312191539_FilteredUniqueCodeIndex precedent for
+ToolboxTalks.Code, allowing a tenant to recreate a code they
+previously deleted. This requires updating CreateTenantValueAsync
+and UpdateTenantValueAsync's duplicate checks in lockstep.
+
+Also worth extending to other soft-deletable tables with
+unfiltered unique indexes if a broader survey identifies them.
+
+Same class of bug: LookupValue table (LookupValueConfiguration.cs:26-27)
+has the identical unfiltered index. No evidence of a live delete
+path today, but worth checking during the broader fix.
+
+---
+
+#### §38 — TestTenantSeeder operator user link gap
+
+- **Priority:** P3 (affects test coverage quality, not runtime)
+- **Origin:** `[Engineering]` `[Session 2026-07-16]`
+- **Status:** Open — deferred pre-demo
+
+TestTenantSeeder.cs never wires Employee.UserId for
+Employees.OperatorEmployee (acknowledging comment present in the
+seeder). Any handler resolving the current employee by UserId
+(MarkSectionReadCommandHandler, CompleteToolboxTalkCommandHandler,
+etc.) fails for the Operator test client with "No employee record
+found."
+
+Pre-existing operator tests use defensive early returns that
+silently skip assertions rather than exercising the flow. This
+means operator-facing completion, refresher, and quiz flows are
+less test-covered than the pass rate suggests.
+
+Fix: extend TestTenantSeeder to wire OperatorEmployee.UserId to
+a real operator user, then audit existing operator tests to
+convert defensive early returns into real assertions. The audit
+step may surface additional latent bugs, so scope for triage
+time when picking this up.
+
+---
+
+### 39 - WhatsApp Integration
+
+- **Priority:** P1 
+- **Origin:** `Client`
+- **Status:** Open
+
+We need to add whatsapp to the lesson delivery system 
+
+--- 
+
+### 40 - Regulatory Term Input and Edit
+
+- **Priority:** P1 
+- **Origin:** `Client`
+- **Status:** Open
+
+On the Regulatory Terms input and edit screens we currently only have 9 languages capable of having term translations. We need to change this to allow translation terms for all languages supported on the system
+
+---
+
+### 41 - AI discontinued check and rebalance
+
+- **Priority:** P1 
+- **Origin:** `Client`
+- **Status:** Open
+
+"Claude Model Discontinuation Check (7-Day Warning) — routine completed
+CRITICAL: claude-opus-4-1-20250805 discontinuing in 8 days (Aug 5). Migrate to claude-opus-4-8 immediately. Check console usage for all instances." - Anthropic issued a warning of discontinuation of one of it's models.  This will be an ongoing problem for the system as providers retire older models and release newer ones.  The system needs to keep up with these changes to ensure continuity of service.
+
+--- 
+
+### 42 - Ensure Regulatory can handle multiple files
+
+- **Priority:** P1 
+- **Origin:** `Client`
+- **Status:** Open
+
+There is a new legal regulatory requirement from the Irish Government in the homecare sector, which means there are now two regulatory documents that homecare providers must adhere to from HIQA and Legal. The system currently allows for a Regulatory document at the application level and Standards documents at the tenant level.  We need to ensure we can upload multiple Regulatory documents at the application level and multiple Standards documents at the tenant level, to cater for these new Regulatory changes.
+
 _End of BACKLOG.md._

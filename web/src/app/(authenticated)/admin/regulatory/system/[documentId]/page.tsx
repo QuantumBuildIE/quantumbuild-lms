@@ -1,18 +1,24 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useIsSuperUser } from "@/lib/auth/use-auth";
 import {
   useIngestionStatus,
-  useIngestionStatusPolling,
   useDraftRequirements,
   useStartIngestion,
   useApproveRequirement,
   useRejectRequirement,
   useUpdateDraftRequirement,
   useApproveAllDrafts,
+  useRegulatoryDocuments,
+  useCreateRegulatoryProfile,
+  isTerminalIngestionStatus,
+  INGESTION_BOOTSTRAP_CEILING_MS,
+  regulatoryKeys,
 } from "@/lib/api/admin/use-regulatory-ingestion";
+import { useAvailableSectors } from "@/lib/api/admin/use-tenant-sectors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +26,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { RegulatoryDocumentUpload } from "@/components/admin/regulatory-document-upload";
 import {
   Select,
   SelectContent,
@@ -49,6 +56,8 @@ import {
   FileText,
   CheckCircle2,
   XCircle,
+  AlertCircle,
+  Plus,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { DraftRequirementDto } from "@/types/regulatory";
@@ -64,6 +73,121 @@ function formatDate(dateStr: string | null): string {
   });
 }
 
+/**
+ * Lightweight client-side guidance for the Source URL field. Backend validation
+ * (RequirementIngestionService.StartIngestionAsync via SourceUrlValidator) is authoritative —
+ * this only gives the user an earlier, friendlier signal before they submit.
+ */
+function checkSourceUrlInput(
+  value: string
+): { level: "error" | "warning"; message: string } | null {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return { level: "error", message: "Source URL is required." };
+  }
+
+  if (/^[a-zA-Z]:[\\/]/.test(trimmed) || trimmed.startsWith("/")) {
+    return {
+      level: "error",
+      message:
+        "This looks like a local file path, not a web address. Enter a public https:// URL.",
+    };
+  }
+
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return {
+        level: "warning",
+        message: `Source URL should use http or https (found "${url.protocol}").`,
+      };
+    }
+  } catch {
+    return {
+      level: "warning",
+      message:
+        "This doesn't look like a valid URL. It should start with https://",
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Maps a backend LastIngestionErrorCode onto a friendlier explanation for the reviewer.
+ * Falls back to the raw error message when the code doesn't match a known category —
+ * matches the backend's own "don't force an unknown reason into a category" rule.
+ */
+function describeIngestionError(
+  errorCode: string | null,
+  errorMessage: string | null
+): string {
+  const detail = errorMessage ? ` (${errorMessage})` : "";
+  switch (errorCode) {
+    case "invalid_uri":
+      return `Source URL must be a valid HTTPS URL, e.g. https://example.com/document.pdf.${detail}`;
+    case "fetch_failed":
+      return `Could not fetch the document from the source URL — the host may be unreachable, the URL may be broken, or the request timed out.${detail}`;
+    case "parse_failed":
+      return `The document was fetched but its content could not be read — it may be a scanned PDF with no extractable text, a corrupted file, or an unsupported format.${detail}`;
+    default:
+      return errorMessage || "An unexpected error occurred during ingestion.";
+  }
+}
+
+function StatusDisplay({
+  status,
+  inProgress,
+  timedOut,
+}: {
+  status?: string;
+  inProgress: boolean;
+  timedOut: boolean;
+}) {
+  if (inProgress) {
+    return (
+      <span className="flex items-center gap-1 text-amber-600">
+        <Loader2 className="h-3 w-3 animate-spin" />
+        Ingesting...
+      </span>
+    );
+  }
+  if (timedOut) {
+    return (
+      <span className="flex items-center gap-1 text-amber-600">
+        <AlertCircle className="h-3 w-3" />
+        Status unknown
+      </span>
+    );
+  }
+  if (status === "Failed") {
+    return (
+      <span className="flex items-center gap-1 text-destructive">
+        <XCircle className="h-3 w-3" />
+        Failed
+      </span>
+    );
+  }
+  if (status === "Skipped") {
+    return (
+      <span className="flex items-center gap-1 text-amber-600">
+        <AlertCircle className="h-3 w-3" />
+        Skipped
+      </span>
+    );
+  }
+  if (status === "Success") {
+    return (
+      <span className="flex items-center gap-1 text-green-600">
+        <CheckCircle2 className="h-3 w-3" />
+        Success
+      </span>
+    );
+  }
+  return <>{status || "Idle"}</>;
+}
+
 function PriorityBadge({ priority }: { priority: string }) {
   const variants: Record<string, string> = {
     high: "border-red-500 text-red-600",
@@ -75,6 +199,24 @@ function PriorityBadge({ priority }: { priority: string }) {
       {priority}
     </Badge>
   );
+}
+
+/**
+ * Ticks every `intervalMs` while `enabled`, so a component can re-derive a wall-clock-relative
+ * value (e.g. "has N minutes elapsed since X") on each render without calling Date.now()
+ * directly in the render body — reading the clock only happens inside the interval callback,
+ * the sanctioned "subscribe to an external system" effect shape.
+ */
+function useNow(intervalMs: number, enabled: boolean): number {
+  const [now, setNow] = useState(0);
+  useEffect(() => {
+    if (!enabled) return;
+    const tick = () => setNow(Date.now());
+    tick();
+    const id = setInterval(tick, intervalMs);
+    return () => clearInterval(id);
+  }, [enabled, intervalMs]);
+  return now;
 }
 
 interface EditState {
@@ -403,6 +545,116 @@ function DraftRequirementCard({
   );
 }
 
+/**
+ * Attach-sector step, embedded inside the "Document Details & Ingestion" panel
+ * rather than a standalone card. Attaching a sector (creating a RegulatoryProfile)
+ * is a required precondition for ingestion — this section is framed as step 1,
+ * directly above the Ingest action, so the two can't be mistaken for unrelated panels.
+ */
+function SectorAttachSection({
+  documentId,
+  sectorKeys,
+}: {
+  documentId: string;
+  sectorKeys: string[];
+}) {
+  const { data: sectors, isLoading: loadingSectors } = useAvailableSectors();
+  const createProfile = useCreateRegulatoryProfile(documentId);
+  const [selectedSectorId, setSelectedSectorId] = useState("");
+
+  const availableSectors = (sectors ?? []).filter(
+    (sector) => !sectorKeys.includes(sector.key)
+  );
+
+  const handleAttachSector = useCallback(() => {
+    if (!selectedSectorId) return;
+    createProfile.mutate(
+      { sectorId: selectedSectorId },
+      {
+        onSuccess: () => {
+          toast.success("Sector attached");
+          setSelectedSectorId("");
+        },
+        onError: (error: unknown) => {
+          let message = "Failed to attach sector";
+          if (error && typeof error === "object" && "response" in error) {
+            const axiosError = error as {
+              response?: { data?: { message?: string } };
+            };
+            if (axiosError.response?.data?.message) {
+              message = axiosError.response.data.message;
+            }
+          } else if (error instanceof Error) {
+            message = error.message;
+          }
+          toast.error("Error", { description: message });
+        },
+      }
+    );
+  }, [createProfile, selectedSectorId]);
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="text-sm font-medium">Sector</label>
+        <p className="text-xs text-muted-foreground">
+          Attach at least one sector before ingesting.
+        </p>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {sectorKeys.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No sectors attached yet.
+          </p>
+        ) : (
+          sectorKeys.map((key) => (
+            <Badge key={key} variant="outline">
+              {key}
+            </Badge>
+          ))
+        )}
+      </div>
+
+      <div className="flex items-end gap-3">
+        <div className="flex-1">
+          {loadingSectors ? (
+            <Skeleton className="h-9 w-full" />
+          ) : (
+            <Select
+              value={selectedSectorId}
+              onValueChange={setSelectedSectorId}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a sector to attach" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableSectors.map((sector) => (
+                  <SelectItem key={sector.id} value={sector.id}>
+                    {sector.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+        <Button
+          variant="secondary"
+          onClick={handleAttachSector}
+          disabled={!selectedSectorId || createProfile.isPending}
+        >
+          {createProfile.isPending ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Plus className="mr-2 h-4 w-4" />
+          )}
+          Attach sector
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function RegulatoryDocumentDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -410,49 +662,102 @@ export default function RegulatoryDocumentDetailPage() {
   const isSuperUser = useIsSuperUser();
 
   const [sourceUrl, setSourceUrl] = useState("");
-  const [isPolling, setIsPolling] = useState(false);
+  const queryClient = useQueryClient();
+
+  const startIngestion = useStartIngestion(documentId);
+
+  // submittedAt is stamped the instant .mutate() is called (not on success), and is 0
+  // until the first call this session. Only trust it as "an attempt is in flight" while
+  // that mutate call hasn't come back as an error — a rejected start (e.g. no sector
+  // attached) must not make the page look like it's ingesting.
+  const attemptStartedAt = startIngestion.submittedAt;
+  const hasLiveAttempt =
+    attemptStartedAt > 0 && (startIngestion.isPending || startIngestion.isSuccess);
 
   const {
-    data: status,
+    data: currentStatus,
     isLoading: statusLoading,
-  } = useIngestionStatus(documentId, !isPolling);
+    dataUpdatedAt: statusUpdatedAt,
+  } = useIngestionStatus(documentId, attemptStartedAt);
 
-  const { data: pollingStatus } = useIngestionStatusPolling(
-    documentId,
-    isPolling
-  );
+  // A fetch is "for this attempt" once it lands after the attempt started — only then
+  // can a terminal status in it be trusted (otherwise it may just be the stale status
+  // from before Start/Retry was clicked).
+  const confirmedTerminalForAttempt =
+    hasLiveAttempt &&
+    statusUpdatedAt > attemptStartedAt &&
+    isTerminalIngestionStatus(currentStatus?.status);
 
-  const currentStatus = isPolling ? pollingStatus : status;
+  const backendConfirmedRunning = currentStatus?.status === "Ingesting";
+
+  // Only need the clock while a start/retry attempt is unconfirmed either way — ticks
+  // just often enough to flip the bootstrap-timeout display promptly once it elapses.
+  const awaitingConfirmation =
+    hasLiveAttempt && !backendConfirmedRunning && !confirmedTerminalForAttempt;
+  const now = useNow(5000, awaitingConfirmation);
+
+  const bootstrapping =
+    awaitingConfirmation && now - attemptStartedAt < INGESTION_BOOTSTRAP_CEILING_MS;
+
+  const bootstrapTimedOut =
+    awaitingConfirmation && now - attemptStartedAt >= INGESTION_BOOTSTRAP_CEILING_MS;
+
+  const isIngestionInProgress = backendConfirmedRunning || bootstrapping;
+
+  // Once a terminal status is confirmed for this attempt, the newly (or no-longer)
+  // created drafts and the document's draft/approved counts need to be pulled in
+  // without a manual refresh. This talks to an external system (the query cache), not
+  // React state, so it belongs in an effect — guarded by a ref so it fires once per
+  // completed attempt rather than on every render while terminal.
+  const notifiedTerminalRef = useRef(false);
+  useEffect(() => {
+    if (confirmedTerminalForAttempt) {
+      if (!notifiedTerminalRef.current) {
+        notifiedTerminalRef.current = true;
+        queryClient.invalidateQueries({
+          queryKey: regulatoryKeys.draftRequirements(documentId),
+        });
+        queryClient.invalidateQueries({ queryKey: regulatoryKeys.documents() });
+      }
+    } else {
+      notifiedTerminalRef.current = false;
+    }
+  }, [confirmedTerminalForAttempt, documentId, queryClient]);
 
   const { data: drafts, isLoading: draftsLoading } =
     useDraftRequirements(documentId);
 
-  const startIngestion = useStartIngestion(documentId);
+  const { data: documents } = useRegulatoryDocuments();
+  const currentDocument = documents?.find((d) => d.id === documentId);
+
   const approveAll = useApproveAllDrafts(documentId);
+
+  const attachedSectorKeys = currentDocument?.sectorKeys ?? [];
+  const hasAttachedSector = attachedSectorKeys.length > 0;
 
   const effectiveSourceUrl =
     sourceUrl || currentStatus?.sourceUrl || "";
 
+  const sourceUrlIssue = checkSourceUrlInput(effectiveSourceUrl);
+
   const handleStartIngestion = useCallback(() => {
+    // Defensive check even though the button is already gated below — belt and
+    // braces so a race or stale render can't fire a profile-less ingest.
+    if (!hasAttachedSector) {
+      toast.error("Attach a sector before ingesting");
+      return;
+    }
     startIngestion.mutate(
       { sourceUrl: effectiveSourceUrl },
       {
         onSuccess: () => {
           toast.success("Ingestion job queued");
-          setIsPolling(true);
-          setTimeout(() => setIsPolling(false), 120000);
         },
         onError: (err: Error) =>
           toast.error(err.message || "Failed to start ingestion"),
       }
     );
-  }, [startIngestion, effectiveSourceUrl]);
-
-  const hasDrafts =
-    currentStatus?.draftCount && currentStatus.draftCount > 0;
-  if (isPolling && hasDrafts) {
-    setIsPolling(false);
-  }
+  }, [startIngestion, effectiveSourceUrl, hasAttachedSector]);
 
   const handleApproveAll = useCallback(() => {
     approveAll.mutate(undefined, {
@@ -506,14 +811,11 @@ export default function RegulatoryDocumentDetailPage() {
                 <div>
                   <span className="text-muted-foreground">Status</span>
                   <p className="font-medium">
-                    {isPolling ? (
-                      <span className="flex items-center gap-1 text-amber-600">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        Processing...
-                      </span>
-                    ) : (
-                      currentStatus?.status || "—"
-                    )}
+                    <StatusDisplay
+                      status={currentStatus?.status}
+                      inProgress={isIngestionInProgress}
+                      timedOut={bootstrapTimedOut}
+                    />
                   </p>
                 </div>
                 <div>
@@ -538,36 +840,119 @@ export default function RegulatoryDocumentDetailPage() {
 
               <Separator />
 
-              <div className="flex items-end gap-3">
-                <div className="flex-1">
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm font-medium">Upload PDF</label>
+                  <div className="mt-1">
+                    <RegulatoryDocumentUpload
+                      documentId={documentId}
+                      currentSourceUrl={sourceUrl || currentStatus?.sourceUrl || null}
+                      onUploaded={(url) => setSourceUrl(url)}
+                    />
+                  </div>
+                </div>
+
+                <div>
                   <label className="text-sm font-medium">Source URL</label>
                   <Input
+                    type="url"
                     value={sourceUrl || currentStatus?.sourceUrl || ""}
                     onChange={(e) => setSourceUrl(e.target.value)}
                     placeholder="https://example.com/document.pdf"
+                    className={
+                      sourceUrlIssue?.level === "error"
+                        ? "border-destructive"
+                        : undefined
+                    }
                   />
+                  {sourceUrlIssue && (
+                    <p
+                      className={
+                        sourceUrlIssue.level === "error"
+                          ? "mt-1 text-xs text-destructive"
+                          : "mt-1 text-xs text-amber-600"
+                      }
+                    >
+                      {sourceUrlIssue.message}
+                    </p>
+                  )}
                 </div>
+              </div>
+
+              <Separator />
+
+              <SectorAttachSection
+                documentId={documentId}
+                sectorKeys={attachedSectorKeys}
+              />
+
+              <Separator />
+
+              <div className="flex items-center justify-end gap-3">
+                {!hasAttachedSector && (
+                  <p className="text-xs text-muted-foreground">
+                    Attach a sector before ingesting
+                  </p>
+                )}
                 <Button
                   onClick={handleStartIngestion}
                   disabled={
                     startIngestion.isPending ||
-                    isPolling ||
-                    !effectiveSourceUrl.trim()
+                    isIngestionInProgress ||
+                    sourceUrlIssue?.level === "error" ||
+                    !hasAttachedSector
                   }
                 >
-                  {startIngestion.isPending || isPolling ? (
+                  {startIngestion.isPending || isIngestionInProgress ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      {isPolling ? "Processing..." : "Starting..."}
+                      {isIngestionInProgress ? "Ingesting..." : "Starting..."}
                     </>
                   ) : (
                     <>
                       <FileText className="mr-2 h-4 w-4" />
-                      Ingest Requirements
+                      {currentStatus?.status === "Failed"
+                        ? "Retry Ingestion"
+                        : "Ingest Requirements"}
                     </>
                   )}
                 </Button>
               </div>
+
+              {!isIngestionInProgress && bootstrapTimedOut && (
+                <div className="rounded-md border border-amber-500/50 bg-amber-50 p-3 text-sm text-amber-800">
+                  <p className="font-medium">Ingestion status unknown</p>
+                  <p>
+                    The job was queued but hasn&apos;t reported back yet. It may
+                    still be running — refresh this page in a few minutes to
+                    check its status.
+                  </p>
+                </div>
+              )}
+
+              {!isIngestionInProgress && currentStatus?.status === "Failed" && (
+                <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                  <p className="font-medium">Ingestion failed</p>
+                  <p>
+                    {describeIngestionError(
+                      currentStatus.lastIngestionErrorCode,
+                      currentStatus.lastIngestionErrorMessage
+                    )}
+                  </p>
+                </div>
+              )}
+
+              {!isIngestionInProgress && currentStatus?.status === "Skipped" && (
+                <div className="rounded-md border border-amber-500/50 bg-amber-50 p-3 text-sm text-amber-800">
+                  <p className="font-medium">Ingestion skipped</p>
+                  <p>
+                    {describeIngestionError(
+                      currentStatus.lastIngestionErrorCode,
+                      currentStatus.lastIngestionErrorMessage
+                    )}
+                  </p>
+                </div>
+              )}
             </>
           )}
         </CardContent>

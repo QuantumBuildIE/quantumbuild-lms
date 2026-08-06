@@ -11,10 +11,14 @@ namespace QuantumBuild.Core.Infrastructure.Services;
 public class CurrentUserService : ICurrentUserService
 {
     private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly IJobTenantContextAccessor _jobTenantContextAccessor;
 
-    public CurrentUserService(IHttpContextAccessor httpContextAccessor)
+    public CurrentUserService(
+        IHttpContextAccessor httpContextAccessor,
+        IJobTenantContextAccessor jobTenantContextAccessor)
     {
         _httpContextAccessor = httpContextAccessor;
+        _jobTenantContextAccessor = jobTenantContextAccessor;
     }
 
     /// <summary>
@@ -117,11 +121,17 @@ public class CurrentUserService : ICurrentUserService
     /// Current user's tenant ID.
     /// For SuperUser: reads X-Tenant-Id header, returns Guid.Empty if absent (bypasses tenant filter).
     /// For regular users: reads from JWT tenant_id claim.
+    /// Hangfire jobs have no HttpContext, so a job that has set an explicit tenant on this
+    /// scope's <see cref="IJobTenantContextAccessor"/> takes precedence over the HTTP-based
+    /// read below (which would otherwise always resolve to Guid.Empty in that context).
     /// </summary>
     public Guid TenantId
     {
         get
         {
+            if (_jobTenantContextAccessor.TenantId is { } jobTenantId)
+                return jobTenantId;
+
             if (IsSuperUser)
             {
                 var headerValue = _httpContextAccessor.HttpContext?.Request.Headers["X-Tenant-Id"].FirstOrDefault();

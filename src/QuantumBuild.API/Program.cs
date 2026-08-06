@@ -104,6 +104,7 @@ builder.Services.AddHttpClient("ClaudeApi", client =>
 
 // Register Infrastructure services
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+builder.Services.AddScoped<IJobTenantContextAccessor, JobTenantContextAccessor>();
 builder.Services.AddScoped<ITenantRepository, TenantRepository>();
 builder.Services.AddScoped<ISystemAuditLogger, SystemAuditLogger>();
 
@@ -147,14 +148,17 @@ builder.Services.AddScoped<UpdateOverdueToolboxTalksJob>();
 builder.Services.AddScoped<ContentGenerationJob>();
 builder.Services.AddScoped<TranslationValidationJob>();
 builder.Services.AddScoped<DailyTranslationScanJob>();
+builder.Services.AddScoped<BulkLearningTranslationSweepJob>();
 builder.Services.AddScoped<ExpiredSessionCleanupJob>();
 builder.Services.AddScoped<LessonParseJob>();
 builder.Services.AddScoped<VideoTranscriptionJob>();
 builder.Services.AddScoped<ContentCreationParseJob>();
 builder.Services.AddScoped<RequirementIngestionJob>();
+builder.Services.AddScoped<StaleIngestionSweepJob>();
 builder.Services.AddScoped<AggregateAiUsageJob>();
 builder.Services.AddScoped<IGenerateEmployeePinsJob, GenerateEmployeePinsJob>();
 builder.Services.AddScoped<IBulkEmployeeImportJob, BulkEmployeeImportJob>();
+builder.Services.AddScoped<IBulkSopImportJob, BulkSopImportJob>();
 
 // Add Hangfire with PostgreSQL storage
 builder.Services.AddHangfire(config => config
@@ -475,10 +479,20 @@ using (var scope = app.Services.CreateScope())
         job => job.ExecuteAsync(CancellationToken.None),
         Cron.Daily(2, 0)); // 2am UTC daily
 
+    recurringJobManager.AddOrUpdate<BulkLearningTranslationSweepJob>(
+        "bulk-learning-translation-sweep",
+        job => job.ExecuteAsync(CancellationToken.None),
+        Cron.Daily(1, 0)); // 1am UTC daily — off-peak, ahead of the 2am/3am/4am sweep block
+
     recurringJobManager.AddOrUpdate<ExpiredSessionCleanupJob>(
         "expired-session-cleanup",
         job => job.ExecuteAsync(CancellationToken.None),
         Cron.Daily(3, 0)); // 3am UTC daily
+
+    recurringJobManager.AddOrUpdate<StaleIngestionSweepJob>(
+        "stale-ingestion-sweep",
+        job => job.ExecuteAsync(CancellationToken.None),
+        Cron.Daily(4, 0)); // 4am UTC daily
 
     recurringJobManager.AddOrUpdate<AggregateAiUsageJob>(
         "aggregate-ai-usage",
@@ -505,6 +519,7 @@ static async Task SeedToolboxTalksDataAsync(IServiceProvider serviceProvider)
         await SectorSeedData.SeedAsync(context, logger);
         await RegulatoryProfileSeedData.SeedAsync(context, logger);
         await RegulatoryRequirementSeedData.SeedAsync(context, logger);
+        await RegulatoryStructureMapSeedData.SeedAsync(context, logger);
 
         // Ensure the active pipeline version record exists on first startup
         var pipelineVersionService = services.GetRequiredService<IPipelineVersionService>();

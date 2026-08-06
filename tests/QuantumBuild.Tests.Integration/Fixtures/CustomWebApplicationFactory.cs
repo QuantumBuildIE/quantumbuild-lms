@@ -76,6 +76,11 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
     public FakeEmailService FakeEmailService { get; } = new();
 
     /// <summary>
+    /// Fake IToolboxTalkEmailService that captures completion/certificate emails for assertion in tests.
+    /// </summary>
+    public FakeToolboxTalkEmailService FakeToolboxTalkEmailService { get; } = new();
+
+    /// <summary>
     /// Fake subtitle services for testing subtitle processing without external APIs.
     /// </summary>
     public FakeTranscriptionService FakeTranscriptionService { get; } = new();
@@ -91,6 +96,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
     public FakeContentParserService FakeContentParserService { get; } = new();
     public FakePdfExtractionService FakePdfExtractionService { get; } = new();
     public FakeDocxExtractionService FakeDocxExtractionService { get; } = new();
+    public FakeAiQuizGenerationService FakeAiQuizGenerationService { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -205,6 +211,11 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
             services.RemoveAll<IEmailService>();
             services.AddSingleton<IEmailService>(FakeEmailService);
 
+            // Replace the real IToolboxTalkEmailService so tests can assert completion/certificate
+            // emails without actually calling MailerSend or requiring SMTP configuration.
+            services.RemoveAll<QuantumBuild.Modules.ToolboxTalks.Application.Services.IToolboxTalkEmailService>();
+            services.AddSingleton<QuantumBuild.Modules.ToolboxTalks.Application.Services.IToolboxTalkEmailService>(FakeToolboxTalkEmailService);
+
             // Register fake subtitle processing services to avoid external API calls
             services.RemoveAll<ITranscriptionService>();
             services.RemoveAll<ITranslationService>();
@@ -229,6 +240,8 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
             services.AddSingleton<IPdfExtractionService>(FakePdfExtractionService);
             services.RemoveAll<IDocxExtractionService>();
             services.AddSingleton<IDocxExtractionService>(FakeDocxExtractionService);
+            services.RemoveAll<QuantumBuild.Modules.ToolboxTalks.Application.Services.IAiQuizGenerationService>();
+            services.AddSingleton<QuantumBuild.Modules.ToolboxTalks.Application.Services.IAiQuizGenerationService>(FakeAiQuizGenerationService);
 
             // Replace real translation validation service to avoid external API calls
             // (Claude Haiku, DeepL, Gemini). The fake returns deterministic Pass results

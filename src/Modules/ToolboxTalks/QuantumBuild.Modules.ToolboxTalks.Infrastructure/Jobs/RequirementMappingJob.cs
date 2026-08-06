@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Frameworks;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
@@ -34,6 +35,7 @@ public class RequirementMappingJob
     private readonly HttpClient _httpClient;
     private readonly SubtitleProcessingSettings _settings;
     private readonly IAiUsageLogger _aiUsageLogger;
+    private readonly IApplicableFrameworksService _applicableFrameworksService;
     private readonly ILogger<RequirementMappingJob> _logger;
 
     public RequirementMappingJob(
@@ -41,6 +43,7 @@ public class RequirementMappingJob
         HttpClient httpClient,
         IOptions<SubtitleProcessingSettings> settings,
         IAiUsageLogger aiUsageLogger,
+        IApplicableFrameworksService applicableFrameworksService,
         ILogger<RequirementMappingJob> logger,
         IOptions<AIProviderOptions> aiProviders)
     {
@@ -48,6 +51,7 @@ public class RequirementMappingJob
         _httpClient = httpClient;
         _settings = settings.Value;
         _aiUsageLogger = aiUsageLogger;
+        _applicableFrameworksService = applicableFrameworksService;
         _logger = logger;
         _sonnetModel = aiProviders.Value.Anthropic.Models.Sonnet;
     }
@@ -170,31 +174,30 @@ public class RequirementMappingJob
     private async Task<List<RegulatoryRequirement>> LoadApprovedRequirementsAsync(
         Guid tenantId, CancellationToken cancellationToken)
     {
-        // Load tenant's sector keys
-        var sectorKeys = await _dbContext.TenantSectors
-            .IgnoreQueryFilters()
-            .Where(ts => ts.TenantId == tenantId && !ts.IsDeleted)
-            .Include(ts => ts.Sector)
-            .Select(ts => ts.Sector.Key)
-            .ToListAsync(cancellationToken);
+        // Raw entitlement sets — tenant's assigned sector keys (Regulation entitlement) and
+        // subscribed Standard body IDs (Standard entitlement), same primitive compliance
+        // display and translation instructions already consume.
+        var entitlements = await _applicableFrameworksService.GetTenantEntitlementsAsync(tenantId, cancellationToken);
+        var sectorKeys = entitlements.SectorKeys;
+        var subscribedStandardBodyIds = entitlements.SubscribedStandardBodyIds;
 
-        if (sectorKeys.Count == 0) return [];
+        if (sectorKeys.Count == 0 && subscribedStandardBodyIds.Count == 0) return [];
 
-        // Load profile IDs matching tenant's sectors
-        var profileIds = await _dbContext.RegulatoryProfiles
-            .Where(p => sectorKeys.Contains(p.SectorKey) && p.IsActive)
-            .Select(p => p.Id)
-            .ToListAsync(cancellationToken);
-
-        if (profileIds.Count == 0) return [];
-
-        // Load approved, active requirements for those profiles
+        // Load approved, active requirements the tenant is entitled to: Regulation-kind
+        // requirements gated by sector assignment, Standard-kind requirements gated by
+        // subscription — matches ApplicableFrameworksService/GetComplianceChecklistAsync.
         return await _dbContext.RegulatoryRequirements
             .IgnoreQueryFilters()
-            .Where(r => profileIds.Contains(r.RegulatoryProfileId)
-                        && r.IngestionStatus == RequirementIngestionStatus.Approved
+            .Where(r => !r.IsDeleted
                         && r.IsActive
-                        && !r.IsDeleted)
+                        && r.IngestionStatus == RequirementIngestionStatus.Approved
+                        && r.RegulatoryProfile.IsActive
+                        && (
+                            (r.RegulatoryProfile.RegulatoryDocument.RegulatoryBody.Kind == RegulatoryBodyKind.Regulation
+                                && sectorKeys.Contains(r.RegulatoryProfile.SectorKey))
+                            || (r.RegulatoryProfile.RegulatoryDocument.RegulatoryBody.Kind == RegulatoryBodyKind.Standard
+                                && subscribedStandardBodyIds.Contains(r.RegulatoryProfile.RegulatoryDocument.RegulatoryBodyId))
+                        ))
             .ToListAsync(cancellationToken);
     }
 

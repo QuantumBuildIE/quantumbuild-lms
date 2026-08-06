@@ -101,6 +101,12 @@ public class ToolboxTalkCertificate : TenantEntity
     /// </summary>
     public string? SignatureDataUrl { get; set; }
 
+    /// <summary>
+    /// Whether sending the completion confirmation email for this certificate failed.
+    /// Used for diagnostic visibility — the certificate itself was generated successfully.
+    /// </summary>
+    public bool CertificateEmailFailed { get; set; } = false;
+
     // Navigation properties
 
     /// <summary>

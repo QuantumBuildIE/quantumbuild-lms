@@ -34,7 +34,7 @@ export function Providers({ children }: ProvidersProps) {
       <AuthProvider>
         <TenantQueryInvalidator />
         {children}
-        <Toaster position="bottom-right" richColors />
+        <Toaster position="top-right" richColors />
       </AuthProvider>
     </QueryClientProvider>
   );

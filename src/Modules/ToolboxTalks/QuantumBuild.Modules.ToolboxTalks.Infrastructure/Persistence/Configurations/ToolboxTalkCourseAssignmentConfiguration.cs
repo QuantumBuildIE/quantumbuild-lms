@@ -56,6 +56,10 @@ public class ToolboxTalkCourseAssignmentConfiguration : IEntityTypeConfiguration
             .IsRequired()
             .HasDefaultValue(false);
 
+        builder.Property(x => x.CertificateGenerationFailed)
+            .IsRequired()
+            .HasDefaultValue(false);
+
         builder.Property(x => x.TenantId)
             .IsRequired();
 

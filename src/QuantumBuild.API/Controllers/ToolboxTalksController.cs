@@ -18,6 +18,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Commands.StartTalkTranslatio
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.AddTargetLanguage;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.SmartGenerateContent;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateLastEditedStep;
+using QuantumBuild.Modules.ToolboxTalks.Application.Commands.ToggleToolboxTalkActive;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalk;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.GenerateToolboxTalkQuiz;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalkQuestions;
@@ -36,12 +37,15 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Queries.GetToolboxTalkSlides
 using QuantumBuild.Modules.ToolboxTalks.Application.Queries.GetToolboxTalks;
 using QuantumBuild.Modules.ToolboxTalks.Application.Queries.GetToolboxTalkSettings;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services;
+using QuantumBuild.Modules.ToolboxTalks.Application.Services.Scorm;
 using QuantumBuild.Modules.ToolboxTalks.Application.Features.Certificates.DTOs;
 using QuantumBuild.Modules.ToolboxTalks.Application.Features.Certificates.Queries;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Storage;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Sectors;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Workflows;
+using QuantumBuild.Modules.ToolboxTalks.Application.Commands.SendForReview;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Workflows;
+using QuantumBuild.Modules.ToolboxTalks.Application.Queries.PreviewSendForReview;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 using System.ComponentModel.DataAnnotations;
@@ -70,6 +74,7 @@ public class ToolboxTalksController : ControllerBase
     private readonly ISupervisorAssignmentService _supervisorAssignmentService;
     private readonly ITenantSectorService _tenantSectorService;
     private readonly ITranslationWorkflowService _workflowService;
+    private readonly IScormPackageService _scormPackageService;
     private readonly UserManager<User> _userManager;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<ToolboxTalksController> _logger;
@@ -86,6 +91,7 @@ public class ToolboxTalksController : ControllerBase
         ISupervisorAssignmentService supervisorAssignmentService,
         ITenantSectorService tenantSectorService,
         ITranslationWorkflowService workflowService,
+        IScormPackageService scormPackageService,
         UserManager<User> userManager,
         IHttpClientFactory httpClientFactory,
         ILogger<ToolboxTalksController> logger)
@@ -101,6 +107,7 @@ public class ToolboxTalksController : ControllerBase
         _supervisorAssignmentService = supervisorAssignmentService;
         _tenantSectorService = tenantSectorService;
         _workflowService = workflowService;
+        _scormPackageService = scormPackageService;
         _userManager = userManager;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
@@ -811,6 +818,37 @@ public class ToolboxTalksController : ControllerBase
     }
 
     /// <summary>
+    /// Activate or deactivate a toolbox talk. Narrow single-field update — does not touch
+    /// sections, questions, or trigger translation-stalening side effects.
+    /// </summary>
+    [HttpPatch("{id:guid}/active")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(typeof(ToggleToolboxTalkActiveResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ToggleActive(Guid id, [FromBody] ToggleToolboxTalkActiveRequest request)
+    {
+        try
+        {
+            var active = await _mediator.Send(new ToggleToolboxTalkActiveCommand
+            {
+                TenantId = _currentUserService.TenantId,
+                TalkId = id,
+                Active = request.Active
+            });
+            return Ok(new ToggleToolboxTalkActiveResponse { Active = active });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error toggling active state for toolbox talk {ToolboxTalkId}", id);
+            return StatusCode(500, new { message = "Error updating active state" });
+        }
+    }
+
+    /// <summary>
     /// Get toolbox talks dashboard with KPIs and statistics
     /// </summary>
     /// <returns>Dashboard data with completion rates and overdue counts</returns>
@@ -883,7 +921,16 @@ public class ToolboxTalksController : ControllerBase
                 DefaultAutoAssignDueDays: dto.DefaultAutoAssignDueDays,
                 DefaultGenerateCertificate: dto.DefaultGenerateCertificate,
                 DefaultRefresherFrequency: dto.DefaultRefresherFrequency,
-                DefaultIsActive: dto.DefaultIsActive
+                DefaultIsActive: dto.DefaultIsActive,
+                DefaultVideoRightsConfirmed: dto.DefaultVideoRightsConfirmed,
+                DefaultUseQuestionPool: dto.DefaultUseQuestionPool,
+                DefaultGenerateSlideshow: dto.DefaultGenerateSlideshow,
+                DefaultAutoAssign: dto.DefaultAutoAssign,
+                DefaultPreserveSourceWording: dto.DefaultPreserveSourceWording,
+                DefaultShuffleQuestions: dto.DefaultShuffleQuestions,
+                DefaultShuffleOptions: dto.DefaultShuffleOptions,
+                DefaultIncludeQuiz: dto.DefaultIncludeQuiz,
+                DefaultAllowRetry: dto.DefaultAllowRetry
             );
 
             var result = await _mediator.Send(command);
@@ -1922,9 +1969,17 @@ public class ToolboxTalksController : ControllerBase
                 id, languageCode, request.ReviewerEmail, request.EditableSectionIndices, ct: ct);
             if (!result.Success)
             {
+                if (result.ErrorCode == FailureCode.WorkflowInvalidState)
+                {
+                    // Fetch the current state for the response body — the Result envelope only
+                    // carries the human-readable message, and the frontend needs a structured
+                    // field to map to state-specific guidance rather than parsing prose.
+                    var currentState = await _workflowService.GetState(id, languageCode, ct: ct);
+                    return Conflict(new { error = result.Errors.FirstOrDefault(), currentState = currentState.State });
+                }
+
                 return result.ErrorCode switch
                 {
-                    FailureCode.WorkflowInvalidState => Conflict(new { error = result.Errors.FirstOrDefault() }),
                     FailureCode.WorkflowInitiationInvalid => BadRequest(new { error = result.Errors.FirstOrDefault() }),
                     _ => BadRequest(new { error = result.Errors.FirstOrDefault() })
                 };
@@ -1936,6 +1991,93 @@ public class ToolboxTalksController : ControllerBase
         {
             _logger.LogError(ex, "Error initiating external review for toolbox talk {ToolboxTalkId}, language {LanguageCode}", id, languageCode);
             return StatusCode(500, new { error = "Error initiating external review" });
+        }
+    }
+
+    /// <summary>
+    /// Previews what "Send for Review" would do: per language with failing sections in its most
+    /// recent validation run, the resolved reviewer and workflow-state eligibility. Read-only —
+    /// initiates nothing.
+    /// </summary>
+    /// <param name="id">Toolbox talk ID</param>
+    /// <param name="ct">Cancellation token</param>
+    [HttpGet("{id:guid}/send-for-review/preview")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> PreviewSendForReview(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            var query = new GetToolboxTalkByIdQuery
+            {
+                TenantId = _currentUserService.TenantId,
+                Id = id
+            };
+
+            var toolboxTalk = await _mediator.Send(query, ct);
+            if (toolboxTalk == null)
+                return NotFound(new { error = "Learning not found" });
+
+            var result = await _mediator.Send(
+                new PreviewSendForReviewQuery { TalkId = id, TenantId = _currentUserService.TenantId }, ct);
+
+            if (!result.Success)
+                return BadRequest(new { error = result.Errors.FirstOrDefault() });
+
+            return Ok(result.Data);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error previewing send-for-review for toolbox talk {ToolboxTalkId}", id);
+            return StatusCode(500, new { error = "Error previewing send for review" });
+        }
+    }
+
+    /// <summary>
+    /// Sends a talk's failing translation sections for external review — one invitation per
+    /// language with Fail-outcome sections. Refuses atomically (nothing initiated) if any
+    /// affected language is blocked (no resolved reviewer, or an ineligible workflow state).
+    /// </summary>
+    /// <param name="id">Toolbox talk ID</param>
+    /// <param name="ct">Cancellation token</param>
+    [HttpPost("{id:guid}/send-for-review")]
+    [Authorize(Policy = "Learnings.Manage")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> SendForReview(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            var query = new GetToolboxTalkByIdQuery
+            {
+                TenantId = _currentUserService.TenantId,
+                Id = id
+            };
+
+            var toolboxTalk = await _mediator.Send(query, ct);
+            if (toolboxTalk == null)
+                return NotFound(new { error = "Learning not found" });
+
+            var result = await _mediator.Send(
+                new SendForReviewCommand { TalkId = id, TenantId = _currentUserService.TenantId }, ct);
+
+            if (!result.Success)
+            {
+                return result.ErrorCode switch
+                {
+                    FailureCode.WorkflowInvalidState => Conflict(result.Data),
+                    _ => BadRequest(new { error = result.Errors.FirstOrDefault() })
+                };
+            }
+
+            return Ok(result.Data);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error sending for review for toolbox talk {ToolboxTalkId}", id);
+            return StatusCode(500, new { error = "Error sending for review" });
         }
     }
 
@@ -2388,6 +2530,7 @@ public class ToolboxTalksController : ControllerBase
         Guid talkId,
         Guid completionId,
         [FromServices] ICertificateGenerationService certificateService,
+        [FromServices] QuantumBuild.Modules.ToolboxTalks.Application.Services.IToolboxTalkEmailService emailService,
         [FromServices] QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces.IToolboxTalksDbContext dbContext)
     {
         try
@@ -2395,6 +2538,8 @@ public class ToolboxTalksController : ControllerBase
             var completion = await dbContext.ScheduledTalkCompletions
                 .Include(c => c.ScheduledTalk)
                     .ThenInclude(st => st.ToolboxTalk)
+                .Include(c => c.ScheduledTalk)
+                    .ThenInclude(st => st.Employee)
                 .FirstOrDefaultAsync(c => c.Id == completionId
                     && c.ScheduledTalk.ToolboxTalkId == talkId
                     && c.ScheduledTalk.TenantId == _currentUserService.TenantId);
@@ -2414,6 +2559,22 @@ public class ToolboxTalksController : ControllerBase
             completion.CertificateGenerationFailed = false;
             await dbContext.SaveChangesAsync(HttpContext.RequestAborted);
 
+            // Send completion confirmation email (includes certificate download link) —
+            // only fires for a newly-created certificate, never blocks the regenerate response
+            try
+            {
+                await emailService.SendCompletionConfirmationEmailAsync(completion, completion.ScheduledTalk.Employee, HttpContext.RequestAborted);
+            }
+            catch (Exception emailEx)
+            {
+                _logger.LogError(emailEx,
+                    "Failed to send completion confirmation email after regenerating certificate for completion {CompletionId}, Certificate {CertificateId}",
+                    completionId, certificate.Id);
+
+                certificate.CertificateEmailFailed = true;
+                await dbContext.SaveChangesAsync(HttpContext.RequestAborted);
+            }
+
             return Ok(new { certificateUrl = certificate.PdfStoragePath });
         }
         catch (Exception ex)
@@ -2421,6 +2582,48 @@ public class ToolboxTalksController : ControllerBase
             _logger.LogError(ex, "Failed to regenerate certificate for completion {CompletionId}", completionId);
             return UnprocessableEntity(new { message = $"Certificate generation failed: {ex.Message}" });
         }
+    }
+
+    #endregion
+
+    #region SCORM Export
+
+    /// <summary>
+    /// Generates and downloads a minimal SCORM 1.2 package for this toolbox talk (Chunk 1 —
+    /// proof of concept: one section, English only, no quiz/video, completion-only JS bridge).
+    /// </summary>
+    /// <param name="id">Toolbox talk ID</param>
+    [HttpPost("{id:guid}/scorm-export")]
+    [Authorize(Policy = "Learnings.Admin")]
+    [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ExportScormPackage(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            var result = await _scormPackageService.GenerateMinimalPackageAsync(
+                id, _currentUserService.TenantId, "en", ct);
+
+            if (result == null)
+            {
+                return NotFound(new { message = "Toolbox talk not found" });
+            }
+
+            var fileName = $"{ToSafeFileNameSegment(result.TalkTitle)}-scorm.zip";
+            return File(result.ZipBytes, "application/zip", fileName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating SCORM package for toolbox talk {ToolboxTalkId}", id);
+            return StatusCode(500, new { message = "Error generating SCORM package" });
+        }
+    }
+
+    private static string ToSafeFileNameSegment(string value)
+    {
+        var invalidChars = Path.GetInvalidFileNameChars();
+        var sanitized = new string(value.Select(c => invalidChars.Contains(c) ? '-' : c).ToArray()).Trim();
+        return string.IsNullOrWhiteSpace(sanitized) ? "toolbox-talk" : sanitized;
     }
 
     #endregion
@@ -2455,6 +2658,17 @@ public record UpdateToolboxTalkSettingsDto
     public bool DefaultGenerateCertificate { get; init; } = true;
     public string DefaultRefresherFrequency { get; init; } = "Once";
     public bool DefaultIsActive { get; init; } = true;
+
+    // Learning-wizard toggle defaults — nullable: omitted fields preserve the existing value.
+    public bool? DefaultVideoRightsConfirmed { get; init; }
+    public bool? DefaultUseQuestionPool { get; init; }
+    public bool? DefaultGenerateSlideshow { get; init; }
+    public bool? DefaultAutoAssign { get; init; }
+    public bool? DefaultPreserveSourceWording { get; init; }
+    public bool? DefaultShuffleQuestions { get; init; }
+    public bool? DefaultShuffleOptions { get; init; }
+    public bool? DefaultIncludeQuiz { get; init; }
+    public bool? DefaultAllowRetry { get; init; }
 }
 
 /// <summary>
@@ -2847,6 +3061,16 @@ public record StartTalkTranslationRequest
 public record UpdateLastEditedStepRequest
 {
     public int Step { get; init; }
+}
+
+public record ToggleToolboxTalkActiveRequest
+{
+    public bool Active { get; init; }
+}
+
+public record ToggleToolboxTalkActiveResponse
+{
+    public bool Active { get; init; }
 }
 
 /// <summary>Request DTO for obtaining a presigned R2 upload URL for a wizard source file.</summary>

@@ -15,5 +15,14 @@ public record UpdateToolboxTalkTenantDefaultsCommand(
     int DefaultAutoAssignDueDays,
     bool DefaultGenerateCertificate,
     string DefaultRefresherFrequency,
-    bool DefaultIsActive
+    bool DefaultIsActive,
+    bool? DefaultVideoRightsConfirmed = null,
+    bool? DefaultUseQuestionPool = null,
+    bool? DefaultGenerateSlideshow = null,
+    bool? DefaultAutoAssign = null,
+    bool? DefaultPreserveSourceWording = null,
+    bool? DefaultShuffleQuestions = null,
+    bool? DefaultShuffleOptions = null,
+    bool? DefaultIncludeQuiz = null,
+    bool? DefaultAllowRetry = null
 ) : IRequest<Result<ToolboxTalkSettingsDto>>;

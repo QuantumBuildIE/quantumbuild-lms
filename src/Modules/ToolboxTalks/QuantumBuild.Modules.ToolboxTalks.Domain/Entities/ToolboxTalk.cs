@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using QuantumBuild.Core.Domain.Common;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 
@@ -311,6 +312,14 @@ public class ToolboxTalk : TenantEntity
     /// </summary>
     public string? CoverImageUrl { get; set; }
 
+    /// <summary>
+    /// Set when a bulk SOP import creates this talk as Draft, marking it eligible for the
+    /// off-peak BulkLearningTranslationSweepJob to pick up. Null means either not bulk-created
+    /// or already swept (the sweep job clears this once it enqueues MissingTranslationsJob).
+    /// The timestamp doubles as a FIFO ordering key so older bulk items are swept first.
+    /// </summary>
+    public DateTimeOffset? BulkTranslationPendingSince { get; set; }
+
     // Navigation properties
 
     /// <summary>
@@ -342,4 +351,17 @@ public class ToolboxTalk : TenantEntity
     /// Translated HTML slideshows for different languages
     /// </summary>
     public ICollection<ToolboxTalkSlideshowTranslation> SlideshowTranslations { get; set; } = new List<ToolboxTalkSlideshowTranslation>();
+
+    /// <summary>
+    /// "Live" = Published, active, not soft-deleted. Single source of truth for surfaces
+    /// (e.g. regulatory requirement mapping) that must only reference operationally-relevant
+    /// talks. Use this Expression form in EF Core queries (translates to SQL); use
+    /// <see cref="IsLive(ToolboxTalk)"/> for in-memory checks.
+    /// </summary>
+    public static readonly Expression<Func<ToolboxTalk, bool>> IsLiveExpression =
+        t => t.Status == ToolboxTalkStatus.Published && t.IsActive && !t.IsDeleted;
+
+    private static readonly Func<ToolboxTalk, bool> IsLiveCompiled = IsLiveExpression.Compile();
+
+    public static bool IsLive(ToolboxTalk talk) => IsLiveCompiled(talk);
 }

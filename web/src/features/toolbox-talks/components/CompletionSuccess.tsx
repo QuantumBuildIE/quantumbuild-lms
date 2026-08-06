@@ -217,7 +217,12 @@ export function CompletionSuccess({
           )}
         </CardContent>
 
-        <CardFooter className="border-t pt-4 flex flex-col sm:flex-row gap-2">
+        <CardFooter
+          className={cn(
+            'border-t pt-4 flex flex-col gap-2',
+            onReview ? 'sm:grid sm:grid-cols-2' : 'sm:flex-row'
+          )}
+        >
           <Button asChild className="w-full gap-2">
             <Link href="/toolbox-talks">
               <ArrowLeft className="h-4 w-4" />

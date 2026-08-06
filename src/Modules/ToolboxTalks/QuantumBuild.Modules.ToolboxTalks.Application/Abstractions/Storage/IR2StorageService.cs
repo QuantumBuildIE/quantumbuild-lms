@@ -180,6 +180,18 @@ public interface IR2StorageService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Uploads a source PDF for a regulatory document to R2 storage. RegulatoryDocument is a
+    /// system-managed entity (no TenantId), so unlike every other upload method the key is
+    /// NOT tenant-prefixed — it lives at a fixed system-level path.
+    /// Path: regulatory/{documentId}/source.pdf — always overwrites any previous upload,
+    /// matching the "one source URL per regulation" model.
+    /// </summary>
+    Task<R2UploadResult> UploadRegulatoryDocumentAsync(
+        Guid regulatoryDocumentId,
+        Stream content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Generates the public URL for a file in the R2 bucket.
     /// </summary>
     string GeneratePublicUrl(Guid tenantId, string folder, string fileName);

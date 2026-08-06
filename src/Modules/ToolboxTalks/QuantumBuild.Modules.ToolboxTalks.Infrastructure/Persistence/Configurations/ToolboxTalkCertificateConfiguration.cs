@@ -67,6 +67,10 @@ public class ToolboxTalkCertificateConfiguration : IEntityTypeConfiguration<Tool
 
         builder.Property(c => c.SignatureDataUrl);
 
+        builder.Property(c => c.CertificateEmailFailed)
+            .IsRequired()
+            .HasDefaultValue(false);
+
         builder.Property(c => c.TenantId)
             .IsRequired();
 

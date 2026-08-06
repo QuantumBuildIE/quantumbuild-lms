@@ -2,6 +2,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using QuantumBuild.Core.Application.Features.Employees;
 using QuantumBuild.Core.Application.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Application.Common;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
@@ -41,10 +42,10 @@ public class UpdateToolboxTalkScheduleCommandHandler : IRequestHandler<UpdateToo
             throw new InvalidOperationException($"Schedule with ID '{request.Id}' not found.");
         }
 
-        // Only allow updates when status is Draft
-        if (schedule.Status != ToolboxTalkScheduleStatus.Draft)
+        // Only allow updates when status is Draft or Active (not yet processed to Completed/Cancelled)
+        if (schedule.Status != ToolboxTalkScheduleStatus.Draft && schedule.Status != ToolboxTalkScheduleStatus.Active)
         {
-            throw new InvalidOperationException($"Schedule can only be updated when in Draft status. Current status: {schedule.Status}");
+            throw new InvalidOperationException($"Schedule can only be updated when in Draft or Active status. Current status: {schedule.Status}");
         }
 
         // Supervisor-scoping: restrict to assigned operators only
@@ -107,11 +108,17 @@ public class UpdateToolboxTalkScheduleCommandHandler : IRequestHandler<UpdateToo
         }
 
         // Update schedule properties
-        schedule.ScheduledDate = request.ScheduledDate;
-        schedule.EndDate = request.EndDate;
+        // ScheduledDate/EndDate arrive as Kind=Unspecified when a client sends a date-only
+        // string (e.g. "2026-07-16") with no offset — Npgsql rejects Unspecified DateTimes
+        // against the timestamptz columns. Normalise to Utc before persisting.
+        var scheduledDate = DateTimeUtils.EnsureUtc(request.ScheduledDate);
+        var endDate = request.EndDate.HasValue ? DateTimeUtils.EnsureUtc(request.EndDate.Value) : (DateTime?)null;
+
+        schedule.ScheduledDate = scheduledDate;
+        schedule.EndDate = endDate;
         schedule.Frequency = request.Frequency;
         schedule.AssignToAllEmployees = request.AssignToAllEmployees;
-        schedule.NextRunDate = request.ScheduledDate;
+        schedule.NextRunDate = scheduledDate;
         schedule.Notes = request.Notes;
 
         // Handle assignment changes

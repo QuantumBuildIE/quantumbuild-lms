@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { WizardSectionDivider } from '@/components/ui/wizard-section-divider';
 import {
@@ -14,6 +14,7 @@ import {
   useSessionValidationRun,
   useSessionSectionDecision,
 } from '@/lib/api/toolbox-talks/use-content-creation';
+import { useValidationHub } from '@/features/toolbox-talks/hooks/use-validation-hub';
 import type { WizardState } from '../CreateWizard';
 import { ValidationProgressPanel } from './validate/ValidationProgressPanel';
 import { ValidationSectionCard } from './validate/ValidationSectionCard';
@@ -77,10 +78,47 @@ export function ValidateStep({
 
   const talkId = session?.outputTalkId ?? null;
 
+  // Live SignalR progress for the active language's run — mirrors create-wizard/TranslateStep.tsx's
+  // direct useValidationHub usage, the established precedent for this component's parent step.
+  const hub = useValidationHub(activeEntry?.runId ?? null);
+
+  // Edit/Retry enqueue a background re-validation job (Accept is synchronous and never sets
+  // this). Poll the run until the job has genuinely started and finished — `hasSeenRunning`
+  // guards against the run's status still reading 'Completed' from the *previous* job in the
+  // brief window before the new one is picked up. Same pattern as learning-wizard/ValidateStep.tsx.
+  const [revalidating, setRevalidating] = useState<{
+    sectionIndex: number;
+    hasSeenRunning: boolean;
+  } | null>(null);
+
   const { data: runDetail, refetch: refetchRun } = useSessionValidationRun(
     talkId,
-    activeEntry?.runId ?? null
+    activeEntry?.runId ?? null,
+    { refetchInterval: revalidating ? 2000 : false }
   );
+
+  // Switching the active language tab invalidates any in-flight tracking for the previous run
+  useEffect(() => {
+    setRevalidating(null);
+  }, [activeEntry?.runId]);
+
+  useEffect(() => {
+    if (!revalidating) return;
+    if (runDetail?.status === 'Running') {
+      if (!revalidating.hasSeenRunning) {
+        setRevalidating((prev) => (prev ? { ...prev, hasSeenRunning: true } : prev));
+      }
+      return;
+    }
+    if (
+      revalidating.hasSeenRunning &&
+      (runDetail?.status === 'Completed' ||
+        runDetail?.status === 'Failed' ||
+        runDetail?.status === 'Cancelled')
+    ) {
+      setRevalidating(null);
+    }
+  }, [revalidating, runDetail?.status]);
 
   const sectionDecision = useSessionSectionDecision();
 
@@ -122,6 +160,14 @@ export function ValidateStep({
     };
   }, [mergedSections]);
 
+  // Real percentComplete: prefer the SignalR-pushed value while a run is active, fall back
+  // to the REST-derived section ratio once the hub has nothing to report (no active run,
+  // or connection not yet established).
+  const percentComplete = hub.isComplete
+    ? 100
+    : hub.progress?.percentComplete ??
+      (stats.totalSections > 0 ? (stats.sectionsComplete / stats.totalSections) * 100 : 0);
+
   // ============================================
   // Section action handlers (Accept / Edit / Retry)
   // ============================================
@@ -153,8 +199,10 @@ export function ValidateStep({
                   ? 'edited & re-validating'
                   : 'retrying';
             toast.success(`Section ${sectionIndex + 1} ${label}`);
-            // Refetch after a brief delay to pick up the updated decision
-            setTimeout(() => refetchRun(), 1500);
+            if (action === 'edit' || action === 'retry') {
+              setRevalidating({ sectionIndex, hasSeenRunning: false });
+            }
+            refetchRun();
           },
           onError: (error: unknown) => {
             const isConflict =
@@ -217,15 +265,15 @@ export function ValidateStep({
       {/* Aggregate progress summary */}
       <ValidationProgressPanel
         overallScore={runDetail?.overallScore ?? stats.overallScore}
-        percentComplete={100}
+        percentComplete={percentComplete}
         sectionsComplete={stats.sectionsComplete}
         totalSections={stats.totalSections}
         statusCounts={stats.statusCounts}
         safetyVerdict={safetyVerdict}
         sourceDialect={sourceDialect}
-        progressMessage=""
+        progressMessage={hub.progress?.message ?? ''}
         passThreshold={passThreshold}
-        isConnected={false}
+        isConnected={hub.isConnected}
       />
 
       {/* Section cards with reviewer actions */}
@@ -236,7 +284,8 @@ export function ValidateStep({
             sectionIndex={section.index}
             sectionTitle={section.title}
             result={section.result}
-            isRunning={false}
+            isRunning={runDetail?.status === 'Running' || runDetail?.status === 'Pending'}
+            isRevalidating={revalidating?.sectionIndex === section.index}
             languageCode={languageCode}
             passThreshold={passThreshold}
             onAccept={() => handleSectionAction(section.index, 'accept')}

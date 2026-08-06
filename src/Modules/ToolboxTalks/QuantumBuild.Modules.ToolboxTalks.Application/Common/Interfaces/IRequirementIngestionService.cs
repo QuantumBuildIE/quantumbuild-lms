@@ -75,4 +75,51 @@ public interface IRequirementIngestionService
     Task<List<RegulatoryBrowseBodyDto>> GetBrowsableRequirementsAsync(
         Guid tenantId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Uploads a source PDF for a regulatory document to storage and updates its SourceUrl.
+    /// Does NOT trigger ingestion — that remains an explicit separate action.
+    /// Returns null if the document does not exist.
+    /// </summary>
+    Task<RegulatoryDocumentUploadResponseDto?> UploadSourceDocumentAsync(
+        Guid regulatoryDocumentId,
+        Stream fileContent,
+        string originalFileName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lists regulatory bodies for the admin catalog / document-creation body picker.
+    /// Pass <paramref name="kind"/> to filter to Regulation-only or Standard-only bodies.
+    /// </summary>
+    Task<List<RegulatoryBodyDto>> GetRegulatoryBodiesAsync(
+        Domain.Enums.RegulatoryBodyKind? kind = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Creates a new regulatory document. Persists with LastIngestionStatus=Idle and no
+    /// profiles — ingestion and sector-profile setup remain separate, later actions.
+    /// </summary>
+    Task<RegulatoryDocumentListDto> CreateDocumentAsync(
+        CreateRegulatoryDocumentRequest request,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Creates a new regulatory body (catalog entry) — a Regulation or a Standard. Enforces the
+    /// Kind/SectorId invariant at the handler layer, in addition to the DB check constraint.
+    /// </summary>
+    Task<RegulatoryBodyDto> CreateRegulatoryBodyAsync(
+        CreateRegulatoryBodyRequest request,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Attaches a sector to a regulatory document by creating a RegulatoryProfile. Restores a
+    /// previously soft-deleted profile for the same document/sector pair rather than inserting
+    /// a duplicate — the unique index on {RegulatoryDocumentId, SectorId} has no soft-delete
+    /// filter, so a soft-deleted row still occupies the constrained slot. Does NOT trigger
+    /// ingestion — that remains a separate, explicit action.
+    /// </summary>
+    Task<RegulatoryProfileDto> CreateProfileAsync(
+        Guid regulatoryDocumentId,
+        Guid sectorId,
+        CancellationToken cancellationToken = default);
 }

@@ -38,9 +38,11 @@ import {
 import { WizardSectionDivider } from '@/components/ui/wizard-section-divider';
 import { LoadingState } from '../components/LoadingState';
 import { CoverImageUpload } from '../components/CoverImageUpload';
+import { DefaultInheritanceIndicator } from '../components/DefaultInheritanceIndicator';
 import { useTalk } from '../hooks/useTalk';
 import { useUpdateTalkSettings } from '../hooks/useUpdateTalkSettings';
 import { useLookupValues } from '@/hooks/use-lookups';
+import { useToolboxTalkSettings } from '@/lib/api/toolbox-talks/use-toolbox-talks';
 import {
   settingsSchema,
   REFRESHER_FREQUENCIES,
@@ -70,6 +72,7 @@ export function SettingsStep({ talkId, onContinue }: SettingsStepProps) {
   const { talk, isLoading } = useTalk(talkId);
   const updateMutation = useUpdateTalkSettings(talkId);
   const { data: categories = [] } = useLookupValues('TrainingCategory');
+  const { data: toolboxTalkSettings } = useToolboxTalkSettings();
 
   const initializedRef = useRef(false);
 
@@ -82,9 +85,9 @@ export function SettingsStep({ talkId, onContinue }: SettingsStepProps) {
       category: null,
       refresherFrequency: 'Once',
       isActiveOnPublish: true,
-      generateCertificate: false,
+      generateCertificate: true,
       minimumWatchPercent: 90,
-      autoAssign: false,
+      autoAssign: true,
       autoAssignDueDays: 30,
       generateSlideshow: false,
     },
@@ -438,6 +441,15 @@ export function SettingsStep({ talkId, onContinue }: SettingsStepProps) {
                   <p className="text-xs text-muted-foreground mt-0.5">
                     New employees are automatically assigned this learning when they are created.
                   </p>
+                  {toolboxTalkSettings && (
+                    <DefaultInheritanceIndicator
+                      isOverridden={field.value !== toolboxTalkSettings.defaultAutoAssign}
+                      onReset={async () => {
+                        field.onChange(toolboxTalkSettings.defaultAutoAssign);
+                        await saveField({ ...form.getValues(), autoAssign: toolboxTalkSettings.defaultAutoAssign });
+                      }}
+                    />
+                  )}
                 </div>
                 <FormControl>
                   <Switch
@@ -504,6 +516,18 @@ export function SettingsStep({ talkId, onContinue }: SettingsStepProps) {
                     <p className="text-xs text-muted-foreground mt-0.5">
                       Each PDF page is converted to a slide shown alongside the learning content.
                     </p>
+                    {toolboxTalkSettings && (
+                      <DefaultInheritanceIndicator
+                        isOverridden={field.value !== toolboxTalkSettings.defaultGenerateSlideshow}
+                        onReset={async () => {
+                          field.onChange(toolboxTalkSettings.defaultGenerateSlideshow);
+                          await saveField({
+                            ...form.getValues(),
+                            generateSlideshow: toolboxTalkSettings.defaultGenerateSlideshow,
+                          });
+                        }}
+                      />
+                    )}
                   </div>
                   <FormControl>
                     <Switch

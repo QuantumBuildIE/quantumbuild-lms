@@ -55,6 +55,7 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
     public DbSet<TenantModule> TenantModules => Set<TenantModule>();
     public DbSet<DpaAcceptance> DpaAcceptances => Set<DpaAcceptance>();
     public DbSet<BulkImportSession> BulkImportSessions => Set<BulkImportSession>();
+    public DbSet<BulkSopImportSession> BulkSopImportSessions => Set<BulkSopImportSession>();
 
     // Settings DbSets
     public DbSet<TenantSetting> TenantSettings => Set<TenantSetting>();
@@ -101,6 +102,7 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
     public DbSet<ContentCreationSession> ContentCreationSessions => Set<ContentCreationSession>();
     public DbSet<Sector> Sectors => Set<Sector>();
     public DbSet<TenantSector> TenantSectors => Set<TenantSector>();
+    public DbSet<TenantReviewerConfiguration> TenantReviewerConfigurations => Set<TenantReviewerConfiguration>();
     public DbSet<RegulatoryBody> RegulatoryBodies => Set<RegulatoryBody>();
     public DbSet<RegulatoryDocument> RegulatoryDocuments => Set<RegulatoryDocument>();
     public DbSet<RegulatoryProfile> RegulatoryProfiles => Set<RegulatoryProfile>();
@@ -108,6 +110,11 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
     public DbSet<ValidationRegulatoryScore> ValidationRegulatoryScores => Set<ValidationRegulatoryScore>();
     public DbSet<RegulatoryRequirement> RegulatoryRequirements => Set<RegulatoryRequirement>();
     public DbSet<RegulatoryRequirementMapping> RegulatoryRequirementMappings => Set<RegulatoryRequirementMapping>();
+    public DbSet<RegulatoryStructureMap> RegulatoryStructureMaps => Set<RegulatoryStructureMap>();
+    public DbSet<RegulatoryStructureMapPrinciple> RegulatoryStructureMapPrinciples => Set<RegulatoryStructureMapPrinciple>();
+    public DbSet<RegulatoryStructureMapStandard> RegulatoryStructureMapStandards => Set<RegulatoryStructureMapStandard>();
+    public DbSet<RegulatoryStructureMapFeature> RegulatoryStructureMapFeatures => Set<RegulatoryStructureMapFeature>();
+    public DbSet<TenantStandardSubscription> TenantStandardSubscriptions => Set<TenantStandardSubscription>();
 
     // AI usage tracking DbSets
     public DbSet<AiUsageLog> AiUsageLogs => Set<AiUsageLog>();
@@ -244,6 +251,7 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.ApplyConfiguration(new TenantModuleConfiguration());
         modelBuilder.ApplyConfiguration(new DpaAcceptanceConfiguration());
         modelBuilder.ApplyConfiguration(new BulkImportSessionConfiguration());
+        modelBuilder.ApplyConfiguration(new BulkSopImportSessionConfiguration());
 
         // Apply Settings entity configurations
         modelBuilder.ApplyConfiguration(new TenantSettingConfiguration());
@@ -286,6 +294,7 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.ApplyConfiguration(new ContentCreationSessionConfiguration());
         modelBuilder.ApplyConfiguration(new SectorConfiguration());
         modelBuilder.ApplyConfiguration(new TenantSectorConfiguration());
+        modelBuilder.ApplyConfiguration(new TenantReviewerConfigurationConfiguration());
         modelBuilder.ApplyConfiguration(new RegulatoryBodyConfiguration());
         modelBuilder.ApplyConfiguration(new RegulatoryDocumentConfiguration());
         modelBuilder.ApplyConfiguration(new RegulatoryProfileConfiguration());
@@ -293,6 +302,11 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.ApplyConfiguration(new ValidationRegulatoryScoreConfiguration());
         modelBuilder.ApplyConfiguration(new RegulatoryRequirementConfiguration());
         modelBuilder.ApplyConfiguration(new RegulatoryRequirementMappingConfiguration());
+        modelBuilder.ApplyConfiguration(new RegulatoryStructureMapConfiguration());
+        modelBuilder.ApplyConfiguration(new RegulatoryStructureMapPrincipleConfiguration());
+        modelBuilder.ApplyConfiguration(new RegulatoryStructureMapStandardConfiguration());
+        modelBuilder.ApplyConfiguration(new RegulatoryStructureMapFeatureConfiguration());
+        modelBuilder.ApplyConfiguration(new TenantStandardSubscriptionConfiguration());
         modelBuilder.ApplyConfiguration(new AiUsageLogConfiguration());
         modelBuilder.ApplyConfiguration(new AiUsageSummaryConfiguration());
         modelBuilder.ApplyConfiguration(new SystemAuditLogConfiguration());
@@ -323,7 +337,9 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.Entity<SupervisorAssignment>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<TenantModule>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<TenantSector>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
+        modelBuilder.Entity<TenantReviewerConfiguration>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<RegulatoryRequirementMapping>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
+        modelBuilder.Entity<TenantStandardSubscription>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<AuditCorpus>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<CorpusRun>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<QrLocation>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
@@ -331,6 +347,7 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.Entity<QrSession>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<DpaAcceptance>().HasQueryFilter(e => !e.IsDeleted);
         modelBuilder.Entity<BulkImportSession>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
+        modelBuilder.Entity<BulkSopImportSession>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
 
         // Toolbox Talks tenant + soft-delete filters (centralised here — removed from entity configurations)
         modelBuilder.Entity<ToolboxTalk>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));

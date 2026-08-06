@@ -23,7 +23,7 @@ public static class TranslationPrompts
         string sourceLanguage,
         string targetLanguage,
         bool isHtml,
-        string? sectorKey = null,
+        string? sectorInstructions = null,
         bool isSafetyCritical = false,
         IEnumerable<GlossaryTermInstruction>? glossaryTerms = null)
     {
@@ -46,15 +46,12 @@ public static class TranslationPrompts
         sb.AppendLine($"- FLUENCY: Write as a native {targetLanguage} speaker would — not as translated English. Restructure sentences if needed for natural fluency.");
         sb.AppendLine("- SAFETY LANGUAGE: Preserve the full force of all obligations and warnings. \"Must\" stays \"must\". \"Never\" stays \"never\". Do not weaken mandatory language.");
 
-        // --- Tier 2: Sector-specific layer ---
-        if (!string.IsNullOrEmpty(sectorKey))
+        // --- Tier 2: Sector-specific layer (pre-resolved from applicable frameworks — see
+        // IApplicableFrameworksService.GetTranslationInstructionsAsync) ---
+        if (!string.IsNullOrEmpty(sectorInstructions))
         {
-            var sectorInstructions = GetSectorInstructions(sectorKey, targetLanguage);
-            if (!string.IsNullOrEmpty(sectorInstructions))
-            {
-                sb.AppendLine();
-                sb.Append(sectorInstructions);
-            }
+            sb.AppendLine();
+            sb.Append(sectorInstructions);
         }
 
         // --- Tier 3: Safety-critical boost ---
@@ -101,7 +98,7 @@ public static class TranslationPrompts
         List<TranslationItem> items,
         string sourceLanguage,
         string targetLanguage,
-        string? sectorKey = null,
+        string? sectorInstructions = null,
         bool isSafetyCritical = false,
         IEnumerable<GlossaryTermInstruction>? glossaryTerms = null)
     {
@@ -121,15 +118,12 @@ public static class TranslationPrompts
         sb.AppendLine($"- FLUENCY: Write as a native {targetLanguage} speaker would — not as translated English. Restructure sentences if needed for natural fluency.");
         sb.AppendLine("- SAFETY LANGUAGE: Preserve the full force of all obligations and warnings. \"Must\" stays \"must\". \"Never\" stays \"never\". Do not weaken mandatory language.");
 
-        // --- Tier 2: Sector-specific layer ---
-        if (!string.IsNullOrEmpty(sectorKey))
+        // --- Tier 2: Sector-specific layer (pre-resolved from applicable frameworks — see
+        // IApplicableFrameworksService.GetTranslationInstructionsAsync) ---
+        if (!string.IsNullOrEmpty(sectorInstructions))
         {
-            var sectorInstructions = GetSectorInstructions(sectorKey, targetLanguage);
-            if (!string.IsNullOrEmpty(sectorInstructions))
-            {
-                sb.AppendLine();
-                sb.Append(sectorInstructions);
-            }
+            sb.AppendLine();
+            sb.Append(sectorInstructions);
         }
 
         // --- Tier 3: Safety-critical boost ---
@@ -214,53 +208,6 @@ Keep the exact same format with numbers and timestamps, only translate the text.
 Return only the translated SRT, nothing else:
 
 {srtContent}";
-    }
-
-    /// <summary>
-    /// Returns sector-specific translation instructions for the given sector.
-    /// </summary>
-    private static string? GetSectorInstructions(string sectorKey, string targetLanguage)
-    {
-        return sectorKey.ToLowerInvariant() switch
-        {
-            "homecare" or "healthcare" => $"""
-                SECTOR-SPECIFIC REQUIREMENTS (Healthcare / Homecare — HIQA):
-                - REGULATORY CONTEXT: This is a HIQA-regulated homecare/healthcare compliance document. Regulatory precision is mandatory.
-                - SAFEGUARDING: "Safeguarding" must retain its full legal meaning — do not translate as generic "safety" or "protection".
-                - MANDATORY REPORTING: Notification deadlines (e.g. "within 3 working days") must be numerically exact.
-                - JOB TITLES: Designated Liaison Person (DLP), Person in Charge (PIC), Registered Provider — translate consistently using approved equivalents or retain in English if no standard equivalent exists.
-                - CONSENT: "Informed consent", "capacity", "advocacy" — use clinical/legal standard translations.
-                """,
-
-            "construction" or "manufacturing" => $"""
-                SECTOR-SPECIFIC REQUIREMENTS (Construction / Manufacturing — HSA):
-                - REGULATORY CONTEXT: This is an HSA-regulated workplace safety document. Safety language precision is mandatory.
-                - PPE: All personal protective equipment terms must be translated precisely — no omissions or paraphrasing.
-                - PROHIBITIONS: "Do not", "never", "must not" must retain full imperative force — never soften to "should not" or "it is recommended".
-                - ROLES: PSDP, PSCS, competent person — translate with approved equivalents only.
-                - RISK: Hazard categories and risk levels must match source exactly.
-                """,
-
-            "food_hospitality" => $"""
-                SECTOR-SPECIFIC REQUIREMENTS (Food & Hospitality — FSAI):
-                - REGULATORY CONTEXT: This is an FSAI-regulated food safety document. Allergen and HACCP terminology precision is mandatory.
-                - ALLERGENS: All 14 declarable allergens must be named precisely — never paraphrased or approximated.
-                - HACCP: Critical Control Point terminology must be consistent and exact throughout.
-                - TEMPERATURES: All numeric temperature thresholds must be preserved exactly.
-                - CCP LIMITS: Critical limits must not be softened or approximated.
-                """,
-
-            "transport" => $"""
-                SECTOR-SPECIFIC REQUIREMENTS (Transport — RSA):
-                - REGULATORY CONTEXT: This is an RSA-regulated road transport document. Numeric precision is mandatory.
-                - DRIVER HOURS: All hour and rest period requirements must be numerically exact.
-                - TACHOGRAPH: Technical terms must use approved translations only — do not improvise.
-                - LOAD LIMITS: All weight and dimension limits must be preserved exactly.
-                - PROHIBITIONS: Driving prohibitions must retain full legal force.
-                """,
-
-            _ => null
-        };
     }
 
     /// <summary>

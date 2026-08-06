@@ -50,7 +50,5 @@ public class AuditCorpusConfiguration : IEntityTypeConfiguration<AuditCorpus>
         builder.HasIndex(c => new { c.TenantId, c.CorpusId })
             .IsUnique()
             .HasDatabaseName("ix_audit_corpora_tenant_id_corpus_id");
-
-        builder.HasQueryFilter(c => !c.IsDeleted);
     }
 }

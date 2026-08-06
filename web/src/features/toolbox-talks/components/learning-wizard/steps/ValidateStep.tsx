@@ -21,7 +21,9 @@ import { ValidationSectionCard } from '@/features/toolbox-talks/components/creat
 import { SendExternalReviewDialog } from '../../SendExternalReviewDialog';
 import { LoadingState } from '../components/LoadingState';
 import { parseLanguageCodes } from '@/features/toolbox-talks/utils/parseLanguageCodes';
+import { isWorkflowStateEligibleForExternalReview } from '@/features/toolbox-talks/lib/workflowStateMessages';
 import type { ValidationRunSummary } from '@/types/content-creation';
+import type { TranslationWorkflowState } from '@/types/workflows';
 
 const LANG_NAMES: Record<string, string> = {
   fr: 'French',
@@ -112,6 +114,8 @@ export function ValidateStep({ talkId }: ValidateStepProps) {
     name: string;
     flaggedCount: number;
   } | null>(null);
+  // Set when a send attempt races the workflow state changing between dialog-open and submit.
+  const [sendReviewRaceState, setSendReviewRaceState] = useState<TranslationWorkflowState | null>(null);
 
   const handleSectionAction = useCallback(
     (
@@ -206,12 +210,14 @@ export function ValidateStep({ talkId }: ValidateStepProps) {
       (stats.totalSections > 0 ? (stats.sectionsComplete / stats.totalSections) * 100 : 0);
 
   const activeWorkflowState = (workflowStates ?? []).find((s) => s.languageCode === activeLangCode) ?? null;
-  const canSendForReview =
-    activeWorkflowState?.state === 'Validated' || activeWorkflowState?.state === 'ReviewerAccepted';
+  const canSendForReview = activeWorkflowState
+    ? isWorkflowStateEligibleForExternalReview(activeWorkflowState.state)
+    : false;
 
   const handleSendForExternalReview = useCallback(
     async (email: string, editableSectionIndices: number[]) => {
       if (!sendReviewLang) return;
+      setSendReviewRaceState(null);
       try {
         await initiateReviewMutation.mutateAsync({
           toolboxTalkId: talkId,
@@ -221,8 +227,16 @@ export function ValidateStep({ talkId }: ValidateStepProps) {
         });
         toast.success(`Invitation sent to ${email}`);
         setSendReviewLang(null);
-      } catch {
-        toast.error(`Failed to send invitation for ${sendReviewLang.name}`);
+      } catch (err) {
+        const axiosError = err as {
+          response?: { status?: number; data?: { currentState?: TranslationWorkflowState } };
+        };
+        const currentState = axiosError.response?.status === 409 ? axiosError.response.data?.currentState : undefined;
+        if (currentState) {
+          setSendReviewRaceState(currentState);
+        } else {
+          toast.error(`Failed to send invitation for ${sendReviewLang.name}`);
+        }
       }
     },
     [talkId, sendReviewLang, initiateReviewMutation]
@@ -262,7 +276,10 @@ export function ValidateStep({ talkId }: ValidateStepProps) {
       <SendExternalReviewDialog
         open={sendReviewLang !== null}
         onOpenChange={(open) => {
-          if (!open) setSendReviewLang(null);
+          if (!open) {
+            setSendReviewLang(null);
+            setSendReviewRaceState(null);
+          }
         }}
         onConfirm={handleSendForExternalReview}
         isLoading={initiateReviewMutation.isPending}
@@ -272,7 +289,17 @@ export function ValidateStep({ talkId }: ValidateStepProps) {
             ? (LANG_NAMES[sendReviewLang.code] ?? sendReviewLang.code.toUpperCase())
             : ''
         }
-        sections={mergedSections.map((s) => ({ title: s.title }))}
+        state={
+          (sendReviewLang
+            ? (workflowStates ?? []).find((s) => s.languageCode === sendReviewLang.code)?.state
+            : undefined) ?? 'Initial'
+        }
+        raceState={sendReviewRaceState}
+        sections={mergedSections.map((s) => ({
+          title: s.title,
+          score: s.result?.finalScore,
+          outcome: s.result?.outcome,
+        }))}
       />
 
       <div className="space-y-6">
@@ -332,13 +359,14 @@ export function ValidateStep({ talkId }: ValidateStepProps) {
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() =>
+                  onClick={() => {
                     setSendReviewLang({
                       code: activeLangCode,
                       name: LANG_NAMES[activeLangCode] ?? activeLangCode.toUpperCase(),
                       flaggedCount: activeWorkflowState?.flaggedWordCount ?? 0,
-                    })
-                  }
+                    });
+                    setSendReviewRaceState(null);
+                  }}
                 >
                   <Send className="mr-1.5 h-3.5 w-3.5" />
                   Send for external review

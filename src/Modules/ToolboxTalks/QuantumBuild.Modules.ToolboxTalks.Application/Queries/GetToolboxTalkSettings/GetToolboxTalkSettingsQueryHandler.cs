@@ -46,7 +46,16 @@ public class GetToolboxTalkSettingsQueryHandler : IRequestHandler<GetToolboxTalk
                 NotifyOnTranslationComplete = settings.NotifyOnTranslationComplete,
                 NotifyOnValidationComplete = settings.NotifyOnValidationComplete,
                 NotifyOnFailure = settings.NotifyOnFailure,
-                NotifyOnExternalReviewResponse = settings.NotifyOnExternalReviewResponse
+                NotifyOnExternalReviewResponse = settings.NotifyOnExternalReviewResponse,
+                DefaultVideoRightsConfirmed = settings.DefaultVideoRightsConfirmed,
+                DefaultUseQuestionPool = settings.DefaultUseQuestionPool,
+                DefaultGenerateSlideshow = settings.DefaultGenerateSlideshow,
+                DefaultAutoAssign = settings.DefaultAutoAssign,
+                DefaultPreserveSourceWording = settings.DefaultPreserveSourceWording,
+                DefaultShuffleQuestions = settings.DefaultShuffleQuestions,
+                DefaultShuffleOptions = settings.DefaultShuffleOptions,
+                DefaultIncludeQuiz = settings.DefaultIncludeQuiz,
+                DefaultAllowRetry = settings.DefaultAllowRetry
             };
         }
 
@@ -75,7 +84,16 @@ public class GetToolboxTalkSettingsQueryHandler : IRequestHandler<GetToolboxTalk
             NotifyOnTranslationComplete = true,
             NotifyOnValidationComplete = true,
             NotifyOnFailure = true,
-            NotifyOnExternalReviewResponse = true
+            NotifyOnExternalReviewResponse = true,
+            DefaultVideoRightsConfirmed = false,
+            DefaultUseQuestionPool = false,
+            DefaultGenerateSlideshow = false,
+            DefaultAutoAssign = true,
+            DefaultPreserveSourceWording = true,
+            DefaultShuffleQuestions = true,
+            DefaultShuffleOptions = true,
+            DefaultIncludeQuiz = true,
+            DefaultAllowRetry = true
         };
     }
 }

@@ -321,17 +321,23 @@ export function useCourseValidationRuns(courseId: string | null) {
 }
 
 /**
- * Fetch validation run details (course-scoped)
+ * Fetch validation run details (course-scoped).
+ *
+ * Pass `refetchInterval` when the caller needs to observe a run reach a
+ * terminal status — defaults to no polling so existing read-only consumers
+ * are unaffected.
  */
 export function useCourseValidationRun(
   courseId: string | null,
-  runId: string | null
+  runId: string | null,
+  options?: { refetchInterval?: number | false }
 ) {
   return useQuery({
     queryKey: contentCreationKeys.courseValidationRun(courseId ?? '', runId ?? ''),
     queryFn: () => getCourseValidationRun(courseId!, runId!),
     enabled: !!courseId && !!runId,
     staleTime: 10 * 1000,
+    refetchInterval: options?.refetchInterval ?? false,
   });
 }
 
@@ -413,16 +419,22 @@ export function useGenerateValidationReport() {
 /**
  * Fetch validation run details via session context (creation wizard).
  * Uses the session's outputTalkId (talkId) to call the talk-context endpoint.
+ *
+ * Pass `refetchInterval` when the caller needs to observe a background
+ * re-validation job (triggered by an edit/retry) reach a terminal status —
+ * defaults to no polling so existing read-only consumers are unaffected.
  */
 export function useSessionValidationRun(
   talkId: string | null,
-  runId: string | null
+  runId: string | null,
+  options?: { refetchInterval?: number | false }
 ) {
   return useQuery({
     queryKey: contentCreationKeys.validationRun(talkId ?? '', runId ?? ''),
     queryFn: () => getSessionValidationRun(talkId!, runId!),
     enabled: !!talkId && !!runId,
     staleTime: 10 * 1000,
+    refetchInterval: options?.refetchInterval ?? false,
   });
 }
 

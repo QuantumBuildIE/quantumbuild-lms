@@ -73,6 +73,16 @@ public abstract class IntegrationTestBase : IAsyncLifetime
     /// </summary>
     protected FakeEmailService FakeEmailService => Factory.FakeEmailService;
 
+    /// <summary>
+    /// Gets the fake toolbox talk email service for asserting completion/certificate email sends.
+    /// </summary>
+    protected FakeToolboxTalkEmailService FakeToolboxTalkEmailService => Factory.FakeToolboxTalkEmailService;
+
+    /// <summary>
+    /// Gets the fake R2 storage service for test configuration (e.g. simulating upload failures).
+    /// </summary>
+    protected FakeR2StorageService FakeR2StorageService => Factory.FakeR2StorageService;
+
     #region Fake Subtitle Services
 
     /// <summary>

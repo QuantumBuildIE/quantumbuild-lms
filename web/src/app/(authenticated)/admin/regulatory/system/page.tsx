@@ -2,8 +2,15 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useIsSuperUser } from "@/lib/auth/use-auth";
-import { useRegulatoryDocuments } from "@/lib/api/admin/use-regulatory-ingestion";
+import {
+  useRegulatoryDocuments,
+  useRegulatoryBodies,
+} from "@/lib/api/admin/use-regulatory-ingestion";
+import { CreateRegulatoryDocumentDialog } from "@/components/admin/create-regulatory-document-dialog";
+import { CreateRegulatoryBodyDialog } from "@/components/admin/create-regulatory-body-dialog";
+import { KindBadge } from "@/components/admin/kind-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,7 +22,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileText } from "lucide-react";
+import { FileText, Plus, Landmark } from "lucide-react";
 import type { RegulatoryDocumentListItem } from "@/types/regulatory";
 
 function formatDate(dateStr: string | null): string {
@@ -49,7 +56,11 @@ function StatusBadge({ doc }: { doc: RegulatoryDocumentListItem }) {
 
 export default function RegulatorySystemPage() {
   const isSuperUser = useIsSuperUser();
+  const router = useRouter();
   const { data: documents, isLoading } = useRegulatoryDocuments();
+  const { data: bodies, isLoading: bodiesLoading } = useRegulatoryBodies();
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [createBodyDialogOpen, setCreateBodyDialogOpen] = useState(false);
 
   if (!isSuperUser) {
     return (
@@ -60,15 +71,106 @@ export default function RegulatorySystemPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-semibold tracking-tight">
-          Regulatory Documents
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Manage regulatory documents and AI-powered requirement ingestion
-        </p>
+    <div className="space-y-8">
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-semibold tracking-tight">
+              Regulatory Bodies
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              The catalog of Regulations and Standards documents attach to
+            </p>
+          </div>
+          <Button onClick={() => setCreateBodyDialogOpen(true)}>
+            <Landmark className="mr-2 h-4 w-4" />
+            Add Body
+          </Button>
+        </div>
+
+        <CreateRegulatoryBodyDialog
+          open={createBodyDialogOpen}
+          onOpenChange={setCreateBodyDialogOpen}
+          onCreated={() => {}}
+        />
+
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Code</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Sector</TableHead>
+                <TableHead>Country</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {bodiesLoading ? (
+                Array.from({ length: 2 }).map((_, i) => (
+                  <TableRow key={i}>
+                    {Array.from({ length: 5 }).map((_, j) => (
+                      <TableCell key={j}>
+                        <Skeleton className="h-4 w-full" />
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              ) : bodies && bodies.length > 0 ? (
+                bodies.map((body) => (
+                  <TableRow key={body.id}>
+                    <TableCell>
+                      <Badge variant="secondary">{body.code}</Badge>
+                    </TableCell>
+                    <TableCell className="font-medium">{body.name}</TableCell>
+                    <TableCell>
+                      <KindBadge kind={body.kind} />
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {body.sectorName ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {body.country}
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell
+                    colSpan={5}
+                    className="text-center text-muted-foreground py-8"
+                  >
+                    No regulatory bodies found.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
+
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight">
+            Regulatory Documents
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Manage regulatory documents and AI-powered requirement ingestion
+          </p>
+        </div>
+        <Button onClick={() => setCreateDialogOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          Add Document
+        </Button>
+      </div>
+
+      <CreateRegulatoryDocumentDialog
+        open={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
+        onCreated={(documentId) =>
+          router.push(`/admin/regulatory/system/${documentId}`)
+        }
+      />
 
       <div className="rounded-md border">
         <Table>

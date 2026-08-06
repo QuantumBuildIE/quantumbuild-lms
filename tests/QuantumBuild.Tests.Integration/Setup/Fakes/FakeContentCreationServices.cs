@@ -56,10 +56,19 @@ public class FakePdfExtractionService : IPdfExtractionService
     public string NextExtractedText { get; set; } = "This is extracted PDF text for testing.";
     public bool ShouldFail { get; set; } = false;
 
+    /// <summary>
+    /// Failure category returned alongside the failure message when ShouldFail is true.
+    /// Defaults to Unknown; set to one of the PdfExtractionErrorCategory constants to test a
+    /// specific mapping (e.g. RequirementIngestionJob's category → job errorCode translation).
+    /// </summary>
+    public string NextErrorCategory { get; set; } = PdfExtractionErrorCategory.Unknown;
+
+    public string NextErrorMessage { get; set; } = "Fake extraction failure";
+
     public Task<PdfExtractionResult> ExtractTextAsync(Stream pdfStream, CancellationToken cancellationToken = default)
     {
         if (ShouldFail)
-            return Task.FromResult(PdfExtractionResult.FailureResult("Fake extraction failure"));
+            return Task.FromResult(PdfExtractionResult.FailureResult(NextErrorMessage, NextErrorCategory));
 
         return Task.FromResult(PdfExtractionResult.SuccessResult(NextExtractedText, 3));
     }
@@ -67,7 +76,7 @@ public class FakePdfExtractionService : IPdfExtractionService
     public Task<PdfExtractionResult> ExtractTextFromUrlAsync(string pdfUrl, CancellationToken cancellationToken = default)
     {
         if (ShouldFail)
-            return Task.FromResult(PdfExtractionResult.FailureResult("Fake extraction failure"));
+            return Task.FromResult(PdfExtractionResult.FailureResult(NextErrorMessage, NextErrorCategory));
 
         return Task.FromResult(PdfExtractionResult.SuccessResult(NextExtractedText, 3));
     }

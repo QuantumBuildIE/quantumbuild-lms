@@ -59,6 +59,23 @@ public class RegulatoryRequirementConfiguration : IEntityTypeConfiguration<Regul
             .IsRequired()
             .HasDefaultValue(true);
 
+        builder.Property(e => e.FeatureIdentifier)
+            .HasMaxLength(20);
+
+        builder.Property(e => e.Block)
+            .HasConversion<string>()
+            .HasMaxLength(50);
+
+        builder.Property(e => e.VerbatimText)
+            .HasMaxLength(2000);
+
+        builder.Property(e => e.FootnoteDefinition)
+            .HasMaxLength(1000);
+
+        builder.Property(e => e.IsProvisional)
+            .IsRequired()
+            .HasDefaultValue(false);
+
         // Audit fields
         builder.Property(e => e.CreatedAt)
             .IsRequired();

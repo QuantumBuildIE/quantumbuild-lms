@@ -3,6 +3,8 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useQueryClient } from '@tanstack/react-query';
+import axios from 'axios';
 import { toast } from 'sonner';
 import { AlertTriangle, Loader2, Wand2 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -24,6 +26,7 @@ import { useGenerateQuiz } from '../hooks/useGenerateQuiz';
 import { useUpdateTalkQuestions } from '../hooks/useUpdateTalkQuestions';
 import { useUpdateQuizSettings } from '../hooks/useUpdateQuizSettings';
 import { useTalkStatusPolling } from '../hooks/useTalkStatusPolling';
+import { useAutoStartStep } from '../hooks/useAutoStartStep';
 import { quizStepSchema, type QuizStepFormValues } from '../schemas/quizStepSchema';
 import type { ToolboxTalkQuestion } from '@/types/toolbox-talks';
 import type { QuestionFormData } from '../schemas/questionSchema';
@@ -88,6 +91,7 @@ export function QuizStep({ talkId, onContinue, onBack }: QuizStepProps) {
   const generateMutation = useGenerateQuiz(talkId);
   const updateQuestionsMutation = useUpdateTalkQuestions(talkId);
   const updateSettingsMutation = useUpdateQuizSettings(talkId);
+  const queryClient = useQueryClient();
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
 
   const form = useForm<QuizStepFormValues>({
@@ -123,10 +127,19 @@ export function QuizStep({ talkId, onContinue, onBack }: QuizStepProps) {
       initializedRef.current = false;
       form.reset({ questions: [] });
       await generateMutation.mutateAsync();
-    } catch {
+    } catch (err) {
+      // 409 means generation is already running (another tab, or a race with a prior
+      // request) — not a real failure. Drop the mutation's error state and refetch
+      // so the "Generating…" view picks up the in-progress status instead of showing
+      // a scary error for something that's actually working.
+      if (axios.isAxiosError(err) && err.response?.status === 409) {
+        generateMutation.reset();
+        queryClient.invalidateQueries({ queryKey: ['learnings', talkId] });
+        return;
+      }
       toast.error('Failed to generate quiz. Please try again.');
     }
-  }, [generateMutation, form]);
+  }, [generateMutation, form, queryClient, talkId]);
 
   const handleSaveQuestion = useCallback(
     (index: number, data: QuestionFormData) => {
@@ -244,6 +257,24 @@ export function QuizStep({ talkId, onContinue, onBack }: QuizStepProps) {
   const isGenerating = generateMutation.isPending || isProcessing;
   const isSaving = updateQuestionsMutation.isPending;
   const hasQuestions = questions.length > 0;
+  const hasSections = (talk?.sections.length ?? 0) > 0;
+
+  // Auto-start: fire quiz generation as soon as the step loads a fresh Draft talk
+  // with sections already parsed and no questions yet. Requires sections to exist —
+  // generation fails server-side without them (Chunk 2). Skipped after a failure
+  // this session (see useAutoStartStep) — the manual button below covers the retry.
+  useAutoStartStep({
+    storageKey: `learning-wizard:autostart:quiz:${talkId}`,
+    shouldStart:
+      !isLoading &&
+      !!talk &&
+      talk.status === 'Draft' &&
+      hasSections &&
+      !hasQuestions &&
+      !generateMutation.isPending &&
+      !generateMutation.isError,
+    onStart: handleGenerateQuiz,
+  });
 
   // ── Loading skeleton ───────────────────────────────────────────────────────
 

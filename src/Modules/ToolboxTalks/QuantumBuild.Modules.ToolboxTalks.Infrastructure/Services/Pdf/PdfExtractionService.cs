@@ -72,7 +72,8 @@ public class PdfExtractionService : IPdfExtractionService
                 _logger.LogWarning("PDF appears to be scanned with no extractable text. OCR may be required.");
                 return PdfExtractionResult.FailureResult(
                     "This PDF appears to be a scanned document with no extractable text. " +
-                    "OCR (Optical Character Recognition) would be needed to extract text from scanned pages.");
+                    "OCR (Optical Character Recognition) would be needed to extract text from scanned pages.",
+                    PdfExtractionErrorCategory.ParseFailure);
             }
 
             _logger.LogInformation(
@@ -92,20 +93,25 @@ public class PdfExtractionService : IPdfExtractionService
         {
             _logger.LogWarning(ex, "PDF is password protected or encrypted");
             return PdfExtractionResult.FailureResult(
-                "This PDF is password protected. Please provide an unprotected PDF document.");
+                "This PDF is password protected. Please provide an unprotected PDF document.",
+                PdfExtractionErrorCategory.ParseFailure);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to extract text from PDF");
+            _logger.LogError(ex, "Failed to extract text from PDF: {ExceptionType} — {Message}", ex.GetType().Name, ex.Message);
 
             // Check for common PDF format issues
             if (ex.Message.Contains("not a valid PDF", StringComparison.OrdinalIgnoreCase) ||
                 ex.Message.Contains("invalid", StringComparison.OrdinalIgnoreCase))
             {
-                return PdfExtractionResult.FailureResult("Invalid PDF format. The file may be corrupted.");
+                return PdfExtractionResult.FailureResult(
+                    "Invalid PDF format. The file may be corrupted.",
+                    PdfExtractionErrorCategory.ParseFailure);
             }
 
-            return PdfExtractionResult.FailureResult($"Failed to extract text: {ex.Message}");
+            return PdfExtractionResult.FailureResult(
+                $"Failed to extract text: {ex.Message}",
+                PdfExtractionErrorCategory.ParseFailure);
         }
     }
 
@@ -116,7 +122,7 @@ public class PdfExtractionService : IPdfExtractionService
     {
         if (string.IsNullOrWhiteSpace(pdfUrl))
         {
-            return PdfExtractionResult.FailureResult("PDF URL is required");
+            return PdfExtractionResult.FailureResult("PDF URL is required", PdfExtractionErrorCategory.UnsupportedScheme);
         }
 
         try
@@ -129,7 +135,8 @@ public class PdfExtractionService : IPdfExtractionService
             {
                 _logger.LogError("Failed to download PDF. Status: {StatusCode}", response.StatusCode);
                 return PdfExtractionResult.FailureResult(
-                    $"Failed to download PDF. HTTP status: {response.StatusCode}");
+                    $"Failed to download PDF. HTTP status: {response.StatusCode}",
+                    PdfExtractionErrorCategory.NetworkError);
             }
 
             var contentType = response.Content.Headers.ContentType?.MediaType;
@@ -147,7 +154,9 @@ public class PdfExtractionService : IPdfExtractionService
         catch (HttpRequestException ex)
         {
             _logger.LogError(ex, "HTTP error while downloading PDF from {Url}", pdfUrl);
-            return PdfExtractionResult.FailureResult($"Failed to download PDF: {ex.Message}");
+            return PdfExtractionResult.FailureResult(
+                $"Failed to download PDF: {ex.Message}",
+                PdfExtractionErrorCategory.NetworkError);
         }
         catch (TaskCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -156,7 +165,43 @@ public class PdfExtractionService : IPdfExtractionService
         catch (TaskCanceledException ex)
         {
             _logger.LogError(ex, "Request timed out while downloading PDF from {Url}", pdfUrl);
-            return PdfExtractionResult.FailureResult("PDF download timed out. The file may be too large.");
+            return PdfExtractionResult.FailureResult(
+                "PDF download timed out. The file may be too large.",
+                PdfExtractionErrorCategory.Timeout);
+        }
+        catch (NotSupportedException ex)
+        {
+            // HttpClient.GetAsync(string) builds a Uri with UriKind.RelativeOrAbsolute. A Windows
+            // drive-letter path (e.g. "C:\foo\bar.pdf") parses successfully as an absolute "file://"
+            // URI rather than throwing at construction time — HttpClient then throws
+            // NotSupportedException when it discovers it cannot send a request over that scheme.
+            _logger.LogError(ex, "Unsupported URI scheme while downloading PDF from {Url}: {Message}", pdfUrl, ex.Message);
+            return PdfExtractionResult.FailureResult(
+                "The source URL uses a scheme that cannot be fetched (e.g. a local file path). Only http and https URLs are supported.",
+                PdfExtractionErrorCategory.UnsupportedScheme);
+        }
+        catch (InvalidOperationException ex)
+        {
+            // Other URI validation failures HttpClient may raise internally before sending.
+            _logger.LogError(ex, "Invalid request while downloading PDF from {Url}: {Message}", pdfUrl, ex.Message);
+            return PdfExtractionResult.FailureResult(
+                $"The source URL could not be used: {ex.Message}",
+                PdfExtractionErrorCategory.UnsupportedScheme);
+        }
+        catch (OperationCanceledException)
+        {
+            // Not a fetch failure — a genuine cancellation should propagate, not be swallowed.
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // Anything else that isn't cancellation: log honestly and report as unknown rather
+            // than letting it escape uncaught to a generic catch three frames up.
+            _logger.LogError(ex, "Unexpected error while downloading PDF from {Url}: {ExceptionType} — {Message}",
+                pdfUrl, ex.GetType().Name, ex.Message);
+            return PdfExtractionResult.FailureResult(
+                $"Unexpected error while fetching PDF: {ex.Message}",
+                PdfExtractionErrorCategory.Unknown);
         }
     }
 }

@@ -3,6 +3,7 @@ using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services;
+using QuantumBuild.Modules.ToolboxTalks.Application.Services.Scorm;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services.Subtitles;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Application;
@@ -40,6 +41,9 @@ public static class DependencyInjection
 
         // Register auto-assignment service for new employees
         services.AddScoped<INewEmployeeTrainingAssigner, AutoAssignmentService>();
+
+        // Register SCORM package generation service (Chunk 1 — minimal SCORM 1.2 export)
+        services.AddScoped<IScormPackageService, ScormPackageService>();
 
         return services;
     }

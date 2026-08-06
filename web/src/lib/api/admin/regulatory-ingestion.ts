@@ -9,11 +9,58 @@ import type {
   StartIngestionRequest,
   RejectRequirementRequest,
   RegulatoryBrowseBody,
+  RegulatoryDocumentUploadResponse,
+  RegulatoryBody,
+  RegulatoryBodyKind,
+  CreateRegulatoryDocumentRequest,
+  CreateRegulatoryBodyRequest,
+  CreateRegulatoryProfileRequest,
+  RegulatoryProfileDto,
 } from "@/types/regulatory";
 
 export async function getRegulatoryDocuments(): Promise<RegulatoryDocumentListItem[]> {
   const response = await apiClient.get<RegulatoryDocumentListItem[]>(
     "/regulatory/documents"
+  );
+  return response.data;
+}
+
+export async function getRegulatoryBodies(
+  kind?: RegulatoryBodyKind
+): Promise<RegulatoryBody[]> {
+  const response = await apiClient.get<RegulatoryBody[]>("/regulatory/bodies", {
+    params: kind ? { kind } : undefined,
+  });
+  return response.data;
+}
+
+export async function createRegulatoryBody(
+  data: CreateRegulatoryBodyRequest
+): Promise<RegulatoryBody> {
+  const response = await apiClient.post<RegulatoryBody>(
+    "/regulatory/bodies",
+    data
+  );
+  return response.data;
+}
+
+export async function createRegulatoryDocument(
+  data: CreateRegulatoryDocumentRequest
+): Promise<RegulatoryDocumentListItem> {
+  const response = await apiClient.post<RegulatoryDocumentListItem>(
+    "/regulatory/documents",
+    data
+  );
+  return response.data;
+}
+
+export async function createRegulatoryProfile(
+  documentId: string,
+  data: CreateRegulatoryProfileRequest
+): Promise<RegulatoryProfileDto> {
+  const response = await apiClient.post<RegulatoryProfileDto>(
+    `/regulatory/documents/${documentId}/profiles`,
+    data
   );
   return response.data;
 }
@@ -84,6 +131,20 @@ export async function approveAllDrafts(
 ): Promise<{ approved: number }> {
   const response = await apiClient.post<{ approved: number }>(
     `/regulatory/documents/${documentId}/approve-all`
+  );
+  return response.data;
+}
+
+export async function uploadRegulatoryDocument(
+  documentId: string,
+  file: File
+): Promise<RegulatoryDocumentUploadResponse> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await apiClient.post<RegulatoryDocumentUploadResponse>(
+    `/regulatory/documents/${documentId}/upload`,
+    form,
+    { headers: { "Content-Type": "multipart/form-data" } }
   );
   return response.data;
 }

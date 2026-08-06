@@ -62,6 +62,12 @@ public interface IToolboxTalksDbContext
     DbSet<Sector> Sectors { get; }
     DbSet<TenantSector> TenantSectors { get; }
 
+    // Tenant standard subscription entities
+    DbSet<TenantStandardSubscription> TenantStandardSubscriptions { get; }
+
+    // Reviewer configuration entities
+    DbSet<TenantReviewerConfiguration> TenantReviewerConfigurations { get; }
+
     // Regulatory profile entities
     DbSet<RegulatoryBody> RegulatoryBodies { get; }
     DbSet<RegulatoryDocument> RegulatoryDocuments { get; }
@@ -74,6 +80,12 @@ public interface IToolboxTalksDbContext
     // Regulatory requirement entities
     DbSet<RegulatoryRequirement> RegulatoryRequirements { get; }
     DbSet<RegulatoryRequirementMapping> RegulatoryRequirementMappings { get; }
+
+    // Regulatory structure map entities
+    DbSet<RegulatoryStructureMap> RegulatoryStructureMaps { get; }
+    DbSet<RegulatoryStructureMapPrinciple> RegulatoryStructureMapPrinciples { get; }
+    DbSet<RegulatoryStructureMapStandard> RegulatoryStructureMapStandards { get; }
+    DbSet<RegulatoryStructureMapFeature> RegulatoryStructureMapFeatures { get; }
 
     // AI usage tracking entities
     DbSet<AiUsageLog> AiUsageLogs { get; }

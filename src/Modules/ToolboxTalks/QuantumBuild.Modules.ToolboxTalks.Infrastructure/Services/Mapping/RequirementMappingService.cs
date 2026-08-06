@@ -1,9 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using QuantumBuild.Core.Application.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Frameworks;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Mapping;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs;
+using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Frameworks;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Mapping;
@@ -16,15 +18,18 @@ public class RequirementMappingService : IRequirementMappingService
 {
     private readonly IToolboxTalksDbContext _dbContext;
     private readonly ICurrentUserService _currentUser;
+    private readonly IApplicableFrameworksService _applicableFrameworksService;
     private readonly ILogger<RequirementMappingService> _logger;
 
     public RequirementMappingService(
         IToolboxTalksDbContext dbContext,
         ICurrentUserService currentUser,
+        IApplicableFrameworksService applicableFrameworksService,
         ILogger<RequirementMappingService> logger)
     {
         _dbContext = dbContext;
         _currentUser = currentUser;
+        _applicableFrameworksService = applicableFrameworksService;
         _logger = logger;
     }
 
@@ -32,9 +37,16 @@ public class RequirementMappingService : IRequirementMappingService
     {
         var tenantId = _currentUser.TenantId;
 
+        var entitlements = await _applicableFrameworksService.GetTenantEntitlementsAsync(tenantId, cancellationToken);
+        var tenantSectorKeys = entitlements.SectorKeys.ToHashSet();
+        var subscribedStandardBodyIds = entitlements.SubscribedStandardBodyIds.ToHashSet();
+
         var allMappings = await _dbContext.RegulatoryRequirementMappings
             .Where(m => m.TenantId == tenantId)
             .Include(m => m.RegulatoryRequirement)
+                .ThenInclude(r => r.RegulatoryProfile)
+                    .ThenInclude(p => p.RegulatoryDocument)
+                        .ThenInclude(d => d.RegulatoryBody)
             .Include(m => m.ToolboxTalk)
             .Include(m => m.Course)
             .ToListAsync(cancellationToken);
@@ -43,30 +55,14 @@ public class RequirementMappingService : IRequirementMappingService
         var totalConfirmed = allMappings.Count(m => m.MappingStatus == RequirementMappingStatus.Confirmed);
         var totalRejected = allMappings.Count(m => m.MappingStatus == RequirementMappingStatus.Rejected);
 
+        // Mappings tab is an admin review/curation tool — non-live targets stay visible with a
+        // badge (see ToDto's TargetIsLive) rather than being hidden, so admins can still act on
+        // (or re-map) a mapping to a Draft or deactivated talk/course.
+
         var pendingReview = allMappings
             .Where(m => m.MappingStatus == RequirementMappingStatus.Suggested)
             .OrderByDescending(m => m.ConfidenceScore)
-            .Select(m => new PendingMappingDto(
-                Id: m.Id,
-                RegulatoryRequirementId: m.RegulatoryRequirementId,
-                RequirementTitle: m.RegulatoryRequirement.Title,
-                RequirementDescription: m.RegulatoryRequirement.Description,
-                RequirementSection: m.RegulatoryRequirement.Section,
-                RequirementSectionLabel: m.RegulatoryRequirement.SectionLabel,
-                RequirementPrinciple: m.RegulatoryRequirement.Principle,
-                RequirementPrincipleLabel: m.RegulatoryRequirement.PrincipleLabel,
-                RequirementPriority: m.RegulatoryRequirement.Priority,
-                ConfidenceScore: m.ConfidenceScore,
-                AiReasoning: m.AiReasoning,
-                ReviewNotes: m.ReviewNotes,
-                MappingStatus: m.MappingStatus.ToString(),
-                ContentTitle: m.ToolboxTalkId.HasValue
-                    ? m.ToolboxTalk?.Title ?? "Unknown Talk"
-                    : m.Course?.Title ?? "Unknown Course",
-                ContentType: m.ToolboxTalkId.HasValue ? "Talk" : "Course",
-                ContentId: m.ToolboxTalkId ?? m.CourseId ?? Guid.Empty,
-                CreatedAt: m.CreatedAt
-            ))
+            .Select(m => ToDto(m, tenantSectorKeys, subscribedStandardBodyIds))
             .ToList();
 
         return new MappingSummaryDto(totalSuggested, totalConfirmed, totalRejected, pendingReview);
@@ -77,6 +73,9 @@ public class RequirementMappingService : IRequirementMappingService
         var mapping = await _dbContext.RegulatoryRequirementMappings
             .Where(m => m.TenantId == _currentUser.TenantId && m.Id == mappingId)
             .Include(m => m.RegulatoryRequirement)
+                .ThenInclude(r => r.RegulatoryProfile)
+                    .ThenInclude(p => p.RegulatoryDocument)
+                        .ThenInclude(d => d.RegulatoryBody)
             .Include(m => m.ToolboxTalk)
             .Include(m => m.Course)
             .FirstOrDefaultAsync(cancellationToken)
@@ -89,7 +88,8 @@ public class RequirementMappingService : IRequirementMappingService
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        return ToDto(mapping);
+        var entitlements = await _applicableFrameworksService.GetTenantEntitlementsAsync(_currentUser.TenantId, cancellationToken);
+        return ToDto(mapping, entitlements.SectorKeys.ToHashSet(), entitlements.SubscribedStandardBodyIds.ToHashSet());
     }
 
     public async Task RejectMappingAsync(Guid mappingId, string? notes, CancellationToken cancellationToken = default)
@@ -113,9 +113,15 @@ public class RequirementMappingService : IRequirementMappingService
 
         var suggestedMappings = await _dbContext.RegulatoryRequirementMappings
             .Where(m => m.TenantId == tenantId && m.MappingStatus == RequirementMappingStatus.Suggested)
+            .Include(m => m.ToolboxTalk)
+            .Include(m => m.Course)
             .ToListAsync(cancellationToken);
 
-        foreach (var mapping in suggestedMappings)
+        // Bulk-confirm only mappings to live content — non-live Suggested mappings remain
+        // Suggested and stay visible (with a badge) in the Mappings tab for individual review.
+        var liveMappings = suggestedMappings.Where(IsMappingTargetLive).ToList();
+
+        foreach (var mapping in liveMappings)
         {
             mapping.MappingStatus = RequirementMappingStatus.Confirmed;
             mapping.ReviewedBy = _currentUser.UserName;
@@ -124,10 +130,12 @@ public class RequirementMappingService : IRequirementMappingService
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        _logger.LogInformation("Confirmed {Count} suggested mappings for tenant {TenantId}",
-            suggestedMappings.Count, tenantId);
+        var skippedCount = suggestedMappings.Count - liveMappings.Count;
+        _logger.LogInformation(
+            "Confirmed {Count} suggested mappings for tenant {TenantId} ({SkippedCount} skipped: target not live)",
+            liveMappings.Count, tenantId, skippedCount);
 
-        return suggestedMappings.Count;
+        return liveMappings.Count;
     }
 
     public async Task<int> GetUnconfirmedCountAsync(
@@ -153,19 +161,40 @@ public class RequirementMappingService : IRequirementMappingService
     {
         var tenantId = _currentUser.TenantId;
 
-        // Validate tenant has this sector
-        var hasSector = await _dbContext.TenantSectors
-            .AnyAsync(ts => ts.TenantId == tenantId && ts.Sector.Key == sectorKey && !ts.IsDeleted, cancellationToken);
+        var entitlements = await _applicableFrameworksService.GetTenantEntitlementsAsync(tenantId, cancellationToken);
+        var tenantSectorKeys = entitlements.SectorKeys.ToHashSet();
+        var subscribedStandardBodyIds = entitlements.SubscribedStandardBodyIds.ToHashSet();
+
+        // A sector tab is reachable either because the tenant is assigned that sector
+        // (Regulation entitlement) or because a Standard the tenant subscribes to targets
+        // that sector via its own RegulatoryProfile (Standard entitlement, sector-independent
+        // subscription still needs a landing tab to render under).
+        var hasSector = tenantSectorKeys.Contains(sectorKey);
+        if (!hasSector)
+        {
+            hasSector = subscribedStandardBodyIds.Count > 0 && await _dbContext.RegulatoryProfiles
+                .Where(p => p.SectorKey == sectorKey
+                    && subscribedStandardBodyIds.Contains(p.RegulatoryDocument.RegulatoryBodyId))
+                .AnyAsync(cancellationToken);
+        }
+
         if (!hasSector)
             throw new UnauthorizedAccessException($"Tenant does not have sector '{sectorKey}' configured.");
 
-        // Load approved, active requirements for this sector via RegulatoryProfile
+        // Load approved, active requirements for this sector: Regulation-kind requirements gated
+        // by tenant sector assignment, Standard-kind requirements gated by subscription.
         var requirements = await _dbContext.RegulatoryRequirements
             .IgnoreQueryFilters()
             .Where(r => !r.IsDeleted
                 && r.IsActive
                 && r.IngestionStatus == RequirementIngestionStatus.Approved
-                && r.RegulatoryProfile.SectorKey == sectorKey)
+                && r.RegulatoryProfile.SectorKey == sectorKey
+                && (
+                    (r.RegulatoryProfile.RegulatoryDocument.RegulatoryBody.Kind == RegulatoryBodyKind.Regulation
+                        && tenantSectorKeys.Contains(sectorKey))
+                    || (r.RegulatoryProfile.RegulatoryDocument.RegulatoryBody.Kind == RegulatoryBodyKind.Standard
+                        && subscribedStandardBodyIds.Contains(r.RegulatoryProfile.RegulatoryDocument.RegulatoryBodyId))
+                ))
             .Include(r => r.RegulatoryProfile)
                 .ThenInclude(p => p.RegulatoryDocument)
                     .ThenInclude(d => d.RegulatoryBody)
@@ -198,12 +227,17 @@ public class RequirementMappingService : IRequirementMappingService
 
         var requirementIds = requirements.Select(r => r.Id).ToList();
 
-        // Load tenant mappings for these requirements
-        var mappings = await _dbContext.RegulatoryRequirementMappings
+        // Load tenant mappings for these requirements. Compliance is an operational/audit-readiness
+        // view whose output also feeds the Training Evidence Pack PDF (InspectionReportService
+        // calls this method directly) — mappings to non-live content are hard-excluded here so a
+        // Draft, deactivated, or deleted talk/course can never register as "Covered".
+        var mappings = (await _dbContext.RegulatoryRequirementMappings
             .Where(m => m.TenantId == tenantId && requirementIds.Contains(m.RegulatoryRequirementId))
             .Include(m => m.ToolboxTalk)
             .Include(m => m.Course)
-            .ToListAsync(cancellationToken);
+            .ToListAsync(cancellationToken))
+            .Where(IsMappingTargetLive)
+            .ToList();
 
         // Load validation runs for mapped content to determine "approved" validation
         var talkIds = mappings.Where(m => m.ToolboxTalkId.HasValue).Select(m => m.ToolboxTalkId!.Value).Distinct().ToList();
@@ -301,6 +335,8 @@ public class RequirementMappingService : IRequirementMappingService
             else
                 coverageStatus = "Gap";
 
+            var sourceBody = req.RegulatoryProfile.RegulatoryDocument.RegulatoryBody;
+
             requirementDtos.Add(new ComplianceRequirementDto(
                 Id: req.Id,
                 Title: req.Title,
@@ -312,7 +348,9 @@ public class RequirementMappingService : IRequirementMappingService
                 Priority: req.Priority,
                 DisplayOrder: req.DisplayOrder,
                 CoverageStatus: coverageStatus,
-                Mappings: mappingDetails
+                Mappings: mappingDetails,
+                SourceBodyName: sourceBody.Name,
+                SourceBodyKind: sourceBody.Kind.ToString()
             ));
         }
 
@@ -335,9 +373,14 @@ public class RequirementMappingService : IRequirementMappingService
         var pendingCount = requirementDtos.Count(r => r.CoverageStatus == "Pending");
         var gapCount = requirementDtos.Count(r => r.CoverageStatus == "Gap");
 
-        // Get regulatory body + score label from the first profile
+        // Regulatory body header: join every distinct contributing body's name rather than
+        // arbitrarily picking the first-sorted requirement's body — a sector tab can now
+        // legitimately mix a Regulation and one or more subscribed Standards.
         var firstProfile = requirements[0].RegulatoryProfile;
-        var regulatoryBody = firstProfile.RegulatoryDocument.RegulatoryBody.Name;
+        var regulatoryBody = string.Join(", ", requirements
+            .Select(r => r.RegulatoryProfile.RegulatoryDocument.RegulatoryBody.Name)
+            .Distinct()
+            .OrderBy(name => name));
         var scoreLabel = firstProfile.ScoreLabel;
         var sectorName = firstProfile.Sector?.Name ?? sectorKey;
 
@@ -411,11 +454,20 @@ public class RequirementMappingService : IRequirementMappingService
         var mapping = await _dbContext.RegulatoryRequirementMappings
             .Where(m => m.Id == existing.Id)
             .Include(m => m.RegulatoryRequirement)
+                .ThenInclude(r => r.RegulatoryProfile)
+                    .ThenInclude(p => p.RegulatoryDocument)
+                        .ThenInclude(d => d.RegulatoryBody)
             .Include(m => m.ToolboxTalk)
             .Include(m => m.Course)
             .FirstAsync(cancellationToken);
 
-        return ToDto(mapping);
+        var entitlements = await _applicableFrameworksService.GetTenantEntitlementsAsync(tenantId, cancellationToken);
+        return ToDto(mapping, entitlements.SectorKeys.ToHashSet(), entitlements.SubscribedStandardBodyIds.ToHashSet());
+    }
+
+    public async Task<List<ApplicableFrameworkDto>> GetApplicableFrameworksAsync(CancellationToken cancellationToken = default)
+    {
+        return await _applicableFrameworksService.GetApplicableFrameworksAsync(_currentUser.TenantId, cancellationToken);
     }
 
     public async Task<List<ContentOptionDto>> GetContentOptionsAsync(CancellationToken cancellationToken = default)
@@ -423,15 +475,15 @@ public class RequirementMappingService : IRequirementMappingService
         var tenantId = _currentUser.TenantId;
 
         var talks = await _dbContext.ToolboxTalks
-            .Where(t => t.TenantId == tenantId
-                && t.Status == ToolboxTalkStatus.Published)
+            .Where(t => t.TenantId == tenantId)
+            .Where(Domain.Entities.ToolboxTalk.IsLiveExpression)
             .OrderBy(t => t.Title)
             .Select(t => new ContentOptionDto(t.Id, t.Title, "Talk"))
             .ToListAsync(cancellationToken);
 
         var courses = await _dbContext.ToolboxTalkCourses
-            .Where(c => c.TenantId == tenantId
-                && c.IsActive)
+            .Where(c => c.TenantId == tenantId)
+            .Where(Domain.Entities.ToolboxTalkCourse.IsLiveExpression)
             .OrderBy(c => c.Title)
             .Select(c => new ContentOptionDto(c.Id, c.Title, "Course"))
             .ToListAsync(cancellationToken);
@@ -441,8 +493,39 @@ public class RequirementMappingService : IRequirementMappingService
         return courses;
     }
 
-    private static PendingMappingDto ToDto(Domain.Entities.RegulatoryRequirementMapping m) =>
-        new(
+    /// <summary>
+    /// Single source of truth for "is this mapping's target live" — Talk: Published, active,
+    /// not deleted (<see cref="Domain.Entities.ToolboxTalk.IsLive"/>); Course: active, not
+    /// deleted (<see cref="Domain.Entities.ToolboxTalkCourse.IsLive"/>). A null navigation
+    /// (e.g. the target was soft-deleted and excluded by the entity's own query filter) counts
+    /// as not live. Requires the mapping's ToolboxTalk/Course navigation to be loaded.
+    /// </summary>
+    private static bool IsMappingTargetLive(Domain.Entities.RegulatoryRequirementMapping m) =>
+        m.ToolboxTalkId.HasValue
+            ? m.ToolboxTalk != null && Domain.Entities.ToolboxTalk.IsLive(m.ToolboxTalk)
+            : m.Course != null && Domain.Entities.ToolboxTalkCourse.IsLive(m.Course);
+
+    /// <summary>
+    /// Maps a mapping entity to its DTO, attributing the source RegulatoryBody (name + Kind)
+    /// and flagging whether that body still currently applies to the tenant — a Standard's
+    /// mapping survives an unsubscribe (and a Regulation's survives a sector removal) with
+    /// IsCurrentlyApplicable = false rather than disappearing, so admins aren't left wondering
+    /// where a previously-suggested/confirmed mapping went. TargetIsLive similarly flags (but
+    /// does not hide) a mapping whose talk/course is Draft, deactivated, or deleted — the
+    /// Mappings tab shows everything so admins can still act on non-live targets.
+    /// </summary>
+    private static PendingMappingDto ToDto(
+        Domain.Entities.RegulatoryRequirementMapping m,
+        HashSet<string> tenantSectorKeys,
+        HashSet<Guid> subscribedStandardBodyIds)
+    {
+        var profile = m.RegulatoryRequirement.RegulatoryProfile;
+        var body = profile.RegulatoryDocument.RegulatoryBody;
+        var isCurrentlyApplicable = body.Kind == RegulatoryBodyKind.Regulation
+            ? tenantSectorKeys.Contains(profile.SectorKey)
+            : subscribedStandardBodyIds.Contains(body.Id);
+
+        return new(
             Id: m.Id,
             RegulatoryRequirementId: m.RegulatoryRequirementId,
             RequirementTitle: m.RegulatoryRequirement.Title,
@@ -461,6 +544,11 @@ public class RequirementMappingService : IRequirementMappingService
                 : m.Course?.Title ?? "Unknown Course",
             ContentType: m.ToolboxTalkId.HasValue ? "Talk" : "Course",
             ContentId: m.ToolboxTalkId ?? m.CourseId ?? Guid.Empty,
-            CreatedAt: m.CreatedAt
+            CreatedAt: m.CreatedAt,
+            SourceBodyName: body.Name,
+            SourceBodyKind: body.Kind.ToString(),
+            IsCurrentlyApplicable: isCurrentlyApplicable,
+            TargetIsLive: IsMappingTargetLive(m)
         );
+    }
 }

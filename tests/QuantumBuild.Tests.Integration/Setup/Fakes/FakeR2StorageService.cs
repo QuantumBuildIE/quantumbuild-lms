@@ -15,11 +15,18 @@ public class FakeR2StorageService : IR2StorageService
     public IReadOnlyDictionary<string, byte[]> StoredFiles => _files;
 
     /// <summary>
+    /// When true, UploadCertificateAsync throws instead of succeeding — simulates an infrastructure
+    /// failure inside certificate generation so tests can verify the exception-swallow gap is closed.
+    /// </summary>
+    public bool ShouldThrowOnUploadCertificate { get; set; }
+
+    /// <summary>
     /// Reset to default state and clear stored files.
     /// </summary>
     public void Reset()
     {
         _files.Clear();
+        ShouldThrowOnUploadCertificate = false;
     }
 
     public Task<R2UploadResult> UploadSubtitleAsync(
@@ -74,6 +81,9 @@ public class FakeR2StorageService : IR2StorageService
         Stream content,
         CancellationToken cancellationToken = default)
     {
+        if (ShouldThrowOnUploadCertificate)
+            throw new InvalidOperationException("Simulated certificate upload failure.");
+
         var key = $"{tenantId}/certificates/{certificateNumber}.pdf";
         var bytes = ReadStream(content);
         _files[key] = bytes;
@@ -228,6 +238,18 @@ public class FakeR2StorageService : IR2StorageService
     public string GeneratePublicUrl(Guid tenantId, string folder, string fileName)
     {
         return $"https://fake-r2.test/{tenantId}/{folder}/{fileName}";
+    }
+
+    public Task<R2UploadResult> UploadRegulatoryDocumentAsync(
+        Guid regulatoryDocumentId,
+        Stream content,
+        CancellationToken cancellationToken = default)
+    {
+        var key = $"regulatory/{regulatoryDocumentId}/source.pdf";
+        var bytes = ReadStream(content);
+        _files[key] = bytes;
+        return Task.FromResult(R2UploadResult.SuccessResult(
+            $"https://fake-r2.test/{key}", key, bytes.Length, "application/pdf"));
     }
 
     public Task<R2UploadResult> UploadQrCodeImageAsync(

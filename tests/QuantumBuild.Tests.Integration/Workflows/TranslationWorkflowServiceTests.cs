@@ -356,11 +356,13 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
         var invitationId = initiateResult.Data.InvitationId;
 
         // Step 2: external reviewer submits via token (state is now AwaitingThirdParty).
-        // editedContent must be a valid [{SectionIndex, TranslatedText}] JSON array — auto-apply
-        // gates reject free-text content on the accept path (see validation gate tests).
+        // editedContent must be a valid [{sectionIndex, translatedText}] JSON array (camelCase —
+        // matches ExternalReviewEditedSectionDto's JsonPropertyName attributes and the frontend
+        // wire contract) — auto-apply gates reject free-text content on the accept path (see
+        // validation gate tests).
         var editsJson = JsonSerializer.Serialize(new[]
         {
-            new { SectionIndex = 0, TranslatedText = "Reviewer edited translation" }
+            new { sectionIndex = 0, translatedText = "Reviewer edited translation" }
         });
         var submitResult = await service.SubmitExternalReview(rawToken, accepted: true, editedContent: editsJson);
         submitResult.Success.Should().BeTrue();
@@ -1219,8 +1221,8 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
 
         var editsJson = JsonSerializer.Serialize(new[]
         {
-            new { SectionIndex = 0, TranslatedText = "Edited section one" },
-            new { SectionIndex = 1, TranslatedText = "Edited section two" }
+            new { sectionIndex = 0, translatedText = "Edited section one" },
+            new { sectionIndex = 1, translatedText = "Edited section two" }
         });
         var result = await service.SubmitExternalReview(initiateResult.Data!.Token, accepted: true, editedContent: editsJson);
 
@@ -1333,7 +1335,7 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
         // gates only require the submitted entries to be well-formed, not exhaustive.
         var editsJson = JsonSerializer.Serialize(new[]
         {
-            new { SectionIndex = 1, TranslatedText = "Only section two was edited" }
+            new { sectionIndex = 1, translatedText = "Only section two was edited" }
         });
         var result = await service.SubmitExternalReview(initiateResult.Data!.Token, accepted: true, editedContent: editsJson);
 
@@ -1374,8 +1376,8 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
 
         var editsJson = JsonSerializer.Serialize(new[]
         {
-            new { SectionIndex = 1, TranslatedText = "Edited section one" },
-            new { SectionIndex = 3, TranslatedText = "Edited section three" }
+            new { sectionIndex = 1, translatedText = "Edited section one" },
+            new { sectionIndex = 3, translatedText = "Edited section three" }
         });
         var result = await service.SubmitExternalReview(initiateResult.Data!.Token, accepted: true, editedContent: editsJson);
 
@@ -1425,8 +1427,8 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
         // Section 2 is in range against the translation (5 sections) but not in the editable set.
         var editsJson = JsonSerializer.Serialize(new[]
         {
-            new { SectionIndex = 1, TranslatedText = "Edited section one" },
-            new { SectionIndex = 2, TranslatedText = "Not selected for review" }
+            new { sectionIndex = 1, translatedText = "Edited section one" },
+            new { sectionIndex = 2, translatedText = "Not selected for review" }
         });
         var result = await service.SubmitExternalReview(initiateResult.Data!.Token, accepted: true, editedContent: editsJson);
 
@@ -1457,8 +1459,8 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
 
         var editsJson = JsonSerializer.Serialize(new[]
         {
-            new { SectionIndex = 0, TranslatedText = "Edited section zero" },
-            new { SectionIndex = 2, TranslatedText = "Edited section two" }
+            new { sectionIndex = 0, translatedText = "Edited section zero" },
+            new { sectionIndex = 2, translatedText = "Edited section two" }
         });
         var result = await service.SubmitExternalReview(initiateResult.Data!.Token, accepted: true, editedContent: editsJson);
 
@@ -1506,7 +1508,7 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
 
         var firstEditsJson = JsonSerializer.Serialize(new[]
         {
-            new { SectionIndex = 0, TranslatedText = "First-round edited content" }
+            new { sectionIndex = 0, translatedText = "First-round edited content" }
         });
         var firstSubmit = await service.SubmitExternalReview(
             firstInitiate.Data!.Token, accepted: true, editedContent: firstEditsJson);
@@ -1529,8 +1531,8 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
 
         var editsJson = JsonSerializer.Serialize(new[]
         {
-            new { SectionIndex = 2, TranslatedText = "Second-round edited content" },
-            new { SectionIndex = 4, TranslatedText = "Second-round edited content two" }
+            new { sectionIndex = 2, translatedText = "Second-round edited content" },
+            new { sectionIndex = 4, translatedText = "Second-round edited content two" }
         });
         var result = await service.SubmitExternalReview(secondInitiate.Data!.Token, accepted: true, editedContent: editsJson);
 
@@ -1591,8 +1593,8 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
 
         var editsJson = JsonSerializer.Serialize(new[]
         {
-            new { SectionIndex = 1, TranslatedText = "Edited section one" },
-            new { SectionIndex = 3, TranslatedText = "Edited section three" }
+            new { sectionIndex = 1, translatedText = "Edited section one" },
+            new { sectionIndex = 3, translatedText = "Edited section three" }
         });
         var beforeSubmit = DateTime.UtcNow;
         var result = await service.SubmitExternalReview(initiateResult.Data!.Token, accepted: true, editedContent: editsJson);
@@ -1666,8 +1668,8 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
 
         var editsJson = JsonSerializer.Serialize(new[]
         {
-            new { SectionIndex = 2, TranslatedText = "Second-round edited content" },
-            new { SectionIndex = 4, TranslatedText = "Second-round edited content two" }
+            new { sectionIndex = 2, translatedText = "Second-round edited content" },
+            new { sectionIndex = 4, translatedText = "Second-round edited content two" }
         });
         var beforeSubmit = DateTime.UtcNow;
         var result = await service.SubmitExternalReview(rawToken, accepted: true, editedContent: editsJson);
@@ -1730,7 +1732,7 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
 
         var editsJson = JsonSerializer.Serialize(new[]
         {
-            new { SectionIndex = 5, TranslatedText = "This index does not exist" }
+            new { sectionIndex = 5, translatedText = "This index does not exist" }
         });
         var result = await service.SubmitExternalReview(initiateResult.Data!.Token, accepted: true, editedContent: editsJson);
 
@@ -1759,7 +1761,7 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
 
         var editsJson = JsonSerializer.Serialize(new[]
         {
-            new { SectionIndex = 0, TranslatedText = "   " }
+            new { sectionIndex = 0, translatedText = "   " }
         });
         var result = await service.SubmitExternalReview(initiateResult.Data!.Token, accepted: true, editedContent: editsJson);
 
@@ -1788,7 +1790,7 @@ public class TranslationWorkflowServiceTests : IntegrationTestBase
 
         var editsJson = JsonSerializer.Serialize(new[]
         {
-            new { SectionIndex = 0, TranslatedText = "Hello <script>alert(1)</script>" }
+            new { sectionIndex = 0, translatedText = "Hello <script>alert(1)</script>" }
         });
         var result = await service.SubmitExternalReview(initiateResult.Data!.Token, accepted: true, editedContent: editsJson);
 

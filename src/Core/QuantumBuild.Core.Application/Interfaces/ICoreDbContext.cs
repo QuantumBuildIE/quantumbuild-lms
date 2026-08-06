@@ -16,6 +16,7 @@ public interface ICoreDbContext
     DbSet<Site> Sites { get; }
     DbSet<Employee> Employees { get; }
     DbSet<BulkImportSession> BulkImportSessions { get; }
+    DbSet<BulkSopImportSession> BulkSopImportSessions { get; }
     DbSet<Company> Companies { get; }
     DbSet<Contact> Contacts { get; }
     DbSet<SupervisorAssignment> SupervisorAssignments { get; }
