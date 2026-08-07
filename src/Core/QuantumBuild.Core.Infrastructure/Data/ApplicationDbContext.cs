@@ -87,6 +87,7 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
     public DbSet<ToolboxTalkCourseTranslation> ToolboxTalkCourseTranslations => Set<ToolboxTalkCourseTranslation>();
     public DbSet<ToolboxTalkCourseAssignment> ToolboxTalkCourseAssignments => Set<ToolboxTalkCourseAssignment>();
     public DbSet<ToolboxTalkCertificate> ToolboxTalkCertificates => Set<ToolboxTalkCertificate>();
+    public DbSet<CertificateNumberCounter> CertificateNumberCounters => Set<CertificateNumberCounter>();
     public DbSet<ToolboxTalkSlide> ToolboxTalkSlides => Set<ToolboxTalkSlide>();
     public DbSet<ToolboxTalkSlideTranslation> ToolboxTalkSlideTranslations => Set<ToolboxTalkSlideTranslation>();
     public DbSet<ToolboxTalkSlideshowTranslation> ToolboxTalkSlideshowTranslations => Set<ToolboxTalkSlideshowTranslation>();
@@ -279,6 +280,7 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.ApplyConfiguration(new ToolboxTalkCourseTranslationConfiguration());
         modelBuilder.ApplyConfiguration(new ToolboxTalkCourseAssignmentConfiguration());
         modelBuilder.ApplyConfiguration(new ToolboxTalkCertificateConfiguration());
+        modelBuilder.ApplyConfiguration(new CertificateNumberCounterConfiguration());
         modelBuilder.ApplyConfiguration(new ToolboxTalkSlideConfiguration());
         modelBuilder.ApplyConfiguration(new ToolboxTalkSlideTranslationConfiguration());
         modelBuilder.ApplyConfiguration(new ToolboxTalkSlideshowTranslationConfiguration());
@@ -357,6 +359,7 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.Entity<ToolboxTalkTranslation>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<ToolboxTalkVideoTranslation>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<ToolboxTalkCertificate>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
+        modelBuilder.Entity<CertificateNumberCounter>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<SubtitleProcessingJob>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<ToolboxTalkSlide>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<TranslationValidationRun>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));

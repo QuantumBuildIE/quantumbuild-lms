@@ -200,14 +200,39 @@ public class CertificateGenerationService(
         return certificate;
     }
 
+    /// <summary>
+    /// Allocates the next certificate number for {tenantId, prefix, current year} atomically via
+    /// a single INSERT ... ON CONFLICT DO UPDATE ... RETURNING statement against
+    /// CertificateNumberCounters. This must happen before PDF render (the number is printed on
+    /// the certificate and used as the R2 storage key), and it must be safe under concurrent
+    /// callers in the same tenant - a plain COUNT(*)-then-increment read is not, because the
+    /// count it reads goes stale for the tens/hundreds of milliseconds the caller then spends
+    /// rendering the PDF and uploading it to R2 before the certificate row is actually inserted.
+    /// Postgres guarantees INSERT ... ON CONFLICT DO UPDATE serializes concurrent upserts to the
+    /// same conflicting key, so two simultaneous callers for the same tenant/prefix/year always
+    /// observe distinct LastNumber values - no application-level locking is required.
+    /// </summary>
     private async Task<string> GenerateCertificateNumber(string prefix, Guid tenantId, CancellationToken ct)
     {
         var year = DateTime.UtcNow.Year;
-        var pattern = $"{prefix}-{year}-";
-        var count = await context.ToolboxTalkCertificates
-            .IgnoreQueryFilters()
-            .CountAsync(c => c.TenantId == tenantId && c.CertificateNumber.StartsWith(pattern), ct);
-        return $"{prefix}-{year}-{(count + 1):D6}";
+        var now = DateTime.UtcNow;
+        var db = (DbContext)context;
+
+        var sequence = await db.Database.SqlQueryRaw<int>(
+            """
+            INSERT INTO toolbox_talks."CertificateNumberCounters"
+                ("Id", "TenantId", "Prefix", "Year", "LastNumber", "CreatedAt", "CreatedBy", "IsDeleted")
+            VALUES ({0}, {1}, {2}, {3}, 1, {4}, {5}, false)
+            ON CONFLICT ("TenantId", "Prefix", "Year")
+            DO UPDATE SET "LastNumber" = "CertificateNumberCounters"."LastNumber" + 1,
+                          "UpdatedAt" = {4},
+                          "UpdatedBy" = {5}
+            RETURNING "LastNumber"
+            """,
+            Guid.NewGuid(), tenantId, prefix, year, now, "system")
+            .ToListAsync(ct);
+
+        return $"{prefix}-{year}-{sequence.Single():D6}";
     }
 
     private async Task<string?> UploadCertificatePdf(ToolboxTalkCertificate cert, byte[] pdfBytes, CancellationToken ct)

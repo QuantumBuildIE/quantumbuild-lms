@@ -11,6 +11,7 @@
     <PackageReference Include="FluentValidation" Version="11.*" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.*" />
     <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.*" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="9.0.*" />
     <PackageReference Include="QuestPDF" Version="2025.12.4" />
   </ItemGroup>
 

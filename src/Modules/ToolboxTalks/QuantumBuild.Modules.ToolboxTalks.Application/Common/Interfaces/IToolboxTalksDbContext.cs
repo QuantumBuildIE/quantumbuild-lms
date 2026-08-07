@@ -32,6 +32,7 @@ public interface IToolboxTalksDbContext
 
     // Certificate entities
     DbSet<ToolboxTalkCertificate> ToolboxTalkCertificates { get; }
+    DbSet<CertificateNumberCounter> CertificateNumberCounters { get; }
 
     // Slide entities
     DbSet<ToolboxTalkSlide> ToolboxTalkSlides { get; }
