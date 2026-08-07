@@ -108,7 +108,12 @@ public class ToolboxTalkCertificateConfiguration : IEntityTypeConfiguration<Tool
             .OnDelete(DeleteBehavior.SetNull);
 
         // Indexes
-        builder.HasIndex(c => c.CertificateNumber)
+
+        // Certificate numbers are allocated per-tenant (CertificateGenerationService scopes its
+        // counting/allocation by TenantId + prefix + year), so uniqueness must be scoped the same
+        // way. A global-only unique index here previously caused deterministic collisions between
+        // two different tenants issuing their Nth certificate of the year on the same default prefix.
+        builder.HasIndex(c => new { c.TenantId, c.CertificateNumber })
             .IsUnique()
             .HasDatabaseName("ix_toolbox_talk_certificates_number");
 
