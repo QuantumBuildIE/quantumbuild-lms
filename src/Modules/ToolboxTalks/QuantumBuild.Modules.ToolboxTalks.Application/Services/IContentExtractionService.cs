@@ -22,6 +22,18 @@ public interface IContentExtractionService
         bool includePdf,
         Guid tenantId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets target languages for translation from employees' preferred languages.
+    /// Returns "English" plus each distinct non-English language spoken by an active employee
+    /// in the tenant (language codes are normalised to display names). Falls back to English-only
+    /// if no employee languages are found or on error.
+    /// </summary>
+    /// <param name="tenantId">The tenant ID (required for background jobs that run outside HTTP context)</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    Task<List<string>> GetTargetLanguagesFromEmployeesAsync(
+        Guid tenantId,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>
