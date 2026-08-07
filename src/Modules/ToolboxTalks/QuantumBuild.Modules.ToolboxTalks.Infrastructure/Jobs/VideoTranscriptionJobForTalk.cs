@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Subtitles;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Application.Services;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services.Subtitles;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
@@ -13,7 +14,8 @@ namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 
 /// <summary>
 /// Transcribes the video attached to a new-wizard ToolboxTalk via ElevenLabs.
-/// On success, chains ContentCreationParseJobForTalk to materialise sections.
+/// On success, chains ContentCreationParseJobForTalk to materialise sections and kicks off
+/// subtitle generation (reusing the cached transcript words, no second ElevenLabs call).
 /// Analogous to VideoTranscriptionJob (session-based) but targets the talk row directly.
 /// </summary>
 [AutomaticRetry(Attempts = 2)]
@@ -23,6 +25,8 @@ public class VideoTranscriptionJobForTalk(
     ITranscriptionService transcriptionService,
     ISrtGeneratorService srtGeneratorService,
     ITranscriptService transcriptService,
+    ISubtitleProcessingOrchestrator subtitleOrchestrator,
+    IContentExtractionService contentExtractionService,
     IOptions<SubtitleProcessingSettings> subtitleSettings,
     ILogger<VideoTranscriptionJobForTalk> logger)
 {
@@ -120,6 +124,8 @@ public class VideoTranscriptionJobForTalk(
                 "[VideoTranscriptionForTalk] Transcription complete for talk {TalkId}: {WordCount} words",
                 talkId, result.Words.Count(w => w.Type == "word"));
 
+            await StartSubtitleProcessingAsync(talkId, tenantId, videoUrl, talk.TranscriptWordsJson, cancellationToken);
+
             BackgroundJob.Enqueue<ContentCreationParseJobForTalk>(
                 job => job.ExecuteAsync(talkId, tenantId, CancellationToken.None));
         }
@@ -137,6 +143,51 @@ public class VideoTranscriptionJobForTalk(
                 logger.LogError(saveEx,
                     "[VideoTranscriptionForTalk] Failed to revert status for talk {TalkId}", talkId);
             }
+        }
+    }
+
+    /// <summary>
+    /// Kicks off subtitle generation for the talk's video, reusing the transcript words already
+    /// fetched from ElevenLabs above (via cachedTranscriptWordsJson) so no redundant
+    /// transcription call/cost is incurred. Mirrors the pattern the session-based wizard uses at
+    /// ContentCreationSessionService.cs:733-739. Target languages are resolved the same way
+    /// legacy's auto-transcription path does — English plus each distinct language spoken by an
+    /// active tenant employee (IContentExtractionService.GetTargetLanguagesFromEmployeesAsync) —
+    /// since this runs immediately after transcription, before any wizard translate step exists
+    /// to consult. Failures here are logged and swallowed: missing/late subtitles should never
+    /// revert the talk to Draft or block section-parsing.
+    /// </summary>
+    private async Task StartSubtitleProcessingAsync(
+        Guid talkId,
+        Guid tenantId,
+        string videoUrl,
+        string transcriptWordsJson,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var targetLanguages = await contentExtractionService.GetTargetLanguagesFromEmployeesAsync(
+                tenantId, cancellationToken);
+
+            var subtitleJobId = await subtitleOrchestrator.StartProcessingAsync(
+                talkId,
+                videoUrl,
+                SubtitleVideoSourceType.DirectUrl,
+                targetLanguages,
+                cachedTranscriptWordsJson: transcriptWordsJson,
+                cancellationToken: cancellationToken);
+
+            logger.LogInformation(
+                "[VideoTranscriptionForTalk] Started subtitle processing for talk {TalkId}, job {SubtitleJobId}, languages: {Languages}",
+                talkId, subtitleJobId, string.Join(", ", targetLanguages));
+        }
+        catch (Exception ex)
+        {
+            // Do not let a subtitle-processing failure (e.g. a job already active for this talk)
+            // revert the talk's status or block section-parsing — subtitles are best-effort here.
+            logger.LogError(ex,
+                "[VideoTranscriptionForTalk] Failed to start subtitle processing for talk {TalkId}",
+                talkId);
         }
     }
 }

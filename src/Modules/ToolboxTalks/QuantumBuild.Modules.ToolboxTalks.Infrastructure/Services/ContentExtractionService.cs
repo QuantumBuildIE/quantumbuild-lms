@@ -650,13 +650,10 @@ public class ContentExtractionService : IContentExtractionService
         return slug.Trim('_');
     }
 
-    /// <summary>
-    /// Gets target languages for translation from employees' preferred languages.
-    /// Returns unique non-English languages from all employees in the tenant.
-    /// </summary>
-    private async Task<List<string>> GetTargetLanguagesFromEmployeesAsync(
+    /// <inheritdoc />
+    public async Task<List<string>> GetTargetLanguagesFromEmployeesAsync(
         Guid tenantId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken = default)
     {
         try
         {

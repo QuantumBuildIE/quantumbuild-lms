@@ -81,8 +81,12 @@ public class SubtitleProcessingOrchestrator : ISubtitleProcessingOrchestrator
     {
         _logger.LogInformation("Starting subtitle processing for ToolboxTalk {TalkId}", toolboxTalkId);
 
-        // Verify the toolbox talk exists
+        // IgnoreQueryFilters() so this also works from Hangfire job context, where there is no
+        // HttpContext and the ambient tenant query filter would otherwise resolve to Guid.Empty
+        // and match nothing (see CLAUDE.md Note 22/23). Both queries below are already scoped by
+        // an explicit unique identifier (toolboxTalkId), so bypassing the filter is safe.
         var talk = await _dbContext.ToolboxTalks
+            .IgnoreQueryFilters()
             .FirstOrDefaultAsync(t => t.Id == toolboxTalkId && !t.IsDeleted, cancellationToken);
 
         if (talk == null)
@@ -90,6 +94,7 @@ public class SubtitleProcessingOrchestrator : ISubtitleProcessingOrchestrator
 
         // Check for existing active job
         var existingJob = await _dbContext.SubtitleProcessingJobs
+            .IgnoreQueryFilters()
             .FirstOrDefaultAsync(j => j.ToolboxTalkId == toolboxTalkId
                 && !j.IsDeleted
                 && j.Status != SubtitleProcessingStatus.Completed
@@ -105,9 +110,12 @@ public class SubtitleProcessingOrchestrator : ISubtitleProcessingOrchestrator
             ? ContentExtractionService.DetermineVideoSourceType(talk.VideoUrl)
             : sourceType;
 
-        // Create the job record
+        // Create the job record. TenantId is set explicitly from the talk we already looked up
+        // rather than relying on the SaveChangesAsync auto-stamp (ICurrentUserService.TenantId),
+        // which resolves to Guid.Empty in Hangfire job context (see CLAUDE.md Note 22).
         var job = new SubtitleProcessingJob
         {
+            TenantId = talk.TenantId,
             ToolboxTalkId = toolboxTalkId,
             SourceVideoUrl = videoUrl,
             VideoSourceType = resolvedSourceType,
