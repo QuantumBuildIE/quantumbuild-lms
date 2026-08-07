@@ -2,9 +2,12 @@ using System.Text.Json;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Subtitles;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Application.Services.Subtitles;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
+using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 
@@ -18,6 +21,9 @@ namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 public class VideoTranscriptionJobForTalk(
     IToolboxTalksDbContext dbContext,
     ITranscriptionService transcriptionService,
+    ISrtGeneratorService srtGeneratorService,
+    ITranscriptService transcriptService,
+    IOptions<SubtitleProcessingSettings> subtitleSettings,
     ILogger<VideoTranscriptionJobForTalk> logger)
 {
     private static readonly JsonSerializerOptions CamelCaseOptions = new()
@@ -89,9 +95,11 @@ public class VideoTranscriptionJobForTalk(
                 return;
             }
 
-            var transcriptText = string.Join(" ", result.Words
-                .Where(w => w.Type == "word")
-                .Select(w => w.Text));
+            var srt = srtGeneratorService.GenerateSrt(result.Words, subtitleSettings.Value.WordsPerSubtitle);
+            var parsed = transcriptService.ParseSrtContent(srt, null);
+            var transcriptText = parsed.Success && !string.IsNullOrEmpty(parsed.FullText)
+                ? parsed.FullText
+                : transcriptService.FormatForAi(parsed);
 
             if (string.IsNullOrWhiteSpace(transcriptText))
             {
