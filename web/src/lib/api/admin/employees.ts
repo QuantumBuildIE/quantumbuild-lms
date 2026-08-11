@@ -11,7 +11,9 @@ export interface CreateEmployeeDto {
   phone?: string;
   mobile?: string;
   jobTitle?: string;
+  /** Legacy free-text department, no longer sent by any employee form */
   department?: string;
+  departmentId?: string;
   primarySiteId?: string;
   startDate?: string;
   endDate?: string;
@@ -33,7 +35,9 @@ export interface UpdateEmployeeDto {
   phone?: string;
   mobile?: string;
   jobTitle?: string;
+  /** Legacy free-text department, no longer sent by any employee form */
   department?: string;
+  departmentId?: string | null;
   primarySiteId?: string | null;
   startDate?: string | null;
   endDate?: string | null;

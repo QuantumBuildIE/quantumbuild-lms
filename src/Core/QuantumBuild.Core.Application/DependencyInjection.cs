@@ -2,6 +2,7 @@ using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using QuantumBuild.Core.Application.Features.Companies;
 using QuantumBuild.Core.Application.Features.Contacts;
+using QuantumBuild.Core.Application.Features.Departments;
 using QuantumBuild.Core.Application.Features.Employees;
 using QuantumBuild.Core.Application.Features.Roles;
 using QuantumBuild.Core.Application.Features.Sites;
@@ -29,6 +30,7 @@ public static class DependencyInjection
 
         // Register Core application services
         services.AddScoped<ISiteService, SiteService>();
+        services.AddScoped<IDepartmentService, DepartmentService>();
         services.AddScoped<IEmployeeService, EmployeeService>();
         services.AddScoped<ICompanyService, CompanyService>();
         services.AddScoped<IContactService, ContactService>();

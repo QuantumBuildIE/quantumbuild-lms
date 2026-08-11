@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/form";
 import { useCreateEmployeeForUser } from "@/lib/api/admin/use-users";
 import { useSites } from "@/lib/api/admin/use-sites";
+import { useAllDepartments } from "@/lib/api/admin/use-departments";
 import { toast } from "sonner";
 import type { User } from "@/lib/api/admin/users";
 
@@ -40,7 +41,7 @@ const formSchema = z.object({
   phone: z.string().max(50).optional(),
   mobile: z.string().max(50).optional(),
   jobTitle: z.string().max(100).optional(),
-  department: z.string().max(100).optional(),
+  departmentId: z.string().optional(),
   primarySiteId: z.string().optional(),
 });
 
@@ -60,6 +61,7 @@ export function CreateEmployeeForUserDialog({
   const createEmployeeForUser = useCreateEmployeeForUser();
   const { data: sitesData, isLoading: loadingSites } = useSites();
   const sites = sitesData?.items ?? [];
+  const { data: departments, isLoading: loadingDepartments } = useAllDepartments();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -68,7 +70,7 @@ export function CreateEmployeeForUserDialog({
       phone: "",
       mobile: "",
       jobTitle: "",
-      department: "",
+      departmentId: "",
       primarySiteId: "",
     },
   });
@@ -89,7 +91,7 @@ export function CreateEmployeeForUserDialog({
           phone: values.phone || undefined,
           mobile: values.mobile || undefined,
           jobTitle: values.jobTitle || undefined,
-          department: values.department || undefined,
+          departmentId: values.departmentId || undefined,
           primarySiteId: values.primarySiteId || undefined,
         },
       });
@@ -159,13 +161,29 @@ export function CreateEmployeeForUserDialog({
 
               <FormField
                 control={form.control}
-                name="department"
+                name="departmentId"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Department</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., Operations" {...field} />
-                    </FormControl>
+                    <Select
+                      onValueChange={(value) => field.onChange(value === "__none__" ? "" : value)}
+                      value={field.value || "__none__"}
+                      disabled={loadingDepartments}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder={loadingDepartments ? "Loading departments..." : "Select a department"} />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="__none__">None</SelectItem>
+                        {departments?.filter((d) => d.isActive).map((department) => (
+                          <SelectItem key={department.id} value={department.id}>
+                            {department.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}

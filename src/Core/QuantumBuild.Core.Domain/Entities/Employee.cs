@@ -68,6 +68,18 @@ public class Employee : TenantEntity
     public Site? PrimarySite { get; set; }
 
     /// <summary>
+    /// Structured department the employee belongs to (optional, one per employee).
+    /// </summary>
+    public Guid? DepartmentId { get; set; }
+
+    /// <summary>
+    /// Structured department navigation property. Named to avoid colliding with the
+    /// legacy free-text <see cref="Department"/> field above, which is retained for
+    /// reference during the transition and is no longer written by the UI.
+    /// </summary>
+    public Department? AssignedDepartment { get; set; }
+
+    /// <summary>
     /// Employee status - true if active
     /// </summary>
     public bool IsActive { get; set; } = true;

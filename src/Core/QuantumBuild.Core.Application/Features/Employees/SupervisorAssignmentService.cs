@@ -36,6 +36,8 @@ public class SupervisorAssignmentService : ISupervisorAssignmentService
                 return Result.Fail<List<SupervisorOperatorDto>>(accessCheck.Errors);
 
             var operators = await _context.SupervisorAssignments
+                .Include(sa => sa.Operator)
+                    .ThenInclude(o => o.AssignedDepartment)
                 .Where(sa => sa.SupervisorEmployeeId == supervisorEmployeeId)
                 .OrderBy(sa => sa.Operator.LastName)
                 .ThenBy(sa => sa.Operator.FirstName)
@@ -43,7 +45,7 @@ public class SupervisorAssignmentService : ISupervisorAssignmentService
                     sa.Operator.Id,
                     sa.Operator.EmployeeCode,
                     sa.Operator.FirstName + " " + sa.Operator.LastName,
-                    sa.Operator.Department,
+                    sa.Operator.AssignedDepartment != null ? sa.Operator.AssignedDepartment.Name : null,
                     sa.Operator.JobTitle
                 ))
                 .ToListAsync();
@@ -75,6 +77,7 @@ public class SupervisorAssignmentService : ISupervisorAssignmentService
             var excludedEmployeeIds = await GetExcludedEmployeeIdsAsync();
 
             var availableOperators = await _context.Employees
+                .Include(e => e.AssignedDepartment)
                 .Where(e => e.IsActive
                     && e.Id != supervisorEmployeeId
                     && !assignedOperatorIds.Contains(e.Id)
@@ -85,7 +88,7 @@ public class SupervisorAssignmentService : ISupervisorAssignmentService
                     e.Id,
                     e.EmployeeCode,
                     e.FirstName + " " + e.LastName,
-                    e.Department,
+                    e.AssignedDepartment != null ? e.AssignedDepartment.Name : null,
                     e.JobTitle
                 ))
                 .ToListAsync();

@@ -16,6 +16,7 @@ public record CreateEmployeeForUserDto(
     string? Mobile = null,
     string? JobTitle = null,
     string? Department = null,
+    Guid? DepartmentId = null,
     Guid? PrimarySiteId = null,
     string? GeoTrackerID = null,
     string PreferredLanguage = "en"

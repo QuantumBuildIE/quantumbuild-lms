@@ -86,5 +86,10 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
             .WithMany()
             .HasForeignKey(e => e.PrimarySiteId)
             .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasOne(e => e.AssignedDepartment)
+            .WithMany()
+            .HasForeignKey(e => e.DepartmentId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }

@@ -317,6 +317,17 @@ public class UserService : IUserService
                         }
                     }
 
+                    // Validate DepartmentId if provided
+                    if (dto.NewEmployee.DepartmentId.HasValue)
+                    {
+                        var departmentExists = await _context.Departments
+                            .AnyAsync(d => d.Id == dto.NewEmployee.DepartmentId.Value);
+                        if (!departmentExists)
+                        {
+                            return Result.Fail<UserDto>($"Department with ID {dto.NewEmployee.DepartmentId} not found");
+                        }
+                    }
+
                     var newEmployee = new Employee
                     {
                         Id = Guid.NewGuid(),
@@ -328,6 +339,7 @@ public class UserService : IUserService
                         Mobile = dto.NewEmployee.Mobile,
                         JobTitle = dto.NewEmployee.JobTitle,
                         Department = dto.NewEmployee.Department,
+                        DepartmentId = dto.NewEmployee.DepartmentId,
                         PrimarySiteId = dto.NewEmployee.PrimarySiteId,
                         IsActive = true,
                         UserId = user.Id,
@@ -828,6 +840,16 @@ public class UserService : IUserService
                 }
             }
 
+            // Validate department if provided
+            if (dto.DepartmentId.HasValue)
+            {
+                var departmentExists = await _context.Departments.AnyAsync(d => d.Id == dto.DepartmentId.Value);
+                if (!departmentExists)
+                {
+                    return Result.Fail<UserDto>($"Department with ID {dto.DepartmentId} not found");
+                }
+            }
+
             var employee = new Employee
             {
                 Id = Guid.NewGuid(),
@@ -839,6 +861,7 @@ public class UserService : IUserService
                 Mobile = dto.Mobile,
                 JobTitle = dto.JobTitle,
                 Department = dto.Department,
+                DepartmentId = dto.DepartmentId,
                 PrimarySiteId = dto.PrimarySiteId,
                 IsActive = true,
                 UserId = user.Id,

@@ -234,6 +234,7 @@ public class BulkEmployeeImportJob : IBulkEmployeeImportJob
                 Mobile: row.Mobile,
                 JobTitle: row.JobTitle,
                 Department: row.Department,
+                DepartmentId: null,
                 PrimarySiteId: null,
                 StartDate: row.StartDate.HasValue
                     ? DateTime.SpecifyKind(row.StartDate.Value.ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc)

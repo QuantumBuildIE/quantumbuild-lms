@@ -413,6 +413,7 @@ public static class DataSeeder
             // Core
             Permissions.Core.ManageEmployees => "Manage employees",
             Permissions.Core.ManageSites => "Manage sites",
+            Permissions.Core.ManageDepartments => "Manage departments",
             Permissions.Core.ManageCompanies => "Manage companies and contacts",
             Permissions.Core.ManageUsers => "Manage user accounts",
 

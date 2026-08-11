@@ -48,6 +48,7 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
     // Core DbSets
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<Site> Sites => Set<Site>();
+    public DbSet<Department> Departments => Set<Department>();
     public DbSet<Employee> Employees => Set<Employee>();
     public DbSet<Company> Companies => Set<Company>();
     public DbSet<Contact> Contacts => Set<Contact>();
@@ -245,6 +246,7 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         // Apply Core entity configurations
         modelBuilder.ApplyConfiguration(new TenantConfiguration());
         // modelBuilder.ApplyConfiguration(new SiteConfiguration());
+        modelBuilder.ApplyConfiguration(new DepartmentConfiguration());
         modelBuilder.ApplyConfiguration(new EmployeeConfiguration());
         // modelBuilder.ApplyConfiguration(new CompanyConfiguration());
         modelBuilder.ApplyConfiguration(new ContactConfiguration());
@@ -333,6 +335,7 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         // Apply global query filters - Core entities
         // BypassTenantFilter allows SuperUser to see all tenants' data when no tenant is selected
         modelBuilder.Entity<Site>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
+        modelBuilder.Entity<Department>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<Employee>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<Company>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<Contact>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));

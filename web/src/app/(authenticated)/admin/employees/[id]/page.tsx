@@ -265,7 +265,7 @@ export default function EmployeeDetailPage() {
             <DetailItem label="Phone" value={employee.phone} />
             <DetailItem label="Mobile" value={employee.mobile} />
             <DetailItem label="Job Title" value={employee.jobTitle} />
-            <DetailItem label="Department" value={employee.department} />
+            <DetailItem label="Department" value={employee.departmentName} />
             <DetailItem label="Default Site" value={employee.primarySiteName} />
             <DetailItem
               label="Preferred Language"

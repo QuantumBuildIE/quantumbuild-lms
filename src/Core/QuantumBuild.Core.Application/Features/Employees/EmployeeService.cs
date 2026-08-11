@@ -56,6 +56,7 @@ public class EmployeeService : IEmployeeService
         {
             var employees = await _context.Employees
                 .Include(e => e.PrimarySite)
+                .Include(e => e.AssignedDepartment)
                 .OrderBy(e => e.EmployeeCode)
                 .Select(e => new EmployeeDto(
                     e.Id,
@@ -68,6 +69,8 @@ public class EmployeeService : IEmployeeService
                     e.Mobile,
                     e.JobTitle,
                     e.Department,
+                    e.DepartmentId,
+                    e.AssignedDepartment != null ? e.AssignedDepartment.Name : null,
                     e.PrimarySiteId,
                     e.PrimarySite != null ? e.PrimarySite.SiteName : null,
                     e.StartDate,
@@ -99,6 +102,7 @@ public class EmployeeService : IEmployeeService
         {
             var employeesQuery = _context.Employees
                 .Include(e => e.PrimarySite)
+                .Include(e => e.AssignedDepartment)
                 .AsQueryable();
 
             // Apply search filter
@@ -136,6 +140,8 @@ public class EmployeeService : IEmployeeService
                     e.Mobile,
                     e.JobTitle,
                     e.Department,
+                    e.DepartmentId,
+                    e.AssignedDepartment != null ? e.AssignedDepartment.Name : null,
                     e.PrimarySiteId,
                     e.PrimarySite != null ? e.PrimarySite.SiteName : null,
                     e.StartDate,
@@ -193,6 +199,7 @@ public class EmployeeService : IEmployeeService
 
             var employee = await _context.Employees
                 .Include(e => e.PrimarySite)
+                .Include(e => e.AssignedDepartment)
                 .Where(e => e.Id == id)
                 .Select(e => new EmployeeDto(
                     e.Id,
@@ -205,6 +212,8 @@ public class EmployeeService : IEmployeeService
                     e.Mobile,
                     e.JobTitle,
                     e.Department,
+                    e.DepartmentId,
+                    e.AssignedDepartment != null ? e.AssignedDepartment.Name : null,
                     e.PrimarySiteId,
                     e.PrimarySite != null ? e.PrimarySite.SiteName : null,
                     e.StartDate,
@@ -257,6 +266,19 @@ public class EmployeeService : IEmployeeService
                 }
             }
 
+            // Validate that DepartmentId exists if provided
+            if (dto.DepartmentId.HasValue)
+            {
+                var departmentExists = await _context.Departments
+                    .IgnoreQueryFilters()
+                    .AnyAsync(d => d.TenantId == tenantId && !d.IsDeleted && d.Id == dto.DepartmentId.Value);
+
+                if (!departmentExists)
+                {
+                    return Result.Fail<EmployeeDto>($"Department with ID {dto.DepartmentId} not found");
+                }
+            }
+
             // Auto-generate EmployeeCode (EMP001, EMP002, etc.) - ignore any value from frontend
             var employeeCode = await GenerateEmployeeCodeAsync(tenantId);
 
@@ -300,6 +322,7 @@ public class EmployeeService : IEmployeeService
                 Mobile = dto.Mobile,
                 JobTitle = dto.JobTitle,
                 Department = dto.Department,
+                DepartmentId = dto.DepartmentId,
                 PrimarySiteId = dto.PrimarySiteId,
                 StartDate = dto.StartDate.HasValue ? DateTime.SpecifyKind(dto.StartDate.Value, DateTimeKind.Utc) : null,
                 EndDate = dto.EndDate.HasValue ? DateTime.SpecifyKind(dto.EndDate.Value, DateTimeKind.Utc) : null,
@@ -433,6 +456,7 @@ public class EmployeeService : IEmployeeService
             var createdEmployee = await _context.Employees
                 .IgnoreQueryFilters()
                 .Include(e => e.PrimarySite)
+                .Include(e => e.AssignedDepartment)
                 .FirstAsync(e => e.Id == employee.Id && !e.IsDeleted);
 
             var employeeDto = new EmployeeDto(
@@ -446,6 +470,8 @@ public class EmployeeService : IEmployeeService
                 createdEmployee.Mobile,
                 createdEmployee.JobTitle,
                 createdEmployee.Department,
+                createdEmployee.DepartmentId,
+                createdEmployee.AssignedDepartment?.Name,
                 createdEmployee.PrimarySiteId,
                 createdEmployee.PrimarySite?.SiteName,
                 createdEmployee.StartDate,
@@ -596,6 +622,7 @@ public class EmployeeService : IEmployeeService
         {
             var employee = await _context.Employees
                 .Include(e => e.PrimarySite)
+                .Include(e => e.AssignedDepartment)
                 .FirstOrDefaultAsync(e => e.Id == id);
 
             if (employee == null)
@@ -612,6 +639,18 @@ public class EmployeeService : IEmployeeService
                 if (!siteExists)
                 {
                     return Result.Fail<EmployeeDto>($"Site with ID {dto.PrimarySiteId} not found");
+                }
+            }
+
+            // Validate that DepartmentId exists if provided
+            if (dto.DepartmentId.HasValue)
+            {
+                var departmentExists = await _context.Departments
+                    .AnyAsync(d => d.Id == dto.DepartmentId.Value);
+
+                if (!departmentExists)
+                {
+                    return Result.Fail<EmployeeDto>($"Department with ID {dto.DepartmentId} not found");
                 }
             }
 
@@ -657,7 +696,9 @@ public class EmployeeService : IEmployeeService
             employee.Phone = dto.Phone;
             employee.Mobile = dto.Mobile;
             employee.JobTitle = dto.JobTitle;
-            employee.Department = dto.Department;
+            // employee.Department (legacy free text) is intentionally left untouched here,
+            // see UpdateEmployeeDto.Department doc comment. Structured department is DepartmentId.
+            employee.DepartmentId = dto.DepartmentId;
             employee.PrimarySiteId = dto.PrimarySiteId;
             employee.StartDate = dto.StartDate.HasValue ? DateTime.SpecifyKind(dto.StartDate.Value, DateTimeKind.Utc) : null;
             employee.EndDate = dto.EndDate.HasValue ? DateTime.SpecifyKind(dto.EndDate.Value, DateTimeKind.Utc) : null;
@@ -738,6 +779,11 @@ public class EmployeeService : IEmployeeService
                 .Reference(e => e.PrimarySite)
                 .LoadAsync();
 
+            await _context.Employees
+                .Entry(employee)
+                .Reference(e => e.AssignedDepartment)
+                .LoadAsync();
+
             var employeeDto = new EmployeeDto(
                 employee.Id,
                 employee.EmployeeCode,
@@ -749,6 +795,8 @@ public class EmployeeService : IEmployeeService
                 employee.Mobile,
                 employee.JobTitle,
                 employee.Department,
+                employee.DepartmentId,
+                employee.AssignedDepartment?.Name,
                 employee.PrimarySiteId,
                 employee.PrimarySite?.SiteName,
                 employee.StartDate,
@@ -919,6 +967,7 @@ public class EmployeeService : IEmployeeService
         {
             var employees = await _context.Employees
                 .Include(e => e.PrimarySite)
+                .Include(e => e.AssignedDepartment)
                 .Where(e => e.UserId == null && e.IsActive)
                 .OrderBy(e => e.FirstName)
                 .ThenBy(e => e.LastName)
@@ -933,6 +982,8 @@ public class EmployeeService : IEmployeeService
                     e.Mobile,
                     e.JobTitle,
                     e.Department,
+                    e.DepartmentId,
+                    e.AssignedDepartment != null ? e.AssignedDepartment.Name : null,
                     e.PrimarySiteId,
                     e.PrimarySite != null ? e.PrimarySite.SiteName : null,
                     e.StartDate,
@@ -1055,6 +1106,7 @@ public class EmployeeService : IEmployeeService
             // Get the employee
             var employee = await _context.Employees
                 .Include(e => e.PrimarySite)
+                .Include(e => e.AssignedDepartment)
                 .FirstOrDefaultAsync(e => e.Id == employeeId);
 
             if (employee == null)
@@ -1106,6 +1158,8 @@ public class EmployeeService : IEmployeeService
                 employee.Mobile,
                 employee.JobTitle,
                 employee.Department,
+                employee.DepartmentId,
+                employee.AssignedDepartment?.Name,
                 employee.PrimarySiteId,
                 employee.PrimarySite?.SiteName,
                 employee.StartDate,
@@ -1139,6 +1193,7 @@ public class EmployeeService : IEmployeeService
             // Get the employee
             var employee = await _context.Employees
                 .Include(e => e.PrimarySite)
+                .Include(e => e.AssignedDepartment)
                 .FirstOrDefaultAsync(e => e.Id == employeeId);
 
             if (employee == null)
@@ -1232,6 +1287,8 @@ public class EmployeeService : IEmployeeService
                 employee.Mobile,
                 employee.JobTitle,
                 employee.Department,
+                employee.DepartmentId,
+                employee.AssignedDepartment?.Name,
                 employee.PrimarySiteId,
                 employee.PrimarySite?.SiteName,
                 employee.StartDate,

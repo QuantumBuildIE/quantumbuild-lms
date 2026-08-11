@@ -2,7 +2,7 @@ namespace QuantumBuild.Core.Infrastructure.Identity;
 
 /// <summary>
 /// Static class containing all permission constants for the application.
-/// 11 permissions across 4 modules: Learnings, LessonParser, Core, Tenant.
+/// 12 permissions across 4 modules: Learnings, LessonParser, Core, Tenant.
 /// </summary>
 public static class Permissions
 {
@@ -24,6 +24,7 @@ public static class Permissions
     {
         public const string ManageEmployees = "Core.ManageEmployees";
         public const string ManageSites = "Core.ManageSites";
+        public const string ManageDepartments = "Core.ManageDepartments";
         public const string ManageCompanies = "Core.ManageCompanies";
         public const string ManageUsers = "Core.ManageUsers";
     }
@@ -61,6 +62,7 @@ public static class Permissions
             // Core permissions
             Core.ManageEmployees,
             Core.ManageSites,
+            Core.ManageDepartments,
             Core.ManageCompanies,
             Core.ManageUsers,
 

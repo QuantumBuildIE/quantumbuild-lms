@@ -15,6 +15,13 @@ export interface Site {
   notes?: string;
 }
 
+export interface Department {
+  id: string;
+  name: string;
+  code?: string;
+  isActive: boolean;
+}
+
 export interface Employee {
   id: string;
   employeeCode: string;
@@ -25,7 +32,10 @@ export interface Employee {
   phone?: string;
   mobile?: string;
   jobTitle?: string;
+  /** Legacy free-text department, retained for reference. See departmentId/departmentName. */
   department?: string;
+  departmentId?: string;
+  departmentName?: string;
   primarySiteId?: string;
   primarySiteName?: string;
   startDate?: string;

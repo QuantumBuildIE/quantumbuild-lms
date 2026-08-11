@@ -10,6 +10,7 @@ public record CreateUserEmployeeDto(
     string? Mobile,
     string? JobTitle,
     string? Department,
+    Guid? DepartmentId,
     Guid? PrimarySiteId,
     string? GeoTrackerID = null
 );
