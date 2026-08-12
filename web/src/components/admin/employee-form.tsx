@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/select";
 import { useCreateEmployee, useUpdateEmployee } from "@/lib/api/admin/use-employees";
 import { useAllSites } from "@/lib/api/admin/use-sites";
+import { useAllDepartments } from "@/lib/api/admin/use-departments";
 import { useRoles } from "@/lib/api/admin/use-roles";
 import type { Employee } from "@/types/admin";
 import { toast } from "sonner";
@@ -43,7 +44,7 @@ const employeeFormSchema = z.object({
   phone: z.string().max(50).optional().nullable(),
   mobile: z.string().max(50).optional().nullable(),
   jobTitle: z.string().max(100).optional().nullable(),
-  department: z.string().max(100).optional().nullable(),
+  departmentId: z.string().optional().nullable(),
   primarySiteId: z.string().optional().nullable(),
   startDate: z.string().optional().nullable(),
   endDate: z.string().optional().nullable(),
@@ -76,6 +77,7 @@ export function EmployeeForm({ employee, onSuccess, onCancel }: EmployeeFormProp
   const createEmployee = useCreateEmployee();
   const updateEmployee = useUpdateEmployee();
   const { data: sites, isLoading: sitesLoading } = useAllSites();
+  const { data: departments, isLoading: departmentsLoading } = useAllDepartments();
   const { data: roles, isLoading: rolesLoading } = useRoles();
   const { data: languages = [] } = useLookupValues('Language');
 
@@ -89,7 +91,7 @@ export function EmployeeForm({ employee, onSuccess, onCancel }: EmployeeFormProp
       phone: employee?.phone ?? "",
       mobile: employee?.mobile ?? "",
       jobTitle: employee?.jobTitle ?? "",
-      department: employee?.department ?? "",
+      departmentId: employee?.departmentId ?? "",
       primarySiteId: employee?.primarySiteId ?? "",
       startDate: employee?.startDate ? employee.startDate.split("T")[0] : "",
       endDate: employee?.endDate ? employee.endDate.split("T")[0] : "",
@@ -116,7 +118,7 @@ export function EmployeeForm({ employee, onSuccess, onCancel }: EmployeeFormProp
         phone: values.phone || undefined,
         mobile: values.mobile || undefined,
         jobTitle: values.jobTitle || undefined,
-        department: values.department || undefined,
+        departmentId: values.departmentId || undefined,
         primarySiteId: values.primarySiteId || undefined,
         startDate: values.startDate || undefined,
         endDate: values.endDate || undefined,
@@ -134,7 +136,7 @@ export function EmployeeForm({ employee, onSuccess, onCancel }: EmployeeFormProp
             phone: cleanedValues.phone,
             mobile: cleanedValues.mobile,
             jobTitle: cleanedValues.jobTitle,
-            department: cleanedValues.department,
+            departmentId: cleanedValues.departmentId || null,
             primarySiteId: cleanedValues.primarySiteId || null,
             startDate: cleanedValues.startDate || null,
             endDate: cleanedValues.endDate || null,
@@ -156,7 +158,7 @@ export function EmployeeForm({ employee, onSuccess, onCancel }: EmployeeFormProp
           phone: cleanedValues.phone,
           mobile: cleanedValues.mobile,
           jobTitle: cleanedValues.jobTitle,
-          department: cleanedValues.department,
+          departmentId: cleanedValues.departmentId,
           primarySiteId: cleanedValues.primarySiteId,
           startDate: cleanedValues.startDate,
           endDate: cleanedValues.endDate,
@@ -234,18 +236,29 @@ export function EmployeeForm({ employee, onSuccess, onCancel }: EmployeeFormProp
 
           <FormField
             control={form.control}
-            name="department"
+            name="departmentId"
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Department</FormLabel>
-                <FormControl>
-                  <LookupField
-                    categoryName="Department"
-                    value={field.value ?? ""}
-                    onChange={field.onChange}
-                    placeholder="Select department..."
-                  />
-                </FormControl>
+                <Select
+                  onValueChange={(value) => field.onChange(value === "__none__" ? "" : value)}
+                  value={field.value || "__none__"}
+                  disabled={departmentsLoading}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder={departmentsLoading ? "Loading departments..." : "Select a department"} />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="__none__">None</SelectItem>
+                    {departments?.filter(d => d.isActive).map((department) => (
+                      <SelectItem key={department.id} value={department.id}>
+                        {department.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <FormMessage />
               </FormItem>
             )}

@@ -8,7 +8,14 @@ public record UpdateEmployeeDto(
     string? Phone,
     string? Mobile,
     string? JobTitle,
+    /// <summary>
+    /// Legacy free-text department. No longer read by <c>EmployeeService.UpdateAsync</c>;
+    /// kept on the DTO only for API-contract stability during the transition to
+    /// <see cref="DepartmentId"/>, so existing per-employee free text values are never
+    /// overwritten by an edit that doesn't touch department.
+    /// </summary>
     string? Department,
+    Guid? DepartmentId,
     Guid? PrimarySiteId,
     DateTime? StartDate,
     DateTime? EndDate,

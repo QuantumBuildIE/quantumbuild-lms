@@ -46,6 +46,11 @@ public sealed class BulkEmployeeImportValidationService : IBulkEmployeeImportVal
             .Select(u => u.NormalizedEmail!)
             .ToHashSetAsync(cancellationToken);
 
+        // Departments query filter automatically scopes to the current tenant and excludes soft-deleted rows.
+        // Loaded once per import run and matched in memory (case-insensitive), avoiding a query per row.
+        var departmentsByName = await _context.Departments
+            .ToDictionaryAsync(d => d.Name.Trim(), d => d.Id, StringComparer.OrdinalIgnoreCase, cancellationToken);
+
         var csvConfig = new CsvConfiguration(CultureInfo.InvariantCulture)
         {
             HasHeaderRecord = true,
@@ -204,6 +209,22 @@ public sealed class BulkEmployeeImportValidationService : IBulkEmployeeImportVal
             if (department is not null && department.Length > 100)  Fail("Department exceeds 100 characters.");
             if (notes      is not null && notes.Length      > 2000) Fail("Notes exceeds 2000 characters.");
 
+            // Department: match against the tenant's existing Department rows by name (case-insensitive).
+            // Blank stays unmatched with no warning; a present-but-unmatched value warns and imports with
+            // no department rather than failing the row or auto-creating a department.
+            Guid? departmentId = null;
+            if (department is not null && department.Length <= 100)
+            {
+                if (departmentsByName.TryGetValue(department, out var matchedDepartmentId))
+                {
+                    departmentId = matchedDepartmentId;
+                }
+                else
+                {
+                    Warn($"Department '{department}' does not match any existing department for this account, imported with no department.");
+                }
+            }
+
             // UserRole — Operator or Supervisor only; blank/unrecognised → default Operator (not a failure)
             var userRole = "Operator";
             if (userRoleRaw is not null)
@@ -244,6 +265,7 @@ public sealed class BulkEmployeeImportValidationService : IBulkEmployeeImportVal
                 Mobile          = mobile,
                 JobTitle        = jobTitle,
                 Department      = department,
+                DepartmentId    = departmentId,
                 StartDate       = startDate,
                 EndDate         = endDate,
                 Notes           = notes,

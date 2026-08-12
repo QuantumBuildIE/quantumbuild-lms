@@ -31,6 +31,7 @@ import type { CreateUserDto, EmployeeLinkOption } from "@/lib/api/admin/users";
 import { useRoles, type Role } from "@/lib/api/admin/use-roles";
 import { useUnlinkedEmployees } from "@/lib/api/admin/use-employees";
 import { useAllSites } from "@/lib/api/admin/use-sites";
+import { useAllDepartments } from "@/lib/api/admin/use-departments";
 import { toast } from "sonner";
 import { getApiErrorMessage } from "@/lib/utils";
 import { LookupField } from "./lookup-field";
@@ -50,7 +51,7 @@ const createUserSchema = z
     newEmployeePhone: z.string().max(50).optional(),
     newEmployeeMobile: z.string().max(50).optional(),
     newEmployeeJobTitle: z.string().max(100).optional(),
-    newEmployeeDepartment: z.string().max(100).optional(),
+    newEmployeeDepartmentId: z.string().optional(),
     newEmployeePrimarySiteId: z.string().optional(),
   })
   .refine(
@@ -92,6 +93,7 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
   const { data: roles, isLoading: rolesLoading } = useRoles();
   const { data: unlinkedEmployees, isLoading: employeesLoading } = useUnlinkedEmployees();
   const { data: sites, isLoading: sitesLoading } = useAllSites();
+  const { data: departments, isLoading: departmentsLoading } = useAllDepartments();
 
   const form = useForm<CreateUserFormValues | UpdateUserFormValues>({
     resolver: zodResolver(isEditing ? updateUserSchema : createUserSchema) as any,
@@ -106,7 +108,7 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
         newEmployeePhone: "",
         newEmployeeMobile: "",
         newEmployeeJobTitle: "",
-        newEmployeeDepartment: "",
+        newEmployeeDepartmentId: "",
         newEmployeePrimarySiteId: "",
       }),
       roleIds: user?.roles.map((r) => r.id) ?? [],
@@ -155,7 +157,7 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
             phone: createValues.newEmployeePhone || undefined,
             mobile: createValues.newEmployeeMobile || undefined,
             jobTitle: createValues.newEmployeeJobTitle || undefined,
-            department: createValues.newEmployeeDepartment || undefined,
+            departmentId: createValues.newEmployeeDepartmentId || undefined,
             primarySiteId: createValues.newEmployeePrimarySiteId || undefined,
           };
         }
@@ -422,18 +424,29 @@ export function UserForm({ user, onSuccess, onCancel }: UserFormProps) {
 
                     <FormField
                       control={form.control}
-                      name={"newEmployeeDepartment" as any}
+                      name={"newEmployeeDepartmentId" as any}
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Department</FormLabel>
-                          <FormControl>
-                            <LookupField
-                              categoryName="Department"
-                              value={field.value ?? ""}
-                              onChange={field.onChange}
-                              placeholder="Select department..."
-                            />
-                          </FormControl>
+                          <Select
+                            onValueChange={(value) => field.onChange(value === "__none__" ? "" : value)}
+                            value={(field.value as string) || "__none__"}
+                            disabled={departmentsLoading}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder={departmentsLoading ? "Loading departments..." : "Select a department"} />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="__none__">None</SelectItem>
+                              {departments?.filter((d) => d.isActive).map((department) => (
+                                <SelectItem key={department.id} value={department.id}>
+                                  {department.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                           <FormMessage />
                         </FormItem>
                       )}

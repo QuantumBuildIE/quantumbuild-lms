@@ -397,6 +397,7 @@ public class ToolboxTalkReportsService : IToolboxTalkReportsService
                 .Where(st => st.TenantId == tenantId && st.Status != ScheduledTalkStatus.Cancelled)
                 .Include(st => st.ToolboxTalk)
                 .Include(st => st.Employee)
+                    .ThenInclude(e => e.AssignedDepartment)
                 .Include(st => st.Completion)
                 .AsQueryable();
 
@@ -440,6 +441,7 @@ public class ToolboxTalkReportsService : IToolboxTalkReportsService
                 var employeeIdsFromTalks = employeesFromTalks.Select(e => e.Id).ToHashSet();
 
                 var unassignedEmployees = await _coreContext.Employees
+                    .Include(e => e.AssignedDepartment)
                     .Where(e => e.TenantId == tenantId && !e.IsDeleted && e.IsActive
                         && !employeeIdsFromTalks.Contains(e.Id))
                     .ToListAsync();
@@ -452,7 +454,7 @@ public class ToolboxTalkReportsService : IToolboxTalkReportsService
                         Id = e.Id,
                         EmployeeCode = e.EmployeeCode,
                         FullName = e.FullName,
-                        Department = e.Department,
+                        Department = e.AssignedDepartment != null ? e.AssignedDepartment.Name : null,
                         JobTitle = e.JobTitle
                     }).ToList();
             }
@@ -466,7 +468,7 @@ public class ToolboxTalkReportsService : IToolboxTalkReportsService
                         Id = e.Id,
                         EmployeeCode = e.EmployeeCode,
                         FullName = e.FullName,
-                        Department = e.Department,
+                        Department = e.AssignedDepartment != null ? e.AssignedDepartment.Name : null,
                         JobTitle = e.JobTitle
                     }).ToList();
             }

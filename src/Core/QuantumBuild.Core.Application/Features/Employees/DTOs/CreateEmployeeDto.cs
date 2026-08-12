@@ -12,7 +12,13 @@ public record CreateEmployeeDto(
     string? Phone,
     string? Mobile,
     string? JobTitle,
+    /// <summary>
+    /// Legacy free-text department, kept during the transition to <see cref="DepartmentId"/>.
+    /// The three employee-management forms no longer send this; it survives only for
+    /// callers not yet migrated (e.g. bulk import).
+    /// </summary>
     string? Department,
+    Guid? DepartmentId,
     Guid? PrimarySiteId,
     DateTime? StartDate,
     DateTime? EndDate,

@@ -273,10 +273,10 @@ export default function AdminComplianceReportPage() {
           </CardContent>
         </Card>
 
-        {/* Department Compliance Chart */}
+        {/* Location Compliance Chart (data is Site-derived, see report?.byDepartment DTO note) */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Compliance by Department</CardTitle>
+            <CardTitle className="text-base">Compliance by Location</CardTitle>
             <CardDescription>Completion rates by site</CardDescription>
           </CardHeader>
           <CardContent>
@@ -294,26 +294,26 @@ export default function AdminComplianceReportPage() {
               </ResponsiveContainer>
             ) : (
               <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                No department data available
+                No location data available
               </div>
             )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Department Breakdown Table */}
+      {/* Location Breakdown Table (data is Site-derived, see report?.byDepartment DTO note) */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <Building2 className="h-5 w-5" />
-            Compliance by Department
+            Compliance by Location
           </CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Department</TableHead>
+                <TableHead>Location</TableHead>
                 <TableHead className="text-right">Employees</TableHead>
                 <TableHead className="text-right">Assigned</TableHead>
                 <TableHead className="text-right">Completed</TableHead>
@@ -336,7 +336,7 @@ export default function AdminComplianceReportPage() {
               ) : (report?.byDepartment ?? []).length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                    No department data available
+                    No location data available
                   </TableCell>
                 </TableRow>
               ) : (

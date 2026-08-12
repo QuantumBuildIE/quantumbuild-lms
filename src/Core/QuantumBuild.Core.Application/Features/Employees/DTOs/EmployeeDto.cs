@@ -10,7 +10,13 @@ public record EmployeeDto(
     string? Phone,
     string? Mobile,
     string? JobTitle,
+    /// <summary>
+    /// Legacy free-text department. Retained for reference during the transition to
+    /// <see cref="DepartmentId"/>, no longer written by any employee form.
+    /// </summary>
     string? Department,
+    Guid? DepartmentId,
+    string? DepartmentName,
     Guid? PrimarySiteId,
     string? PrimarySiteName,
     DateTime? StartDate,

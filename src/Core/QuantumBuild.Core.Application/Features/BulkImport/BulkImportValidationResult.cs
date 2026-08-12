@@ -41,6 +41,13 @@ public sealed record BulkImportRowResult
     public string? Mobile { get; init; }
     public string? JobTitle { get; init; }
     public string? Department { get; init; }
+
+    /// <summary>
+    /// Resolved from Department by case-insensitive name match against the tenant's existing
+    /// Department rows. Null when the CSV value was blank, or when it did not match any
+    /// existing department (a Warning message is added to the row in the latter case).
+    /// </summary>
+    public Guid? DepartmentId { get; init; }
     public DateOnly? StartDate { get; init; }
     public DateOnly? EndDate { get; init; }
     public string? Notes { get; init; }

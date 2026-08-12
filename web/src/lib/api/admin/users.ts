@@ -28,6 +28,7 @@ export interface CreateUserEmployeeDto {
   mobile?: string;
   jobTitle?: string;
   department?: string;
+  departmentId?: string;
   primarySiteId?: string;
 }
 
@@ -182,6 +183,7 @@ export interface CreateEmployeeForUserDto {
   mobile?: string;
   jobTitle?: string;
   department?: string;
+  departmentId?: string;
   primarySiteId?: string;
   preferredLanguage?: string;
 }
