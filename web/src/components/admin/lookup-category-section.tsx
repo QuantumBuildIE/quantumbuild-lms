@@ -25,10 +25,6 @@ const CATEGORY_DISPLAY_NAMES: Record<string, { title: string; description: strin
     title: "Learning Categories",
     description: "Categories used to classify learnings (e.g., Safety, Compliance, Orientation)",
   },
-  Department: {
-    title: "Departments",
-    description: "Organisational departments for employee grouping",
-  },
   JobTitle: {
     title: "Job Titles",
     description: "Job titles available for employees",

@@ -431,7 +431,6 @@ public static class DataSeeder
         var categoriesToSeed = new[]
         {
             new { Name = "TrainingCategory", Module = "Core" },
-            new { Name = "Department", Module = "Core" },
             new { Name = "JobTitle", Module = "Core" }
         };
 
