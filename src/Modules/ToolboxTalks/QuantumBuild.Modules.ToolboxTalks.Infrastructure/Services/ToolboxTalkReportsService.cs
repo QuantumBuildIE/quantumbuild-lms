@@ -386,7 +386,11 @@ public class ToolboxTalkReportsService : IToolboxTalkReportsService
     public async Task<SkillsMatrixDto> GetSkillsMatrixAsync(
         Guid tenantId,
         List<Guid>? employeeIds = null,
-        string? category = null)
+        string? category = null,
+        Guid? departmentId = null,
+        bool departmentUnassigned = false,
+        Guid? siteId = null,
+        bool siteUnassigned = false)
     {
         try
         {
@@ -409,6 +413,27 @@ public class ToolboxTalkReportsService : IToolboxTalkReportsService
             if (!string.IsNullOrEmpty(category))
             {
                 scheduledTalksQuery = scheduledTalksQuery.Where(st => st.ToolboxTalk.Category == category);
+            }
+
+            // Department/location filter — must also apply to the zero-assignment
+            // employees sub-query below, so the same three-state semantics (all /
+            // specific / unassigned) hold for both employee sources.
+            if (departmentUnassigned)
+            {
+                scheduledTalksQuery = scheduledTalksQuery.Where(st => st.Employee.DepartmentId == null);
+            }
+            else if (departmentId.HasValue)
+            {
+                scheduledTalksQuery = scheduledTalksQuery.Where(st => st.Employee.DepartmentId == departmentId.Value);
+            }
+
+            if (siteUnassigned)
+            {
+                scheduledTalksQuery = scheduledTalksQuery.Where(st => st.Employee.PrimarySiteId == null);
+            }
+            else if (siteId.HasValue)
+            {
+                scheduledTalksQuery = scheduledTalksQuery.Where(st => st.Employee.PrimarySiteId == siteId.Value);
             }
 
             var scheduledTalks = await scheduledTalksQuery.ToListAsync();
@@ -440,11 +465,33 @@ public class ToolboxTalkReportsService : IToolboxTalkReportsService
                 // Admin view: employees from ScheduledTalks + active employees with zero assignments
                 var employeeIdsFromTalks = employeesFromTalks.Select(e => e.Id).ToHashSet();
 
-                var unassignedEmployees = await _coreContext.Employees
+                var unassignedEmployeesQuery = _coreContext.Employees
                     .Include(e => e.AssignedDepartment)
                     .Where(e => e.TenantId == tenantId && !e.IsDeleted && e.IsActive
-                        && !employeeIdsFromTalks.Contains(e.Id))
-                    .ToListAsync();
+                        && !employeeIdsFromTalks.Contains(e.Id));
+
+                // Same department/location filter as the ScheduledTalks-derived query
+                // above, so a 'No department' filter correctly includes zero-training
+                // employees who also have no department, and excludes those who have one.
+                if (departmentUnassigned)
+                {
+                    unassignedEmployeesQuery = unassignedEmployeesQuery.Where(e => e.DepartmentId == null);
+                }
+                else if (departmentId.HasValue)
+                {
+                    unassignedEmployeesQuery = unassignedEmployeesQuery.Where(e => e.DepartmentId == departmentId.Value);
+                }
+
+                if (siteUnassigned)
+                {
+                    unassignedEmployeesQuery = unassignedEmployeesQuery.Where(e => e.PrimarySiteId == null);
+                }
+                else if (siteId.HasValue)
+                {
+                    unassignedEmployeesQuery = unassignedEmployeesQuery.Where(e => e.PrimarySiteId == siteId.Value);
+                }
+
+                var unassignedEmployees = await unassignedEmployeesQuery.ToListAsync();
 
                 employees = employeesFromTalks
                     .Concat(unassignedEmployees)

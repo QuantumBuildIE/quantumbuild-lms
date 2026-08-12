@@ -21,8 +21,20 @@ import {
   type SortDirection,
 } from "@/components/shared/data-table";
 import { useEmployees, useDeleteEmployee, useResendInvite } from "@/lib/api/admin/use-employees";
+import { useAllDepartments } from "@/lib/api/admin/use-departments";
+import { useAllSites } from "@/lib/api/admin/use-sites";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { getApiErrorMessage } from "@/lib/utils";
 import type { Employee } from "@/types/admin";
+
+const ALL_VALUE = "__all__";
+const NONE_VALUE = "__none__";
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = React.useState(value);
@@ -51,6 +63,10 @@ export default function EmployeesPage() {
   const sortColumn = searchParams.get("sortColumn") || undefined;
   const sortDirection = (searchParams.get("sortDirection") as SortDirection) || undefined;
   const searchParam = searchParams.get("search") || "";
+  const departmentId = searchParams.get("departmentId") || undefined;
+  const departmentUnassigned = searchParams.get("departmentUnassigned") === "true";
+  const siteId = searchParams.get("siteId") || undefined;
+  const siteUnassigned = searchParams.get("siteUnassigned") === "true";
 
   const [searchInput, setSearchInput] = React.useState(searchParam);
   const debouncedSearch = useDebounce(searchInput, 300);
@@ -69,7 +85,14 @@ export default function EmployeesPage() {
     sortColumn,
     sortDirection,
     search: searchParam || undefined,
+    departmentId,
+    departmentUnassigned,
+    siteId,
+    siteUnassigned,
   });
+
+  const { data: departments = [] } = useAllDepartments();
+  const { data: sites = [] } = useAllSites();
 
   const deleteEmployee = useDeleteEmployee();
   const resendInvite = useResendInvite();
@@ -277,7 +300,7 @@ export default function EmployeesPage() {
         </div>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-4">
         <div className="relative flex-1 max-w-sm">
           <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -287,6 +310,60 @@ export default function EmployeesPage() {
             className="pl-9"
           />
         </div>
+
+        <Select
+          value={departmentUnassigned ? NONE_VALUE : departmentId || ALL_VALUE}
+          onValueChange={(value) => {
+            if (value === ALL_VALUE) {
+              updateUrlParams({ departmentId: null, departmentUnassigned: null, page: 1 });
+            } else if (value === NONE_VALUE) {
+              updateUrlParams({ departmentId: null, departmentUnassigned: "true", page: 1 });
+            } else {
+              updateUrlParams({ departmentId: value, departmentUnassigned: null, page: 1 });
+            }
+          }}
+        >
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="All Departments" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_VALUE}>All Departments</SelectItem>
+            <SelectItem value={NONE_VALUE}>No Department</SelectItem>
+            {departments.map((department) => (
+              <SelectItem key={department.id} value={department.id}>
+                {department.name}
+                {!department.isActive ? " (Inactive)" : ""}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={siteUnassigned ? NONE_VALUE : siteId || ALL_VALUE}
+          onValueChange={(value) => {
+            if (value === ALL_VALUE) {
+              updateUrlParams({ siteId: null, siteUnassigned: null, page: 1 });
+            } else if (value === NONE_VALUE) {
+              updateUrlParams({ siteId: null, siteUnassigned: "true", page: 1 });
+            } else {
+              updateUrlParams({ siteId: value, siteUnassigned: null, page: 1 });
+            }
+          }}
+        >
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="All Locations" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_VALUE}>All Locations</SelectItem>
+            <SelectItem value={NONE_VALUE}>No Location</SelectItem>
+            {sites.map((site) => (
+              <SelectItem key={site.id} value={site.id}>
+                {site.siteName}
+                {!site.isActive ? " (Inactive)" : ""}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <DataTable

@@ -119,6 +119,26 @@ public class EmployeeService : IEmployeeService
                 );
             }
 
+            // Apply department filter (combinable with the site filter and search above)
+            if (query.DepartmentUnassigned)
+            {
+                employeesQuery = employeesQuery.Where(e => e.DepartmentId == null);
+            }
+            else if (query.DepartmentId.HasValue)
+            {
+                employeesQuery = employeesQuery.Where(e => e.DepartmentId == query.DepartmentId.Value);
+            }
+
+            // Apply site/location filter
+            if (query.SiteUnassigned)
+            {
+                employeesQuery = employeesQuery.Where(e => e.PrimarySiteId == null);
+            }
+            else if (query.SiteId.HasValue)
+            {
+                employeesQuery = employeesQuery.Where(e => e.PrimarySiteId == query.SiteId.Value);
+            }
+
             // Apply sorting
             employeesQuery = ApplySorting(employeesQuery, query.SortColumn, query.SortDirection);
 
