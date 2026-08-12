@@ -45,6 +45,18 @@ public record CreateToolboxTalkScheduleCommand : IRequest<ToolboxTalkScheduleDto
     public List<Guid> EmployeeIds { get; init; } = new();
 
     /// <summary>
+    /// Department IDs to target — expands to member employees, unioned with EmployeeIds/TargetSiteIds.
+    /// Ignored when AssignToAllEmployees is true.
+    /// </summary>
+    public List<Guid> TargetDepartmentIds { get; init; } = new();
+
+    /// <summary>
+    /// Site/Location IDs to target — expands to member employees, unioned with EmployeeIds/TargetDepartmentIds.
+    /// Ignored when AssignToAllEmployees is true.
+    /// </summary>
+    public List<Guid> TargetSiteIds { get; init; } = new();
+
+    /// <summary>
     /// Additional notes about the schedule
     /// </summary>
     public string? Notes { get; init; }

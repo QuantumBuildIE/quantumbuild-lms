@@ -30,6 +30,10 @@ public class ToolboxTalkScheduleAssignmentConfiguration : IEntityTypeConfigurati
 
         builder.Property(a => a.ProcessedAt);
 
+        builder.Property(a => a.IsCriteriaDerived)
+            .IsRequired()
+            .HasDefaultValue(false);
+
         // Audit fields
         builder.Property(a => a.CreatedAt)
             .IsRequired();

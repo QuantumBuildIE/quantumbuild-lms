@@ -210,6 +210,8 @@ export interface ToolboxTalkSchedule {
   frequency: ToolboxTalkFrequency;
   frequencyDisplay: string;
   assignToAllEmployees: boolean;
+  targetDepartmentIds: string[];
+  targetSiteIds: string[];
   status: ToolboxTalkScheduleStatus;
   statusDisplay: string;
   nextRunDate: string | null;
@@ -696,6 +698,8 @@ export interface CreateToolboxTalkScheduleRequest {
   frequency: ToolboxTalkFrequency;
   assignToAllEmployees: boolean;
   employeeIds?: string[];
+  targetDepartmentIds?: string[];
+  targetSiteIds?: string[];
   notes?: string;
 }
 

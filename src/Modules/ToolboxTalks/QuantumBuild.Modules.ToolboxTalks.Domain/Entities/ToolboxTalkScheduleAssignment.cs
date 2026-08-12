@@ -29,6 +29,13 @@ public class ToolboxTalkScheduleAssignment : BaseEntity
     /// </summary>
     public DateTime? ProcessedAt { get; set; }
 
+    /// <summary>
+    /// True when this assignment was expanded from a department/site target (or AssignToAllEmployees)
+    /// rather than an explicitly-selected employee. Recurring refresh only adds/removes
+    /// criteria-derived assignments, leaving explicit ones untouched.
+    /// </summary>
+    public bool IsCriteriaDerived { get; set; } = false;
+
     // Navigation properties
 
     /// <summary>

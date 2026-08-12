@@ -79,6 +79,15 @@ public class ProcessToolboxTalkScheduleCommandHandler : IRequestHandler<ProcessT
                 await RefreshAssignmentsForAllEmployees(schedule, request.TenantId, cancellationToken);
                 unprocessedAssignments = schedule.Assignments.Where(a => !a.IsProcessed).ToList();
             }
+            // If targeted by department/location and recurring, refresh the criteria-derived assignments
+            // (explicitly-added employees are left untouched — see RefreshAssignmentsForTargetCriteria)
+            else if (!schedule.AssignToAllEmployees
+                && (schedule.TargetDepartmentIds.Any() || schedule.TargetSiteIds.Any())
+                && schedule.Frequency != ToolboxTalkFrequency.Once)
+            {
+                await RefreshAssignmentsForTargetCriteria(schedule, request.TenantId, cancellationToken);
+                unprocessedAssignments = schedule.Assignments.Where(a => !a.IsProcessed).ToList();
+            }
         }
 
         var talksCreated = 0;
@@ -250,6 +259,75 @@ public class ProcessToolboxTalkScheduleCommandHandler : IRequestHandler<ProcessT
         {
             await _dbContext.ToolboxTalkScheduleAssignments
                 .Where(a => inactiveAssignmentIds.Contains(a.Id))
+                .ExecuteDeleteAsync(cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Re-derives the department/location-targeted portion of a recurring schedule's assignments.
+    /// Only touches assignments flagged IsCriteriaDerived — explicitly-added employees (EmployeeIds
+    /// at creation/edit time) are never added or removed by this refresh, mirroring how
+    /// RefreshAssignmentsForAllEmployees never coexists with an explicit list (AssignToAllEmployees
+    /// and EmployeeIds are mutually exclusive there).
+    /// </summary>
+    private async Task RefreshAssignmentsForTargetCriteria(
+        ToolboxTalkSchedule schedule,
+        Guid tenantId,
+        CancellationToken cancellationToken)
+    {
+        var targetDepartmentIds = schedule.TargetDepartmentIds;
+        var targetSiteIds = schedule.TargetSiteIds;
+
+        var currentTargetEmployeeIds = (await _coreDbContext.Employees
+            .Where(e => e.TenantId == tenantId && e.IsActive && !e.IsDeleted
+                && ((e.DepartmentId.HasValue && targetDepartmentIds.Contains(e.DepartmentId.Value))
+                    || (e.PrimarySiteId.HasValue && targetSiteIds.Contains(e.PrimarySiteId.Value))))
+            .Select(e => e.Id)
+            .ToListAsync(cancellationToken)).ToHashSet();
+
+        var existingEmployeeIds = schedule.Assignments.Select(a => a.EmployeeId).ToHashSet();
+        var existingCriteriaDerivedEmployeeIds = schedule.Assignments
+            .Where(a => a.IsCriteriaDerived)
+            .Select(a => a.EmployeeId)
+            .ToHashSet();
+
+        // Add newly-qualifying employees (skip anyone already present, whether explicit or criteria-derived)
+        foreach (var employeeId in currentTargetEmployeeIds)
+        {
+            if (!existingEmployeeIds.Contains(employeeId))
+            {
+                var assignment = new ToolboxTalkScheduleAssignment
+                {
+                    Id = Guid.NewGuid(),
+                    ScheduleId = schedule.Id,
+                    EmployeeId = employeeId,
+                    IsProcessed = false,
+                    ProcessedAt = null,
+                    IsCriteriaDerived = true
+                };
+                schedule.Assignments.Add(assignment);
+            }
+        }
+
+        // Remove criteria-derived assignments that no longer qualify (department/site changed, or employee
+        // went inactive). Explicit (non-criteria-derived) assignments are never removed by this refresh.
+        var noLongerQualifying = existingCriteriaDerivedEmployeeIds.Except(currentTargetEmployeeIds).ToHashSet();
+        var assignmentsToRemove = schedule.Assignments
+            .Where(a => a.IsCriteriaDerived && noLongerQualifying.Contains(a.EmployeeId))
+            .ToList();
+
+        var assignmentIdsToRemove = new List<Guid>();
+        foreach (var assignment in assignmentsToRemove)
+        {
+            schedule.Assignments.Remove(assignment); // load-bearing for nav-collection consumers
+            _dbContext.Entry(assignment).State = EntityState.Detached;
+            assignmentIdsToRemove.Add(assignment.Id);
+        }
+
+        if (assignmentIdsToRemove.Count > 0)
+        {
+            await _dbContext.ToolboxTalkScheduleAssignments
+                .Where(a => assignmentIdsToRemove.Contains(a.Id))
                 .ExecuteDeleteAsync(cancellationToken);
         }
     }

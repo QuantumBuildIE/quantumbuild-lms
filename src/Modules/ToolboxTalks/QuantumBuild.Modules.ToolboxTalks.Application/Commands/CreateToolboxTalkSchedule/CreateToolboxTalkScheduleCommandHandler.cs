@@ -50,6 +50,7 @@ public class CreateToolboxTalkScheduleCommandHandler : IRequestHandler<CreateToo
             && !_currentUserService.Roles.Contains("Admin", StringComparer.OrdinalIgnoreCase)
             && _currentUserService.Roles.Contains("Supervisor", StringComparer.OrdinalIgnoreCase);
 
+        List<Guid>? supervisorPermittedIds = null;
         if (isSupervisorOnly)
         {
             var supervisorEmployeeId = _currentUserService.EmployeeId;
@@ -66,7 +67,9 @@ public class CreateToolboxTalkScheduleCommandHandler : IRequestHandler<CreateToo
             if (!assignedResult.Success)
                 throw new InvalidOperationException("Could not verify supervisor assignments.");
 
-            var unauthorised = request.EmployeeIds.Except(assignedResult.Data!).ToList();
+            supervisorPermittedIds = assignedResult.Data!;
+
+            var unauthorised = request.EmployeeIds.Except(supervisorPermittedIds).ToList();
             if (unauthorised.Any())
                 throw new InvalidOperationException(
                     $"{unauthorised.Count} selected employee(s) are not in your assigned team and cannot be scheduled.");
@@ -74,6 +77,7 @@ public class CreateToolboxTalkScheduleCommandHandler : IRequestHandler<CreateToo
 
         // Get employee IDs to assign
         List<Guid> employeeIdsToAssign;
+        var criteriaDerivedIds = new HashSet<Guid>();
         if (request.AssignToAllEmployees)
         {
             // Get all active employees for the tenant
@@ -101,7 +105,60 @@ public class CreateToolboxTalkScheduleCommandHandler : IRequestHandler<CreateToo
                 throw new InvalidOperationException($"The following employee IDs are invalid or inactive: {string.Join(", ", invalidIds)}");
             }
 
-            employeeIdsToAssign = validEmployeeIds;
+            // Validate department/site targets belong to the caller's tenant
+            if (request.TargetDepartmentIds.Any())
+            {
+                var validDepartmentIds = await _coreDbContext.Departments
+                    .Where(d => d.TenantId == request.TenantId && !d.IsDeleted && request.TargetDepartmentIds.Contains(d.Id))
+                    .Select(d => d.Id)
+                    .ToListAsync(cancellationToken);
+
+                var invalidDepartmentIds = request.TargetDepartmentIds.Except(validDepartmentIds).ToList();
+                if (invalidDepartmentIds.Any())
+                {
+                    throw new InvalidOperationException($"The following department IDs are invalid: {string.Join(", ", invalidDepartmentIds)}");
+                }
+            }
+
+            if (request.TargetSiteIds.Any())
+            {
+                var validSiteIds = await _coreDbContext.Sites
+                    .Where(s => s.TenantId == request.TenantId && !s.IsDeleted && request.TargetSiteIds.Contains(s.Id))
+                    .Select(s => s.Id)
+                    .ToListAsync(cancellationToken);
+
+                var invalidSiteIds = request.TargetSiteIds.Except(validSiteIds).ToList();
+                if (invalidSiteIds.Any())
+                {
+                    throw new InvalidOperationException($"The following site IDs are invalid: {string.Join(", ", invalidSiteIds)}");
+                }
+            }
+
+            // Expand department/site targets to member employees (union, active only)
+            if (request.TargetDepartmentIds.Any() || request.TargetSiteIds.Any())
+            {
+                var expandedIds = await _coreDbContext.Employees
+                    .Where(e => e.TenantId == request.TenantId && e.IsActive && !e.IsDeleted
+                        && ((e.DepartmentId.HasValue && request.TargetDepartmentIds.Contains(e.DepartmentId.Value))
+                            || (e.PrimarySiteId.HasValue && request.TargetSiteIds.Contains(e.PrimarySiteId.Value))))
+                    .Select(e => e.Id)
+                    .ToListAsync(cancellationToken);
+
+                // Supervisors only reach the operators assigned to them, even via a department/location target
+                if (isSupervisorOnly)
+                {
+                    expandedIds = expandedIds.Intersect(supervisorPermittedIds!).ToList();
+                }
+
+                criteriaDerivedIds = expandedIds.ToHashSet();
+            }
+
+            employeeIdsToAssign = validEmployeeIds.Union(criteriaDerivedIds).ToList();
+
+            if (!employeeIdsToAssign.Any())
+            {
+                throw new InvalidOperationException("No employees resolved from the selected employees, departments, or locations.");
+            }
         }
 
         // Create the schedule
@@ -120,6 +177,8 @@ public class CreateToolboxTalkScheduleCommandHandler : IRequestHandler<CreateToo
             EndDate = endDate,
             Frequency = request.Frequency,
             AssignToAllEmployees = request.AssignToAllEmployees,
+            TargetDepartmentIds = request.AssignToAllEmployees ? new List<Guid>() : request.TargetDepartmentIds,
+            TargetSiteIds = request.AssignToAllEmployees ? new List<Guid>() : request.TargetSiteIds,
             Status = ToolboxTalkScheduleStatus.Active,
             NextRunDate = scheduledDate,
             Notes = request.Notes
@@ -134,7 +193,8 @@ public class CreateToolboxTalkScheduleCommandHandler : IRequestHandler<CreateToo
                 ScheduleId = schedule.Id,
                 EmployeeId = employeeId,
                 IsProcessed = false,
-                ProcessedAt = null
+                ProcessedAt = null,
+                IsCriteriaDerived = criteriaDerivedIds.Contains(employeeId)
             };
             schedule.Assignments.Add(assignment);
         }
@@ -158,6 +218,8 @@ public class CreateToolboxTalkScheduleCommandHandler : IRequestHandler<CreateToo
             Frequency = schedule.Frequency,
             FrequencyDisplay = GetFrequencyDisplay(schedule.Frequency),
             AssignToAllEmployees = schedule.AssignToAllEmployees,
+            TargetDepartmentIds = schedule.TargetDepartmentIds,
+            TargetSiteIds = schedule.TargetSiteIds,
             Status = schedule.Status,
             StatusDisplay = GetStatusDisplay(schedule.Status),
             NextRunDate = schedule.NextRunDate,
