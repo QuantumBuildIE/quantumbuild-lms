@@ -2,7 +2,7 @@ namespace QuantumBuild.Core.Application.Features.Sites.DTOs;
 
 public record SiteDto(
     Guid Id,
-    string SiteCode,
+    string? SiteCode,
     string SiteName,
     string? Address,
     string? City,

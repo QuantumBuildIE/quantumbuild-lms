@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { useHasAnyPermission, usePermission } from "@/lib/auth/use-auth";
+import { useHasAnyPermission, usePermissions } from "@/lib/auth/use-auth";
 import { cn } from "@/lib/utils";
 
 const settingsNavItems = [
@@ -11,6 +11,7 @@ const settingsNavItems = [
   { href: "/admin/settings/languages", label: "Languages" },
   { href: "/admin/settings/lookups", label: "Lookups" },
   { href: "/admin/settings/departments", label: "Departments", permission: "Core.ManageDepartments" },
+  { href: "/admin/settings/locations", label: "Locations", permission: "Core.ManageSites" },
 ];
 
 const settingsPermissions = [
@@ -26,10 +27,12 @@ export default function AdminSettingsLayout({
   const router = useRouter();
   const pathname = usePathname();
   const hasPermission = useHasAnyPermission(settingsPermissions);
-  const canManageDepartments = usePermission("Core.ManageDepartments");
+  const navPermissions = usePermissions(
+    settingsNavItems.flatMap((item) => (item.permission ? [item.permission] : []))
+  );
 
   const visibleNavItems = settingsNavItems.filter(
-    (item) => !item.permission || canManageDepartments
+    (item) => !item.permission || navPermissions[item.permission]
   );
 
   useEffect(() => {

@@ -1,7 +1,7 @@
 namespace QuantumBuild.Core.Application.Features.Sites.DTOs;
 
 public record CreateSiteDto(
-    string SiteCode,
+    string? SiteCode,
     string SiteName,
     string? Address,
     string? City,

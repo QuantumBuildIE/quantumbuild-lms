@@ -1,6 +1,6 @@
 export interface Site {
   id: string;
-  siteCode: string;
+  siteCode: string | null;
   siteName: string;
   address?: string;
   city?: string;

@@ -8,10 +8,9 @@ public class UpdateSiteValidator : AbstractValidator<UpdateSiteDto>
     public UpdateSiteValidator()
     {
         RuleFor(x => x.SiteCode)
-            .NotEmpty()
-            .WithMessage("Site code is required")
             .MaximumLength(50)
-            .WithMessage("Site code must not exceed 50 characters");
+            .WithMessage("Site code must not exceed 50 characters")
+            .When(x => !string.IsNullOrEmpty(x.SiteCode));
 
         RuleFor(x => x.SiteName)
             .NotEmpty()

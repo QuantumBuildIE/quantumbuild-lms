@@ -3,7 +3,7 @@ import type { ApiResponse } from "@/types/auth";
 import type { Site } from "@/types/admin";
 
 export interface CreateSiteDto {
-  siteCode: string;
+  siteCode?: string | null;
   siteName: string;
   address?: string;
   city?: string;
@@ -17,7 +17,7 @@ export interface CreateSiteDto {
 }
 
 export interface UpdateSiteDto {
-  siteCode: string;
+  siteCode?: string | null;
   siteName: string;
   address?: string;
   city?: string;
