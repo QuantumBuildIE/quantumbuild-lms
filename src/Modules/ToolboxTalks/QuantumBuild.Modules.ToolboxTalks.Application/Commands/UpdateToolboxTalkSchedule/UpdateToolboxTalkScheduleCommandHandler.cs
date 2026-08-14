@@ -221,7 +221,12 @@ public class UpdateToolboxTalkScheduleCommandHandler : IRequestHandler<UpdateToo
                 ProcessedAt = null,
                 IsCriteriaDerived = criteriaDerivedIds.Contains(employeeId)
             };
+            // schedule is an already-tracked query result, so DetectChanges resolves a
+            // key-preassigned child linked via nav-collection Add() to Modified, not Added
+            // (EF's Added/Modified heuristic keys off the PK's default-ness). Force Added
+            // explicitly so EF issues an INSERT instead of a 0-row UPDATE.
             schedule.Assignments.Add(assignment);
+            _dbContext.Entry(assignment).State = EntityState.Added;
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
