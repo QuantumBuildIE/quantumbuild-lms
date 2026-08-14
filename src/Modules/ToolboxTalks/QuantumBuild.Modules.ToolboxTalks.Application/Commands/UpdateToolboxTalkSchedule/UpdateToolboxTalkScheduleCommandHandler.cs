@@ -16,17 +16,20 @@ public class UpdateToolboxTalkScheduleCommandHandler : IRequestHandler<UpdateToo
     private readonly ICoreDbContext _coreDbContext;
     private readonly ICurrentUserService _currentUserService;
     private readonly ISupervisorAssignmentService _supervisorAssignmentService;
+    private readonly ITargetEmployeeResolver _targetEmployeeResolver;
 
     public UpdateToolboxTalkScheduleCommandHandler(
         IToolboxTalksDbContext dbContext,
         ICoreDbContext coreDbContext,
         ICurrentUserService currentUserService,
-        ISupervisorAssignmentService supervisorAssignmentService)
+        ISupervisorAssignmentService supervisorAssignmentService,
+        ITargetEmployeeResolver targetEmployeeResolver)
     {
         _dbContext = dbContext;
         _coreDbContext = coreDbContext;
         _currentUserService = currentUserService;
         _supervisorAssignmentService = supervisorAssignmentService;
+        _targetEmployeeResolver = targetEmployeeResolver;
     }
 
     public async Task<ToolboxTalkScheduleDto> Handle(UpdateToolboxTalkScheduleCommand request, CancellationToken cancellationToken)
@@ -140,12 +143,8 @@ public class UpdateToolboxTalkScheduleCommandHandler : IRequestHandler<UpdateToo
             // Expand department/site targets to member employees (union, active only)
             if (request.TargetDepartmentIds.Any() || request.TargetSiteIds.Any())
             {
-                var expandedIds = await _coreDbContext.Employees
-                    .Where(e => e.TenantId == request.TenantId && e.IsActive && !e.IsDeleted
-                        && ((e.DepartmentId.HasValue && request.TargetDepartmentIds.Contains(e.DepartmentId.Value))
-                            || (e.PrimarySiteId.HasValue && request.TargetSiteIds.Contains(e.PrimarySiteId.Value))))
-                    .Select(e => e.Id)
-                    .ToListAsync(cancellationToken);
+                var expandedIds = await _targetEmployeeResolver.ResolveEmployeeIdsAsync(
+                    request.TenantId, request.TargetDepartmentIds, request.TargetSiteIds, cancellationToken);
 
                 // Supervisors only reach the operators assigned to them, even via a department/location target
                 if (isSupervisorOnly)

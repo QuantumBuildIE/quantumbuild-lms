@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using QuantumBuild.Core.Application.Features.Employees;
 using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Core.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
@@ -15,17 +16,20 @@ public class ProcessToolboxTalkScheduleCommandHandler : IRequestHandler<ProcessT
     private readonly IToolboxTalksDbContext _dbContext;
     private readonly ICoreDbContext _coreDbContext;
     private readonly IToolboxTalkEmailService _emailService;
+    private readonly ITargetEmployeeResolver _targetEmployeeResolver;
     private readonly ILogger<ProcessToolboxTalkScheduleCommandHandler> _logger;
 
     public ProcessToolboxTalkScheduleCommandHandler(
         IToolboxTalksDbContext dbContext,
         ICoreDbContext coreDbContext,
         IToolboxTalkEmailService emailService,
+        ITargetEmployeeResolver targetEmployeeResolver,
         ILogger<ProcessToolboxTalkScheduleCommandHandler> logger)
     {
         _dbContext = dbContext;
         _coreDbContext = coreDbContext;
         _emailService = emailService;
+        _targetEmployeeResolver = targetEmployeeResolver;
         _logger = logger;
     }
 
@@ -283,12 +287,8 @@ public class ProcessToolboxTalkScheduleCommandHandler : IRequestHandler<ProcessT
         var targetDepartmentIds = schedule.TargetDepartmentIds;
         var targetSiteIds = schedule.TargetSiteIds;
 
-        var currentTargetEmployeeIds = (await _coreDbContext.Employees
-            .Where(e => e.TenantId == tenantId && e.IsActive && !e.IsDeleted
-                && ((e.DepartmentId.HasValue && targetDepartmentIds.Contains(e.DepartmentId.Value))
-                    || (e.PrimarySiteId.HasValue && targetSiteIds.Contains(e.PrimarySiteId.Value))))
-            .Select(e => e.Id)
-            .ToListAsync(cancellationToken)).ToHashSet();
+        var currentTargetEmployeeIds = (await _targetEmployeeResolver.ResolveEmployeeIdsAsync(
+            tenantId, targetDepartmentIds, targetSiteIds, cancellationToken)).ToHashSet();
 
         var existingEmployeeIds = schedule.Assignments.Select(a => a.EmployeeId).ToHashSet();
         var existingCriteriaDerivedEmployeeIds = schedule.Assignments
