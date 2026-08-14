@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using QuantumBuild.Core.Application.Features.Employees;
 using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Features.CourseAssignments.DTOs;
@@ -15,17 +16,20 @@ public class AssignCourseCommandHandler : IRequestHandler<AssignCourseCommand, L
     private readonly IToolboxTalksDbContext _dbContext;
     private readonly ICoreDbContext _coreDbContext;
     private readonly IToolboxTalkEmailService _emailService;
+    private readonly ITargetEmployeeResolver _targetEmployeeResolver;
     private readonly ILogger<AssignCourseCommandHandler> _logger;
 
     public AssignCourseCommandHandler(
         IToolboxTalksDbContext dbContext,
         ICoreDbContext coreDbContext,
         IToolboxTalkEmailService emailService,
+        ITargetEmployeeResolver targetEmployeeResolver,
         ILogger<AssignCourseCommandHandler> logger)
     {
         _dbContext = dbContext;
         _coreDbContext = coreDbContext;
         _emailService = emailService;
+        _targetEmployeeResolver = targetEmployeeResolver;
         _logger = logger;
     }
 
@@ -54,8 +58,59 @@ public class AssignCourseCommandHandler : IRequestHandler<AssignCourseCommand, L
         if (!courseItems.Any())
             throw new InvalidOperationException("Course has no talks");
 
+        // 1b. Validate department/site targets belong to the caller's tenant
+        if (dto.TargetDepartmentIds.Any())
+        {
+            var validDepartmentIds = await _coreDbContext.Departments
+                .Where(d => d.TenantId == tenantId && !d.IsDeleted && dto.TargetDepartmentIds.Contains(d.Id))
+                .Select(d => d.Id)
+                .ToListAsync(cancellationToken);
+
+            var invalidDepartmentIds = dto.TargetDepartmentIds.Except(validDepartmentIds).ToList();
+            if (invalidDepartmentIds.Any())
+                throw new InvalidOperationException($"The following department IDs are invalid: {string.Join(", ", invalidDepartmentIds)}");
+        }
+
+        if (dto.TargetSiteIds.Any())
+        {
+            var validSiteIds = await _coreDbContext.Sites
+                .Where(s => s.TenantId == tenantId && !s.IsDeleted && dto.TargetSiteIds.Contains(s.Id))
+                .Select(s => s.Id)
+                .ToListAsync(cancellationToken);
+
+            var invalidSiteIds = dto.TargetSiteIds.Except(validSiteIds).ToList();
+            if (invalidSiteIds.Any())
+                throw new InvalidOperationException($"The following site IDs are invalid: {string.Join(", ", invalidSiteIds)}");
+        }
+
+        // 1c. Expand department/site targets to member employees (union, active only, no supervisor
+        // restriction — course assignment is admin-only), merged with the explicit Assignments list
+        var explicitEmployeeIds = dto.Assignments.Select(a => a.EmployeeId).ToHashSet();
+        var mergedAssignments = new List<EmployeeCourseAssignmentDto>(dto.Assignments);
+
+        if (dto.TargetDepartmentIds.Any() || dto.TargetSiteIds.Any())
+        {
+            var expandedIds = await _targetEmployeeResolver.ResolveEmployeeIdsAsync(
+                tenantId, dto.TargetDepartmentIds, dto.TargetSiteIds, cancellationToken);
+
+            foreach (var employeeId in expandedIds)
+            {
+                if (explicitEmployeeIds.Add(employeeId))
+                {
+                    mergedAssignments.Add(new EmployeeCourseAssignmentDto
+                    {
+                        EmployeeId = employeeId,
+                        IncludedTalkIds = null,
+                    });
+                }
+            }
+        }
+
+        if (!mergedAssignments.Any())
+            throw new InvalidOperationException("No employees resolved from the selected employees, departments, or locations.");
+
         // 2. Validate employees exist
-        var employeeIds = dto.Assignments.Select(a => a.EmployeeId).Distinct().ToList();
+        var employeeIds = mergedAssignments.Select(a => a.EmployeeId).Distinct().ToList();
 
         var employees = await _coreDbContext.Employees
             .Where(e => employeeIds.Contains(e.Id) && e.TenantId == tenantId && !e.IsDeleted)
@@ -74,7 +129,7 @@ public class AssignCourseCommandHandler : IRequestHandler<AssignCourseCommand, L
             .ToListAsync(cancellationToken);
 
         var existingEmployeeIdSet = existingEmployeeIds.ToHashSet();
-        var eligibleAssignments = dto.Assignments
+        var eligibleAssignments = mergedAssignments
             .Where(a => !existingEmployeeIdSet.Contains(a.EmployeeId))
             .ToList();
 

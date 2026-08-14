@@ -46,6 +46,10 @@ export interface EmployeeCourseAssignment {
 export interface AssignCourseDto {
   courseId: string;
   assignments: EmployeeCourseAssignment[];
+  /** Department IDs to target — expands to member employees, unioned with `assignments`. */
+  targetDepartmentIds?: string[];
+  /** Site/Location IDs to target — expands to member employees, unioned with `assignments`. */
+  targetSiteIds?: string[];
   dueDate?: string;
 }
 
