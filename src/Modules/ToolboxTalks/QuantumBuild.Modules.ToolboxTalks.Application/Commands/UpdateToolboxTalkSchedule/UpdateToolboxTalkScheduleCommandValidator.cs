@@ -1,11 +1,13 @@
 using FluentValidation;
+using Microsoft.EntityFrameworkCore;
+using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Application.Commands.UpdateToolboxTalkSchedule;
 
 public class UpdateToolboxTalkScheduleCommandValidator : AbstractValidator<UpdateToolboxTalkScheduleCommand>
 {
-    public UpdateToolboxTalkScheduleCommandValidator()
+    public UpdateToolboxTalkScheduleCommandValidator(IToolboxTalksDbContext dbContext)
     {
         RuleFor(x => x.TenantId)
             .NotEmpty()
@@ -15,10 +17,24 @@ public class UpdateToolboxTalkScheduleCommandValidator : AbstractValidator<Updat
             .NotEmpty()
             .WithMessage("Schedule Id is required.");
 
+        // The future-date rule only applies when ScheduledDate is actually being changed.
+        // ScheduleDialog resubmits the schedule's existing (possibly past) date whenever an
+        // admin edits unrelated fields (notes, department/site targeting, end date), so
+        // comparing against the persisted date here — rather than unconditionally against
+        // today — lets those edits through while still rejecting a genuinely new past date.
         RuleFor(x => x.ScheduledDate)
             .NotEmpty()
             .WithMessage("ScheduledDate is required.")
-            .Must(date => date.Date >= DateTime.UtcNow.Date)
+            .MustAsync(async (command, date, ct) =>
+            {
+                var persistedDate = await dbContext.ToolboxTalkSchedules
+                    .Where(s => s.Id == command.Id && s.TenantId == command.TenantId)
+                    .Select(s => (DateTime?)s.ScheduledDate)
+                    .FirstOrDefaultAsync(ct);
+
+                var isDateChange = persistedDate is null || persistedDate.Value.Date != date.Date;
+                return !isDateChange || date.Date >= DateTime.UtcNow.Date;
+            })
             .WithMessage("ScheduledDate must be today or in the future.");
 
         RuleFor(x => x.Frequency)
@@ -39,21 +55,12 @@ public class UpdateToolboxTalkScheduleCommandValidator : AbstractValidator<Updat
                 || (x.TargetSiteIds != null && x.TargetSiteIds.Any()))
             .WithMessage("Either AssignToAllEmployees must be true or at least one employee, department, or location must be selected.");
 
-        // If AssignToAllEmployees is true, EmployeeIds/TargetDepartmentIds/TargetSiteIds should be empty
-        RuleFor(x => x.EmployeeIds)
-            .Must(ids => ids == null || !ids.Any())
-            .When(x => x.AssignToAllEmployees)
-            .WithMessage("EmployeeIds should be empty when AssignToAllEmployees is true.");
-
-        RuleFor(x => x.TargetDepartmentIds)
-            .Must(ids => ids == null || !ids.Any())
-            .When(x => x.AssignToAllEmployees)
-            .WithMessage("TargetDepartmentIds should be empty when AssignToAllEmployees is true.");
-
-        RuleFor(x => x.TargetSiteIds)
-            .Must(ids => ids == null || !ids.Any())
-            .When(x => x.AssignToAllEmployees)
-            .WithMessage("TargetSiteIds should be empty when AssignToAllEmployees is true.");
+        // No "must be empty when AssignToAllEmployees" rule here: the handler already treats
+        // AssignToAllEmployees=true as authoritative and discards EmployeeIds/TargetDepartmentIds/
+        // TargetSiteIds (see UpdateToolboxTalkScheduleCommandHandler.cs:177-178), so rejecting a
+        // request that sends both would contradict the handler's own intentional
+        // ignore-and-assign-everyone behavior (confirmed by
+        // ScheduleTargetingTests.CreateSchedule_AssignToAllEmployeesWithDepartmentTarget_IgnoresDepartmentAndAssignsEveryone).
 
         // Validate EmployeeIds are valid GUIDs
         RuleForEach(x => x.EmployeeIds)

@@ -1,4 +1,3 @@
-using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using QuantumBuild.Core.Application.Interfaces;
@@ -14,26 +13,20 @@ public class UpdateToolboxTalkTenantDefaultsCommandHandler
 {
     private readonly IToolboxTalksDbContext _dbContext;
     private readonly ICurrentUserService _currentUser;
-    private readonly IValidator<UpdateToolboxTalkTenantDefaultsCommand> _validator;
 
     public UpdateToolboxTalkTenantDefaultsCommandHandler(
         IToolboxTalksDbContext dbContext,
-        ICurrentUserService currentUser,
-        IValidator<UpdateToolboxTalkTenantDefaultsCommand> validator)
+        ICurrentUserService currentUser)
     {
         _dbContext = dbContext;
         _currentUser = currentUser;
-        _validator = validator;
     }
 
+    // Validation now runs in the MediatR ValidationBehavior pipeline before Handle() is
+    // ever called, so a manual IValidator invocation here would be dead code.
     public async Task<Result<ToolboxTalkSettingsDto>> Handle(
         UpdateToolboxTalkTenantDefaultsCommand request, CancellationToken ct)
     {
-        var validation = await _validator.ValidateAsync(request, ct);
-        if (!validation.IsValid)
-            return Result.Fail<ToolboxTalkSettingsDto>(
-                string.Join("; ", validation.Errors.Select(e => e.ErrorMessage)));
-
         var settings = await _dbContext.ToolboxTalkSettings
             .Where(s => s.TenantId == request.TenantId && !s.IsDeleted)
             .FirstOrDefaultAsync(ct);

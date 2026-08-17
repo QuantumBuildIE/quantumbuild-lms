@@ -259,7 +259,7 @@ public class MyToolboxTalksController : ControllerBase
         }
         catch (FluentValidation.ValidationException ex)
         {
-            return BadRequest(new { message = ex.Message, errors = ex.Errors });
+            return BadRequest(Result.Fail(ex));
         }
         catch (Exception ex)
         {
@@ -302,7 +302,7 @@ public class MyToolboxTalksController : ControllerBase
         }
         catch (FluentValidation.ValidationException ex)
         {
-            return BadRequest(new { message = ex.Message, errors = ex.Errors });
+            return BadRequest(Result.Fail(ex));
         }
         catch (Exception ex)
         {
@@ -386,7 +386,7 @@ public class MyToolboxTalksController : ControllerBase
         }
         catch (FluentValidation.ValidationException ex)
         {
-            return BadRequest(new { message = ex.Message, errors = ex.Errors });
+            return BadRequest(Result.Fail(ex));
         }
         catch (Exception ex)
         {

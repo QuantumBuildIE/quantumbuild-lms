@@ -2,6 +2,7 @@ using System.Reflection;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using QuantumBuild.Core.Application.Interfaces;
+using QuantumBuild.Modules.ToolboxTalks.Application.Common.Behaviors;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services.Scorm;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services.Subtitles;
@@ -21,7 +22,12 @@ public static class DependencyInjection
     public static IServiceCollection AddToolboxTalksApplication(this IServiceCollection services)
     {
         // Register MediatR handlers from this assembly
-        services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(Assembly.GetExecutingAssembly()));
+        // ROLLBACK: remove the AddOpenBehavior line below to disable command validation instantly.
+        services.AddMediatR(cfg =>
+        {
+            cfg.RegisterServicesFromAssembly(Assembly.GetExecutingAssembly());
+            cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
+        });
 
         // Register FluentValidation validators from this assembly
         services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());

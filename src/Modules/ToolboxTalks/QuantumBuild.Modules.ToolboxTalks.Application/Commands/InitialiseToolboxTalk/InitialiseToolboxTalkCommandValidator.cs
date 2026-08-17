@@ -42,6 +42,12 @@ public class InitialiseToolboxTalkCommandValidator : AbstractValidator<Initialis
             .When(x => x.InputMode == InputMode.Pdf)
             .WithMessage("A source file URL is required for PDF mode.");
 
+        // Docx mode: SourceFileUrl required (mirrors PDF mode)
+        RuleFor(x => x.SourceFileUrl)
+            .NotEmpty()
+            .When(x => x.InputMode == InputMode.Docx)
+            .WithMessage("A source file URL is required for Docx mode.");
+
         // Video mode: VideoUrl or SourceFileUrl required
         RuleFor(x => x)
             .Must(x => !string.IsNullOrEmpty(x.VideoUrl) || !string.IsNullOrEmpty(x.SourceFileUrl))
