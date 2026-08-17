@@ -17,7 +17,6 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Commands.InitialiseToolboxTa
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.ParseToolboxTalkContent;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
-using QuantumBuild.Core.Infrastructure.Services;
 
 namespace QuantumBuild.Core.Infrastructure.Jobs;
 
