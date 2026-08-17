@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
@@ -36,18 +35,20 @@ namespace QuantumBuild.Tests.Integration.ToolboxTalks;
 /// however, is only evaluated by the job itself (the manual button always processes on demand
 /// regardless of due date) — the last test below exercises the job directly for that reason.
 ///
-/// SEPARATE PRE-EXISTING GAP (found while writing the last test, not one of the two defects
-/// above, and NOT fixed here): ProcessToolboxTalkSchedulesJob never sets
-/// IJobTenantContextAccessor.TenantId before calling _mediator.Send(...), unlike e.g.
-/// BulkSopImportJob.cs:206. Without an HttpContext (exactly how Hangfire's cron invokes it),
-/// ICurrentUserService.TenantId falls back to Guid.Empty, so ApplicationDbContext's global tenant
-/// query filter makes ProcessToolboxTalkScheduleCommandHandler's schedule lookup match nothing —
-/// every schedule, in every tenant, throws "not found" (caught per-schedule and merely logged).
-/// Confirmed empirically: the real job cannot successfully process ANY schedule when invoked
-/// exactly as Hangfire would. The last test below works around this in-test only (sets
-/// IJobTenantContextAccessor.TenantId on the job's own scope before calling ExecuteAsync, so the
-/// due-filter defect can be observed in isolation) — no production code is touched. The
-/// IJobTenantContextAccessor gap itself is a distinct bug requiring its own fix, out of scope here.
+/// TENANT CONTEXT GAP (Chunk 2a, fixed): ProcessToolboxTalkSchedulesJob previously never set
+/// IJobTenantContextAccessor.TenantId before dispatching ProcessToolboxTalkScheduleCommand, unlike
+/// e.g. BulkSopImportJob.cs:205. Without an HttpContext (exactly how Hangfire's cron invokes it),
+/// ICurrentUserService.TenantId fell back to Guid.Empty, so ApplicationDbContext's global tenant
+/// query filter made ProcessToolboxTalkScheduleCommandHandler's schedule lookup match nothing: every
+/// schedule, in every tenant, threw 'not found' (caught per-schedule and merely logged). The job now
+/// processes each schedule in its own fresh DI scope, setting IJobTenantContextAccessor.TenantId on
+/// that scope before resolving IMediator, mirroring BulkSopImportJob's fresh-scope-per-item pattern
+/// (see ProcessToolboxTalkSchedulesJob.ProcessScheduleInFreshScopeAsync). See
+/// ExecuteAsync_NoManualTenantContextWorkaround_ProcessesDueScheduleAndCreatesScheduledTalk below for
+/// the before/after proof, and docs/schedule-job-tenant-context-recon.md for the original recon.
+/// This chunk does NOT fix the lifecycle defects (1 and 2) documented above; it only makes the cron
+/// reach the handler where those defects live. It must deploy together with the lifecycle fix
+/// (Chunk 2b), not alone, since it activates the daily-duplication defect on the real cron.
 /// </summary>
 public class RecurringScheduleRefreshCharacterisationTests : IntegrationTestBase
 {
@@ -102,6 +103,54 @@ public class RecurringScheduleRefreshCharacterisationTests : IntegrationTestBase
         scheduledTalkCount.Should().Be(2,
             "current broken behaviour: duplicate ScheduledTalk rows (and duplicate assignment " +
             "emails) are created well inside the Weekly cadence interval");
+    }
+
+    #endregion
+
+    #region TENANT CONTEXT (Chunk 2a): cron now reaches the handler
+
+    [Fact]
+    public async Task ExecuteAsync_NoManualTenantContextWorkaround_ProcessesDueScheduleAndCreatesScheduledTalk()
+    {
+        // Proves the Chunk 2a tenant-context fix. ProcessToolboxTalkSchedulesJob is constructed and
+        // invoked exactly as Hangfire's own cron activator would: via ActivatorUtilities, with no
+        // HttpContext and no manual IJobTenantContextAccessor pre-set anywhere. Before this fix, the
+        // same bare call produced zero ScheduledTalks for every schedule (every schedule's lookup in
+        // ProcessToolboxTalkScheduleCommandHandler threw 'not found', caught per-schedule and merely
+        // logged, see the class doc comment and docs/schedule-job-tenant-context-recon.md). The job
+        // now sets tenant context itself, per schedule, in a fresh DI scope, so this assertion now
+        // resolves to a real ScheduledTalk instead of silently creating nothing.
+        var talk = await CreateTestTalkAsync();
+        var employee = TestTenantConstants.Employees.Employee1;
+
+        var createCommand = new
+        {
+            ToolboxTalkId = talk,
+            ScheduledDate = DateTime.UtcNow.Date,
+            EndDate = DateTime.UtcNow.Date.AddYears(1),
+            Frequency = ToolboxTalkFrequency.Weekly,
+            AssignToAllEmployees = false,
+            EmployeeIds = new[] { employee }
+        };
+        var createResponse = await AdminClient.PostAsJsonAsync("/api/toolbox-talks/schedules", createCommand);
+        createResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+        var created = await createResponse.Content.ReadFromJsonAsync<ScheduleResult>();
+
+        // Act. Run the actual job, resolved via ActivatorUtilities (mirroring Hangfire's own job
+        // activator), with NO manual tenant-context workaround anywhere in this test.
+        using (var jobScope = Factory.Services.CreateScope())
+        {
+            var job = ActivatorUtilities.CreateInstance<ProcessToolboxTalkSchedulesJob>(jobScope.ServiceProvider);
+            await job.ExecuteAsync(CancellationToken.None);
+        }
+
+        // Assert. The cron now reaches ProcessToolboxTalkScheduleCommandHandler and creates a
+        // ScheduledTalk for the assigned employee, where before this fix it created none.
+        var scheduledTalkCount = await CountScheduledTalksAsync(created!.Id, employee);
+        scheduledTalkCount.Should().Be(1,
+            "the job now sets IJobTenantContextAccessor.TenantId per schedule in a fresh scope, so " +
+            "the cron reaches the command handler and creates the ScheduledTalk instead of throwing " +
+            "'not found'");
     }
 
     #endregion
@@ -273,17 +322,11 @@ public class RecurringScheduleRefreshCharacterisationTests : IntegrationTestBase
         // would invoke it. Resolved via ActivatorUtilities (as Hangfire's own job activator does)
         // since the job class is not itself registered in DI.
         //
-        // Test-only workaround for a SEPARATE, pre-existing gap (see class doc comment): the job
-        // never sets IJobTenantContextAccessor.TenantId itself, so without an HttpContext the
-        // command handler's tenant-scoped schedule lookup matches nothing and every schedule
-        // errors with "not found" (caught per-schedule inside the job and merely logged) — the job
-        // cannot successfully process ANY schedule as currently written when invoked exactly as
-        // Hangfire's cron would invoke it. Setting the accessor here simulates what a correctly
-        // wired job would do, so this test can isolate and prove the due-filter defect on its own.
-        // No production code is changed by this workaround.
+        // No manual IJobTenantContextAccessor pre-set here (Chunk 2a removed the need for it): the
+        // job now sets tenant context itself, per schedule, in a fresh DI scope, so a bare
+        // ExecuteAsync() call reaches the command handler correctly on its own.
         using (var jobScope = Factory.Services.CreateScope())
         {
-            jobScope.ServiceProvider.GetRequiredService<IJobTenantContextAccessor>().TenantId = TestTenantConstants.TenantId;
             var job = ActivatorUtilities.CreateInstance<ProcessToolboxTalkSchedulesJob>(jobScope.ServiceProvider);
             await job.ExecuteAsync(CancellationToken.None);
         }
