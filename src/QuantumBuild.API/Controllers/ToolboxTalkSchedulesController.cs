@@ -248,7 +248,8 @@ public class ToolboxTalkSchedulesController : ControllerBase
             var command = new ProcessToolboxTalkScheduleCommand
             {
                 TenantId = _currentUserService.TenantId,
-                ScheduleId = id
+                ScheduleId = id,
+                IsScheduledRun = false
             };
 
             var result = await _mediator.Send(command);

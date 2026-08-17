@@ -7,65 +7,54 @@ using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 namespace QuantumBuild.Tests.Integration.ToolboxTalks;
 
 /// <summary>
-/// Characterisation tests for the recurring-schedule refresh/reprocessing defects documented in
-/// docs/recurring-refresh-reachability-recon.md. Every test here captures CURRENT (broken)
-/// behaviour and PASSES against today's unfixed code — this is the verified baseline the Chunk 2
-/// fix will be measured against. No production code is changed in this chunk.
+/// Verifies the recurring-schedule processing lifecycle fixed in Chunk 2b, against the defects
+/// documented in docs/recurring-refresh-reachability-recon.md and captured (as broken behaviour)
+/// by the original version of this test class.
 ///
-/// Two independent, compounding defects, both captured below:
+/// The two defects that were fixed in ProcessToolboxTalkScheduleCommandHandler:
 ///
-///  - DEFECT 1 (refresh never fires): the criteria/all-employees refresh block
-///    (RefreshAssignmentsForTargetCriteria / RefreshAssignmentsForAllEmployees in
-///    ProcessToolboxTalkScheduleCommandHandler) is gated on "zero unprocessed assignments" — a
-///    state that never occurs naturally, because every non-completing recurring run resets ALL
-///    assignments back to unprocessed at the end of that same run. So the refresh never fires in
-///    normal operation and membership goes stale.
+///  - DEFECT 1 (refresh never fired): the criteria/all-employees refresh is no longer gated on
+///    "zero unprocessed assignments" (a state that could never occur naturally). It now runs
+///    unconditionally, every time a recurring schedule is processed, on both the cron path and
+///    the manual "Process Now" path.
 ///
-///  - DEFECT 2 (reprocessed every job run, not on cadence): ScheduledDate is set once at creation
-///    and never advanced. The daily job's due-filter ORs `ScheduledDate.Date <= today` with
-///    `NextRunDate <= today`, so once ScheduledDate is in the past (true from day one onward) a
-///    schedule is selected as "due" every single day the job runs, regardless of
-///    NextRunDate/frequency. Combined with defect 1 (assignments always reset to unprocessed),
-///    this reprocesses every assignee and creates a duplicate ScheduledTalk (and would send a
-///    duplicate assignment email) on every run instead of once per cadence interval.
+///  - DEFECT 2 (reprocessed every job run, not on cadence): ProcessToolboxTalkSchedulesJob's
+///    due-filter no longer ORs in the write-once ScheduledDate; a schedule is due only when
+///    NextRunDate <= today. ProcessToolboxTalkScheduleCommand gained an IsScheduledRun flag — only
+///    a scheduled (cron) run advances NextRunDate/cadence; a manual run processes on demand without
+///    disturbing it. Assignments are no longer unconditionally reset to unprocessed at the end of
+///    every run; instead ToolboxTalkSchedule.LastProcessedCycleDate tracks which due date was last
+///    handled, so assignments are only reopened once a genuinely new cycle becomes due — this
+///    makes repeat calls against the same due date (cron after manual, or a repeat click)
+///    idempotent instead of duplicating ScheduledTalks/emails.
 ///
 /// The command handler (ProcessToolboxTalkScheduleCommandHandler) is shared between the cron job
 /// (ProcessToolboxTalkSchedulesJob) and the admin "Process Now" button — both entry points hit the
-/// exact same code, so the manual button is equally affected by defect 1. Defect 2's due-filter,
-/// however, is only evaluated by the job itself (the manual button always processes on demand
-/// regardless of due date) — the last test below exercises the job directly for that reason.
+/// exact same code, differing only in the IsScheduledRun flag the caller passes.
 ///
-/// TENANT CONTEXT GAP (Chunk 2a, fixed): ProcessToolboxTalkSchedulesJob previously never set
-/// IJobTenantContextAccessor.TenantId before dispatching ProcessToolboxTalkScheduleCommand, unlike
-/// e.g. BulkSopImportJob.cs:205. Without an HttpContext (exactly how Hangfire's cron invokes it),
-/// ICurrentUserService.TenantId fell back to Guid.Empty, so ApplicationDbContext's global tenant
-/// query filter made ProcessToolboxTalkScheduleCommandHandler's schedule lookup match nothing: every
-/// schedule, in every tenant, threw 'not found' (caught per-schedule and merely logged). The job now
-/// processes each schedule in its own fresh DI scope, setting IJobTenantContextAccessor.TenantId on
-/// that scope before resolving IMediator, mirroring BulkSopImportJob's fresh-scope-per-item pattern
+/// TENANT CONTEXT (Chunk 2a, fixed): ProcessToolboxTalkSchedulesJob sets
+/// IJobTenantContextAccessor.TenantId per schedule in a fresh DI scope before dispatching
+/// ProcessToolboxTalkScheduleCommand, mirroring BulkSopImportJob's fresh-scope-per-item pattern
 /// (see ProcessToolboxTalkSchedulesJob.ProcessScheduleInFreshScopeAsync). See
-/// ExecuteAsync_NoManualTenantContextWorkaround_ProcessesDueScheduleAndCreatesScheduledTalk below for
-/// the before/after proof, and docs/schedule-job-tenant-context-recon.md for the original recon.
-/// This chunk does NOT fix the lifecycle defects (1 and 2) documented above; it only makes the cron
-/// reach the handler where those defects live. It must deploy together with the lifecycle fix
-/// (Chunk 2b), not alone, since it activates the daily-duplication defect on the real cron.
+/// ExecuteAsync_NoManualTenantContextWorkaround_ProcessesDueScheduleAndCreatesScheduledTalk below
+/// for the before/after proof, and docs/schedule-job-tenant-context-recon.md for the original recon.
 /// </summary>
 public class RecurringScheduleRefreshCharacterisationTests : IntegrationTestBase
 {
     public RecurringScheduleRefreshCharacterisationTests(CustomWebApplicationFactory factory) : base(factory) { }
 
-    #region DEFECT 2 — Daily reprocessing produces duplicates
+    #region Idempotency — repeat processing within the same cycle does not duplicate
 
     [Fact]
-    public async Task CurrentBehaviour_ProcessCalledTwiceBeforeCadenceInterval_CreatesDuplicateScheduledTalks()
+    public async Task ProcessCalledTwiceBeforeCadenceInterval_DoesNotCreateDuplicateScheduledTalks()
     {
-        // CAPTURES CURRENT BROKEN BEHAVIOUR — Chunk 2 will invert this assertion.
+        // FIXED BEHAVIOUR (was: CurrentBehaviour_ProcessCalledTwiceBeforeCadenceInterval_CreatesDuplicateScheduledTalks).
         //
-        // A Weekly recurring schedule, processed twice back-to-back (same day — nowhere near the
-        // 7-day cadence interval) currently creates a SECOND ScheduledTalk (and would send a
-        // second assignment email) for the same employee, because the end-of-run reset in
-        // ProcessToolboxTalkScheduleCommandHandler unconditionally marks all assignments
-        // unprocessed again, regardless of whether a full cycle has actually elapsed.
+        // A Weekly recurring schedule, processed twice back-to-back via the manual "Process Now"
+        // endpoint (same day — nowhere near the 7-day cadence interval), must create the
+        // ScheduledTalk only once. The manual endpoint never advances NextRunDate, and
+        // LastProcessedCycleDate prevents the second call from reopening the already-processed
+        // assignment.
         var talk = await CreateTestTalkAsync();
         var employee = TestTenantConstants.Employees.Employee1;
 
@@ -82,27 +71,23 @@ public class RecurringScheduleRefreshCharacterisationTests : IntegrationTestBase
         createResponse.StatusCode.Should().Be(HttpStatusCode.Created);
         var created = await createResponse.Content.ReadFromJsonAsync<ScheduleResult>();
 
-        // Act — simulate the job's day-0 run, then an immediate next run (well inside the 7-day
-        // Weekly cadence — this should NOT reprocess anything if cadence were respected).
+        // Act — two manual calls back-to-back, well inside the 7-day Weekly cadence.
         var firstResponse = await AdminClient.PostAsync($"/api/toolbox-talks/schedules/{created!.Id}/process", null);
         var firstResult = await firstResponse.Content.ReadFromJsonAsync<ProcessResult>();
 
         var secondResponse = await AdminClient.PostAsync($"/api/toolbox-talks/schedules/{created.Id}/process", null);
         var secondResult = await secondResponse.Content.ReadFromJsonAsync<ProcessResult>();
 
-        // Assert — CURRENT (wrong) outcome: both calls report a talk created, and two distinct
-        // ScheduledTalk rows now exist for the same employee/schedule/talk pairing, a week apart
-        // in intent but back-to-back in reality.
+        // Assert — first call processes the employee; the second is a no-op (idempotent).
         firstResult!.TalksCreated.Should().Be(1);
-        secondResult!.TalksCreated.Should().Be(1,
-            "current broken behaviour: the second call reprocesses the same employee instead of " +
-            "skipping until NextRunDate, because assignments were reset to unprocessed at the end " +
-            "of the first run");
+        secondResult!.TalksCreated.Should().Be(0,
+            "the second call falls within the same cycle as the first (LastProcessedCycleDate " +
+            "matches NextRunDate), so the already-processed assignment is not reopened");
 
         var scheduledTalkCount = await CountScheduledTalksAsync(created.Id, employee);
-        scheduledTalkCount.Should().Be(2,
-            "current broken behaviour: duplicate ScheduledTalk rows (and duplicate assignment " +
-            "emails) are created well inside the Weekly cadence interval");
+        scheduledTalkCount.Should().Be(1,
+            "no duplicate ScheduledTalk (or duplicate assignment email) is created within the " +
+            "Weekly cadence interval");
     }
 
     #endregion
@@ -114,12 +99,7 @@ public class RecurringScheduleRefreshCharacterisationTests : IntegrationTestBase
     {
         // Proves the Chunk 2a tenant-context fix. ProcessToolboxTalkSchedulesJob is constructed and
         // invoked exactly as Hangfire's own cron activator would: via ActivatorUtilities, with no
-        // HttpContext and no manual IJobTenantContextAccessor pre-set anywhere. Before this fix, the
-        // same bare call produced zero ScheduledTalks for every schedule (every schedule's lookup in
-        // ProcessToolboxTalkScheduleCommandHandler threw 'not found', caught per-schedule and merely
-        // logged, see the class doc comment and docs/schedule-job-tenant-context-recon.md). The job
-        // now sets tenant context itself, per schedule, in a fresh DI scope, so this assertion now
-        // resolves to a real ScheduledTalk instead of silently creating nothing.
+        // HttpContext and no manual IJobTenantContextAccessor pre-set anywhere.
         var talk = await CreateTestTalkAsync();
         var employee = TestTenantConstants.Employees.Employee1;
 
@@ -144,31 +124,28 @@ public class RecurringScheduleRefreshCharacterisationTests : IntegrationTestBase
             await job.ExecuteAsync(CancellationToken.None);
         }
 
-        // Assert. The cron now reaches ProcessToolboxTalkScheduleCommandHandler and creates a
-        // ScheduledTalk for the assigned employee, where before this fix it created none.
+        // Assert. The cron reaches ProcessToolboxTalkScheduleCommandHandler and creates a
+        // ScheduledTalk for the assigned employee.
         var scheduledTalkCount = await CountScheduledTalksAsync(created!.Id, employee);
         scheduledTalkCount.Should().Be(1,
-            "the job now sets IJobTenantContextAccessor.TenantId per schedule in a fresh scope, so " +
-            "the cron reaches the command handler and creates the ScheduledTalk instead of throwing " +
-            "'not found'");
+            "the job sets IJobTenantContextAccessor.TenantId per schedule in a fresh scope, so " +
+            "the cron reaches the command handler and creates the ScheduledTalk");
     }
 
     #endregion
 
-    #region DEFECT 1 — Refresh never fires, membership goes stale
+    #region Membership refresh — fires on every processing run, cron and manual alike
 
     [Fact]
-    public async Task CurrentBehaviour_NewDepartmentMemberAfterProcessing_IsNotPickedUpOnNextRun()
+    public async Task NewDepartmentMemberAfterProcessing_IsPickedUpOnNextRun()
     {
-        // CAPTURES CURRENT BROKEN BEHAVIOUR — Chunk 2 will invert this assertion.
+        // FIXED BEHAVIOUR (was: CurrentBehaviour_NewDepartmentMemberAfterProcessing_IsNotPickedUpOnNextRun).
         //
         // A recurring, department-targeted schedule is processed once, a new employee then joins
-        // the targeted department, and the schedule is processed again on a later run — via the
-        // real create -> process -> process flow, with NO forced DB write. The refresh
-        // (RefreshAssignmentsForTargetCriteria) is supposed to pick up the new member, but its
-        // guard (`if (!unprocessedAssignments.Any())`) never passes in normal flow, because the
-        // first run's end-of-run reset already left memberA's assignment unprocessed again — so
-        // the refresh branch is skipped entirely and memberB is never added.
+        // the targeted department, and the schedule is processed again — via the real
+        // create -> process -> process flow. The refresh now runs unconditionally on every
+        // processing call, so the new member is picked up without needing a "zero unprocessed
+        // assignments" state to occur first.
         var department = await CreateDepartmentAsync("Recurring Refresh Recon Dept");
         var memberA = await CreateEmployeeAsync("ReconStale", "A", department);
         var talk = await CreateTestTalkAsync();
@@ -186,42 +163,39 @@ public class RecurringScheduleRefreshCharacterisationTests : IntegrationTestBase
         var created = await createResponse.Content.ReadFromJsonAsync<ScheduleResult>();
         created!.AssignmentCount.Should().Be(1);
 
-        // Simulate the job's day-0 run (no forced DB write — this is the real create->process flow).
+        // First processing run.
         var firstResponse = await AdminClient.PostAsync($"/api/toolbox-talks/schedules/{created.Id}/process", null);
         firstResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        // A new employee joins the targeted department after the schedule was last processed —
-        // exactly the scenario the refresh is meant to pick up on the next cycle.
+        // A new employee joins the targeted department after the schedule was last processed.
         var memberB = await CreateEmployeeAsync("ReconStale", "B", department);
 
-        // Act — simulate a later job run (e.g. next week's due run).
+        // Act — a later processing run (e.g. an admin clicking Process Now again, or the next
+        // cron pass).
         var secondResponse = await AdminClient.PostAsync($"/api/toolbox-talks/schedules/{created.Id}/process", null);
 
-        // Assert — CURRENT (wrong) outcome: memberB is NOT added to the schedule's assignments,
-        // because unprocessedAssignments.Any() was true (memberA was reset to unprocessed at the
-        // end of the first run), so the refresh gate never opened.
+        // Assert — memberB is added to the schedule's assignments and processed; memberA is not
+        // reprocessed (already handled in the current cycle).
         secondResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         var secondResult = await secondResponse.Content.ReadFromJsonAsync<ProcessResult>();
         secondResult!.TalksCreated.Should().Be(1,
-            "memberA is reprocessed (defect 2) while memberB is never added (defect 1)");
+            "memberA was already processed this cycle; only the newly-refreshed memberB is processed");
 
         var assignedEmployeeIds = await GetScheduleAssignmentEmployeeIdsAsync(created.Id);
-        assignedEmployeeIds.Should().NotContain(memberB,
-            "current broken behaviour: the refresh guard never passes in normal flow, so a new " +
-            "department member is silently missed");
-        assignedEmployeeIds.Should().BeEquivalentTo(new[] { memberA });
+        assignedEmployeeIds.Should().Contain(memberB,
+            "the membership refresh now runs unconditionally on every processing call, so a new " +
+            "department member is picked up immediately");
+        assignedEmployeeIds.Should().BeEquivalentTo(new[] { memberA, memberB });
     }
 
     [Fact]
-    public async Task CurrentBehaviour_EndOfRunReset_MarksAllAssignmentsUnprocessed_WhichIsWhyRefreshNeverFires()
+    public async Task ProcessedAssignment_StaysProcessed_UntilANewCycleBecomesDue()
     {
-        // CAPTURES CURRENT BROKEN BEHAVIOUR — Chunk 2 will invert this assertion.
+        // FIXED BEHAVIOUR (was: CurrentBehaviour_EndOfRunReset_MarksAllAssignmentsUnprocessed_WhichIsWhyRefreshNeverFires).
         //
-        // Documents the mechanism behind defect 1: after any non-completing recurring run, every
-        // assignment on the schedule (not just the ones just processed) is reset to
-        // IsProcessed = false. This is exactly why `if (!unprocessedAssignments.Any())` can never
-        // pass naturally on the next call — there is always at least one unprocessed assignment
-        // going in, so the refresh gate can never see "a new cycle is starting".
+        // After a single, non-completing recurring run, the assignment stays marked processed —
+        // it is no longer unconditionally reset to unprocessed at the end of the run. It only
+        // becomes unprocessed again once a genuinely new cycle becomes due.
         var talk = await CreateTestTalkAsync();
         var employee = TestTenantConstants.Employees.Employee1;
 
@@ -241,9 +215,8 @@ public class RecurringScheduleRefreshCharacterisationTests : IntegrationTestBase
         var response = await AdminClient.PostAsync($"/api/toolbox-talks/schedules/{created!.Id}/process", null);
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        // Assert — CURRENT (wrong) outcome: the assignment is unprocessed again immediately after
-        // a single successful, non-completing run — not "unprocessed once the next cadence date
-        // arrives", just unconditionally unprocessed.
+        // Assert — the assignment remains processed immediately after a single successful,
+        // non-completing run.
         using var scope = Factory.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<IToolboxTalksDbContext>();
         var assignment = await dbContext.ToolboxTalkScheduleAssignments
@@ -251,32 +224,24 @@ public class RecurringScheduleRefreshCharacterisationTests : IntegrationTestBase
             .Where(a => a.ScheduleId == created.Id)
             .SingleAsync();
 
-        assignment.IsProcessed.Should().BeFalse(
-            "current broken behaviour: the end-of-run reset unconditionally clears IsProcessed on " +
-            "every assignment, which is the reason the refresh guard can never observe zero " +
-            "unprocessed assignments in normal operation");
+        assignment.IsProcessed.Should().BeTrue(
+            "assignments are only reopened when a new cycle becomes due (NextRunDate advances " +
+            "past LastProcessedCycleDate), not unconditionally at the end of every run");
     }
 
     #endregion
 
-    #region DEFECT 2 — Stale ScheduledDate keeps the job's due-filter perpetually true
+    #region Due-filter — cadence is respected, not perpetually re-triggered
 
     [Fact]
-    public async Task CurrentBehaviour_JobDueFilter_SelectsScheduleWithFutureNextRunDate_BecauseScheduledDateNeverAdvances()
+    public async Task JobDueFilter_DoesNotReselectSchedule_WhileNextRunDateIsInTheFuture()
     {
-        // CAPTURES CURRENT BROKEN BEHAVIOUR — Chunk 2 will invert this assertion.
+        // FIXED BEHAVIOUR (was: CurrentBehaviour_JobDueFilter_SelectsScheduleWithFutureNextRunDate_BecauseScheduledDateNeverAdvances).
         //
-        // ProcessToolboxTalkSchedulesJob's due-filter is:
-        //   ScheduledDate.Date <= today || (NextRunDate.HasValue && NextRunDate.Value.Date <= today)
-        // ScheduledDate is set once at creation and never advanced by the handler. After one
-        // process run on a Weekly schedule, NextRunDate is correctly pushed ~7 days out (not due
-        // yet) — but ScheduledDate is still today's date, so the OR is still true and the job's own
-        // due-selection query picks the schedule up again well before NextRunDate.
-        //
-        // This exercises the actual ProcessToolboxTalkSchedulesJob (not the admin /process
-        // endpoint, which always processes on demand regardless of due date) so the job's real
-        // due-filter query is what gets proven wrong here — the same query the daily Hangfire cron
-        // runs.
+        // ProcessToolboxTalkSchedulesJob's due-filter is now purely NextRunDate <= today — the
+        // stale-ScheduledDate half of the old OR is gone. The FIRST job run (a real cron
+        // invocation, IsScheduledRun=true) processes the due cycle and advances NextRunDate ~7
+        // days out; a SECOND job run immediately after must not reselect the schedule at all.
         var talk = await CreateTestTalkAsync();
         var employee = TestTenantConstants.Employees.Employee1;
 
@@ -292,53 +257,205 @@ public class RecurringScheduleRefreshCharacterisationTests : IntegrationTestBase
         var createResponse = await AdminClient.PostAsJsonAsync("/api/toolbox-talks/schedules", createCommand);
         var created = await createResponse.Content.ReadFromJsonAsync<ScheduleResult>();
 
-        // First run — simulates the job's day-0 pass via the admin endpoint. Advances NextRunDate
-        // ~7 days out.
-        var firstResponse = await AdminClient.PostAsync($"/api/toolbox-talks/schedules/{created!.Id}/process", null);
-        firstResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        // Act — first real job run. Due (NextRunDate == ScheduledDate == today).
+        await RunScheduleJobAsync();
 
-        DateTime scheduledDateAfterFirstRun;
         DateTime? nextRunDateAfterFirstRun;
         using (var scope = Factory.Services.CreateScope())
         {
             var dbContext = scope.ServiceProvider.GetRequiredService<IToolboxTalksDbContext>();
             var scheduleRow = await dbContext.ToolboxTalkSchedules
                 .IgnoreQueryFilters()
-                .SingleAsync(s => s.Id == created.Id);
-            scheduledDateAfterFirstRun = scheduleRow.ScheduledDate;
+                .SingleAsync(s => s.Id == created!.Id);
             nextRunDateAfterFirstRun = scheduleRow.NextRunDate;
         }
 
-        // Confirm the precondition this test relies on: NextRunDate has moved into the future
-        // (not due by cadence), but ScheduledDate is unchanged (still today, i.e. <= today).
         nextRunDateAfterFirstRun.Should().NotBeNull();
         nextRunDateAfterFirstRun!.Value.Date.Should().BeAfter(DateTime.UtcNow.Date,
-            "NextRunDate correctly advanced ~7 days out for a Weekly schedule");
-        scheduledDateAfterFirstRun.Date.Should().BeOnOrBefore(DateTime.UtcNow.Date,
-            "ScheduledDate is write-once at creation and is never advanced by the handler");
+            "NextRunDate correctly advances ~7 days out for a Weekly schedule on a scheduled run");
 
-        // Act — run the actual ProcessToolboxTalkSchedulesJob (not the /process endpoint), so the
-        // job's own due-filter query is exercised for real, exactly as the daily Hangfire cron
-        // would invoke it. Resolved via ActivatorUtilities (as Hangfire's own job activator does)
-        // since the job class is not itself registered in DI.
-        //
-        // No manual IJobTenantContextAccessor pre-set here (Chunk 2a removed the need for it): the
-        // job now sets tenant context itself, per schedule, in a fresh DI scope, so a bare
-        // ExecuteAsync() call reaches the command handler correctly on its own.
-        using (var jobScope = Factory.Services.CreateScope())
-        {
-            var job = ActivatorUtilities.CreateInstance<ProcessToolboxTalkSchedulesJob>(jobScope.ServiceProvider);
-            await job.ExecuteAsync(CancellationToken.None);
-        }
+        var scheduledTalkCountAfterFirstRun = await CountScheduledTalksAsync(created!.Id, employee);
+        scheduledTalkCountAfterFirstRun.Should().Be(1);
 
-        // Assert — CURRENT (wrong) outcome: the job treated the schedule as due (via the stale
-        // ScheduledDate half of the OR) despite NextRunDate being ~7 days in the future, and
-        // reprocessed it, producing a second ScheduledTalk for the same employee.
+        // Act — second job run, same day. NextRunDate is now in the future, so the due-filter
+        // must exclude the schedule entirely.
+        await RunScheduleJobAsync();
+
+        // Assert — no second ScheduledTalk was created; the job never even reached the handler
+        // for this schedule.
         var scheduledTalkCount = await CountScheduledTalksAsync(created.Id, employee);
-        scheduledTalkCount.Should().Be(2,
-            "current broken behaviour: the job's due-filter ORs in the stale ScheduledDate, so it " +
-            "selects the schedule as due and reprocesses it even though NextRunDate says it is not " +
-            "due for another ~7 days");
+        scheduledTalkCount.Should().Be(1,
+            "the due-filter is purely NextRunDate <= today now, so a schedule whose NextRunDate " +
+            "was just advanced into the future is not reselected until that date arrives");
+    }
+
+    #endregion
+
+    #region Cadence advance — only a scheduled (cron) run advances NextRunDate
+
+    [Fact]
+    public async Task ManualProcessNow_DoesNotAdvanceCadence_ScheduledCronRunDoes()
+    {
+        // NEW BEHAVIOUR (Chunk 2b). A manual "Process Now" call processes on demand but leaves
+        // NextRunDate untouched; only a scheduled (cron) run advances it by the frequency
+        // interval.
+        var talk = await CreateTestTalkAsync();
+
+        // Schedule A — processed via the manual endpoint.
+        var employeeA = TestTenantConstants.Employees.Employee1;
+        var createManual = await AdminClient.PostAsJsonAsync("/api/toolbox-talks/schedules", new
+        {
+            ToolboxTalkId = talk,
+            ScheduledDate = DateTime.UtcNow.Date,
+            EndDate = DateTime.UtcNow.Date.AddYears(1),
+            Frequency = ToolboxTalkFrequency.Weekly,
+            AssignToAllEmployees = false,
+            EmployeeIds = new[] { employeeA }
+        });
+        var manualSchedule = await createManual.Content.ReadFromJsonAsync<ScheduleResult>();
+        var originalNextRunDate = manualSchedule!.NextRunDate;
+
+        var manualProcessResponse = await AdminClient.PostAsync(
+            $"/api/toolbox-talks/schedules/{manualSchedule.Id}/process", null);
+        var manualProcessResult = await manualProcessResponse.Content.ReadFromJsonAsync<ProcessResult>();
+
+        manualProcessResult!.TalksCreated.Should().Be(1);
+        manualProcessResult.NextRunDate.Should().Be(originalNextRunDate,
+            "a manual Process Now run does not advance cadence");
+
+        // Schedule B — processed via the real job (cron path).
+        var employeeB = TestTenantConstants.Employees.Employee2;
+        var createCron = await AdminClient.PostAsJsonAsync("/api/toolbox-talks/schedules", new
+        {
+            ToolboxTalkId = talk,
+            ScheduledDate = DateTime.UtcNow.Date,
+            EndDate = DateTime.UtcNow.Date.AddYears(1),
+            Frequency = ToolboxTalkFrequency.Weekly,
+            AssignToAllEmployees = false,
+            EmployeeIds = new[] { employeeB }
+        });
+        var cronSchedule = await createCron.Content.ReadFromJsonAsync<ScheduleResult>();
+
+        await RunScheduleJobAsync();
+
+        using var scope = Factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<IToolboxTalksDbContext>();
+        var cronScheduleRow = await dbContext.ToolboxTalkSchedules
+            .IgnoreQueryFilters()
+            .SingleAsync(s => s.Id == cronSchedule!.Id);
+
+        cronScheduleRow.NextRunDate.Should().NotBeNull();
+        cronScheduleRow.NextRunDate!.Value.Date.Should().BeAfter(DateTime.UtcNow.Date,
+            "a scheduled (cron) run advances NextRunDate by the frequency interval");
+    }
+
+    #endregion
+
+    #region Manual-then-cron same cycle — no duplicate, cadence still advances
+
+    [Fact]
+    public async Task ManualProcessThenCronOnSameCycle_DoesNotDuplicate_ButStillAdvancesCadence()
+    {
+        // NEW BEHAVIOUR (Chunk 2b edge case). An admin clicks Process Now while the schedule is
+        // due (processes, does not advance cadence). The cron then runs later the same day for
+        // the same due cycle: it must not reprocess the already-handled employee, but it must
+        // still advance NextRunDate — cadence advancement is the cron's responsibility regardless
+        // of whether the cycle's work was already done by a manual click.
+        var talk = await CreateTestTalkAsync();
+        var employee = TestTenantConstants.Employees.Employee1;
+
+        var createResponse = await AdminClient.PostAsJsonAsync("/api/toolbox-talks/schedules", new
+        {
+            ToolboxTalkId = talk,
+            ScheduledDate = DateTime.UtcNow.Date,
+            EndDate = DateTime.UtcNow.Date.AddYears(1),
+            Frequency = ToolboxTalkFrequency.Weekly,
+            AssignToAllEmployees = false,
+            EmployeeIds = new[] { employee }
+        });
+        var created = await createResponse.Content.ReadFromJsonAsync<ScheduleResult>();
+
+        // Manual click while due.
+        var manualResponse = await AdminClient.PostAsync($"/api/toolbox-talks/schedules/{created!.Id}/process", null);
+        var manualResult = await manualResponse.Content.ReadFromJsonAsync<ProcessResult>();
+        manualResult!.TalksCreated.Should().Be(1);
+
+        // Cron runs later the same day, same due cycle (NextRunDate was not advanced by the manual call).
+        await RunScheduleJobAsync();
+
+        var scheduledTalkCount = await CountScheduledTalksAsync(created.Id, employee);
+        scheduledTalkCount.Should().Be(1,
+            "the cron finds nothing left unprocessed for this cycle, so it does not duplicate the " +
+            "ScheduledTalk the manual click already created");
+
+        using var scope = Factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<IToolboxTalksDbContext>();
+        var scheduleRow = await dbContext.ToolboxTalkSchedules
+            .IgnoreQueryFilters()
+            .SingleAsync(s => s.Id == created.Id);
+
+        scheduleRow.NextRunDate.Should().NotBeNull();
+        scheduleRow.NextRunDate!.Value.Date.Should().BeAfter(DateTime.UtcNow.Date,
+            "the cron still advances cadence even though the cycle's work was already done manually");
+    }
+
+    #endregion
+
+    #region Processing on cadence — the next cycle's work is created once NextRunDate is reached
+
+    [Fact]
+    public async Task JobRun_OneIntervalLater_CreatesNextCycleScheduledTalks()
+    {
+        // NEW BEHAVIOUR (Chunk 2b). Simulates arriving at the next cadence interval by advancing
+        // NextRunDate directly in the database (tests cannot wait 7 real days). A job run before
+        // that point creates nothing further; a job run once NextRunDate is reached creates the
+        // next cycle's ScheduledTalk for the same employee.
+        var talk = await CreateTestTalkAsync();
+        var employee = TestTenantConstants.Employees.Employee1;
+
+        var createResponse = await AdminClient.PostAsJsonAsync("/api/toolbox-talks/schedules", new
+        {
+            ToolboxTalkId = talk,
+            ScheduledDate = DateTime.UtcNow.Date,
+            EndDate = DateTime.UtcNow.Date.AddYears(1),
+            Frequency = ToolboxTalkFrequency.Weekly,
+            AssignToAllEmployees = false,
+            EmployeeIds = new[] { employee }
+        });
+        var created = await createResponse.Content.ReadFromJsonAsync<ScheduleResult>();
+
+        // First cycle.
+        await RunScheduleJobAsync();
+        (await CountScheduledTalksAsync(created!.Id, employee)).Should().Be(1);
+
+        // A run before the next interval creates nothing further.
+        await RunScheduleJobAsync();
+        (await CountScheduledTalksAsync(created.Id, employee)).Should().Be(1,
+            "NextRunDate has not been reached yet, so the job's due-filter excludes the schedule");
+
+        // Simulate arriving at the next cadence interval. The schedule was created (and its
+        // first cycle processed) "today", so LastProcessedCycleDate already equals today's date —
+        // setting NextRunDate back to exactly today would collide with that marker and look like
+        // the same cycle. Use a distinct due date in the past to unambiguously represent "the
+        // next interval's due date has now arrived".
+        await SetScheduleNextRunDateAsync(created.Id, DateTime.UtcNow.Date.AddDays(-1));
+
+        // Act — the job run that reaches the next due cycle.
+        await RunScheduleJobAsync();
+
+        // Assert — a second ScheduledTalk is created for the new cycle, and cadence advances again.
+        (await CountScheduledTalksAsync(created.Id, employee)).Should().Be(2,
+            "a new cycle became due, so the employee is reprocessed for the next occurrence");
+
+        using var scope = Factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<IToolboxTalksDbContext>();
+        var scheduleRow = await dbContext.ToolboxTalkSchedules
+            .IgnoreQueryFilters()
+            .SingleAsync(s => s.Id == created.Id);
+
+        scheduleRow.NextRunDate.Should().NotBeNull();
+        scheduleRow.NextRunDate!.Value.Date.Should().BeAfter(DateTime.UtcNow.Date,
+            "cadence advances again from the newly-processed cycle's due date");
     }
 
     #endregion
@@ -411,6 +528,32 @@ public class RecurringScheduleRefreshCharacterisationTests : IntegrationTestBase
             .CountAsync();
     }
 
+    /// <summary>
+    /// Runs the actual ProcessToolboxTalkSchedulesJob, resolved via ActivatorUtilities (mirroring
+    /// Hangfire's own job activator), exactly as the daily cron would invoke it.
+    /// </summary>
+    private async Task RunScheduleJobAsync()
+    {
+        using var jobScope = Factory.Services.CreateScope();
+        var job = ActivatorUtilities.CreateInstance<ProcessToolboxTalkSchedulesJob>(jobScope.ServiceProvider);
+        await job.ExecuteAsync(CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Test-only DB manipulation to simulate a schedule's cadence reaching its next due date,
+    /// since tests cannot wait real days between cycles.
+    /// </summary>
+    private async Task SetScheduleNextRunDateAsync(Guid scheduleId, DateTime nextRunDate)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<IToolboxTalksDbContext>();
+        var scheduleRow = await dbContext.ToolboxTalkSchedules
+            .IgnoreQueryFilters()
+            .SingleAsync(s => s.Id == scheduleId);
+        scheduleRow.NextRunDate = DateTime.SpecifyKind(nextRunDate, DateTimeKind.Utc);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+    }
+
     #endregion
 
     #region Response DTOs
@@ -419,7 +562,7 @@ public class RecurringScheduleRefreshCharacterisationTests : IntegrationTestBase
 
     private record IdOnly(Guid Id);
 
-    private record ScheduleResult(Guid Id, bool AssignToAllEmployees, int AssignmentCount, List<ScheduleAssignmentResult> Assignments);
+    private record ScheduleResult(Guid Id, bool AssignToAllEmployees, int AssignmentCount, DateTime? NextRunDate, List<ScheduleAssignmentResult> Assignments);
 
     private record ScheduleAssignmentResult(Guid EmployeeId);
 

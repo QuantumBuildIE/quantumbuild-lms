@@ -59,8 +59,7 @@ public class ProcessToolboxTalkSchedulesJob
                     .IgnoreQueryFilters()
                     .Where(s => s.TenantId == tenant.Id && !s.IsDeleted)
                     .Where(s => s.Status == ToolboxTalkScheduleStatus.Active)
-                    .Where(s => s.ScheduledDate.Date <= today ||
-                               (s.NextRunDate.HasValue && s.NextRunDate.Value.Date <= today))
+                    .Where(s => s.NextRunDate.HasValue && s.NextRunDate.Value.Date <= today)
                     .ToListAsync(cancellationToken);
 
                 _logger.LogInformation(
@@ -138,7 +137,8 @@ public class ProcessToolboxTalkSchedulesJob
         var command = new ProcessToolboxTalkScheduleCommand
         {
             TenantId = tenantId,
-            ScheduleId = scheduleId
+            ScheduleId = scheduleId,
+            IsScheduledRun = true
         };
 
         return await mediator.Send(command, cancellationToken);

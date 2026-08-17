@@ -177,6 +177,9 @@ public class UpdateToolboxTalkScheduleCommandHandler : IRequestHandler<UpdateToo
         schedule.TargetDepartmentIds = request.AssignToAllEmployees ? new List<Guid>() : request.TargetDepartmentIds;
         schedule.TargetSiteIds = request.AssignToAllEmployees ? new List<Guid>() : request.TargetSiteIds;
         schedule.NextRunDate = scheduledDate;
+        // The schedule's due date just moved — any prior cycle marker is stale, so a future
+        // process run at the new NextRunDate must be treated as a new cycle.
+        schedule.LastProcessedCycleDate = null;
         schedule.Notes = request.Notes;
 
         // Handle assignment changes

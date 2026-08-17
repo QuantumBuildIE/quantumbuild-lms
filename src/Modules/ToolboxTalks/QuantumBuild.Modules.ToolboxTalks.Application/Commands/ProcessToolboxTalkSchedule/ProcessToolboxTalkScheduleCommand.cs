@@ -18,6 +18,14 @@ public record ProcessToolboxTalkScheduleCommand : IRequest<ProcessToolboxTalkSch
     /// Schedule identifier to process
     /// </summary>
     public Guid ScheduleId { get; init; }
+
+    /// <summary>
+    /// True when this run is dispatched by the recurring cron job, false for an on-demand
+    /// "Process Now" call. Only a scheduled run advances NextRunDate/cadence for recurring
+    /// schedules — an on-demand run processes whatever is currently unprocessed (and refreshes
+    /// criteria-derived membership) without disturbing the schedule's cadence.
+    /// </summary>
+    public bool IsScheduledRun { get; init; } = false;
 }
 
 /// <summary>

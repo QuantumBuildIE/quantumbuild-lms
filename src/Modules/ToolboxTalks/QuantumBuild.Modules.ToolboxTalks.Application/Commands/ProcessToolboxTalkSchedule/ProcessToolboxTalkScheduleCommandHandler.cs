@@ -64,6 +64,44 @@ public class ProcessToolboxTalkScheduleCommandHandler : IRequestHandler<ProcessT
 
         var defaultDueDays = settings?.DefaultDueDays ?? 7;
 
+        var today = DateTime.UtcNow.Date;
+
+        // Refresh criteria-derived membership every time a recurring schedule is processed
+        // (both cron and manual "Process Now"), so department/site/all-employees targeting
+        // reflects current membership — not just the first time a cycle happens to have zero
+        // unprocessed assignments.
+        if (schedule.Frequency != ToolboxTalkFrequency.Once)
+        {
+            if (schedule.AssignToAllEmployees)
+            {
+                await RefreshAssignmentsForAllEmployees(schedule, request.TenantId, cancellationToken);
+            }
+            else if (schedule.TargetDepartmentIds.Any() || schedule.TargetSiteIds.Any())
+            {
+                // Explicitly-added employees are left untouched — see RefreshAssignmentsForTargetCriteria
+                await RefreshAssignmentsForTargetCriteria(schedule, request.TenantId, cancellationToken);
+            }
+        }
+
+        // A new cycle begins the first time a due NextRunDate is actually processed. Comparing
+        // against LastProcessedCycleDate (rather than resetting unconditionally at the end of
+        // every run) means a repeat call against the same due date — cron after manual, or
+        // manual clicked twice — does not reopen assignments that were already processed for
+        // this cycle.
+        var isNewCycle = schedule.Frequency != ToolboxTalkFrequency.Once
+            && schedule.NextRunDate.HasValue
+            && schedule.NextRunDate.Value.Date <= today
+            && schedule.NextRunDate != schedule.LastProcessedCycleDate;
+
+        if (isNewCycle)
+        {
+            foreach (var assignment in schedule.Assignments)
+            {
+                assignment.IsProcessed = false;
+                assignment.ProcessedAt = null;
+            }
+        }
+
         // Get employee data for language code assignment and email sending
         var employeeIds = schedule.Assignments.Select(a => a.EmployeeId).ToList();
         var employees = await _coreDbContext.Employees
@@ -74,25 +112,6 @@ public class ProcessToolboxTalkScheduleCommandHandler : IRequestHandler<ProcessT
         var unprocessedAssignments = schedule.Assignments
             .Where(a => !a.IsProcessed)
             .ToList();
-
-        if (!unprocessedAssignments.Any())
-        {
-            // If AssignToAllEmployees and recurring, refresh assignments
-            if (schedule.AssignToAllEmployees && schedule.Frequency != ToolboxTalkFrequency.Once)
-            {
-                await RefreshAssignmentsForAllEmployees(schedule, request.TenantId, cancellationToken);
-                unprocessedAssignments = schedule.Assignments.Where(a => !a.IsProcessed).ToList();
-            }
-            // If targeted by department/location and recurring, refresh the criteria-derived assignments
-            // (explicitly-added employees are left untouched — see RefreshAssignmentsForTargetCriteria)
-            else if (!schedule.AssignToAllEmployees
-                && (schedule.TargetDepartmentIds.Any() || schedule.TargetSiteIds.Any())
-                && schedule.Frequency != ToolboxTalkFrequency.Once)
-            {
-                await RefreshAssignmentsForTargetCriteria(schedule, request.TenantId, cancellationToken);
-                unprocessedAssignments = schedule.Assignments.Where(a => !a.IsProcessed).ToList();
-            }
-        }
 
         var talksCreated = 0;
         var now = DateTime.UtcNow;
@@ -161,7 +180,6 @@ public class ProcessToolboxTalkScheduleCommandHandler : IRequestHandler<ProcessT
 
         // Handle schedule status and recurring logic
         var scheduleCompleted = false;
-        DateTime? nextRunDate = null;
 
         if (schedule.Frequency == ToolboxTalkFrequency.Once)
         {
@@ -178,25 +196,29 @@ public class ProcessToolboxTalkScheduleCommandHandler : IRequestHandler<ProcessT
                 schedule.Status = ToolboxTalkScheduleStatus.Active;
             }
 
-            // Calculate next run date based on frequency
-            nextRunDate = CalculateNextRunDate(now, schedule.Frequency);
-
-            // Check if next run date is beyond end date
-            if (schedule.EndDate.HasValue && nextRunDate > schedule.EndDate.Value)
+            // Mark this due cycle as handled so a later call against the same due date (cron
+            // after manual, or a repeat call) does not reopen assignments again.
+            if (isNewCycle)
             {
-                schedule.Status = ToolboxTalkScheduleStatus.Completed;
-                schedule.NextRunDate = null;
-                scheduleCompleted = true;
+                schedule.LastProcessedCycleDate = schedule.NextRunDate;
             }
-            else
-            {
-                schedule.NextRunDate = nextRunDate;
 
-                // Reset assignments for next cycle (mark all as unprocessed)
-                foreach (var assignment in schedule.Assignments)
+            // Only a scheduled (cron) run advances cadence. An on-demand "Process Now" run
+            // processes whatever is currently due/unprocessed without disturbing NextRunDate.
+            if (request.IsScheduledRun)
+            {
+                var candidateNextRunDate = CalculateNextRunDate(schedule.NextRunDate ?? now, schedule.Frequency);
+
+                // Check if next run date is beyond end date
+                if (schedule.EndDate.HasValue && candidateNextRunDate > schedule.EndDate.Value)
                 {
-                    assignment.IsProcessed = false;
-                    assignment.ProcessedAt = null;
+                    schedule.Status = ToolboxTalkScheduleStatus.Completed;
+                    schedule.NextRunDate = null;
+                    scheduleCompleted = true;
+                }
+                else
+                {
+                    schedule.NextRunDate = candidateNextRunDate;
                 }
             }
         }
@@ -207,7 +229,7 @@ public class ProcessToolboxTalkScheduleCommandHandler : IRequestHandler<ProcessT
         {
             TalksCreated = talksCreated,
             ScheduleCompleted = scheduleCompleted,
-            NextRunDate = nextRunDate
+            NextRunDate = schedule.NextRunDate
         };
     }
 
