@@ -780,6 +780,10 @@ public class ToolboxTalksController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+        catch (FluentValidation.ValidationException ex)
+        {
+            return BadRequest(Result.Fail(ex));
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error deleting toolbox talk {ToolboxTalkId}", id);
@@ -939,6 +943,10 @@ public class ToolboxTalksController : ControllerBase
 
             return Ok(Result.Ok(result.Data));
         }
+        catch (FluentValidation.ValidationException ex)
+        {
+            return BadRequest(Result.Fail(ex));
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error updating learning settings");
@@ -970,6 +978,10 @@ public class ToolboxTalksController : ControllerBase
                 return BadRequest(result);
 
             return Ok(Result.Ok(result.Data));
+        }
+        catch (FluentValidation.ValidationException ex)
+        {
+            return BadRequest(Result.Fail(ex));
         }
         catch (Exception ex)
         {
@@ -1605,6 +1617,10 @@ public class ToolboxTalksController : ControllerBase
                 id, result.LanguageResults?.Count ?? 0);
 
             return Ok(result);
+        }
+        catch (FluentValidation.ValidationException ex)
+        {
+            return BadRequest(Result.Fail(ex));
         }
         catch (Exception ex)
         {
