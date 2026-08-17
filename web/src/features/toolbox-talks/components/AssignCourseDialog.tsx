@@ -29,6 +29,9 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { useAllEmployees } from '@/lib/api/admin/use-employees';
+import { useAllDepartments } from '@/lib/api/admin/use-departments';
+import { useAllSites } from '@/lib/api/admin/use-sites';
+import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 import { useAssignCourse, useCourseAssignmentPreview } from '@/lib/api/toolbox-talks/use-course-assignments';
 import type { CourseAssignmentPreviewDto, EmployeeCourseAssignment } from '@/lib/api/toolbox-talks/course-assignments';
 import { toast } from 'sonner';
@@ -51,13 +54,27 @@ export function AssignCourseDialog({ course, open, onOpenChange }: AssignCourseD
   const { data: unconfirmedMappingCount } = useUnconfirmedMappingCount(undefined, course.id);
   const previewMutation = useCourseAssignmentPreview();
 
+  // Departments/locations available for target-based assignment (union with any explicit employees)
+  const { data: allDepartments, isLoading: departmentsLoading } = useAllDepartments();
+  const { data: allSites, isLoading: sitesLoading } = useAllSites();
+  const departmentOptions = (allDepartments ?? [])
+    .filter((d) => d.isActive)
+    .map((d) => ({ value: d.id, label: d.name }));
+  const siteOptions = (allSites ?? [])
+    .filter((s) => s.isActive)
+    .map((s) => ({ value: s.id, label: s.siteName }));
+
   const [step, setStep] = useState<Step>('select');
   const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
   const [employeeSearch, setEmployeeSearch] = useState('');
+  const [targetDepartmentIds, setTargetDepartmentIds] = useState<string[]>([]);
+  const [targetSiteIds, setTargetSiteIds] = useState<string[]>([]);
   const [dueDate, setDueDate] = useState<Date | undefined>(undefined);
   const [preview, setPreview] = useState<CourseAssignmentPreviewDto | null>(null);
   // Map<employeeId, Set<includedTalkIds>>
   const [assignments, setAssignments] = useState<Map<string, Set<string>>>(new Map());
+
+  const hasTargets = targetDepartmentIds.length > 0 || targetSiteIds.length > 0;
 
   const filteredEmployees = useMemo(() => {
     return (employees ?? []).filter((employee) => {
@@ -92,8 +109,17 @@ export function AssignCourseDialog({ course, open, onOpenChange }: AssignCourseD
   };
 
   const handleNext = async () => {
+    if (selectedEmployees.length === 0 && !hasTargets) {
+      toast.error('Please select at least one employee, department, or location');
+      return;
+    }
+
+    // Employees resolved from department/location targets get all course talks and are not
+    // previewed/customized individually — only explicitly-selected employees go through preview.
     if (selectedEmployees.length === 0) {
-      toast.error('Please select at least one employee');
+      setPreview({ courseId: course.id, courseTitle: course.title, employees: [] });
+      setAssignments(new Map());
+      setStep('preview');
       return;
     }
 
@@ -189,7 +215,7 @@ export function AssignCourseDialog({ course, open, onOpenChange }: AssignCourseD
       });
     }
 
-    if (assignmentData.length === 0) {
+    if (assignmentData.length === 0 && !hasTargets) {
       toast.error('No talks selected for any employee');
       return;
     }
@@ -198,11 +224,19 @@ export function AssignCourseDialog({ course, open, onOpenChange }: AssignCourseD
       await assignMutation.mutateAsync({
         courseId: course.id,
         assignments: assignmentData,
+        targetDepartmentIds: hasTargets ? targetDepartmentIds : undefined,
+        targetSiteIds: hasTargets ? targetSiteIds : undefined,
         dueDate: dueDate ? dueDate.toISOString() : undefined,
       });
-      toast.success('Course assigned', {
-        description: `Assigned "${course.title}" to ${assignmentData.length} employee${assignmentData.length !== 1 ? 's' : ''}`,
-      });
+      let description: string;
+      if (hasTargets && assignmentData.length > 0) {
+        description = `Assigned "${course.title}" to ${assignmentData.length} employee${assignmentData.length !== 1 ? 's' : ''} plus everyone in the targeted department(s)/location(s)`;
+      } else if (hasTargets) {
+        description = `Assigned "${course.title}" to everyone in the targeted department(s)/location(s)`;
+      } else {
+        description = `Assigned "${course.title}" to ${assignmentData.length} employee${assignmentData.length !== 1 ? 's' : ''}`;
+      }
+      toast.success('Course assigned', { description });
       handleClose();
     } catch (error: unknown) {
       let message = 'Failed to assign course';
@@ -221,6 +255,8 @@ export function AssignCourseDialog({ course, open, onOpenChange }: AssignCourseD
   const handleClose = () => {
     setSelectedEmployees([]);
     setEmployeeSearch('');
+    setTargetDepartmentIds([]);
+    setTargetSiteIds([]);
     setDueDate(undefined);
     setStep('select');
     setPreview(null);
@@ -294,6 +330,40 @@ export function AssignCourseDialog({ course, open, onOpenChange }: AssignCourseD
                   />
                 </PopoverContent>
               </Popover>
+            </div>
+
+            {/* Target by department / location — unions with explicit employees below */}
+            <div className="space-y-4 rounded-md border p-4">
+              <div className="space-y-1 leading-none">
+                <Label>Target by Department / Location</Label>
+                <p className="text-xs text-muted-foreground">
+                  Assigns the course to everyone in the selected department(s) and/or location(s), combined with any employees selected below. Individuals reached this way receive all course talks.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Departments</Label>
+                <MultiSelectCombobox
+                  options={departmentOptions}
+                  selectedValues={targetDepartmentIds}
+                  onValuesChange={setTargetDepartmentIds}
+                  placeholder="Select departments..."
+                  searchPlaceholder="Search departments..."
+                  isLoading={departmentsLoading}
+                  ariaLabel="Target departments"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Locations</Label>
+                <MultiSelectCombobox
+                  options={siteOptions}
+                  selectedValues={targetSiteIds}
+                  onValuesChange={setTargetSiteIds}
+                  placeholder="Select locations..."
+                  searchPlaceholder="Search locations..."
+                  isLoading={sitesLoading}
+                  ariaLabel="Target locations"
+                />
+              </div>
             </div>
 
             {/* Employee Selection */}
@@ -370,6 +440,14 @@ export function AssignCourseDialog({ course, open, onOpenChange }: AssignCourseD
         ) : (
           /* Preview Step */
           <div className="py-4">
+            {hasTargets && (
+              <Alert className="mb-4">
+                <UsersIcon className="h-4 w-4" />
+                <AlertDescription>
+                  Everyone in the selected department(s)/location(s) will also be assigned all course talks. Individual members are not listed here.
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="rounded-md border max-h-[400px] overflow-y-auto">
               {preview && preview.employees.length > 0 ? (
                 <Accordion type="multiple" defaultValue={preview.employees.map((e) => e.employeeId)}>
@@ -454,6 +532,10 @@ export function AssignCourseDialog({ course, open, onOpenChange }: AssignCourseD
                     );
                   })}
                 </Accordion>
+              ) : hasTargets ? (
+                <div className="p-4 text-center text-sm text-muted-foreground">
+                  No individually-selected employees — assignment will target the department(s)/location(s) selected.
+                </div>
               ) : (
                 <div className="p-4 text-center text-sm text-muted-foreground">
                   No preview data available
@@ -476,7 +558,7 @@ export function AssignCourseDialog({ course, open, onOpenChange }: AssignCourseD
               </Button>
               <Button
                 onClick={handleNext}
-                disabled={selectedEmployees.length === 0 || previewMutation.isPending}
+                disabled={(selectedEmployees.length === 0 && !hasTargets) || previewMutation.isPending}
               >
                 {previewMutation.isPending ? (
                   <>
@@ -496,15 +578,17 @@ export function AssignCourseDialog({ course, open, onOpenChange }: AssignCourseD
               </Button>
               <Button
                 onClick={handleAssign}
-                disabled={totalSelectedTalks === 0 || assignMutation.isPending}
+                disabled={(totalSelectedTalks === 0 && !hasTargets) || assignMutation.isPending}
               >
                 {assignMutation.isPending ? (
                   <>
                     <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
                     Assigning...
                   </>
-                ) : (
+                ) : totalSelectedTalks > 0 ? (
                   `Assign ${totalSelectedTalks} talk${totalSelectedTalks !== 1 ? 's' : ''}`
+                ) : (
+                  'Assign Course'
                 )}
               </Button>
             </>

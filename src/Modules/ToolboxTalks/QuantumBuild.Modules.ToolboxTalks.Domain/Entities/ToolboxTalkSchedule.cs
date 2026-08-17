@@ -35,6 +35,18 @@ public class ToolboxTalkSchedule : TenantEntity
     public bool AssignToAllEmployees { get; set; } = false;
 
     /// <summary>
+    /// Department IDs to target (expands to member employees, unioned with EmployeeIds/TargetSiteIds).
+    /// Ignored when AssignToAllEmployees is true.
+    /// </summary>
+    public List<Guid> TargetDepartmentIds { get; set; } = new();
+
+    /// <summary>
+    /// Site/Location IDs to target (expands to member employees, unioned with EmployeeIds/TargetDepartmentIds).
+    /// Ignored when AssignToAllEmployees is true.
+    /// </summary>
+    public List<Guid> TargetSiteIds { get; set; } = new();
+
+    /// <summary>
     /// Current status of the schedule
     /// </summary>
     public ToolboxTalkScheduleStatus Status { get; set; } = ToolboxTalkScheduleStatus.Draft;

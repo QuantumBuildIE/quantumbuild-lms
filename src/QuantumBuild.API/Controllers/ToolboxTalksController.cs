@@ -2219,11 +2219,19 @@ public class ToolboxTalksController : ControllerBase
     /// Get skills matrix report showing employees × learnings with completion status
     /// </summary>
     /// <param name="category">Optional category filter</param>
+    /// <param name="departmentId">Optional department filter (ignored when departmentUnassigned is true)</param>
+    /// <param name="departmentUnassigned">When true, filter to employees with no department assigned</param>
+    /// <param name="siteId">Optional site/location filter (ignored when siteUnassigned is true)</param>
+    /// <param name="siteUnassigned">When true, filter to employees with no site/location assigned</param>
     /// <returns>Skills matrix with employees, learnings, and status cells</returns>
     [HttpGet("reports/skills-matrix")]
     [ProducesResponseType(typeof(SkillsMatrixDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetSkillsMatrix(
-        [FromQuery] string? category = null)
+        [FromQuery] string? category = null,
+        [FromQuery] Guid? departmentId = null,
+        [FromQuery] bool departmentUnassigned = false,
+        [FromQuery] Guid? siteId = null,
+        [FromQuery] bool siteUnassigned = false)
     {
         try
         {
@@ -2232,7 +2240,11 @@ public class ToolboxTalksController : ControllerBase
             var report = await _reportsService.GetSkillsMatrixAsync(
                 _currentUserService.TenantId,
                 employeeIds,
-                category);
+                category,
+                departmentId,
+                departmentUnassigned,
+                siteId,
+                siteUnassigned);
             return Ok(Result.Ok(report));
         }
         catch (Exception ex)
@@ -2246,11 +2258,19 @@ public class ToolboxTalksController : ControllerBase
     /// Export skills matrix as Excel file
     /// </summary>
     /// <param name="category">Optional category filter</param>
+    /// <param name="departmentId">Optional department filter (ignored when departmentUnassigned is true)</param>
+    /// <param name="departmentUnassigned">When true, filter to employees with no department assigned</param>
+    /// <param name="siteId">Optional site/location filter (ignored when siteUnassigned is true)</param>
+    /// <param name="siteUnassigned">When true, filter to employees with no site/location assigned</param>
     /// <returns>Excel file</returns>
     [HttpGet("reports/skills-matrix/export")]
     [ProducesResponseType(typeof(FileResult), StatusCodes.Status200OK)]
     public async Task<IActionResult> ExportSkillsMatrix(
-        [FromQuery] string? category = null)
+        [FromQuery] string? category = null,
+        [FromQuery] Guid? departmentId = null,
+        [FromQuery] bool departmentUnassigned = false,
+        [FromQuery] Guid? siteId = null,
+        [FromQuery] bool siteUnassigned = false)
     {
         try
         {
@@ -2259,7 +2279,11 @@ public class ToolboxTalksController : ControllerBase
             var report = await _reportsService.GetSkillsMatrixAsync(
                 _currentUserService.TenantId,
                 employeeIds,
-                category);
+                category,
+                departmentId,
+                departmentUnassigned,
+                siteId,
+                siteUnassigned);
 
             var fileBytes = await _exportService.GenerateSkillsMatrixExcelAsync(report);
 

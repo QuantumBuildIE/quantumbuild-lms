@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using QuantumBuild.Core.Application.Features.Employees;
 using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Core.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
@@ -15,17 +16,20 @@ public class ProcessToolboxTalkScheduleCommandHandler : IRequestHandler<ProcessT
     private readonly IToolboxTalksDbContext _dbContext;
     private readonly ICoreDbContext _coreDbContext;
     private readonly IToolboxTalkEmailService _emailService;
+    private readonly ITargetEmployeeResolver _targetEmployeeResolver;
     private readonly ILogger<ProcessToolboxTalkScheduleCommandHandler> _logger;
 
     public ProcessToolboxTalkScheduleCommandHandler(
         IToolboxTalksDbContext dbContext,
         ICoreDbContext coreDbContext,
         IToolboxTalkEmailService emailService,
+        ITargetEmployeeResolver targetEmployeeResolver,
         ILogger<ProcessToolboxTalkScheduleCommandHandler> logger)
     {
         _dbContext = dbContext;
         _coreDbContext = coreDbContext;
         _emailService = emailService;
+        _targetEmployeeResolver = targetEmployeeResolver;
         _logger = logger;
     }
 
@@ -77,6 +81,15 @@ public class ProcessToolboxTalkScheduleCommandHandler : IRequestHandler<ProcessT
             if (schedule.AssignToAllEmployees && schedule.Frequency != ToolboxTalkFrequency.Once)
             {
                 await RefreshAssignmentsForAllEmployees(schedule, request.TenantId, cancellationToken);
+                unprocessedAssignments = schedule.Assignments.Where(a => !a.IsProcessed).ToList();
+            }
+            // If targeted by department/location and recurring, refresh the criteria-derived assignments
+            // (explicitly-added employees are left untouched — see RefreshAssignmentsForTargetCriteria)
+            else if (!schedule.AssignToAllEmployees
+                && (schedule.TargetDepartmentIds.Any() || schedule.TargetSiteIds.Any())
+                && schedule.Frequency != ToolboxTalkFrequency.Once)
+            {
+                await RefreshAssignmentsForTargetCriteria(schedule, request.TenantId, cancellationToken);
                 unprocessedAssignments = schedule.Assignments.Where(a => !a.IsProcessed).ToList();
             }
         }
@@ -224,7 +237,12 @@ public class ProcessToolboxTalkScheduleCommandHandler : IRequestHandler<ProcessT
                     IsProcessed = false,
                     ProcessedAt = null
                 };
+                // schedule is an already-tracked query result, so DetectChanges resolves a
+                // key-preassigned child linked via nav-collection Add() to Modified, not Added
+                // (EF's Added/Modified heuristic keys off the PK's default-ness). Force Added
+                // explicitly so EF issues an INSERT instead of a 0-row UPDATE.
                 schedule.Assignments.Add(assignment);
+                _dbContext.Entry(assignment).State = EntityState.Added;
             }
         }
 
@@ -250,6 +268,76 @@ public class ProcessToolboxTalkScheduleCommandHandler : IRequestHandler<ProcessT
         {
             await _dbContext.ToolboxTalkScheduleAssignments
                 .Where(a => inactiveAssignmentIds.Contains(a.Id))
+                .ExecuteDeleteAsync(cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Re-derives the department/location-targeted portion of a recurring schedule's assignments.
+    /// Only touches assignments flagged IsCriteriaDerived — explicitly-added employees (EmployeeIds
+    /// at creation/edit time) are never added or removed by this refresh, mirroring how
+    /// RefreshAssignmentsForAllEmployees never coexists with an explicit list (AssignToAllEmployees
+    /// and EmployeeIds are mutually exclusive there).
+    /// </summary>
+    private async Task RefreshAssignmentsForTargetCriteria(
+        ToolboxTalkSchedule schedule,
+        Guid tenantId,
+        CancellationToken cancellationToken)
+    {
+        var targetDepartmentIds = schedule.TargetDepartmentIds;
+        var targetSiteIds = schedule.TargetSiteIds;
+
+        var currentTargetEmployeeIds = (await _targetEmployeeResolver.ResolveEmployeeIdsAsync(
+            tenantId, targetDepartmentIds, targetSiteIds, cancellationToken)).ToHashSet();
+
+        var existingEmployeeIds = schedule.Assignments.Select(a => a.EmployeeId).ToHashSet();
+        var existingCriteriaDerivedEmployeeIds = schedule.Assignments
+            .Where(a => a.IsCriteriaDerived)
+            .Select(a => a.EmployeeId)
+            .ToHashSet();
+
+        // Add newly-qualifying employees (skip anyone already present, whether explicit or criteria-derived)
+        foreach (var employeeId in currentTargetEmployeeIds)
+        {
+            if (!existingEmployeeIds.Contains(employeeId))
+            {
+                var assignment = new ToolboxTalkScheduleAssignment
+                {
+                    Id = Guid.NewGuid(),
+                    ScheduleId = schedule.Id,
+                    EmployeeId = employeeId,
+                    IsProcessed = false,
+                    ProcessedAt = null,
+                    IsCriteriaDerived = true
+                };
+                // schedule is an already-tracked query result, so DetectChanges resolves a
+                // key-preassigned child linked via nav-collection Add() to Modified, not Added
+                // (EF's Added/Modified heuristic keys off the PK's default-ness). Force Added
+                // explicitly so EF issues an INSERT instead of a 0-row UPDATE.
+                schedule.Assignments.Add(assignment);
+                _dbContext.Entry(assignment).State = EntityState.Added;
+            }
+        }
+
+        // Remove criteria-derived assignments that no longer qualify (department/site changed, or employee
+        // went inactive). Explicit (non-criteria-derived) assignments are never removed by this refresh.
+        var noLongerQualifying = existingCriteriaDerivedEmployeeIds.Except(currentTargetEmployeeIds).ToHashSet();
+        var assignmentsToRemove = schedule.Assignments
+            .Where(a => a.IsCriteriaDerived && noLongerQualifying.Contains(a.EmployeeId))
+            .ToList();
+
+        var assignmentIdsToRemove = new List<Guid>();
+        foreach (var assignment in assignmentsToRemove)
+        {
+            schedule.Assignments.Remove(assignment); // load-bearing for nav-collection consumers
+            _dbContext.Entry(assignment).State = EntityState.Detached;
+            assignmentIdsToRemove.Add(assignment.Id);
+        }
+
+        if (assignmentIdsToRemove.Count > 0)
+        {
+            await _dbContext.ToolboxTalkScheduleAssignments
+                .Where(a => assignmentIdsToRemove.Contains(a.Id))
                 .ExecuteDeleteAsync(cancellationToken);
         }
     }

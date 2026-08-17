@@ -16,17 +16,20 @@ public class UpdateToolboxTalkScheduleCommandHandler : IRequestHandler<UpdateToo
     private readonly ICoreDbContext _coreDbContext;
     private readonly ICurrentUserService _currentUserService;
     private readonly ISupervisorAssignmentService _supervisorAssignmentService;
+    private readonly ITargetEmployeeResolver _targetEmployeeResolver;
 
     public UpdateToolboxTalkScheduleCommandHandler(
         IToolboxTalksDbContext dbContext,
         ICoreDbContext coreDbContext,
         ICurrentUserService currentUserService,
-        ISupervisorAssignmentService supervisorAssignmentService)
+        ISupervisorAssignmentService supervisorAssignmentService,
+        ITargetEmployeeResolver targetEmployeeResolver)
     {
         _dbContext = dbContext;
         _coreDbContext = coreDbContext;
         _currentUserService = currentUserService;
         _supervisorAssignmentService = supervisorAssignmentService;
+        _targetEmployeeResolver = targetEmployeeResolver;
     }
 
     public async Task<ToolboxTalkScheduleDto> Handle(UpdateToolboxTalkScheduleCommand request, CancellationToken cancellationToken)
@@ -53,6 +56,7 @@ public class UpdateToolboxTalkScheduleCommandHandler : IRequestHandler<UpdateToo
             && !_currentUserService.Roles.Contains("Admin", StringComparer.OrdinalIgnoreCase)
             && _currentUserService.Roles.Contains("Supervisor", StringComparer.OrdinalIgnoreCase);
 
+        List<Guid>? supervisorPermittedIds = null;
         if (isSupervisorOnly)
         {
             var supervisorEmployeeId = _currentUserService.EmployeeId;
@@ -69,7 +73,9 @@ public class UpdateToolboxTalkScheduleCommandHandler : IRequestHandler<UpdateToo
             if (!assignedResult.Success)
                 throw new InvalidOperationException("Could not verify supervisor assignments.");
 
-            var unauthorised = request.EmployeeIds.Except(assignedResult.Data!).ToList();
+            supervisorPermittedIds = assignedResult.Data!;
+
+            var unauthorised = request.EmployeeIds.Except(supervisorPermittedIds).ToList();
             if (unauthorised.Any())
                 throw new InvalidOperationException(
                     $"{unauthorised.Count} selected employee(s) are not in your assigned team and cannot be scheduled.");
@@ -77,6 +83,7 @@ public class UpdateToolboxTalkScheduleCommandHandler : IRequestHandler<UpdateToo
 
         // Get employee IDs to assign
         List<Guid> employeeIdsToAssign;
+        var criteriaDerivedIds = new HashSet<Guid>();
         if (request.AssignToAllEmployees)
         {
             // Get all active employees for the tenant
@@ -104,7 +111,56 @@ public class UpdateToolboxTalkScheduleCommandHandler : IRequestHandler<UpdateToo
                 throw new InvalidOperationException($"The following employee IDs are invalid or inactive: {string.Join(", ", invalidIds)}");
             }
 
-            employeeIdsToAssign = validEmployeeIds;
+            // Validate department/site targets belong to the caller's tenant
+            if (request.TargetDepartmentIds.Any())
+            {
+                var validDepartmentIds = await _coreDbContext.Departments
+                    .Where(d => d.TenantId == request.TenantId && !d.IsDeleted && request.TargetDepartmentIds.Contains(d.Id))
+                    .Select(d => d.Id)
+                    .ToListAsync(cancellationToken);
+
+                var invalidDepartmentIds = request.TargetDepartmentIds.Except(validDepartmentIds).ToList();
+                if (invalidDepartmentIds.Any())
+                {
+                    throw new InvalidOperationException($"The following department IDs are invalid: {string.Join(", ", invalidDepartmentIds)}");
+                }
+            }
+
+            if (request.TargetSiteIds.Any())
+            {
+                var validSiteIds = await _coreDbContext.Sites
+                    .Where(s => s.TenantId == request.TenantId && !s.IsDeleted && request.TargetSiteIds.Contains(s.Id))
+                    .Select(s => s.Id)
+                    .ToListAsync(cancellationToken);
+
+                var invalidSiteIds = request.TargetSiteIds.Except(validSiteIds).ToList();
+                if (invalidSiteIds.Any())
+                {
+                    throw new InvalidOperationException($"The following site IDs are invalid: {string.Join(", ", invalidSiteIds)}");
+                }
+            }
+
+            // Expand department/site targets to member employees (union, active only)
+            if (request.TargetDepartmentIds.Any() || request.TargetSiteIds.Any())
+            {
+                var expandedIds = await _targetEmployeeResolver.ResolveEmployeeIdsAsync(
+                    request.TenantId, request.TargetDepartmentIds, request.TargetSiteIds, cancellationToken);
+
+                // Supervisors only reach the operators assigned to them, even via a department/location target
+                if (isSupervisorOnly)
+                {
+                    expandedIds = expandedIds.Intersect(supervisorPermittedIds!).ToList();
+                }
+
+                criteriaDerivedIds = expandedIds.ToHashSet();
+            }
+
+            employeeIdsToAssign = validEmployeeIds.Union(criteriaDerivedIds).ToList();
+
+            if (!employeeIdsToAssign.Any())
+            {
+                throw new InvalidOperationException("No employees resolved from the selected employees, departments, or locations.");
+            }
         }
 
         // Update schedule properties
@@ -118,6 +174,8 @@ public class UpdateToolboxTalkScheduleCommandHandler : IRequestHandler<UpdateToo
         schedule.EndDate = endDate;
         schedule.Frequency = request.Frequency;
         schedule.AssignToAllEmployees = request.AssignToAllEmployees;
+        schedule.TargetDepartmentIds = request.AssignToAllEmployees ? new List<Guid>() : request.TargetDepartmentIds;
+        schedule.TargetSiteIds = request.AssignToAllEmployees ? new List<Guid>() : request.TargetSiteIds;
         schedule.NextRunDate = scheduledDate;
         schedule.Notes = request.Notes;
 
@@ -159,9 +217,15 @@ public class UpdateToolboxTalkScheduleCommandHandler : IRequestHandler<UpdateToo
                 ScheduleId = schedule.Id,
                 EmployeeId = employeeId,
                 IsProcessed = false,
-                ProcessedAt = null
+                ProcessedAt = null,
+                IsCriteriaDerived = criteriaDerivedIds.Contains(employeeId)
             };
+            // schedule is an already-tracked query result, so DetectChanges resolves a
+            // key-preassigned child linked via nav-collection Add() to Modified, not Added
+            // (EF's Added/Modified heuristic keys off the PK's default-ness). Force Added
+            // explicitly so EF issues an INSERT instead of a 0-row UPDATE.
             schedule.Assignments.Add(assignment);
+            _dbContext.Entry(assignment).State = EntityState.Added;
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -182,6 +246,8 @@ public class UpdateToolboxTalkScheduleCommandHandler : IRequestHandler<UpdateToo
             Frequency = schedule.Frequency,
             FrequencyDisplay = GetFrequencyDisplay(schedule.Frequency),
             AssignToAllEmployees = schedule.AssignToAllEmployees,
+            TargetDepartmentIds = schedule.TargetDepartmentIds,
+            TargetSiteIds = schedule.TargetSiteIds,
             Status = schedule.Status,
             StatusDisplay = GetStatusDisplay(schedule.Status),
             NextRunDate = schedule.NextRunDate,

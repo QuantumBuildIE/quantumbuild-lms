@@ -43,6 +43,9 @@ import {
 import { useToolboxTalks, useCreateToolboxTalkSchedule, useUpdateToolboxTalkSchedule, useToolboxTalkSchedule } from '@/lib/api/toolbox-talks';
 import { useAllEmployees } from '@/lib/api/admin/use-employees';
 import { useMyOperators } from '@/lib/api/admin/use-supervisor-assignments';
+import { useAllDepartments } from '@/lib/api/admin/use-departments';
+import { useAllSites } from '@/lib/api/admin/use-sites';
+import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 import { useAuth } from '@/lib/auth/use-auth';
 import type {
   ToolboxTalkSchedule,
@@ -66,6 +69,8 @@ const scheduleFormSchema = z.object({
   frequency: z.enum(FREQUENCY_VALUES),
   assignToAllEmployees: z.boolean(),
   employeeIds: z.array(z.string()).optional(),
+  targetDepartmentIds: z.array(z.string()).optional(),
+  targetSiteIds: z.array(z.string()).optional(),
   notes: z.string().max(500).optional().nullable(),
 });
 
@@ -129,6 +134,17 @@ export function ScheduleDialog({
   const { data: allEmployees, isLoading: allEmployeesLoading } = useAllEmployees();
   const { data: myOperators, isLoading: myOperatorsLoading } = useMyOperators();
 
+  // Departments/locations available for target-based scheduling (union with any explicit employees)
+  const { data: allDepartments, isLoading: departmentsLoading } = useAllDepartments();
+  const { data: allSites, isLoading: sitesLoading } = useAllSites();
+
+  const departmentOptions = (allDepartments ?? [])
+    .filter((d) => d.isActive)
+    .map((d) => ({ value: d.id, label: d.name }));
+  const siteOptions = (allSites ?? [])
+    .filter((s) => s.isActive)
+    .map((s) => ({ value: s.id, label: s.siteName }));
+
   const employees = isSupervisorOnly
     ? (myOperators ?? []).map(op => ({
         id: op.employeeId,
@@ -157,6 +173,8 @@ export function ScheduleDialog({
       frequency: schedule?.frequency ?? 'Once',
       assignToAllEmployees: schedule?.assignToAllEmployees ?? true,
       employeeIds: schedule?.assignments?.map(a => a.employeeId) ?? [],
+      targetDepartmentIds: schedule?.targetDepartmentIds ?? [],
+      targetSiteIds: schedule?.targetSiteIds ?? [],
       notes: schedule?.notes ?? '',
     },
   });
@@ -174,6 +192,8 @@ export function ScheduleDialog({
         frequency: schedule?.frequency ?? 'Once',
         assignToAllEmployees: schedule?.assignToAllEmployees ?? true,
         employeeIds: schedule?.assignments?.map(a => a.employeeId) ?? [],
+        targetDepartmentIds: schedule?.targetDepartmentIds ?? [],
+        targetSiteIds: schedule?.targetSiteIds ?? [],
         notes: schedule?.notes ?? '',
       });
       setSelectedEmployees(schedule?.assignments?.map(a => a.employeeId) ?? []);
@@ -189,8 +209,11 @@ export function ScheduleDialog({
 
   async function onSubmit(values: ScheduleFormValues) {
     // Custom validation
-    if (!values.assignToAllEmployees && (!values.employeeIds || values.employeeIds.length === 0)) {
-      form.setError('employeeIds', { message: 'Please select at least one employee' });
+    const hasEmployees = !!values.employeeIds && values.employeeIds.length > 0;
+    const hasDepartments = !!values.targetDepartmentIds && values.targetDepartmentIds.length > 0;
+    const hasSites = !!values.targetSiteIds && values.targetSiteIds.length > 0;
+    if (!values.assignToAllEmployees && !hasEmployees && !hasDepartments && !hasSites) {
+      form.setError('employeeIds', { message: 'Select at least one employee, department, or location' });
       return;
     }
     if (values.endDate && values.scheduledDate && values.endDate < values.scheduledDate) {
@@ -206,6 +229,8 @@ export function ScheduleDialog({
         frequency: values.frequency,
         assignToAllEmployees: values.assignToAllEmployees,
         employeeIds: values.assignToAllEmployees ? undefined : values.employeeIds,
+        targetDepartmentIds: values.assignToAllEmployees ? undefined : values.targetDepartmentIds,
+        targetSiteIds: values.assignToAllEmployees ? undefined : values.targetSiteIds,
         notes: values.notes || undefined,
       };
 
@@ -464,7 +489,57 @@ export function ScheduleDialog({
               />
             )}
 
-            {/* Employee selection (conditional) */}
+            {/* Target by department / location (conditional) — unions with explicit employees below */}
+            {!watchAssignToAll && (
+              <div className="space-y-4 rounded-md border p-4">
+                <div className="space-y-1 leading-none">
+                  <FormLabel>Target by Department / Location</FormLabel>
+                  <FormDescription>
+                    Sends to everyone in the selected department(s) and/or location(s), combined with any employees selected below.
+                  </FormDescription>
+                </div>
+                <FormField
+                  control={form.control}
+                  name="targetDepartmentIds"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs text-muted-foreground">Departments</FormLabel>
+                      <MultiSelectCombobox
+                        options={departmentOptions}
+                        selectedValues={field.value ?? []}
+                        onValuesChange={(values) => field.onChange(values)}
+                        placeholder="Select departments..."
+                        searchPlaceholder="Search departments..."
+                        isLoading={departmentsLoading}
+                        ariaLabel="Target departments"
+                      />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="targetSiteIds"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs text-muted-foreground">Locations</FormLabel>
+                      <MultiSelectCombobox
+                        options={siteOptions}
+                        selectedValues={field.value ?? []}
+                        onValuesChange={(values) => field.onChange(values)}
+                        placeholder="Select locations..."
+                        searchPlaceholder="Search locations..."
+                        isLoading={sitesLoading}
+                        ariaLabel="Target locations"
+                      />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
+
+            {/* Employee selection (conditional) — unions with department/location targets above */}
             {!watchAssignToAll && (
               <FormField
                 control={form.control}
@@ -472,7 +547,7 @@ export function ScheduleDialog({
                 render={() => (
                   <FormItem>
                     <div className="flex items-center justify-between">
-                      <FormLabel>{isSupervisorOnly ? 'Select team members *' : 'Select Employees *'}</FormLabel>
+                      <FormLabel>{isSupervisorOnly ? 'Select team members' : 'Select Employees'}</FormLabel>
                       <div className="flex gap-2">
                         <Button
                           type="button"

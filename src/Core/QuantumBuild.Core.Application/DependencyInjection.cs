@@ -41,6 +41,7 @@ public static class DependencyInjection
         services.AddScoped<ILookupService, LookupService>();
         services.AddScoped<ITenantSettingsService, TenantSettingsService>();
         services.AddScoped<ISupervisorAssignmentService, SupervisorAssignmentService>();
+        services.AddScoped<ITargetEmployeeResolver, TargetEmployeeResolver>();
 
         return services;
     }

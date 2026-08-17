@@ -37,6 +37,14 @@ public class ToolboxTalkScheduleConfiguration : IEntityTypeConfiguration<Toolbox
             .IsRequired()
             .HasDefaultValue(false);
 
+        builder.Property(s => s.TargetDepartmentIds)
+            .IsRequired()
+            .HasDefaultValueSql("'{}'");
+
+        builder.Property(s => s.TargetSiteIds)
+            .IsRequired()
+            .HasDefaultValueSql("'{}'");
+
         builder.Property(s => s.Status)
             .IsRequired()
             .HasConversion<string>()

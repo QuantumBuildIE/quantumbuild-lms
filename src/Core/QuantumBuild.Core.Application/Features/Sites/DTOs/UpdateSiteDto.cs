@@ -1,7 +1,7 @@
 namespace QuantumBuild.Core.Application.Features.Sites.DTOs;
 
 public record UpdateSiteDto(
-    string SiteCode,
+    string? SiteCode,
     string SiteName,
     string? Address,
     string? City,
@@ -11,9 +11,5 @@ public record UpdateSiteDto(
     string? Phone,
     string? Email,
     bool IsActive,
-    string? Notes,
-    decimal? Latitude,
-    decimal? Longitude,
-    int? GeofenceRadiusMeters,
-    int? FloatProjectId = null
+    string? Notes
 );

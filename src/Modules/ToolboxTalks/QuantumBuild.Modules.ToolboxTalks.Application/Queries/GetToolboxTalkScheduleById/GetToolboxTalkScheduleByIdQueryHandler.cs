@@ -38,6 +38,8 @@ public class GetToolboxTalkScheduleByIdQueryHandler : IRequestHandler<GetToolbox
             Frequency = schedule.Frequency,
             FrequencyDisplay = GetFrequencyDisplay(schedule.Frequency),
             AssignToAllEmployees = schedule.AssignToAllEmployees,
+            TargetDepartmentIds = schedule.TargetDepartmentIds,
+            TargetSiteIds = schedule.TargetSiteIds,
             Status = schedule.Status,
             StatusDisplay = GetStatusDisplay(schedule.Status),
             NextRunDate = schedule.NextRunDate,

@@ -80,17 +80,27 @@ public class EmployeesController : ControllerBase
     }
 
     /// <summary>
-    /// Get employees with pagination, sorting, and search
+    /// Get employees with pagination, sorting, search, and department/location filtering
     /// </summary>
+    /// <param name="departmentId">Optional department filter (ignored when departmentUnassigned is true)</param>
+    /// <param name="departmentUnassigned">When true, filter to employees with no department assigned</param>
+    /// <param name="siteId">Optional site/location filter (ignored when siteUnassigned is true)</param>
+    /// <param name="siteUnassigned">When true, filter to employees with no site/location assigned</param>
     [HttpGet]
     public async Task<IActionResult> GetPaginated(
         [FromQuery] int pageNumber = 1,
         [FromQuery] int pageSize = 20,
         [FromQuery] string? sortColumn = null,
         [FromQuery] string? sortDirection = null,
-        [FromQuery] string? search = null)
+        [FromQuery] string? search = null,
+        [FromQuery] Guid? departmentId = null,
+        [FromQuery] bool departmentUnassigned = false,
+        [FromQuery] Guid? siteId = null,
+        [FromQuery] bool siteUnassigned = false)
     {
-        var query = new GetEmployeesQueryDto(pageNumber, pageSize, sortColumn, sortDirection, search);
+        var query = new GetEmployeesQueryDto(
+            pageNumber, pageSize, sortColumn, sortDirection, search,
+            departmentId, departmentUnassigned, siteId, siteUnassigned);
         var result = await _employeeService.GetPaginatedAsync(query);
 
         if (!result.Success)

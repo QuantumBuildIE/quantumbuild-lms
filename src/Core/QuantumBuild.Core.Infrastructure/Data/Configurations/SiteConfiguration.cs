@@ -11,8 +11,7 @@ public class SiteConfiguration : IEntityTypeConfiguration<Site>
         builder.HasKey(e => e.Id);
 
         builder.Property(e => e.SiteCode)
-            .HasMaxLength(50)
-            .IsRequired();
+            .HasMaxLength(50);
 
         builder.Property(e => e.SiteName)
             .HasMaxLength(200)
@@ -48,8 +47,10 @@ public class SiteConfiguration : IEntityTypeConfiguration<Site>
         builder.Property(s => s.FloatLinkedAt);
         builder.Property(s => s.FloatLinkMethod).HasMaxLength(50);
 
+        // Unique per tenant only when a code is present - SiteCode is optional.
         builder.HasIndex(e => new { e.TenantId, e.SiteCode })
             .IsUnique()
+            .HasFilter("\"SiteCode\" IS NOT NULL")
             .HasDatabaseName("IX_Sites_TenantId_SiteCode");
 
         // Index on FloatProjectId for quick lookups (where not null)

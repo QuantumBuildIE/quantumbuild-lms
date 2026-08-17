@@ -43,6 +43,10 @@ export interface CompletionsReportParams {
 
 export interface SkillsMatrixParams {
   category?: string;
+  departmentId?: string;
+  departmentUnassigned?: boolean;
+  siteId?: string;
+  siteUnassigned?: boolean;
 }
 
 // ============================================

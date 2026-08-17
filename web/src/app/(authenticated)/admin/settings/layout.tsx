@@ -3,13 +3,15 @@
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { useHasAnyPermission } from "@/lib/auth/use-auth";
+import { useHasAnyPermission, usePermissions } from "@/lib/auth/use-auth";
 import { cn } from "@/lib/utils";
 
 const settingsNavItems = [
   { href: "/admin/settings", label: "General", exact: true },
   { href: "/admin/settings/languages", label: "Languages" },
   { href: "/admin/settings/lookups", label: "Lookups" },
+  { href: "/admin/settings/departments", label: "Departments", permission: "Core.ManageDepartments" },
+  { href: "/admin/settings/locations", label: "Locations", permission: "Core.ManageSites" },
 ];
 
 const settingsPermissions = [
@@ -25,6 +27,13 @@ export default function AdminSettingsLayout({
   const router = useRouter();
   const pathname = usePathname();
   const hasPermission = useHasAnyPermission(settingsPermissions);
+  const navPermissions = usePermissions(
+    settingsNavItems.flatMap((item) => (item.permission ? [item.permission] : []))
+  );
+
+  const visibleNavItems = settingsNavItems.filter(
+    (item) => !item.permission || navPermissions[item.permission]
+  );
 
   useEffect(() => {
     if (!hasPermission) {
@@ -61,7 +70,7 @@ export default function AdminSettingsLayout({
 
       <nav className="border-b bg-background">
         <div className="flex h-10 items-center gap-4 overflow-x-auto sm:gap-6 scrollbar-hide">
-          {settingsNavItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}

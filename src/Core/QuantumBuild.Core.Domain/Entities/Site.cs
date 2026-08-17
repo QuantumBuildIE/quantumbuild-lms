@@ -8,9 +8,9 @@ namespace QuantumBuild.Core.Domain.Entities;
 public class Site : TenantEntity
 {
     /// <summary>
-    /// Unique code for the site within the tenant
+    /// Unique code for the site within the tenant. Optional; when present, unique per tenant.
     /// </summary>
-    public string SiteCode { get; set; } = string.Empty;
+    public string? SiteCode { get; set; }
 
     /// <summary>
     /// Name of the construction site

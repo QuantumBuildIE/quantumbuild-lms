@@ -63,9 +63,17 @@ public interface IToolboxTalkReportsService
     /// <param name="tenantId">Tenant ID</param>
     /// <param name="employeeIds">Optional employee IDs for role-based scoping (null = all)</param>
     /// <param name="category">Optional category filter</param>
+    /// <param name="departmentId">Optional department filter (ignored when departmentUnassigned is true)</param>
+    /// <param name="departmentUnassigned">When true, filter to employees with no department assigned</param>
+    /// <param name="siteId">Optional site/location filter (ignored when siteUnassigned is true)</param>
+    /// <param name="siteUnassigned">When true, filter to employees with no site/location assigned</param>
     /// <returns>Skills matrix with employees, learnings, and status cells</returns>
     Task<SkillsMatrixDto> GetSkillsMatrixAsync(
         Guid tenantId,
         List<Guid>? employeeIds = null,
-        string? category = null);
+        string? category = null,
+        Guid? departmentId = null,
+        bool departmentUnassigned = false,
+        Guid? siteId = null,
+        bool siteUnassigned = false);
 }

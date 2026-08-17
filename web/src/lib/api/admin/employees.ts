@@ -53,6 +53,14 @@ export interface GetEmployeesParams {
   sortColumn?: string;
   sortDirection?: "asc" | "desc";
   search?: string;
+  /** Filter to a specific department. Ignored when departmentUnassigned is true. */
+  departmentId?: string;
+  /** Filter to employees with no department assigned. */
+  departmentUnassigned?: boolean;
+  /** Filter to a specific site/location. Ignored when siteUnassigned is true. */
+  siteId?: string;
+  /** Filter to employees with no site/location assigned. */
+  siteUnassigned?: boolean;
 }
 
 export interface PaginatedResponse<T> {
@@ -84,6 +92,16 @@ export async function getEmployees(
   }
   if (params?.search) {
     queryParams.append("search", params.search);
+  }
+  if (params?.departmentUnassigned) {
+    queryParams.append("departmentUnassigned", "true");
+  } else if (params?.departmentId) {
+    queryParams.append("departmentId", params.departmentId);
+  }
+  if (params?.siteUnassigned) {
+    queryParams.append("siteUnassigned", "true");
+  } else if (params?.siteId) {
+    queryParams.append("siteId", params.siteId);
   }
 
   const queryString = queryParams.toString();

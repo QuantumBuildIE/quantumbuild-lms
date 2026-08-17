@@ -16,6 +16,8 @@ public record ToolboxTalkScheduleDto
     public ToolboxTalkFrequency Frequency { get; init; }
     public string FrequencyDisplay { get; init; } = string.Empty;
     public bool AssignToAllEmployees { get; init; }
+    public List<Guid> TargetDepartmentIds { get; init; } = new();
+    public List<Guid> TargetSiteIds { get; init; } = new();
     public ToolboxTalkScheduleStatus Status { get; init; }
     public string StatusDisplay { get; init; } = string.Empty;
     public DateTime? NextRunDate { get; init; }

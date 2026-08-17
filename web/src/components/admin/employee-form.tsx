@@ -451,7 +451,8 @@ export function EmployeeForm({ employee, onSuccess, onCancel }: EmployeeFormProp
                   <SelectItem value="__none__">None</SelectItem>
                   {sites?.filter(s => s.isActive).map((site) => (
                     <SelectItem key={site.id} value={site.id}>
-                      {site.siteName} ({site.siteCode})
+                      {site.siteName}
+                      {site.siteCode ? ` (${site.siteCode})` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>

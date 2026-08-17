@@ -51,6 +51,30 @@ public class SiteTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task GetSites_WithSearch_DoesNotCrashOnNullSiteCode()
+    {
+        // Arrange - Create a site with no code, then search by a term that would
+        // hit the SiteCode.ToLower().Contains() branch if it weren't null-guarded.
+        var createCommand = new
+        {
+            SiteName = $"NullCodeSearchSite-{Guid.NewGuid():N}",
+            IsActive = true
+        };
+
+        var createResponse = await AdminClient.PostAsJsonAsync("/api/sites", createCommand);
+        createResponse.EnsureSuccessStatusCode();
+
+        // Act
+        var response = await AdminClient.GetAsync("/api/sites?search=NullCodeSearchSite");
+        var result = await response.Content.ReadFromJsonAsync<ResultWrapper<PaginatedResult<SiteDto>>>();
+
+        // Assert - no 500 from a NullReferenceException in the search filter
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        result.Should().NotBeNull();
+        result!.Success.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task GetAllSites_ReturnsNonPaginatedList()
     {
         // Act
@@ -199,7 +223,7 @@ public class SiteTests : IntegrationTestBase
     [Fact]
     public async Task CreateSite_MissingRequiredFields_ReturnsBadRequest()
     {
-        // Arrange - Missing SiteCode and SiteName
+        // Arrange - Missing SiteName (SiteCode is optional, SiteName is still required)
         var command = new
         {
             City = "Dublin",
@@ -211,6 +235,43 @@ public class SiteTests : IntegrationTestBase
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task CreateSite_NoSiteCode_ReturnsCreatedWithNullCode()
+    {
+        // Arrange - SiteCode omitted entirely
+        var command = new
+        {
+            SiteName = $"No Code Site {Guid.NewGuid():N}",
+            IsActive = true
+        };
+
+        // Act
+        var response = await AdminClient.PostAsJsonAsync("/api/sites", command);
+        var result = await response.Content.ReadFromJsonAsync<ResultWrapper<SiteDto>>();
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        result.Should().NotBeNull();
+        result!.Success.Should().BeTrue();
+        result.Data!.SiteCode.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task CreateSite_MultipleNullSiteCodes_BothSucceed()
+    {
+        // Arrange - Two sites, both with no code, must coexist (filtered unique index)
+        var command1 = new { SiteName = $"Null Code A {Guid.NewGuid():N}", IsActive = true };
+        var command2 = new { SiteName = $"Null Code B {Guid.NewGuid():N}", IsActive = true };
+
+        // Act
+        var response1 = await AdminClient.PostAsJsonAsync("/api/sites", command1);
+        var response2 = await AdminClient.PostAsJsonAsync("/api/sites", command2);
+
+        // Assert
+        response1.StatusCode.Should().Be(HttpStatusCode.Created);
+        response2.StatusCode.Should().Be(HttpStatusCode.Created);
     }
 
     [Fact]
@@ -323,13 +384,16 @@ public class SiteTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task UpdateSite_UpdateGeolocation_ReturnsOk()
+    public async Task UpdateSite_PreservesGeolocation_NotEditableViaUpdate()
     {
-        // Arrange - First create a site
+        // Arrange - Create a site with geolocation set at creation time
         var createCommand = new
         {
             SiteCode = $"UPDGEO-{Guid.NewGuid():N}".Substring(0, 10),
             SiteName = "Geo Update Site",
+            Latitude = 51.8985m,
+            Longitude = -8.4756m,
+            GeofenceRadiusMeters = 200,
             IsActive = true
         };
 
@@ -338,14 +402,11 @@ public class SiteTests : IntegrationTestBase
         var createResult = await createResponse.Content.ReadFromJsonAsync<ResultWrapper<SiteDto>>();
         var siteId = createResult!.Data!.Id;
 
-        // Update with geolocation
+        // Update a visible field only - geolocation is not part of UpdateSiteDto
         var updateCommand = new
         {
             SiteCode = createCommand.SiteCode,
-            SiteName = createCommand.SiteName,
-            Latitude = 51.8985m,
-            Longitude = -8.4756m,
-            GeofenceRadiusMeters = 200,
+            SiteName = "Renamed Geo Site",
             IsActive = true
         };
 
@@ -353,11 +414,12 @@ public class SiteTests : IntegrationTestBase
         var response = await AdminClient.PutAsJsonAsync($"/api/sites/{siteId}", updateCommand);
         var result = await response.Content.ReadFromJsonAsync<ResultWrapper<SiteDto>>();
 
-        // Assert
+        // Assert - the name changed but geolocation survived untouched
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         result.Should().NotBeNull();
         result!.Success.Should().BeTrue();
-        result.Data!.Latitude.Should().Be(51.8985m);
+        result.Data!.SiteName.Should().Be("Renamed Geo Site");
+        result.Data.Latitude.Should().Be(51.8985m);
         result.Data.Longitude.Should().Be(-8.4756m);
         result.Data.GeofenceRadiusMeters.Should().Be(200);
     }
@@ -500,7 +562,7 @@ public class SiteTests : IntegrationTestBase
 
     private record SiteDto(
         Guid Id,
-        string SiteCode,
+        string? SiteCode,
         string SiteName,
         string? Address,
         string? City,

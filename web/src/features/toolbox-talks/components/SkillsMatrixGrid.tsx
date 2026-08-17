@@ -140,13 +140,68 @@ export interface CategoryFilterProps {
   isLoading: boolean;
 }
 
+/**
+ * Three-state entity filter (Department / Location): no filter, a specific
+ * entity, or the explicit 'unassigned' (no entity assigned) state. Inactive
+ * entities are still listed (suffixed) so employees assigned to a
+ * deactivated department/site remain findable.
+ */
+export interface EntityFilterProps {
+  label: string;
+  unassignedLabel: string;
+  allLabel: string;
+  entities: { id: string; name: string; isActive: boolean }[];
+  selectedId?: string;
+  unassigned: boolean;
+  onChange: (value: { id?: string; unassigned: boolean }) => void;
+  isLoading: boolean;
+}
+
+function EntityFilterSelect({
+  filter,
+  className,
+}: {
+  filter: EntityFilterProps;
+  className?: string;
+}) {
+  const value = filter.unassigned ? '__none__' : filter.selectedId || '__all__';
+
+  return (
+    <Select
+      value={value}
+      onValueChange={(v) => {
+        if (v === '__all__') filter.onChange({ unassigned: false });
+        else if (v === '__none__') filter.onChange({ unassigned: true });
+        else filter.onChange({ id: v, unassigned: false });
+      }}
+      disabled={filter.isLoading}
+    >
+      <SelectTrigger className={className ?? 'w-[180px] h-9'}>
+        <SelectValue placeholder={filter.allLabel} />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="__all__">{filter.allLabel}</SelectItem>
+        <SelectItem value="__none__">{filter.unassignedLabel}</SelectItem>
+        {filter.entities.map((entity) => (
+          <SelectItem key={entity.id} value={entity.id}>
+            {entity.name}
+            {!entity.isActive ? ' (Inactive)' : ''}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 interface SkillsMatrixGridProps {
   data: SkillsMatrix | undefined;
   isLoading: boolean;
   categoryFilter?: CategoryFilterProps;
+  departmentFilter?: EntityFilterProps;
+  locationFilter?: EntityFilterProps;
 }
 
-export function SkillsMatrixGrid({ data, isLoading, categoryFilter }: SkillsMatrixGridProps) {
+export function SkillsMatrixGrid({ data, isLoading, categoryFilter, departmentFilter, locationFilter }: SkillsMatrixGridProps) {
   const [page, setPage] = useState(0);
   const [compactOverride, setCompactOverride] = useState<boolean | null>(null);
   const [selectedLearningIds, setSelectedLearningIds] = useState<string[]>([]);
@@ -254,6 +309,12 @@ export function SkillsMatrixGrid({ data, isLoading, categoryFilter }: SkillsMatr
                 {compact ? 'Switch to full view' : 'Switch to compact view'}
               </TooltipContent>
             </Tooltip>
+
+            {/* Department filter (passed from parent) */}
+            {departmentFilter && <EntityFilterSelect filter={departmentFilter} />}
+
+            {/* Location filter (passed from parent) */}
+            {locationFilter && <EntityFilterSelect filter={locationFilter} />}
 
             {/* Category filter (passed from parent) */}
             {categoryFilter && (

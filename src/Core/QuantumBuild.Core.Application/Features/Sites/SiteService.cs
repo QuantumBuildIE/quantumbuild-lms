@@ -69,7 +69,7 @@ public class SiteService : ISiteService
             {
                 var searchLower = query.Search.ToLower();
                 sitesQuery = sitesQuery.Where(s =>
-                    s.SiteCode.ToLower().Contains(searchLower) ||
+                    (s.SiteCode != null && s.SiteCode.ToLower().Contains(searchLower)) ||
                     s.SiteName.ToLower().Contains(searchLower) ||
                     (s.City != null && s.City.ToLower().Contains(searchLower)) ||
                     (s.Address != null && s.Address.ToLower().Contains(searchLower))
@@ -212,19 +212,26 @@ public class SiteService : ISiteService
                 }
             }
 
-            // Check for duplicate SiteCode within the same tenant
-            var duplicateCode = await _context.Sites
-                .AnyAsync(s => s.SiteCode == dto.SiteCode);
+            // SiteCode is optional - normalize blank input to null so it's excluded
+            // from the filtered unique index rather than colliding with other blanks.
+            var siteCode = string.IsNullOrWhiteSpace(dto.SiteCode) ? null : dto.SiteCode.Trim();
 
-            if (duplicateCode)
+            // Check for duplicate SiteCode within the same tenant (only when a code is present)
+            if (siteCode != null)
             {
-                return Result.Fail<SiteDto>($"Site with code '{dto.SiteCode}' already exists");
+                var duplicateCode = await _context.Sites
+                    .AnyAsync(s => s.SiteCode == siteCode);
+
+                if (duplicateCode)
+                {
+                    return Result.Fail<SiteDto>($"Site with code '{siteCode}' already exists");
+                }
             }
 
             var site = new Site
             {
                 Id = Guid.NewGuid(),
-                SiteCode = dto.SiteCode,
+                SiteCode = siteCode,
                 SiteName = dto.SiteName,
                 Address = dto.Address,
                 City = dto.City,
@@ -321,16 +328,23 @@ public class SiteService : ISiteService
                 }
             }
 
-            // Check for duplicate SiteCode (excluding current site)
-            var duplicateCode = await _context.Sites
-                .AnyAsync(s => s.SiteCode == dto.SiteCode && s.Id != id);
+            // SiteCode is optional - normalize blank input to null so it's excluded
+            // from the filtered unique index rather than colliding with other blanks.
+            var siteCode = string.IsNullOrWhiteSpace(dto.SiteCode) ? null : dto.SiteCode.Trim();
 
-            if (duplicateCode)
+            // Check for duplicate SiteCode (excluding current site, only when a code is present)
+            if (siteCode != null)
             {
-                return Result.Fail<SiteDto>($"Site with code '{dto.SiteCode}' already exists");
+                var duplicateCode = await _context.Sites
+                    .AnyAsync(s => s.SiteCode == siteCode && s.Id != id);
+
+                if (duplicateCode)
+                {
+                    return Result.Fail<SiteDto>($"Site with code '{siteCode}' already exists");
+                }
             }
 
-            site.SiteCode = dto.SiteCode;
+            site.SiteCode = siteCode;
             site.SiteName = dto.SiteName;
             site.Address = dto.Address;
             site.City = dto.City;
@@ -341,28 +355,9 @@ public class SiteService : ISiteService
             site.Email = dto.Email;
             site.IsActive = dto.IsActive;
             site.Notes = dto.Notes;
-            site.Latitude = dto.Latitude;
-            site.Longitude = dto.Longitude;
-            site.GeofenceRadiusMeters = dto.GeofenceRadiusMeters;
-
-            // Handle FloatProjectId changes
-            if (dto.FloatProjectId != site.FloatProjectId)
-            {
-                if (dto.FloatProjectId.HasValue)
-                {
-                    // Setting or changing FloatProjectId
-                    site.FloatProjectId = dto.FloatProjectId;
-                    site.FloatLinkedAt = DateTime.UtcNow;
-                    site.FloatLinkMethod = "Manual";
-                }
-                else
-                {
-                    // Clearing FloatProjectId
-                    site.FloatProjectId = null;
-                    site.FloatLinkedAt = null;
-                    site.FloatLinkMethod = null;
-                }
-            }
+            // Latitude, Longitude, GeofenceRadiusMeters, and the Float link fields are
+            // not part of this update - they're managed outside the Location UI and are
+            // left untouched here rather than being overwritten from the DTO.
 
             await _context.SaveChangesAsync();
 
