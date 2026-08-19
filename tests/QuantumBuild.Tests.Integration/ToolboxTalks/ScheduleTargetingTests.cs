@@ -145,14 +145,10 @@ public class ScheduleTargetingTests : IntegrationTestBase
     {
         // Arrange — AssignToAllEmployees overrides/ignores a department target per spec: "means
         // everyone... a department/location target is irrelevant/overridden - do not double-add."
-        // NOTE: a FluentValidation rule also rejects this combination (mirroring the pre-existing
-        // EmployeeIds-must-be-empty-when-AssignToAll rule), but this codebase's command validators
-        // are registered in DI without being wired into either ASP.NET auto-validation or a MediatR
-        // ValidationBehavior pipeline step (checked: no such behavior is registered anywhere), so no
-        // FluentValidation validator for any MediatR command currently runs. That is a pre-existing,
-        // cross-cutting gap outside this chunk's scope — flagged, not fixed here. The handler's own
-        // branch logic is what actually governs behaviour, and it silently overrides, which is what
-        // this test verifies.
+        // The MediatR ValidationBehavior pipeline is wired in, and CreateToolboxTalkScheduleCommandValidator
+        // deliberately has no "must be empty when AssignToAllEmployees" rule, matching the handler's
+        // own branch logic (which silently overrides), so this combination reaches the handler and
+        // is ignored rather than rejected.
         var department = await CreateDepartmentAsync("Overridden Dept");
         var deptMember = await CreateEmployeeAsync("Dept", "Member", departmentId: department);
         var talk = await CreateTestTalkAsync();

@@ -355,6 +355,26 @@ app.UseExceptionHandler(errorApp =>
         var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
         var exceptionFeature = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
 
+        // A FluentValidation failure that bubbles up past a controller with no explicit catch
+        // block (e.g. thrown by the MediatR ValidationBehavior) is a client input error, not a
+        // server fault — surface it as 400 with the standard Result envelope so the frontend's
+        // getApiErrorMessage renders the actual field messages instead of a generic 500.
+        if (exceptionFeature?.Error is FluentValidation.ValidationException validationEx)
+        {
+            logger.LogWarning(validationEx, "Validation failed on {Method} {Path}", context.Request.Method, context.Request.Path);
+
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            context.Response.ContentType = "application/json";
+
+            var validationJsonOptions = new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase };
+            validationJsonOptions.Converters.Add(new JsonStringEnumConverter());
+
+            await context.Response.WriteAsJsonAsync(
+                QuantumBuild.Core.Application.Models.Result.Fail(validationEx),
+                validationJsonOptions);
+            return;
+        }
+
         if (exceptionFeature?.Error is { } ex)
         {
             logger.LogError(ex, "Unhandled exception on {Method} {Path}", context.Request.Method, context.Request.Path);

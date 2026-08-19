@@ -218,6 +218,10 @@ public class MyToolboxTalksController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+        catch (FluentValidation.ValidationException ex)
+        {
+            return BadRequest(Result.Fail(ex));
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error marking section {SectionId} as read for talk {ScheduledTalkId}", sectionId, id);
@@ -259,7 +263,7 @@ public class MyToolboxTalksController : ControllerBase
         }
         catch (FluentValidation.ValidationException ex)
         {
-            return BadRequest(new { message = ex.Message, errors = ex.Errors });
+            return BadRequest(Result.Fail(ex));
         }
         catch (Exception ex)
         {
@@ -302,7 +306,7 @@ public class MyToolboxTalksController : ControllerBase
         }
         catch (FluentValidation.ValidationException ex)
         {
-            return BadRequest(new { message = ex.Message, errors = ex.Errors });
+            return BadRequest(Result.Fail(ex));
         }
         catch (Exception ex)
         {
@@ -386,7 +390,7 @@ public class MyToolboxTalksController : ControllerBase
         }
         catch (FluentValidation.ValidationException ex)
         {
-            return BadRequest(new { message = ex.Message, errors = ex.Errors });
+            return BadRequest(Result.Fail(ex));
         }
         catch (Exception ex)
         {

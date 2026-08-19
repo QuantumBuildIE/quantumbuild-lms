@@ -396,7 +396,10 @@ public class UpdateToolboxTalkSettingsCommandHandlerTests : IntegrationTestBase
             Frequency = ToolboxTalkFrequency.Once,
             RequiresQuiz = false,
             IsActive = true,
-            Sections = Array.Empty<object>()
+            Sections = new[]
+            {
+                new { SectionNumber = 1, Title = "Section 1", Content = "<p>Content</p>", RequiresAcknowledgment = true }
+            }
         };
         var createResponse = await AdminClient.PostAsJsonAsync("/api/toolbox-talks", createBody);
         createResponse.EnsureSuccessStatusCode();

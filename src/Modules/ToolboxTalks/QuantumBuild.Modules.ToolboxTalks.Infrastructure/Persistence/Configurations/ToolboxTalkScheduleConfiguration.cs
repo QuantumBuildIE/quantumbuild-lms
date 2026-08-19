@@ -53,6 +53,8 @@ public class ToolboxTalkScheduleConfiguration : IEntityTypeConfiguration<Toolbox
 
         builder.Property(s => s.NextRunDate);
 
+        builder.Property(s => s.LastProcessedCycleDate);
+
         builder.Property(s => s.Notes)
             .HasMaxLength(1000);
 

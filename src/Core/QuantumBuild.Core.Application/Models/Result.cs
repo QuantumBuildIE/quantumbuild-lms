@@ -1,3 +1,5 @@
+using FluentValidation;
+
 namespace QuantumBuild.Core.Application.Models;
 
 public class Result
@@ -42,6 +44,21 @@ public class Result
         {
             Success = false,
             Errors = errors
+        };
+    }
+
+    /// <summary>
+    /// Projects a FluentValidation failure into the standard Result envelope so callers get
+    /// readable messages (getApiErrorMessage expects errors: string[]) instead of serialized
+    /// ValidationFailure objects.
+    /// </summary>
+    public static Result Fail(ValidationException exception)
+    {
+        return new Result
+        {
+            Success = false,
+            Errors = exception.Errors.Select(e => e.ErrorMessage).ToList(),
+            ErrorCode = FailureCode.ValidationFailed
         };
     }
 

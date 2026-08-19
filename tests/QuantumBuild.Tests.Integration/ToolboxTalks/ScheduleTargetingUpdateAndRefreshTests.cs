@@ -162,11 +162,12 @@ public class ScheduleTargetingUpdateAndRefreshTests : IntegrationTestBase
     [Fact]
     public async Task ProcessSchedule_RecurringTargetCriteria_AddsNewlyQualifyingEmployee()
     {
-        // Arrange — a recurring schedule targeted by department. We force the "zero unprocessed
-        // assignments" precondition directly (see docs/targeting-expansion-extraction-recon.md
-        // §7 — this state is not reliably reachable via the normal two-step HTTP create+process
-        // flow because a successful non-completing process resets all assignments back to
-        // unprocessed for the next cycle) so the refresh branch actually runs.
+        // Arrange — a recurring schedule targeted by department. The refresh now runs
+        // unconditionally on every /process call (Chunk 2b), so the "zero unprocessed
+        // assignments" precondition this test used to force directly via the DB (see
+        // docs/targeting-expansion-extraction-recon.md §7) is no longer needed or valid — a
+        // real first /process call establishes the schedule's first cycle (and its
+        // LastProcessedCycleDate marker) the same way the cron would.
         var department = await CreateDepartmentAsync("Refresh Add Dept");
         var memberA = await CreateEmployeeAsync("RefreshAdd", "A", departmentId: department);
         var talk = await CreateTestTalkAsync();
@@ -184,9 +185,11 @@ public class ScheduleTargetingUpdateAndRefreshTests : IntegrationTestBase
         var created = await createResponse.Content.ReadFromJsonAsync<ScheduleResult>();
         created!.AssignmentCount.Should().Be(1);
 
-        await MarkAllAssignmentsProcessedAsync(created.Id);
+        // Establishes the schedule's first cycle for real (processes memberA).
+        var firstResponse = await AdminClient.PostAsync($"/api/toolbox-talks/schedules/{created.Id}/process", null);
+        firstResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        // A new employee joins the targeted department after the schedule was created/last processed
+        // A new employee joins the targeted department after the schedule was last processed
         var memberB = await CreateEmployeeAsync("RefreshAdd", "B", departmentId: department);
 
         // Act
@@ -227,7 +230,9 @@ public class ScheduleTargetingUpdateAndRefreshTests : IntegrationTestBase
         var created = await createResponse.Content.ReadFromJsonAsync<ScheduleResult>();
         created!.AssignmentCount.Should().Be(2);
 
-        await MarkAllAssignmentsProcessedAsync(created.Id);
+        // Establishes the schedule's first cycle for real (processes both members).
+        var firstResponse = await AdminClient.PostAsync($"/api/toolbox-talks/schedules/{created.Id}/process", null);
+        firstResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
         // criteriaMember moves out of the targeted department — no longer qualifies
         await RemoveEmployeeFromDepartmentAsync(criteriaMember);
@@ -306,26 +311,6 @@ public class ScheduleTargetingUpdateAndRefreshTests : IntegrationTestBase
         response.EnsureSuccessStatusCode();
         var result = await response.Content.ReadFromJsonAsync<IdOnly>();
         return result!.Id;
-    }
-
-    /// <summary>
-    /// Directly flips every assignment on a schedule to IsProcessed = true, bypassing the normal
-    /// /process endpoint. This forces the "zero unprocessed assignments" precondition that
-    /// triggers RefreshAssignmentsForTargetCriteria on the next /process call.
-    /// </summary>
-    private async Task MarkAllAssignmentsProcessedAsync(Guid scheduleId)
-    {
-        var dbContext = GetService<IToolboxTalksDbContext>();
-        var assignments = await dbContext.ToolboxTalkScheduleAssignments
-            .IgnoreQueryFilters()
-            .Where(a => a.ScheduleId == scheduleId)
-            .ToListAsync();
-        foreach (var assignment in assignments)
-        {
-            assignment.IsProcessed = true;
-            assignment.ProcessedAt = DateTime.UtcNow;
-        }
-        await dbContext.SaveChangesAsync(CancellationToken.None);
     }
 
     private async Task<HashSet<Guid>> GetScheduleAssignmentEmployeeIdsAsync(Guid scheduleId)

@@ -42,21 +42,11 @@ public class CreateToolboxTalkScheduleCommandValidator : AbstractValidator<Creat
                 || (x.TargetSiteIds != null && x.TargetSiteIds.Any()))
             .WithMessage("Either AssignToAllEmployees must be true or at least one employee, department, or location must be selected.");
 
-        // If AssignToAllEmployees is true, EmployeeIds/TargetDepartmentIds/TargetSiteIds should be empty (optional validation)
-        RuleFor(x => x.EmployeeIds)
-            .Must(ids => ids == null || !ids.Any())
-            .When(x => x.AssignToAllEmployees)
-            .WithMessage("EmployeeIds should be empty when AssignToAllEmployees is true.");
-
-        RuleFor(x => x.TargetDepartmentIds)
-            .Must(ids => ids == null || !ids.Any())
-            .When(x => x.AssignToAllEmployees)
-            .WithMessage("TargetDepartmentIds should be empty when AssignToAllEmployees is true.");
-
-        RuleFor(x => x.TargetSiteIds)
-            .Must(ids => ids == null || !ids.Any())
-            .When(x => x.AssignToAllEmployees)
-            .WithMessage("TargetSiteIds should be empty when AssignToAllEmployees is true.");
+        // No "must be empty when AssignToAllEmployees" rule here: the handler already treats
+        // AssignToAllEmployees=true as authoritative and discards EmployeeIds/TargetDepartmentIds/
+        // TargetSiteIds (see CreateToolboxTalkScheduleCommandHandler.cs), so rejecting a request
+        // that sends both would contradict the handler's own intentional ignore-and-assign-everyone
+        // behavior (confirmed by ScheduleTargetingTests.CreateSchedule_AssignToAllEmployeesWithDepartmentTarget_IgnoresDepartmentAndAssignsEveryone).
 
         // Validate EmployeeIds are valid GUIDs
         RuleForEach(x => x.EmployeeIds)

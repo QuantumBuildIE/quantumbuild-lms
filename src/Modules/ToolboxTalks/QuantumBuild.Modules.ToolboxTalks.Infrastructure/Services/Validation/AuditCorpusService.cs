@@ -216,7 +216,12 @@ public class AuditCorpusService : IAuditCorpusService
             CreatedAt = DateTime.UtcNow,
         };
 
+        // corpus is an already-tracked query result, so DetectChanges resolves a
+        // key-preassigned child linked via nav-collection Add() to Modified, not Added
+        // (EF's Added/Modified heuristic keys off the PK's default-ness). Force Added
+        // explicitly so EF issues an INSERT instead of a 0-row UPDATE.
         corpus.Entries.Add(entry);
+        _dbContext.Entry(entry).State = EntityState.Added;
         corpus.Version += 1;
         corpus.UpdatedAt = DateTime.UtcNow;
         corpus.UpdatedBy = _currentUser.UserName;

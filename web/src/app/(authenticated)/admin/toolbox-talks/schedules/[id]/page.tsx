@@ -65,6 +65,7 @@ export default function ScheduleDetailPage({ params }: PageProps) {
   const { data: schedule, isLoading, error } = useToolboxTalkSchedule(id);
   const cancelMutation = useCancelToolboxTalkSchedule();
   const processMutation = useProcessToolboxTalkSchedule();
+  const hasSchedulePermission = usePermission('Learnings.Schedule');
 
   const handleCancel = async () => {
     try {
@@ -123,7 +124,6 @@ export default function ScheduleDetailPage({ params }: PageProps) {
     );
   }
 
-  const hasSchedulePermission = usePermission('Learnings.Schedule');
   const canProcess = hasSchedulePermission && (schedule.status === 'Draft' || schedule.status === 'Active');
   const canCancel = hasSchedulePermission && schedule.status !== 'Cancelled' && schedule.status !== 'Completed';
   const canEdit = hasSchedulePermission && schedule.status === 'Draft';

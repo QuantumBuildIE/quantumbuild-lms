@@ -101,6 +101,7 @@ public class SubtitleProcessingTests : IntegrationTestBase
             RequiresQuiz = false,
             IsActive = true,
             VideoUrl = "https://example.com/video.mp4",
+            VideoSource = VideoSource.DirectUrl,
             Sections = new[]
             {
                 new { SectionNumber = 1, Title = "Section 1", Content = "<p>Content</p>", RequiresAcknowledgment = true }

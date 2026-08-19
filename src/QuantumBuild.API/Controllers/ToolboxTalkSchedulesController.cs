@@ -149,7 +149,7 @@ public class ToolboxTalkSchedulesController : ControllerBase
         catch (FluentValidation.ValidationException ex)
         {
             _logger.LogWarning("FluentValidation failed: {Message}", ex.Message);
-            return BadRequest(new { message = ex.Message, errors = ex.Errors });
+            return BadRequest(Result.Fail(ex));
         }
         catch (Exception ex)
         {
@@ -188,7 +188,7 @@ public class ToolboxTalkSchedulesController : ControllerBase
         }
         catch (FluentValidation.ValidationException ex)
         {
-            return BadRequest(new { message = ex.Message, errors = ex.Errors });
+            return BadRequest(Result.Fail(ex));
         }
         catch (Exception ex)
         {
@@ -248,7 +248,8 @@ public class ToolboxTalkSchedulesController : ControllerBase
             var command = new ProcessToolboxTalkScheduleCommand
             {
                 TenantId = _currentUserService.TenantId,
-                ScheduleId = id
+                ScheduleId = id,
+                IsScheduledRun = false
             };
 
             var result = await _mediator.Send(command);

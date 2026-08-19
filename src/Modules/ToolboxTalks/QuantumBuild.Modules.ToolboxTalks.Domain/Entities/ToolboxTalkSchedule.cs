@@ -57,6 +57,15 @@ public class ToolboxTalkSchedule : TenantEntity
     public DateTime? NextRunDate { get; set; }
 
     /// <summary>
+    /// The NextRunDate value that was due and processed the last time this schedule actually
+    /// began a new cycle (recurring schedules only). Used to distinguish "this due date has
+    /// already been handled" from "a new cycle has become due", so assignments are only reset
+    /// to unprocessed once per cycle regardless of how many times (cron and/or manual) the
+    /// schedule is processed against the same due date.
+    /// </summary>
+    public DateTime? LastProcessedCycleDate { get; set; }
+
+    /// <summary>
     /// Additional notes about the schedule
     /// </summary>
     public string? Notes { get; set; }

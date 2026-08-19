@@ -1,6 +1,7 @@
 using Hangfire;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.ProcessToolboxTalkSchedule;
@@ -15,20 +16,20 @@ namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 /// </summary>
 public class ProcessToolboxTalkSchedulesJob
 {
-    private readonly IMediator _mediator;
     private readonly IToolboxTalksDbContext _dbContext;
     private readonly ITenantRepository _tenantRepository;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<ProcessToolboxTalkSchedulesJob> _logger;
 
     public ProcessToolboxTalkSchedulesJob(
-        IMediator mediator,
         IToolboxTalksDbContext dbContext,
         ITenantRepository tenantRepository,
+        IServiceScopeFactory scopeFactory,
         ILogger<ProcessToolboxTalkSchedulesJob> logger)
     {
-        _mediator = mediator;
         _dbContext = dbContext;
         _tenantRepository = tenantRepository;
+        _scopeFactory = scopeFactory;
         _logger = logger;
     }
 
@@ -58,8 +59,7 @@ public class ProcessToolboxTalkSchedulesJob
                     .IgnoreQueryFilters()
                     .Where(s => s.TenantId == tenant.Id && !s.IsDeleted)
                     .Where(s => s.Status == ToolboxTalkScheduleStatus.Active)
-                    .Where(s => s.ScheduledDate.Date <= today ||
-                               (s.NextRunDate.HasValue && s.NextRunDate.Value.Date <= today))
+                    .Where(s => s.NextRunDate.HasValue && s.NextRunDate.Value.Date <= today)
                     .ToListAsync(cancellationToken);
 
                 _logger.LogInformation(
@@ -72,13 +72,7 @@ public class ProcessToolboxTalkSchedulesJob
                 {
                     try
                     {
-                        var command = new ProcessToolboxTalkScheduleCommand
-                        {
-                            TenantId = tenant.Id,
-                            ScheduleId = schedule.Id
-                        };
-
-                        var result = await _mediator.Send(command, cancellationToken);
+                        var result = await ProcessScheduleInFreshScopeAsync(tenant.Id, schedule.Id, cancellationToken);
 
                         _logger.LogInformation(
                             "Processed schedule {ScheduleId}: Created {TalksCreated} talks, Completed: {Completed}, NextRun: {NextRunDate}",
@@ -116,5 +110,37 @@ public class ProcessToolboxTalkSchedulesJob
             "Completed ProcessToolboxTalkSchedulesJob. Processed: {ProcessedCount}, Errors: {ErrorCount}",
             processedCount,
             errorCount);
+    }
+
+    /// <summary>
+    /// Dispatches ProcessToolboxTalkScheduleCommand for a single schedule in its own DI scope.
+    /// Hangfire has no HttpContext, so ICurrentUserService.TenantId would otherwise resolve to
+    /// Guid.Empty inside this scope: the EF Core tenant query filter on ToolboxTalkSchedules
+    /// (and everything else ProcessToolboxTalkScheduleCommandHandler touches) would then match
+    /// nothing, even for a schedule this job's own selection query just found with an explicit
+    /// TenantId. Setting the tenant here, before anything is resolved from this scope, makes the
+    /// ambient filter resolve correctly for the unmodified handler, mirroring BulkSopImportJob's
+    /// fresh-scope-per-item pattern. A fresh scope also gives each schedule its own DbContext, so
+    /// one schedule's failed SaveChangesAsync cannot poison the change tracker for the next.
+    /// </summary>
+    private async Task<ProcessToolboxTalkScheduleResult> ProcessScheduleInFreshScopeAsync(
+        Guid tenantId,
+        Guid scheduleId,
+        CancellationToken cancellationToken)
+    {
+        await using var scheduleScope = _scopeFactory.CreateAsyncScope();
+
+        scheduleScope.ServiceProvider.GetRequiredService<IJobTenantContextAccessor>().TenantId = tenantId;
+
+        var mediator = scheduleScope.ServiceProvider.GetRequiredService<IMediator>();
+
+        var command = new ProcessToolboxTalkScheduleCommand
+        {
+            TenantId = tenantId,
+            ScheduleId = scheduleId,
+            IsScheduledRun = true
+        };
+
+        return await mediator.Send(command, cancellationToken);
     }
 }
