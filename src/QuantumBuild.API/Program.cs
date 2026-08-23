@@ -30,8 +30,23 @@ using QuantumBuild.Core.Application.Configuration;
 using QuantumBuild.Core.Application.Features.BulkImport;
 using QuantumBuild.Core.Infrastructure.Jobs;
 using Microsoft.Extensions.Options;
+using Sentry;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Sentry: error-only monitoring. Inert when no DSN is configured (SENTRY_DSN env
+// var or Sentry:Dsn config) so the app runs normally in environments before the
+// DSN is set. No performance tracing, no log-forwarding — errors only.
+builder.WebHost.UseSentry(options =>
+{
+    options.Dsn = builder.Configuration["SENTRY_DSN"] ?? builder.Configuration["Sentry:Dsn"];
+    options.SendDefaultPii = false;
+    options.Environment = builder.Configuration["Sentry:Environment"] ?? builder.Environment.EnvironmentName;
+    options.MinimumEventLevel = LogLevel.Error;
+#if DEBUG
+    options.Debug = true;
+#endif
+});
 
 // Add services to the container.
 
@@ -462,6 +477,19 @@ app.MapHealthChecks("/health");
 if (app.Environment.IsDevelopment())
 {
     app.UseHangfireDashboard("/hangfire");
+}
+
+// TEMPORARY — Sentry capture verification only. Remove this block once Sentry
+// capture has been confirmed in the target environment's dashboard.
+// Manual test: with SENTRY_DSN set, run in Development and GET /dev/sentry-test,
+// then check the Sentry dashboard for a "Sentry test" message event.
+if (app.Environment.IsDevelopment())
+{
+    app.MapGet("/dev/sentry-test", () =>
+    {
+        SentrySdk.CaptureMessage("Sentry test");
+        return Results.Ok("Sentry test message captured — check the Sentry dashboard.");
+    });
 }
 
 // Register recurring jobs using DI-based approach (required for production)
