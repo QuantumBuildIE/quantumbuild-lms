@@ -481,14 +481,15 @@ if (app.Environment.IsDevelopment())
 
 // TEMPORARY — Sentry capture verification only. Remove this block once Sentry
 // capture has been confirmed in the target environment's dashboard.
-// Manual test: with SENTRY_DSN set, run in Development and GET /dev/sentry-test,
-// then check the Sentry dashboard for a "Sentry test" message event.
+// Manual test: with SENTRY_DSN set, run in Development and GET /dev/sentry-test.
+// This throws a real unhandled exception (500) so the global exception handler's
+// Sentry capture path, the email alert, and the captured event's request/context
+// data (PII review) can all be verified — not just message-capture connectivity.
 if (app.Environment.IsDevelopment())
 {
     app.MapGet("/dev/sentry-test", () =>
     {
-        SentrySdk.CaptureMessage("Sentry test");
-        return Results.Ok("Sentry test message captured — check the Sentry dashboard.");
+        throw new Exception("Sentry verification - real unhandled exception test");
     });
 }
 
