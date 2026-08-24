@@ -34,6 +34,7 @@ using Sentry;
 using Sentry.Extensibility;
 using Sentry.Protocol;
 using System.Text.RegularExpressions;
+using QuantumBuild.API.Monitoring;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -205,6 +206,11 @@ builder.Services.AddHangfireServer(options =>
 {
     options.Queues = new[] { "default", "content-generation" };
 });
+
+// Report Hangfire jobs that reach the Failed state to Sentry - background jobs run outside
+// the web pipeline, so the ASP.NET Sentry integration never sees them otherwise. See
+// HangfireSentryJobFilter for why IApplyStateFilter is used instead of IElectStateFilter.
+Hangfire.GlobalJobFilters.Filters.Add(new HangfireSentryJobFilter());
 
 // Add controllers with JSON options for enum string conversion and camelCase naming
 builder.Services.AddControllers()
@@ -495,20 +501,6 @@ app.MapHealthChecks("/health");
 if (app.Environment.IsDevelopment())
 {
     app.UseHangfireDashboard("/hangfire");
-}
-
-// TEMPORARY — Sentry capture verification only. Remove this block once Sentry
-// capture has been confirmed in the target environment's dashboard.
-// Manual test: with SENTRY_DSN set, run in Development and GET /dev/sentry-test.
-// This throws a real unhandled exception (500) so the global exception handler's
-// Sentry capture path, the email alert, and the captured event's request/context
-// data (PII review) can all be verified — not just message-capture connectivity.
-if (app.Environment.IsDevelopment())
-{
-    app.MapGet("/dev/sentry-test", () =>
-    {
-        throw new Exception("Sentry verification - real unhandled exception test");
-    });
 }
 
 // Register recurring jobs using DI-based approach (required for production)

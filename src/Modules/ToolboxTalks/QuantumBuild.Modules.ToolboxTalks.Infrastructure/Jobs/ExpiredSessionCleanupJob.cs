@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Storage;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
+using Sentry;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 
@@ -60,6 +61,12 @@ public class ExpiredSessionCleanupJob(
                 logger.LogWarning(ex,
                     "Failed to clean up session {SessionId}, will retry next run",
                     session.Id);
+                SentrySdk.CaptureException(ex, scope =>
+                {
+                    scope.SetTag("hangfire.job_type", nameof(ExpiredSessionCleanupJob));
+                    scope.SetTag("tenant.id", session.TenantId.ToString());
+                    scope.SetTag("content_creation_session.id", session.Id.ToString());
+                });
             }
         }
 

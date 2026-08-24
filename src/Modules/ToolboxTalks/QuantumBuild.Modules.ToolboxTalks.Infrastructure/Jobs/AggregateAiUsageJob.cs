@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
+using Sentry;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 
@@ -102,6 +103,10 @@ public class AggregateAiUsageJob(
         catch (Exception ex)
         {
             logger.LogError(ex, "AggregateAiUsageJob failed");
+            SentrySdk.CaptureException(ex, scope =>
+            {
+                scope.SetTag("hangfire.job_type", nameof(AggregateAiUsageJob));
+            });
         }
     }
 }
