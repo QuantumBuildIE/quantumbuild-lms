@@ -394,9 +394,9 @@ public class UserService : IUserService
             }
             catch (Exception emailEx)
             {
-                _logger.LogWarning(emailEx,
-                    "Failed to send password setup email to {Email} for User {UserId}",
-                    createdUser.Email, createdUser.Id);
+                _logger.LogError(emailEx,
+                    "Failed to send password setup email (user {UserId}, tenant {TenantId})",
+                    createdUser.Id, tenantId);
             }
 
             return Result.Ok(userDto);

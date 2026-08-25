@@ -351,9 +351,9 @@ public class BulkEmployeeImportJob : IBulkEmployeeImportJob
         catch (Exception ex)
         {
             // Non-fatal: log and continue to the next invitation
-            _logger.LogWarning(ex,
-                "BulkEmployeeImportJob: failed to send invitation to {Email} (row {Row}) — continuing",
-                invitation.Email, invitation.RowNumber);
+            _logger.LogError(ex,
+                "BulkEmployeeImportJob: failed to send invitation (user {UserId}, row {Row}) — continuing",
+                invitation.UserId, invitation.RowNumber);
             return false;
         }
     }

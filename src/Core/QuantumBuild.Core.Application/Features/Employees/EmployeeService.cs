@@ -463,11 +463,11 @@ public class EmployeeService : IEmployeeService
                 catch (Exception emailEx)
                 {
                     // Log but don't fail - the user account was created successfully
-                    _logger.LogWarning(
+                    _logger.LogError(
                         emailEx,
-                        "Failed to send password setup email to {Email} for Employee {EmployeeId}",
-                        dto.Email,
-                        employee.Id);
+                        "Failed to send password setup email (employee {EmployeeId}, tenant {TenantId})",
+                        employee.Id,
+                        tenantId);
                 }
             }
 
@@ -1290,10 +1290,10 @@ public class EmployeeService : IEmployeeService
             }
             catch (Exception emailEx)
             {
-                _logger.LogWarning(
+                _logger.LogError(
                     emailEx,
-                    "Failed to send password setup email to {Email} for User {UserId}",
-                    employee.Email, user.Id);
+                    "Failed to send password setup email (employee {EmployeeId}, user {UserId}, tenant {TenantId})",
+                    employee.Id, user.Id, tenantId);
             }
 
             var employeeDto = new EmployeeDto(
@@ -1372,9 +1372,9 @@ public class EmployeeService : IEmployeeService
             }
             catch (Exception emailEx)
             {
-                _logger.LogWarning(emailEx,
-                    "Failed to send PIN reset email to {Email} for Employee {EmployeeId}",
-                    employee.Email, employeeId);
+                _logger.LogError(emailEx,
+                    "Failed to send PIN reset email (employee {EmployeeId}, tenant {TenantId})",
+                    employeeId, tenantId);
             }
 
             return Result.Ok();

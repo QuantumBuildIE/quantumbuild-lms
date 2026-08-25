@@ -268,9 +268,9 @@ public class EmailService : IEmailService
         // Check if email provider is configured
         if (!_emailProvider.IsConfigured)
         {
-            _logger.LogWarning(
-                "Email provider not configured. Email NOT sent - To: {To}, Subject: {Subject}",
-                to, subject);
+            _logger.LogError(
+                "Email provider not configured — email NOT sent (Subject: {Subject})",
+                subject);
             return;
         }
 
@@ -291,9 +291,9 @@ public class EmailService : IEmailService
         }
         else
         {
-            _logger.LogWarning(
-                "Failed to send email via IEmailProvider - To: {To}, Subject: {Subject}, Error: {Error}",
-                to, subject, result.ErrorMessage);
+            _logger.LogError(
+                "Failed to send email via IEmailProvider (Subject: {Subject}): {Error}",
+                subject, result.ErrorMessage);
         }
     }
 }
