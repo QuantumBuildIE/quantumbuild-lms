@@ -110,9 +110,9 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
         }
         else
         {
-            _logger.LogWarning(
-                "Failed to send Toolbox Talk assignment email to {Email}: {Error}",
-                employee.Email, result.ErrorMessage);
+            _logger.LogError(
+                "Failed to send Toolbox Talk assignment email (employee {EmployeeId}, talk {TalkId}, tenant {TenantId}): {Error}",
+                employee.Id, scheduledTalk.Id, scheduledTalk.TenantId, result.ErrorMessage);
         }
     }
 
@@ -199,9 +199,9 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
         }
         else
         {
-            _logger.LogWarning(
-                "Failed to send Toolbox Talk reminder email to {Email}: {Error}",
-                employee.Email, result.ErrorMessage);
+            _logger.LogError(
+                "Failed to send Toolbox Talk reminder email (employee {EmployeeId}, talk {TalkId}, tenant {TenantId}, reminder #{ReminderNumber}): {Error}",
+                employee.Id, scheduledTalk.Id, scheduledTalk.TenantId, reminderNumber, result.ErrorMessage);
         }
     }
 
@@ -295,9 +295,9 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
         }
         else
         {
-            _logger.LogWarning(
-                "Failed to send Toolbox Talk completion email to {Email}: {Error}",
-                employee.Email, result.ErrorMessage);
+            _logger.LogError(
+                "Failed to send Toolbox Talk completion email (employee {EmployeeId}, completion {CompletionId}, tenant {TenantId}): {Error}",
+                employee.Id, completion.Id, scheduledTalk.TenantId, result.ErrorMessage);
         }
     }
 
@@ -379,9 +379,9 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
         }
         else
         {
-            _logger.LogWarning(
-                "Failed to send Toolbox Talk course completion email to {Email}: {Error}",
-                employee.Email, result.ErrorMessage);
+            _logger.LogError(
+                "Failed to send Toolbox Talk course completion email (employee {EmployeeId}, course assignment {AssignmentId}, tenant {TenantId}): {Error}",
+                employee.Id, courseAssignment.Id, courseAssignment.TenantId, result.ErrorMessage);
         }
     }
 
@@ -478,9 +478,9 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
         }
         else
         {
-            _logger.LogWarning(
-                "Failed to send Toolbox Talk escalation email to manager {Email}: {Error}",
-                manager.Email, result.ErrorMessage);
+            _logger.LogError(
+                "Failed to send Toolbox Talk escalation email (manager {ManagerId}, talk {TalkId}, tenant {TenantId}): {Error}",
+                manager.Id, scheduledTalk.Id, scheduledTalk.TenantId, result.ErrorMessage);
         }
 
         // Also send to the employee if they have an email
@@ -504,9 +504,9 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
             }
             else
             {
-                _logger.LogWarning(
-                    "Failed to send Toolbox Talk escalation copy to employee {Email}: {Error}",
-                    employee.Email, employeeResult.ErrorMessage);
+                _logger.LogError(
+                    "Failed to send Toolbox Talk escalation copy (employee {EmployeeId}, talk {TalkId}, tenant {TenantId}): {Error}",
+                    employee.Id, scheduledTalk.Id, scheduledTalk.TenantId, employeeResult.ErrorMessage);
             }
         }
     }
@@ -580,8 +580,9 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
         }
         else
         {
-            _logger.LogWarning("Failed to send refresher reminder to {Email}: {Error}",
-                employee.Email, result.ErrorMessage);
+            _logger.LogError(
+                "Failed to send refresher reminder email (employee {EmployeeId}, talk {TalkId}, tenant {TenantId}, timeframe {Timeframe}): {Error}",
+                employee.Id, refresherTalk.Id, refresherTalk.TenantId, timeframe, result.ErrorMessage);
         }
     }
 
@@ -666,9 +667,9 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
         }
         else
         {
-            _logger.LogWarning(
-                "Failed to send course assignment email to {Email}: {Error}",
-                employee.Email, result.ErrorMessage);
+            _logger.LogError(
+                "Failed to send course assignment email (employee {EmployeeId}, course {CourseId}, tenant {TenantId}): {Error}",
+                employee.Id, course.Id, course.TenantId, result.ErrorMessage);
         }
     }
 
@@ -741,8 +742,9 @@ public class ToolboxTalkEmailService : IToolboxTalkEmailService
         }
         else
         {
-            _logger.LogWarning("Failed to send course refresher reminder to {Email}: {Error}",
-                employee.Email, result.ErrorMessage);
+            _logger.LogError(
+                "Failed to send course refresher reminder email (employee {EmployeeId}, assignment {AssignmentId}, tenant {TenantId}, timeframe {Timeframe}): {Error}",
+                employee.Id, refresherAssignment.Id, refresherAssignment.TenantId, timeframe, result.ErrorMessage);
         }
     }
 

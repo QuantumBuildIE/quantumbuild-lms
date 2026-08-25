@@ -461,9 +461,9 @@ public sealed class TranslationWorkflowService(
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex,
-                "Failed to dispatch external review invitation email to {Email} for talk {TalkId}",
-                invitedEmail, talkId);
+            logger.LogError(ex,
+                "Failed to dispatch external review invitation email (invitation {InvitationId}, talk {TalkId}, tenant {TenantId})",
+                invitation.Id, talkId, tenantId);
         }
 
         // TODO Phase 7: fire WorkflowNotificationTrigger

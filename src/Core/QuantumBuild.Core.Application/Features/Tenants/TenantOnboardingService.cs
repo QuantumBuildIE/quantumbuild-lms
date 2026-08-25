@@ -171,7 +171,9 @@ public class TenantOnboardingService(
         catch (Exception ex)
         {
             // Don't fail the entire onboarding if email fails
-            logger.LogWarning(ex, "Failed to send welcome email to {Email}. User was created successfully.", user.Email);
+            logger.LogError(ex,
+                "Failed to send welcome email (user {UserId}, tenant {TenantId}). User was created successfully.",
+                user.Id, user.TenantId);
         }
     }
 
