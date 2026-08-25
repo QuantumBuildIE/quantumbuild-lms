@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
+using Sentry;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 
@@ -72,6 +73,11 @@ public class BulkLearningTranslationSweepJob
                 _logger.LogError(ex,
                     "BulkLearningTranslationSweepJob failed for tenant {TenantId}. Continuing to next tenant.",
                     tenant.Id);
+                SentrySdk.CaptureException(ex, scope =>
+                {
+                    scope.SetTag("hangfire.job_type", nameof(BulkLearningTranslationSweepJob));
+                    scope.SetTag("tenant.id", tenant.Id.ToString());
+                });
             }
         }
 

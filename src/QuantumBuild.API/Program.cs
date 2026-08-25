@@ -30,8 +30,42 @@ using QuantumBuild.Core.Application.Configuration;
 using QuantumBuild.Core.Application.Features.BulkImport;
 using QuantumBuild.Core.Infrastructure.Jobs;
 using Microsoft.Extensions.Options;
+using Sentry;
+using Sentry.Extensibility;
+using Sentry.Protocol;
+using System.Text.RegularExpressions;
+using QuantumBuild.API.Monitoring;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Sentry: error-only monitoring. Inert when no DSN is configured (SENTRY_DSN env
+// var or Sentry:Dsn config) so the app runs normally in environments before the
+// DSN is set. No performance tracing, no log-forwarding — errors only.
+builder.WebHost.UseSentry(options =>
+{
+    options.Dsn = builder.Configuration["SENTRY_DSN"] ?? builder.Configuration["Sentry:Dsn"];
+    options.SendDefaultPii = false;
+    options.Environment = builder.Configuration["Sentry:Environment"] ?? builder.Environment.EnvironmentName;
+    options.MinimumEventLevel = LogLevel.Error;
+    // Defence-in-depth #1: never extract request bodies. This is already the
+    // SDK default (RequestSize.None - opt-in required), set explicitly so it
+    // can't drift silently if a future Sentry version changes its default.
+    options.MaxRequestBodySize = RequestSize.None;
+    // Defence-in-depth #2: scrub clear-text PII from every event before it
+    // leaves the process - email addresses, the Authorization header (and
+    // other credential-bearing headers), and the raw query string (reset/
+    // invite links carry single-use tokens as query params). The user GUID
+    // (scope.User.Id) is left untouched: with SendDefaultPii false, Sentry's
+    // claims-based DefaultUserFactory never runs, so this GUID is not the
+    // caller's identity - it's Sentry's own per-installation InstallationId,
+    // attached as a fallback by the core SDK's Enricher whenever User.Id is
+    // still null. It is pseudonymous and constant per server instance/DSN,
+    // not per request or per employee.
+    options.SetBeforeSend(ScrubSentryEvent);
+#if DEBUG
+    options.Debug = true;
+#endif
+});
 
 // Add services to the container.
 
@@ -172,6 +206,11 @@ builder.Services.AddHangfireServer(options =>
 {
     options.Queues = new[] { "default", "content-generation" };
 });
+
+// Report Hangfire jobs that reach the Failed state to Sentry - background jobs run outside
+// the web pipeline, so the ASP.NET Sentry integration never sees them otherwise. See
+// HangfireSentryJobFilter for why IApplyStateFilter is used instead of IElectStateFilter.
+Hangfire.GlobalJobFilters.Filters.Add(new HangfireSentryJobFilter());
 
 // Add controllers with JSON options for enum string conversion and camelCase naming
 builder.Services.AddControllers()
@@ -523,6 +562,103 @@ using (var scope = app.Services.CreateScope())
 app.Run();
 
 /// <summary>
+/// Redacts clear-text PII (currently: email addresses) from a string,
+/// leaving everything else - including the user GUID and stack traces -
+/// untouched.
+/// </summary>
+static string? RedactPii(string? text)
+{
+    if (string.IsNullOrEmpty(text))
+    {
+        return text;
+    }
+
+    foreach (var (pattern, replacement) in Program.PiiRedactionPatterns)
+    {
+        text = pattern.Replace(text, replacement);
+    }
+
+    return text;
+}
+
+/// <summary>
+/// Sentry BeforeSend hook: strips clear-text PII from the event message and
+/// exception messages, strips credential-bearing request headers, and drops
+/// the request query string, before the event leaves the process. Does not
+/// touch scope.User (Sentry's own pseudonymous installation GUID - see the
+/// comment on options.SetBeforeSend above), stack traces, or other context.
+/// </summary>
+static SentryEvent? ScrubSentryEvent(SentryEvent @event)
+{
+    if (@event.Message is { } message)
+    {
+        message.Message = RedactPii(message.Message);
+        message.Formatted = RedactPii(message.Formatted);
+    }
+
+    foreach (var exception in @event.SentryExceptions ?? Enumerable.Empty<SentryException>())
+    {
+        exception.Value = RedactPii(exception.Value);
+    }
+
+    // Belt-and-braces alongside MaxRequestBodySize = None above: make sure no
+    // request body ever rides along on an event.
+    @event.Request.Data = null;
+
+    // Defence-in-depth #3: the ASP.NET Core integration copies every request
+    // header verbatim (Cookie excepted) regardless of SendDefaultPii, so the
+    // Authorization bearer JWT would otherwise reach Sentry in clear text.
+    // Denylist rather than allowlist, kept simple on purpose: an exact-name
+    // list of known credential headers plus a substring fallback so a future
+    // custom header carrying a token/secret/key/auth value is still caught.
+    if (@event.Request.Headers is { } headers && headers.Count > 0)
+    {
+        foreach (var headerName in headers.Keys.ToList())
+        {
+            if (IsSensitiveRequestHeader(headerName))
+            {
+                headers.Remove(headerName);
+            }
+        }
+    }
+
+    // Defence-in-depth #4: drop the raw query string outright rather than
+    // attempt to redact it. Query params carry single-use reset/invite
+    // tokens, and the integration sets QueryString unconditionally
+    // (unlike Cookie/User, it is not gated by SendDefaultPii). Request.Url
+    // is unaffected - the SDK builds it as scheme://host+path and never
+    // appends the query string.
+    @event.Request.QueryString = null;
+
+    return @event;
+}
+
+/// <summary>
+/// True if a request header name is a known or likely credential carrier
+/// (Authorization, API keys, tokens, secrets) and must never reach Sentry.
+/// </summary>
+static bool IsSensitiveRequestHeader(string headerName)
+{
+    foreach (var exact in Program.SensitiveRequestHeaderNames)
+    {
+        if (string.Equals(headerName, exact, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+    }
+
+    foreach (var fragment in Program.SensitiveRequestHeaderNameFragments)
+    {
+        if (headerName.Contains(fragment, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/// <summary>
 /// Seeds Toolbox Talks module data using the main ApplicationDbContext
 /// </summary>
 static async Task SeedToolboxTalksDataAsync(IServiceProvider serviceProvider)
@@ -555,4 +691,34 @@ static async Task SeedToolboxTalksDataAsync(IServiceProvider serviceProvider)
 }
 
 // Make the Program class public so integration tests can access it
-public partial class Program { }
+public partial class Program
+{
+    // Clear-text PII patterns to redact from Sentry event text, applied in
+    // order. Add further patterns here (e.g. phone numbers) as new clear-text
+    // PII shapes are identified - keep each pattern its own conservative tuple.
+    internal static readonly (Regex Pattern, string Replacement)[] PiiRedactionPatterns =
+    {
+        (new Regex(@"[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+",
+            RegexOptions.Compiled), "[redacted-email]"),
+    };
+
+    // Request header names stripped verbatim from Sentry events (case-insensitive).
+    internal static readonly string[] SensitiveRequestHeaderNames =
+    {
+        "Authorization",
+        "Proxy-Authorization",
+        "Cookie",
+        "X-Api-Key",
+    };
+
+    // Substrings that flag a header name as credential-bearing even if it
+    // isn't in the exact-name list above (e.g. a future custom header).
+    internal static readonly string[] SensitiveRequestHeaderNameFragments =
+    {
+        "token",
+        "secret",
+        "api-key",
+        "apikey",
+        "auth",
+    };
+}

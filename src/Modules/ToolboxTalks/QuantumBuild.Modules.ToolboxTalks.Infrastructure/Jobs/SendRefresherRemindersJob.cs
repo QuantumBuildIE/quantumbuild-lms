@@ -5,6 +5,7 @@ using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
+using Sentry;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 
@@ -79,6 +80,12 @@ public class SendRefresherRemindersJob
                     {
                         _logger.LogError(ex, "Error sending 2-week refresher reminder for talk {TalkId}", talk.Id);
                         errorCount++;
+                        SentrySdk.CaptureException(ex, scope =>
+                        {
+                            scope.SetTag("hangfire.job_type", nameof(SendRefresherRemindersJob));
+                            scope.SetTag("tenant.id", tenant.Id.ToString());
+                            scope.SetTag("scheduled_talk.id", talk.Id.ToString());
+                        });
                     }
                 }
 
@@ -110,6 +117,12 @@ public class SendRefresherRemindersJob
                     {
                         _logger.LogError(ex, "Error sending 1-week refresher reminder for talk {TalkId}", talk.Id);
                         errorCount++;
+                        SentrySdk.CaptureException(ex, scope =>
+                        {
+                            scope.SetTag("hangfire.job_type", nameof(SendRefresherRemindersJob));
+                            scope.SetTag("tenant.id", tenant.Id.ToString());
+                            scope.SetTag("scheduled_talk.id", talk.Id.ToString());
+                        });
                     }
                 }
 
@@ -141,6 +154,12 @@ public class SendRefresherRemindersJob
                     {
                         _logger.LogError(ex, "Error sending 2-week course refresher reminder for assignment {AssignmentId}", assignment.Id);
                         errorCount++;
+                        SentrySdk.CaptureException(ex, scope =>
+                        {
+                            scope.SetTag("hangfire.job_type", nameof(SendRefresherRemindersJob));
+                            scope.SetTag("tenant.id", tenant.Id.ToString());
+                            scope.SetTag("course_assignment.id", assignment.Id.ToString());
+                        });
                     }
                 }
 
@@ -171,6 +190,12 @@ public class SendRefresherRemindersJob
                     {
                         _logger.LogError(ex, "Error sending 1-week course refresher reminder for assignment {AssignmentId}", assignment.Id);
                         errorCount++;
+                        SentrySdk.CaptureException(ex, scope =>
+                        {
+                            scope.SetTag("hangfire.job_type", nameof(SendRefresherRemindersJob));
+                            scope.SetTag("tenant.id", tenant.Id.ToString());
+                            scope.SetTag("course_assignment.id", assignment.Id.ToString());
+                        });
                     }
                 }
 
@@ -179,6 +204,11 @@ public class SendRefresherRemindersJob
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error processing refresher reminders for tenant {TenantId}", tenant.Id);
+                SentrySdk.CaptureException(ex, scope =>
+                {
+                    scope.SetTag("hangfire.job_type", nameof(SendRefresherRemindersJob));
+                    scope.SetTag("tenant.id", tenant.Id.ToString());
+                });
             }
         }
 

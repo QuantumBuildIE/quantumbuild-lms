@@ -7,6 +7,7 @@ using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Commands.ProcessToolboxTalkSchedule;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
+using Sentry;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 
@@ -91,6 +92,12 @@ public class ProcessToolboxTalkSchedulesJob
                             schedule.Id,
                             tenant.Id);
                         errorCount++;
+                        SentrySdk.CaptureException(ex, scope =>
+                        {
+                            scope.SetTag("hangfire.job_type", nameof(ProcessToolboxTalkSchedulesJob));
+                            scope.SetTag("tenant.id", tenant.Id.ToString());
+                            scope.SetTag("schedule.id", schedule.Id.ToString());
+                        });
                         // Continue processing other schedules
                     }
                 }
@@ -102,6 +109,11 @@ public class ProcessToolboxTalkSchedulesJob
                     "Error processing schedules for tenant {TenantId} ({TenantName})",
                     tenant.Id,
                     tenant.Name);
+                SentrySdk.CaptureException(ex, scope =>
+                {
+                    scope.SetTag("hangfire.job_type", nameof(ProcessToolboxTalkSchedulesJob));
+                    scope.SetTag("tenant.id", tenant.Id.ToString());
+                });
                 // Continue processing other tenants
             }
         }

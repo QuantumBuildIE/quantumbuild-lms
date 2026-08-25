@@ -5,6 +5,7 @@ using QuantumBuild.Core.Application.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Common.Interfaces;
 using QuantumBuild.Modules.ToolboxTalks.Application.Services;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
+using Sentry;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 
@@ -148,6 +149,12 @@ public class SendToolboxTalkRemindersJob
                             "Error sending reminder for ScheduledTalk {TalkId}",
                             talk.Id);
                         errorCount++;
+                        SentrySdk.CaptureException(ex, scope =>
+                        {
+                            scope.SetTag("hangfire.job_type", nameof(SendToolboxTalkRemindersJob));
+                            scope.SetTag("tenant.id", tenant.Id.ToString());
+                            scope.SetTag("scheduled_talk.id", talk.Id.ToString());
+                        });
                         // Continue processing other talks
                     }
                 }
@@ -162,6 +169,11 @@ public class SendToolboxTalkRemindersJob
                     "Error processing reminders for tenant {TenantId} ({TenantName})",
                     tenant.Id,
                     tenant.Name);
+                SentrySdk.CaptureException(ex, scope =>
+                {
+                    scope.SetTag("hangfire.job_type", nameof(SendToolboxTalkRemindersJob));
+                    scope.SetTag("tenant.id", tenant.Id.ToString());
+                });
                 // Continue processing other tenants
             }
         }
