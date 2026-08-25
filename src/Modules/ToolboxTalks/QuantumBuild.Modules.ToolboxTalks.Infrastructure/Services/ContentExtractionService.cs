@@ -142,7 +142,7 @@ public class ContentExtractionService : IContentExtractionService
                             transcriptResult, 80, 100);
 
                         videoContent = new VideoContentInfo(
-                            FullTranscript: transcriptResult.FullText,
+                            FullTranscript: _transcriptService.GetCleanFullText(transcriptResult),
                             FinalPortionTranscript: finalPortionText,
                             Duration: transcriptResult.TotalDuration ?? TimeSpan.Zero,
                             SegmentCount: transcriptResult.Segments.Count);
@@ -602,9 +602,7 @@ public class ContentExtractionService : IContentExtractionService
                 : null;
 
             var videoContent = new VideoContentInfo(
-                FullTranscript: parsedTranscript.Success && !string.IsNullOrEmpty(parsedTranscript.FullText)
-                    ? parsedTranscript.FullText
-                    : _transcriptService.FormatForAi(parsedTranscript),
+                FullTranscript: _transcriptService.GetCleanFullText(parsedTranscript),
                 FinalPortionTranscript: finalPortionText ?? string.Empty,
                 Duration: parsedTranscript.TotalDuration ?? TimeSpan.Zero,
                 SegmentCount: parsedTranscript.Segments.Count);

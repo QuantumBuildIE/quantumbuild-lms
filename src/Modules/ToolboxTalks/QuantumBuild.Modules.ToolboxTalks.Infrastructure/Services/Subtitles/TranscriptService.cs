@@ -202,6 +202,17 @@ public class TranscriptService : ITranscriptService
         return builder.ToString();
     }
 
+    /// <inheritdoc />
+    public string GetCleanFullText(TranscriptResult transcript)
+    {
+        if (!transcript.Success || transcript.Segments.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        return string.Join(" ", transcript.Segments.OrderBy(s => s.Index).Select(s => s.Text));
+    }
+
     /// <summary>
     /// Parses an SRT timestamp (00:00:01,000 or 00:00:01.000) into a TimeSpan.
     /// </summary>

@@ -52,6 +52,16 @@ public interface ITranscriptService
     /// <param name="transcript">The transcript result to format</param>
     /// <returns>Formatted transcript text with timestamps</returns>
     string FormatForAi(TranscriptResult transcript);
+
+    /// <summary>
+    /// Gets the full transcript text with NO timestamp markers.
+    /// Use this (not <see cref="FormatForAi"/> or <see cref="TranscriptResult.FullText"/>) when
+    /// feeding transcript text into a content-generation prompt - timestamps are caption/SRT
+    /// metadata, not training content, and must not reach the model or the persisted output.
+    /// </summary>
+    /// <param name="transcript">The transcript result to format</param>
+    /// <returns>Plain transcript text with segment text joined, no timestamp brackets</returns>
+    string GetCleanFullText(TranscriptResult transcript);
 }
 
 /// <summary>

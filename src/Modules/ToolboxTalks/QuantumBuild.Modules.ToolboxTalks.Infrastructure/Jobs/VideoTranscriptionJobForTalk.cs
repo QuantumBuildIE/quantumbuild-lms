@@ -101,9 +101,7 @@ public class VideoTranscriptionJobForTalk(
 
             var srt = srtGeneratorService.GenerateSrt(result.Words, subtitleSettings.Value.WordsPerSubtitle);
             var parsed = transcriptService.ParseSrtContent(srt, null);
-            var transcriptText = parsed.Success && !string.IsNullOrEmpty(parsed.FullText)
-                ? parsed.FullText
-                : transcriptService.FormatForAi(parsed);
+            var transcriptText = transcriptService.GetCleanFullText(parsed);
 
             if (string.IsNullOrWhiteSpace(transcriptText))
             {

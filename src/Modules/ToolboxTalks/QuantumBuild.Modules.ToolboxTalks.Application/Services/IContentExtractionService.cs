@@ -58,7 +58,7 @@ public record ContentExtractionResult(
 /// <summary>
 /// Information about extracted video content.
 /// </summary>
-/// <param name="FullTranscript">The complete video transcript with timestamps</param>
+/// <param name="FullTranscript">The complete video transcript, with timestamp markers stripped (this feeds AI content-generation prompts, not captions)</param>
 /// <param name="FinalPortionTranscript">Transcript from the 80-100% portion for quiz question generation</param>
 /// <param name="Duration">Total video duration</param>
 /// <param name="SegmentCount">Number of transcript segments</param>
