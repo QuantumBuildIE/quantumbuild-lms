@@ -47,6 +47,8 @@ REQUIREMENTS:
   the body
 - Do not invent content. Do not add safety advice the source didn't include.
 - Do not merge content across distinct sections in the source.
+- If the source contains transcript artifacts such as [mm:ss] timestamp markers, exclude
+  them from ""content"" - they are structural metadata, not part of the source wording.
 {sourceTracking}
 
 OUTPUT FORMAT:
@@ -83,6 +85,8 @@ REQUIREMENTS:
 - Focus on the most important information, procedures, and requirements
 - Use clear, simple language suitable for all employees
 - Sections should be logically ordered (general concepts first, then specific procedures)
+- If the source contains transcript artifacts such as [mm:ss] timestamp markers, exclude
+  them from ""content"" - they are structural metadata, not training content.
 {sourceTracking}
 
 OUTPUT FORMAT:

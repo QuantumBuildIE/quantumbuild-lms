@@ -8,6 +8,7 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.ContentCreation
 using QuantumBuild.Modules.ToolboxTalks.Application.Prompts;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
+using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services;
 
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.ContentCreation;
 
@@ -230,7 +231,8 @@ public class ContentParserService : IContentParserService
             foreach (var element in sectionsDoc.RootElement.EnumerateArray())
             {
                 var title = element.GetProperty("title").GetString() ?? "Untitled";
-                var sectionContent = element.GetProperty("content").GetString() ?? "";
+                var sectionContent = TranscriptMarkerSanitizer.StripTimestampMarkers(
+                    element.GetProperty("content").GetString() ?? "");
                 // BuildSectionPrompt emits "sortOrder"; fall back to "suggestedOrder" for
                 // any cached responses produced by the legacy BuildParsePrompt shape.
                 var suggestedOrder =

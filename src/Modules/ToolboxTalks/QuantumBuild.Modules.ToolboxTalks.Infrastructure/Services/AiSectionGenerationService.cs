@@ -217,12 +217,15 @@ public class AiSectionGenerationService : IAiSectionGenerationService
             return new List<GeneratedSection>();
         }
 
-        // Convert raw sections to GeneratedSection with proper ContentSource enum
+        // Convert raw sections to GeneratedSection with proper ContentSource enum.
+        // StripTimestampMarkers is a backstop: the transcript fed into the prompt is already
+        // timestamp-free (see ITranscriptService.GetCleanFullText), but the model may echo
+        // markers regardless of prompt instructions - never persist them into section content.
         return rawSections
             .Select(s => new GeneratedSection(
                 s.SortOrder,
                 s.Title,
-                s.Content,
+                TranscriptMarkerSanitizer.StripTimestampMarkers(s.Content),
                 ParseContentSource(s.Source, hasVideo, hasPdf)))
             .ToList();
     }
