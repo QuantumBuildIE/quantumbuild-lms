@@ -17,10 +17,16 @@ public class FakeContentParserService : IContentParserService
 
     public bool ShouldFail { get; set; } = false;
 
+    /// <summary>Captures the preserveSourceWording value received on the last call, for
+    /// tests asserting which default (rewrite vs. verbatim) the caller resolved to.</summary>
+    public bool? LastPreserveSourceWordingReceived { get; private set; }
+
     public Task<ContentParseResult> ParseContentAsync(
         string rawText, InputMode inputModeHint, Guid tenantId, Guid? userId = null,
         bool preserveSourceWording = false, CancellationToken cancellationToken = default)
     {
+        LastPreserveSourceWordingReceived = preserveSourceWording;
+
         if (ShouldFail)
             return Task.FromResult(new ContentParseResult(false, [], OutputType.Lesson, "Fake parse failure"));
 

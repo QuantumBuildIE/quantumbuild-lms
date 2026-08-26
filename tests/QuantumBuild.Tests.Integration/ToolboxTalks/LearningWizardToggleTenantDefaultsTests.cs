@@ -129,14 +129,15 @@ public class LearningWizardToggleTenantDefaultsTests : IntegrationTestBase
 
         var settings = await GetSettingsAsync(tenantBClient);
 
-        // Three false
+        // Four false — DefaultPreserveSourceWording now defaults false (intelligent
+        // rewrite is the standard behaviour; verbatim copy is opt-in).
         settings.DefaultVideoRightsConfirmed.Should().BeFalse();
         settings.DefaultUseQuestionPool.Should().BeFalse();
         settings.DefaultGenerateSlideshow.Should().BeFalse();
+        settings.DefaultPreserveSourceWording.Should().BeFalse();
 
-        // Six true
+        // Five true
         settings.DefaultAutoAssign.Should().BeTrue();
-        settings.DefaultPreserveSourceWording.Should().BeTrue();
         settings.DefaultShuffleQuestions.Should().BeTrue();
         settings.DefaultShuffleOptions.Should().BeTrue();
         settings.DefaultIncludeQuiz.Should().BeTrue();

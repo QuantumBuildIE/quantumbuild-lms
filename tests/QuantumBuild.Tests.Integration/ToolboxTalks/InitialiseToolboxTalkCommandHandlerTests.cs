@@ -459,11 +459,12 @@ public class InitialiseToolboxTalkCommandHandlerTests : IntegrationTestBase
         talk.AllowRetry.Should().BeTrue();
     }
 
-    // 16 — PreserveSourceWording now defaults true when the caller omits it entirely
-    // (Command-level default). MinimalRequest always sends it explicitly, so this test
-    // constructs a request without the field to exercise the Command's own default.
+    // 16 — PreserveSourceWording now defaults false (intelligent rewrite) when the caller
+    // omits it entirely (Command-level default) — verbatim copy is opt-in, not the default.
+    // MinimalRequest always sends it explicitly, so this test constructs a request without
+    // the field to exercise the Command's own default.
     [Fact]
-    public async Task NewTalk_OmittingPreserveSourceWording_DefaultsTrue()
+    public async Task NewTalk_OmittingPreserveSourceWording_DefaultsFalse()
     {
         var request = new
         {
@@ -479,7 +480,7 @@ public class InitialiseToolboxTalkCommandHandlerTests : IntegrationTestBase
 
         var result = await InitialiseAsync(request);
 
-        result.PreserveSourceWording.Should().BeTrue();
+        result.PreserveSourceWording.Should().BeFalse();
     }
 
     // 17 — Admin can still explicitly override ShuffleQuestions/ShuffleOptions/

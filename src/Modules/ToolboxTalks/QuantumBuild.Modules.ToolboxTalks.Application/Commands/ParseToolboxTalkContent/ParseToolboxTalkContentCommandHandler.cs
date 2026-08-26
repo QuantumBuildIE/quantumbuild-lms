@@ -172,13 +172,21 @@ public class ParseToolboxTalkContentCommandHandler
     private async Task<Result<ToolboxTalkDto>> HandleVideoAsync(ToolboxTalk talk, CancellationToken ct)
     {
         // Determine the video URL — uploaded file takes precedence over VideoUrl
-        var videoUrl = talk.SourceFileType?.StartsWith("video/", StringComparison.OrdinalIgnoreCase) == true
-            ? talk.SourceFileUrl
-            : talk.VideoUrl;
+        var isUploadedVideoFile = talk.SourceFileType?.StartsWith("video/", StringComparison.OrdinalIgnoreCase) == true;
+        var videoUrl = isUploadedVideoFile ? talk.SourceFileUrl : talk.VideoUrl;
 
         if (string.IsNullOrWhiteSpace(videoUrl))
             return Result.Fail<ToolboxTalkDto>(
                 "No video URL is available for transcription. Upload a video or set a video URL.");
+
+        // Persist the resolved URL to VideoUrl — every rendering surface (preview, employee
+        // viewer, edit form) reads VideoUrl exclusively, never SourceFileUrl. Mirrors the
+        // legacy wizard's ContentCreationSessionService.cs VideoUrl/VideoSource sync pattern.
+        if (isUploadedVideoFile)
+        {
+            talk.VideoUrl = videoUrl;
+            talk.VideoSource = VideoSource.DirectUrl;
+        }
 
         talk.Status = ToolboxTalkStatus.Processing;
         talk.LastEditedStep = 2;

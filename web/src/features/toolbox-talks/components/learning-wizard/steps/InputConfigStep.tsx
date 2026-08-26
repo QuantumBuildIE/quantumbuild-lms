@@ -172,7 +172,7 @@ export function InputConfigStep() {
       passThreshold: defaultPassThreshold,
       includeQuiz: true,
       audienceRole: 'Operator',
-      preserveSourceWording: true,
+      preserveSourceWording: false,
       sectorKey: undefined,
       reviewerName: user ? `${user.firstName} ${user.lastName}`.trim() : '',
       reviewerOrg: '',

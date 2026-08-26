@@ -109,6 +109,17 @@ public class ParseToolboxTalkContentCommandHandlerTests : IntegrationTestBase
         return talk.Status;
     }
 
+    /// <summary>Read the talk's VideoUrl/VideoSource directly from the DB for assertion.</summary>
+    private async Task<(string? VideoUrl, VideoSource VideoSource)> GetTalkVideoFieldsInDbAsync(Guid talkId)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var talk = await db.Set<ToolboxTalk>()
+            .IgnoreQueryFilters()
+            .FirstAsync(t => t.Id == talkId);
+        return (talk.VideoUrl, talk.VideoSource);
+    }
+
     // ── parse tests ───────────────────────────────────────────────────────────
 
     // 1 — Text mode happy path → 200, 2 sections in response and persisted to DB
@@ -138,6 +149,72 @@ public class ParseToolboxTalkContentCommandHandlerTests : IntegrationTestBase
 
         var db = await GetDbSectionsAsync(init.Id);
         db.Should().HaveCount(2);
+    }
+
+    // 1a — Omitting PreserveSourceWording at Step 1 defaults to false (intelligent rewrite)
+    //      by the time parsing happens — not verbatim copy. Regression test for the
+    //      "single near-verbatim section" defect — see docs/video-parsing-regression-recon.md §A.
+    [Fact]
+    public async Task TextMode_OmittingPreserveSourceWording_ParsesWithRewriteDefault()
+    {
+        var request = new
+        {
+            Title = UniqueTitle("Rewrite Default"),
+            InputMode = "Text",
+            SourceLanguageCode = "en",
+            SourceText = "Always bend your knees when lifting heavy loads.",
+            TargetLanguageCodes = new[] { "fr" },
+            AudienceRole = "Operator",
+            IncludeQuiz = true,
+            // PreserveSourceWording intentionally omitted — exercises the system default.
+        };
+        var json = System.Text.Json.JsonSerializer.Serialize(request);
+        var initResponse = await AdminClient.PostAsync(
+            "/api/toolbox-talks/initialise",
+            new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
+        initResponse.EnsureSuccessStatusCode();
+        var init = await initResponse.Content.ReadFromJsonAsync<InitTalkDto>()
+            ?? throw new InvalidOperationException("Initialise returned null");
+
+        Factory.FakeContentParserService.NextSections =
+        [
+            new("Rewritten Section 1", "<p>Rewritten content.</p>", 1),
+            new("Rewritten Section 2", "<p>More rewritten content.</p>", 2),
+            new("Rewritten Section 3", "<p>Even more rewritten content.</p>", 3),
+        ];
+
+        var response = await AdminClient.PostAsync(
+            $"/api/toolbox-talks/{init.Id}/parse", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        Factory.FakeContentParserService.LastPreserveSourceWordingReceived.Should().BeFalse();
+
+        var result = await response.Content.ReadFromJsonAsync<TalkResult>();
+        result!.Sections.Should().HaveCount(3, "rewrite mode is not bound to the old hard floor of 2 sections");
+    }
+
+    // 1b — Verbatim mode remains available as an explicit, non-default option: when the
+    //      wizard caller explicitly requests PreserveSourceWording = true, that value must
+    //      still reach the parser unchanged.
+    [Fact]
+    public async Task TextMode_ExplicitPreserveSourceWordingTrue_StillHonoursVerbatimMode()
+    {
+        var init = await InitialiseAsync(UniqueTitle("Verbatim Explicit"), "Text",
+            sourceText: "Always bend your knees when lifting heavy loads.");
+
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var talk = await db.Set<ToolboxTalk>()
+            .IgnoreQueryFilters()
+            .FirstAsync(t => t.Id == init.Id);
+        talk.PreserveSourceWording = true;
+        await db.SaveChangesAsync();
+
+        var response = await AdminClient.PostAsync(
+            $"/api/toolbox-talks/{init.Id}/parse", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        Factory.FakeContentParserService.LastPreserveSourceWordingReceived.Should().BeTrue();
     }
 
     // 2 — PDF mode happy path → 200, sections from fake extracted text
@@ -223,6 +300,56 @@ public class ParseToolboxTalkContentCommandHandlerTests : IntegrationTestBase
         // No sections in DB — job hasn't executed yet in test env
         var db = await GetDbSectionsAsync(init.Id);
         db.Should().BeEmpty();
+    }
+
+    // 3b — Video mode via uploaded file (SourceFileUrl + video/* SourceFileType, no VideoUrl
+    //      typed at Step 1): the resolved URL must be persisted into VideoUrl/VideoSource so
+    //      every rendering surface (which reads VideoUrl exclusively, never SourceFileUrl)
+    //      displays the video. Regression test for the "Failed to load video" defect —
+    //      see docs/video-parsing-regression-recon.md §B.
+    [Fact]
+    public async Task VideoMode_UploadedFile_PersistsVideoUrlFromSourceFileUrl()
+    {
+        var init = await InitialiseAsync(UniqueTitle("Video Upload"), "Video",
+            sourceText: null,
+            sourceFileUrl: "https://pub-xxx.r2.dev/uploads/test/safety-talk.mp4",
+            sourceFileType: "video/mp4");
+
+        var response = await AdminClient.PostAsync(
+            $"/api/toolbox-talks/{init.Id}/parse", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var result = await response.Content.ReadFromJsonAsync<TalkResult>();
+        result!.Status.Should().Be("Processing");
+        result.VideoUrl.Should().Be("https://pub-xxx.r2.dev/uploads/test/safety-talk.mp4");
+        result.VideoSourceDisplay.Should().Be("DirectUrl");
+
+        var (videoUrl, videoSource) = await GetTalkVideoFieldsInDbAsync(init.Id);
+        videoUrl.Should().Be("https://pub-xxx.r2.dev/uploads/test/safety-talk.mp4");
+        videoSource.Should().Be(VideoSource.DirectUrl);
+    }
+
+    // 3c — Video mode via a typed Video URL (not a file upload) is unaffected by the
+    //      upload-persistence fix: VideoUrl was already set at Step 1 (Initialise) and is
+    //      left untouched by the parse handler.
+    [Fact]
+    public async Task VideoMode_TypedUrl_LeavesVideoUrlUnchanged()
+    {
+        var init = await InitialiseAsync(UniqueTitle("Video Typed URL"), "Video",
+            sourceText: null,
+            videoUrl: "https://example.com/safety-video.mp4",
+            videoSource: "DirectUrl");
+
+        var response = await AdminClient.PostAsync(
+            $"/api/toolbox-talks/{init.Id}/parse", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var result = await response.Content.ReadFromJsonAsync<TalkResult>();
+        result!.VideoUrl.Should().Be("https://example.com/safety-video.mp4");
+
+        var (videoUrl, videoSource) = await GetTalkVideoFieldsInDbAsync(init.Id);
+        videoUrl.Should().Be("https://example.com/safety-video.mp4");
+        videoSource.Should().Be(VideoSource.DirectUrl);
     }
 
     // 4 — Talk not in Draft status → 409 Conflict
@@ -447,6 +574,8 @@ public class ParseToolboxTalkContentCommandHandlerTests : IntegrationTestBase
         Guid Id,
         string Status,
         int? LastEditedStep,
+        string? VideoUrl,
+        string VideoSourceDisplay,
         List<SectionResult> Sections);
 
     private record SectionResult(Guid Id, string Title, int SectionNumber);

@@ -118,7 +118,7 @@ public class ToolboxTalkSettingsConfiguration : IEntityTypeConfiguration<Toolbox
 
         builder.Property(s => s.DefaultPreserveSourceWording)
             .IsRequired()
-            .HasDefaultValue(true);
+            .HasDefaultValue(false);
 
         builder.Property(s => s.DefaultShuffleQuestions)
             .IsRequired()
