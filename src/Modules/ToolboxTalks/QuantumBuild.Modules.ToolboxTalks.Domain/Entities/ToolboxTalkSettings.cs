@@ -148,7 +148,7 @@ public class ToolboxTalkSettings : BaseEntity
     /// <summary>
     /// Whether AI generation preserves source wording as closely as possible by default.
     /// </summary>
-    public bool DefaultPreserveSourceWording { get; set; } = true;
+    public bool DefaultPreserveSourceWording { get; set; } = false;
 
     /// <summary>
     /// Whether quiz question order is shuffled per attempt by default.

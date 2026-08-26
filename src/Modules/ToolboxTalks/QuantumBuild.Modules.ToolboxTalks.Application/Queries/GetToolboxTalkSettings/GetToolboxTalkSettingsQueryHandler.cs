@@ -89,7 +89,7 @@ public class GetToolboxTalkSettingsQueryHandler : IRequestHandler<GetToolboxTalk
             DefaultUseQuestionPool = false,
             DefaultGenerateSlideshow = false,
             DefaultAutoAssign = true,
-            DefaultPreserveSourceWording = true,
+            DefaultPreserveSourceWording = false,
             DefaultShuffleQuestions = true,
             DefaultShuffleOptions = true,
             DefaultIncludeQuiz = true,

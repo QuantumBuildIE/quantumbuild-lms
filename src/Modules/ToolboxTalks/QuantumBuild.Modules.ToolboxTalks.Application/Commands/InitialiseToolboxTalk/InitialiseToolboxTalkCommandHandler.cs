@@ -117,7 +117,7 @@ public class InitialiseToolboxTalkCommandHandler : IRequestHandler<InitialiseToo
             // Explicit request value wins; otherwise fall back to the tenant default; otherwise
             // the initial system default. See ToolboxTalkSettings.DefaultPreserveSourceWording /
             // DefaultIncludeQuiz.
-            PreserveSourceWording = request.PreserveSourceWording ?? tenantSettings?.DefaultPreserveSourceWording ?? true,
+            PreserveSourceWording = request.PreserveSourceWording ?? tenantSettings?.DefaultPreserveSourceWording ?? false,
             RequiresQuiz = request.IncludeQuiz ?? tenantSettings?.DefaultIncludeQuiz ?? true,
 
             // Wizard shell defaults — sourced from tenant ToolboxTalkSettings

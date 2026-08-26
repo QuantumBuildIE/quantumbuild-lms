@@ -108,7 +108,7 @@ export function LearningDefaultsSection() {
       defaultUseQuestionPool: false,
       defaultGenerateSlideshow: false,
       defaultAutoAssign: true,
-      defaultPreserveSourceWording: true,
+      defaultPreserveSourceWording: false,
       defaultShuffleQuestions: true,
       defaultShuffleOptions: true,
       defaultIncludeQuiz: true,
