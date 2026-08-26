@@ -80,7 +80,7 @@ public class ContentParserService : IContentParserService
             var prompt = SectionGenerationPrompts.BuildSectionPrompt(
                 content: rawText,
                 sourceDescription: sourceDescription,
-                minimumSections: 7,
+                minimumSections: 2,
                 hasVideo: inputModeHint == InputMode.Video,
                 hasPdf: inputModeHint == InputMode.Pdf,
                 preserveSourceWording: preserveSourceWording);
