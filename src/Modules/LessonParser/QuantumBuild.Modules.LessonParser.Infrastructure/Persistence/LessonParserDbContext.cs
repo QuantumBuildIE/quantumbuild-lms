@@ -114,6 +114,7 @@ public class LessonParserDbContext : DbContext, ILessonParserDbContext
                     entry.Entity.IsDeleted = true;
                     entry.Entity.UpdatedAt = now;
                     entry.Entity.UpdatedBy = CurrentUserId;
+                    entry.Entity.DeletedBy = CurrentUserId;
                     break;
             }
         }
