@@ -25,6 +25,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -37,7 +38,7 @@ import { toast } from "sonner";
 import type { User } from "@/lib/api/admin/users";
 
 const formSchema = z.object({
-  employeeCode: z.string().min(1, "Employee code is required").max(50),
+  employeeCode: z.string().max(50).optional(),
   phone: z.string().max(50).optional(),
   mobile: z.string().max(50).optional(),
   jobTitle: z.string().max(100).optional(),
@@ -87,7 +88,7 @@ export function CreateEmployeeForUserDialog({
       await createEmployeeForUser.mutateAsync({
         userId: user.id,
         data: {
-          employeeCode: values.employeeCode,
+          employeeCode: values.employeeCode?.trim() || undefined,
           phone: values.phone || undefined,
           mobile: values.mobile || undefined,
           jobTitle: values.jobTitle || undefined,
@@ -119,7 +120,17 @@ export function CreateEmployeeForUserDialog({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form
+            onSubmit={(e) => {
+              // Radix Dialog portals this form outside the parent page's <form> in the
+              // DOM, but React still bubbles the synthetic submit event through the
+              // component tree. Without stopping it here, a validation failure (or
+              // success) in this dialog also submits the parent user-edit form.
+              e.stopPropagation();
+              void form.handleSubmit(onSubmit)(e);
+            }}
+            className="space-y-4"
+          >
             {/* User Info */}
             <div className="rounded-lg border p-4 bg-muted/50">
               <div className="grid grid-cols-2 gap-2 text-sm">
@@ -135,10 +146,13 @@ export function CreateEmployeeForUserDialog({
               name="employeeCode"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Employee Code *</FormLabel>
+                  <FormLabel>Employee Code</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., EMP001" {...field} />
+                    <Input placeholder="e.g., EMP001 (auto-generated if left blank)" {...field} />
                   </FormControl>
+                  <FormDescription>
+                    Leave blank to auto-generate (e.g., EMP001). Enter a value to use a code from a legacy system.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -227,8 +241,8 @@ export function CreateEmployeeForUserDialog({
                 <FormItem>
                   <FormLabel>Primary Site</FormLabel>
                   <Select
-                    onValueChange={field.onChange}
-                    value={field.value}
+                    onValueChange={(value) => field.onChange(value === "__none__" ? "" : value)}
+                    value={field.value || "__none__"}
                     disabled={loadingSites}
                   >
                     <FormControl>
@@ -237,7 +251,7 @@ export function CreateEmployeeForUserDialog({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">None</SelectItem>
+                      <SelectItem value="__none__">None</SelectItem>
                       {sites.map((site) => (
                         <SelectItem key={site.id} value={site.id}>
                           {site.siteName}

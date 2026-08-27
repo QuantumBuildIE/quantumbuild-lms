@@ -11,7 +11,7 @@ public record LinkUserToEmployeeDto(
 /// DTO for creating a new employee for an existing user
 /// </summary>
 public record CreateEmployeeForUserDto(
-    string EmployeeCode,
+    string? EmployeeCode = null,
     string? Phone = null,
     string? Mobile = null,
     string? JobTitle = null,

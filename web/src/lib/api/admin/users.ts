@@ -178,7 +178,7 @@ export interface LinkUserToEmployeeDto {
 }
 
 export interface CreateEmployeeForUserDto {
-  employeeCode: string;
+  employeeCode?: string;
   phone?: string;
   mobile?: string;
   jobTitle?: string;
