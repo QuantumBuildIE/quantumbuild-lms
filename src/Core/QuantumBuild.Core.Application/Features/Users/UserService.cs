@@ -811,23 +811,34 @@ public class UserService : IUserService
                 return Result.Fail<UserDto>("This user is already linked to an employee");
             }
 
-            // Check employee code uniqueness (including soft-deleted records)
-            var duplicateCode = await _context.Employees
-                .IgnoreQueryFilters()
-                .Where(e => e.TenantId == tenantId && e.EmployeeCode == dto.EmployeeCode)
-                .Select(e => new { e.Id, e.FirstName, e.LastName, e.IsDeleted })
-                .FirstOrDefaultAsync();
-
-            if (duplicateCode != null)
+            // Resolve employee code: use the provided value or auto-generate one
+            string employeeCode;
+            if (!string.IsNullOrWhiteSpace(dto.EmployeeCode))
             {
-                if (duplicateCode.IsDeleted)
+                // Manual override — validate uniqueness (including soft-deleted records)
+                var duplicateCode = await _context.Employees
+                    .IgnoreQueryFilters()
+                    .Where(e => e.TenantId == tenantId && e.EmployeeCode == dto.EmployeeCode)
+                    .Select(e => new { e.Id, e.FirstName, e.LastName, e.IsDeleted })
+                    .FirstOrDefaultAsync();
+
+                if (duplicateCode != null)
                 {
-                    return Result.Fail<UserDto>(
-                        $"Employee code '{dto.EmployeeCode}' was previously assigned to deleted employee " +
-                        $"{duplicateCode.FirstName} {duplicateCode.LastName}. " +
-                        "Please choose a different code.");
+                    if (duplicateCode.IsDeleted)
+                    {
+                        return Result.Fail<UserDto>(
+                            $"Employee code '{dto.EmployeeCode}' was previously assigned to deleted employee " +
+                            $"{duplicateCode.FirstName} {duplicateCode.LastName}. " +
+                            "Please choose a different code.");
+                    }
+                    return Result.Fail<UserDto>($"Employee code '{dto.EmployeeCode}' is already in use.");
                 }
-                return Result.Fail<UserDto>($"Employee code '{dto.EmployeeCode}' is already in use.");
+
+                employeeCode = dto.EmployeeCode.Trim();
+            }
+            else
+            {
+                employeeCode = await _employeeService.GenerateEmployeeCodeAsync(tenantId);
             }
 
             // Validate site if provided
@@ -853,7 +864,7 @@ public class UserService : IUserService
             var employee = new Employee
             {
                 Id = Guid.NewGuid(),
-                EmployeeCode = dto.EmployeeCode,
+                EmployeeCode = employeeCode,
                 FirstName = user.FirstName,
                 LastName = user.LastName,
                 Email = user.Email,
