@@ -227,8 +227,8 @@ export function CreateEmployeeForUserDialog({
                 <FormItem>
                   <FormLabel>Primary Site</FormLabel>
                   <Select
-                    onValueChange={field.onChange}
-                    value={field.value}
+                    onValueChange={(value) => field.onChange(value === "__none__" ? "" : value)}
+                    value={field.value || "__none__"}
                     disabled={loadingSites}
                   >
                     <FormControl>
@@ -237,7 +237,7 @@ export function CreateEmployeeForUserDialog({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">None</SelectItem>
+                      <SelectItem value="__none__">None</SelectItem>
                       {sites.map((site) => (
                         <SelectItem key={site.id} value={site.id}>
                           {site.siteName}
