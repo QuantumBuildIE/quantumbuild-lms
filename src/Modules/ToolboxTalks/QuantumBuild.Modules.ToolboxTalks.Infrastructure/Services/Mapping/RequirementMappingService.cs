@@ -271,6 +271,30 @@ public class RequirementMappingService : IRequirementMappingService
         var talkValidationLookup = talkValidationRuns.ToDictionary(v => v.ToolboxTalkId!.Value);
         var courseValidationLookup = courseValidationRuns.ToDictionary(v => v.CourseId!.Value);
 
+        // Content with no target languages configured never gets a TranslationValidationRun at
+        // all (the create workflow skips the whole translate/validate step for it) — that's a
+        // permanent, structural state, not "hasn't run yet". So a run's mere existence (any
+        // status/outcome), not just a completed one, is what tells us translation applies here.
+        var talkIdsWithAnyRun = talkIds.Count > 0
+            ? (await _dbContext.TranslationValidationRuns
+                .Where(v => v.TenantId == tenantId && v.ToolboxTalkId.HasValue && talkIds.Contains(v.ToolboxTalkId.Value))
+                .Select(v => v.ToolboxTalkId!.Value)
+                .Distinct()
+                .ToListAsync(cancellationToken)).ToHashSet()
+            : [];
+
+        var courseIdsWithAnyRun = courseIds.Count > 0
+            ? (await _dbContext.TranslationValidationRuns
+                .Where(v => v.TenantId == tenantId && v.CourseId.HasValue && courseIds.Contains(v.CourseId.Value))
+                .Select(v => v.CourseId!.Value)
+                .Distinct()
+                .ToListAsync(cancellationToken)).ToHashSet()
+            : [];
+
+        bool RequiresTranslation(MappingDetailDto md) => md.ContentType == "Talk"
+            ? talkIdsWithAnyRun.Contains(md.ContentId)
+            : courseIdsWithAnyRun.Contains(md.ContentId);
+
         // Build requirement DTOs with coverage status
         var mappingsByRequirement = mappings
             .GroupBy(m => m.RegulatoryRequirementId)
@@ -317,15 +341,19 @@ public class RequirementMappingService : IRequirementMappingService
                 })
                 .ToList();
 
-            // Determine coverage status
+            // Determine coverage status. A confirmed mapping is covered outright when its content
+            // has no translations to validate (RequiresTranslation false) — requiring a
+            // validation run there would be requiring something that structurally never exists.
+            // Content that does have translations still needs a completed run, unchanged.
             var hasConfirmedWithValidation = mappingDetails.Any(md =>
                 md.MappingStatus == RequirementMappingStatus.Confirmed.ToString()
-                && md.ValidationOutcome != null);
+                && (md.ValidationOutcome != null || !RequiresTranslation(md)));
             var hasSuggested = mappingDetails.Any(md =>
                 md.MappingStatus == RequirementMappingStatus.Suggested.ToString());
             var hasConfirmedWithoutValidation = mappingDetails.Any(md =>
                 md.MappingStatus == RequirementMappingStatus.Confirmed.ToString()
-                && md.ValidationOutcome == null);
+                && md.ValidationOutcome == null
+                && RequiresTranslation(md));
 
             string coverageStatus;
             if (hasConfirmedWithValidation)
