@@ -165,4 +165,142 @@ public class BulkSopImportJobTests : IntegrationTestBase
                 "BulkLearningTranslationSweepJob to pick up (Bulk SOP Learnings, Chunk 2)");
         }
     }
+
+    // Regression test for Bug A: BulkSopImportJob used to upload each PDF via
+    // UploadSessionFileAsync (scratch, {tenantId}/sessions/{sessionId}/...) and never moved it
+    // anywhere else, so the end-of-run DeleteSessionFilesAsync cleanup deleted every
+    // just-created talk's SourceFileUrl/PdfUrl in the same job run. With the fix, each item is
+    // re-uploaded to the permanent talk-ID-keyed pdfs/ location before cleanup runs. This test
+    // uses a 3-item ZIP (no collisions) and asserts, after the full run (including cleanup):
+    // all three talks exist with distinct ids/codes/titles, and each one's SourceFileUrl/PdfUrl
+    // key is still present in storage and is NOT under the wiped sessions/ prefix.
+    [Fact]
+    public async Task RealZip_MultiItem_PdfsSurviveSessionCleanupAndTalksAreDistinct()
+    {
+        var zipBytes = BuildZip(
+            ("Fire Extinguisher Use.pdf", "%PDF-1.4 fake content — Fire Extinguisher Use"),
+            ("Forklift Operation.pdf", "%PDF-1.4 fake content — Forklift Operation"),
+            ("Chemical Spill Response.pdf", "%PDF-1.4 fake content — Chemical Spill Response"));
+
+        using var form = new MultipartFormDataContent();
+        var fileContent = new ByteArrayContent(zipBytes);
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/zip");
+        form.Add(fileContent, "file", "sops.zip");
+
+        var uploadResponse = await AdminClient.PostAsync("/api/toolbox-talks/bulk-sop-import", form);
+        uploadResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var uploadResult = await uploadResponse.Content
+            .ReadFromJsonAsync<Result<BulkSopImportUploadResponseDto>>();
+        var sessionId = uploadResult!.Data!.SessionId;
+
+        using (var jobScope = Factory.Services.CreateScope())
+        {
+            var job = jobScope.ServiceProvider.GetRequiredService<IBulkSopImportJob>();
+            await job.ExecuteAsync(sessionId, CancellationToken.None);
+        }
+
+        var statusResponse = await AdminClient.GetAsync($"/api/toolbox-talks/bulk-sop-import/{sessionId}");
+        var statusResult = await statusResponse.Content
+            .ReadFromJsonAsync<Result<BulkSopImportSessionStatusDto>>();
+        statusResult!.Data!.Status.Should().Be(nameof(BulkSopImportStatus.Completed));
+
+        var processing = statusResult.Data.Processing!;
+        processing.SucceededCount.Should().Be(3);
+        processing.FailedCount.Should().Be(0);
+
+        var succeededItems = processing.Items
+            .Where(i => i.Status == nameof(BulkSopImportItemStatus.Succeeded))
+            .ToList();
+        succeededItems.Should().HaveCount(3);
+
+        // Distinct ids, codes, and titles across all three items — no "first vs. rest" divergence.
+        succeededItems.Select(i => i.ToolboxTalkId).Should().OnlyHaveUniqueItems();
+        succeededItems.Select(i => i.ToolboxTalkTitle).Should().OnlyHaveUniqueItems();
+
+        using var dbScope = Factory.Services.CreateScope();
+        var dbContext = dbScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        var talks = new List<ToolboxTalk>();
+        foreach (var item in succeededItems)
+        {
+            var talk = await dbContext.Set<ToolboxTalk>()
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(t => t.Id == item.ToolboxTalkId
+                                       && t.TenantId == TestTenantConstants.TenantId
+                                       && !t.IsDeleted);
+            talk.Should().NotBeNull();
+            talks.Add(talk!);
+        }
+
+        talks.Select(t => t.Code).Should().OnlyHaveUniqueItems("each talk must get its own generated Code");
+
+        // The session-level cleanup (DeleteSessionFilesAsync) has already run by this point —
+        // the job only reaches Completed after that cleanup call. Bug A's signature was every
+        // succeeded item's SourceFileUrl/PdfUrl pointing into the now-deleted
+        // {tenantId}/sessions/{sessionId}/ prefix.
+        var sessionsPrefix = $"{TestTenantConstants.TenantId}/sessions/{sessionId}/";
+        foreach (var talk in talks)
+        {
+            talk.SourceFileUrl.Should().NotBeNullOrEmpty();
+            talk.PdfUrl.Should().NotBeNullOrEmpty();
+            talk.SourceFileUrl.Should().NotContain(sessionsPrefix,
+                $"'{talk.Title}' SourceFileUrl must not point into the wiped scratch prefix");
+            talk.PdfUrl.Should().NotContain(sessionsPrefix,
+                $"'{talk.Title}' PdfUrl must not point into the wiped scratch prefix");
+
+            var pdfKey = $"{TestTenantConstants.TenantId}/pdfs/{talk.Id}.pdf";
+            FakeR2StorageService.StoredFiles.Should().ContainKey(pdfKey,
+                $"'{talk.Title}' PDF should have been re-uploaded to the permanent pdfs/ location and survived cleanup");
+        }
+    }
+
+    // Regression test for the title-collision defect: DeriveTitle used to derive titles from the
+    // ZIP entry's basename only, so two PDFs sharing a basename in different in-archive
+    // subfolders (a realistic multi-site SOP export) collided on the title-uniqueness check and
+    // the second was recorded Failed. With the fix, the in-archive folder path disambiguates
+    // same-basename entries.
+    [Fact]
+    public async Task RealZip_NestedSubfoldersWithSameBasename_ProduceDistinctNonCollidingTalks()
+    {
+        var zipBytes = BuildZip(
+            ("SiteA/Manual Handling.pdf", "%PDF-1.4 fake content — Site A Manual Handling"),
+            ("SiteB/Manual Handling.pdf", "%PDF-1.4 fake content — Site B Manual Handling"));
+
+        using var form = new MultipartFormDataContent();
+        var fileContent = new ByteArrayContent(zipBytes);
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/zip");
+        form.Add(fileContent, "file", "sops.zip");
+
+        var uploadResponse = await AdminClient.PostAsync("/api/toolbox-talks/bulk-sop-import", form);
+        uploadResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var uploadResult = await uploadResponse.Content
+            .ReadFromJsonAsync<Result<BulkSopImportUploadResponseDto>>();
+        var sessionId = uploadResult!.Data!.SessionId;
+
+        using (var jobScope = Factory.Services.CreateScope())
+        {
+            var job = jobScope.ServiceProvider.GetRequiredService<IBulkSopImportJob>();
+            await job.ExecuteAsync(sessionId, CancellationToken.None);
+        }
+
+        var statusResponse = await AdminClient.GetAsync($"/api/toolbox-talks/bulk-sop-import/{sessionId}");
+        var statusResult = await statusResponse.Content
+            .ReadFromJsonAsync<Result<BulkSopImportSessionStatusDto>>();
+        statusResult!.Data!.Status.Should().Be(nameof(BulkSopImportStatus.Completed));
+
+        var processing = statusResult.Data.Processing!;
+        processing.FailedCount.Should().Be(0,
+            "same-basename PDFs in different ZIP subfolders must not collide on title uniqueness");
+        processing.SucceededCount.Should().Be(2);
+
+        var titles = processing.Items
+            .Where(i => i.Status == nameof(BulkSopImportItemStatus.Succeeded))
+            .Select(i => i.ToolboxTalkTitle)
+            .ToList();
+
+        titles.Should().OnlyHaveUniqueItems();
+        titles.Should().BeEquivalentTo("SiteA - Manual Handling", "SiteB - Manual Handling");
+    }
 }

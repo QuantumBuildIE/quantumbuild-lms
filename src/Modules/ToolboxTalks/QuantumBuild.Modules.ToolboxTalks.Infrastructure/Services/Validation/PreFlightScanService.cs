@@ -31,11 +31,12 @@ public class PreFlightScanService(
         string? sectorKey,
         CancellationToken cancellationToken = default)
     {
+        string? responseText = null;
         try
         {
             var combinedText = string.Join("\n\n---\n\n", sectionTexts);
             var prompt = BuildPrompt(combinedText, targetLanguage, sectorKey);
-            var responseText = await CallClaudeAsync(prompt, cancellationToken);
+            responseText = await CallClaudeAsync(prompt, cancellationToken);
             var findings = ParseResponse(responseText);
 
             return new PreFlightScanResult(
@@ -45,11 +46,31 @@ public class PreFlightScanService(
                 ProperNounCount: findings.Count(f => f.Type == PreFlightFindingType.ProperNoun),
                 RoleConstructCount: findings.Count(f => f.Type == PreFlightFindingType.RoleConstruct));
         }
+        catch (JsonException ex)
+        {
+            logger.LogError(
+                ex,
+                "Pre-flight scan returned unparseable JSON for {TargetLanguage}, sector {SectorKey}. Raw response: {RawResponse}",
+                targetLanguage,
+                sectorKey,
+                TruncateForLogging(responseText));
+            return EmptyResult();
+        }
         catch (Exception ex)
         {
             logger.LogError(ex, "Pre-flight scan failed for {TargetLanguage}, sector {SectorKey}", targetLanguage, sectorKey);
-            return new PreFlightScanResult([], HasFindings: false, HighRiskCount: 0, ProperNounCount: 0, RoleConstructCount: 0);
+            return EmptyResult();
         }
+    }
+
+    private static PreFlightScanResult EmptyResult() =>
+        new([], HasFindings: false, HighRiskCount: 0, ProperNounCount: 0, RoleConstructCount: 0);
+
+    private static string TruncateForLogging(string? text)
+    {
+        if (string.IsNullOrEmpty(text)) return "(empty)";
+        const int maxLength = 2000;
+        return text.Length <= maxLength ? text : text[..maxLength] + "... [truncated]";
     }
 
     private static string BuildPrompt(string sourceText, string targetLanguage, string? sectorKey)
@@ -140,16 +161,7 @@ public class PreFlightScanService(
 
     private static IReadOnlyList<PreFlightFinding> ParseResponse(string responseText)
     {
-        var json = responseText.Trim();
-
-        // Strip markdown code fences if present
-        if (json.StartsWith("```"))
-        {
-            var firstNewline = json.IndexOf('\n');
-            if (firstNewline >= 0) json = json[(firstNewline + 1)..];
-            if (json.EndsWith("```")) json = json[..^3];
-            json = json.Trim();
-        }
+        var json = ExtractJsonPayload(responseText);
 
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
@@ -204,5 +216,27 @@ public class PreFlightScanService(
         }
 
         return findings;
+    }
+
+    // The prompt always requests a single top-level JSON object, so the outermost
+    // {...} span is the payload even if the model wraps it in a fence or prose.
+    private static string ExtractJsonPayload(string responseText)
+    {
+        var text = responseText.Trim();
+
+        if (text.StartsWith("```"))
+        {
+            var firstNewline = text.IndexOf('\n');
+            if (firstNewline >= 0) text = text[(firstNewline + 1)..];
+            if (text.EndsWith("```")) text = text[..^3];
+            text = text.Trim();
+        }
+
+        var start = text.IndexOf('{');
+        var end = text.LastIndexOf('}');
+
+        return start >= 0 && end > start
+            ? text[start..(end + 1)]
+            : text;
     }
 }

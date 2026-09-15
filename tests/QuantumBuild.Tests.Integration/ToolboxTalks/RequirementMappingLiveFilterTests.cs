@@ -204,6 +204,34 @@ public class RequirementMappingLiveFilterTests : IntegrationTestBase
             .FirstOrDefaultAsync(m => m.Id == mappingId);
     }
 
+    /// <summary>
+    /// Creates a TranslationValidationRun for a talk, standing in for the row the create
+    /// workflow would create once target languages are configured — used to distinguish
+    /// "translated content" fixtures from the no-target-language fixtures elsewhere in this file.
+    /// </summary>
+    private async Task<Guid> CreateValidationRunAsync(
+        Guid talkId, ValidationRunStatus status, ValidationOutcome? outcome = null)
+    {
+        var runId = Guid.NewGuid();
+        var context = GetDbContext();
+        context.TranslationValidationRuns.Add(new TranslationValidationRun
+        {
+            Id = runId,
+            TenantId = TestTenantConstants.TenantId,
+            ToolboxTalkId = talkId,
+            LanguageCode = "es",
+            SourceLanguage = "en",
+            PassThreshold = 75,
+            Status = status,
+            OverallOutcome = outcome ?? ValidationOutcome.Review,
+            CompletedAt = status == ValidationRunStatus.Completed ? DateTime.UtcNow : null,
+            CreatedAt = DateTime.UtcNow,
+            CreatedBy = "test"
+        });
+        await context.SaveChangesAsync();
+        return runId;
+    }
+
     private record ConfirmAllResponseDto(int Confirmed);
 
     // ── Compliance checklist — hard exclude ─────────────────────────────────
@@ -225,7 +253,9 @@ public class RequirementMappingLiveFilterTests : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var reqDto = checklist!.PrincipleGroups.SelectMany(g => g.Requirements).Single(r => r.Id == requirement.Id);
         reqDto.Mappings.Should().ContainSingle(m => m.ContentId == talkId);
-        reqDto.CoverageStatus.Should().Be("Pending"); // Confirmed but no validation run yet
+        // No TranslationValidationRun exists for this talk (no target languages configured) —
+        // confirmed mapping alone is enough; there is nothing to wait for.
+        reqDto.CoverageStatus.Should().Be("Covered");
     }
 
     [Fact]
@@ -288,6 +318,71 @@ public class RequirementMappingLiveFilterTests : IntegrationTestBase
         reqDto.CoverageStatus.Should().Be("Gap");
     }
 
+    // ── Compliance checklist — no-translation (English-only) coverage ──────
+
+    [Fact]
+    public async Task ComplianceChecklist_NoTranslationTalk_UnconfirmedMapping_IsPending()
+    {
+        var sector = await CreateSectorAsync(nameof(ComplianceChecklist_NoTranslationTalk_UnconfirmedMapping_IsPending));
+        await AssignSectorToTenantAsync(TestTenantConstants.TenantId, sector.Id);
+        var (_, profile) = await CreateRegulationChainAsync(sector, nameof(ComplianceChecklist_NoTranslationTalk_UnconfirmedMapping_IsPending));
+        var requirement = await CreateApprovedRequirementAsync(profile.Id, $"No-translation suggested requirement {UniqueSuffix("NT1")}");
+        var talkId = await CreateTalkAsync(nameof(ComplianceChecklist_NoTranslationTalk_UnconfirmedMapping_IsPending),
+            ToolboxTalkStatus.Published, isActive: true);
+        await CreateMappingAsync(requirement.Id, talkId, null, RequirementMappingStatus.Suggested);
+
+        var (response, checklist) = await AdminClient.GetWithResponseAsync<ComplianceChecklistDto>(
+            $"/api/toolbox-talks/requirement-mappings/compliance/{sector.Key}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var reqDto = checklist!.PrincipleGroups.SelectMany(g => g.Requirements).Single(r => r.Id == requirement.Id);
+        // An unconfirmed AI suggestion is a genuine, actionable review regardless of language —
+        // "Pending" here reflects the mapping decision still owed, not a translation wait.
+        reqDto.CoverageStatus.Should().Be("Pending");
+    }
+
+    [Fact]
+    public async Task ComplianceChecklist_TranslatedTalk_ConfirmedMapping_NoCompletedRun_IsPending()
+    {
+        var sector = await CreateSectorAsync(nameof(ComplianceChecklist_TranslatedTalk_ConfirmedMapping_NoCompletedRun_IsPending));
+        await AssignSectorToTenantAsync(TestTenantConstants.TenantId, sector.Id);
+        var (_, profile) = await CreateRegulationChainAsync(sector, nameof(ComplianceChecklist_TranslatedTalk_ConfirmedMapping_NoCompletedRun_IsPending));
+        var requirement = await CreateApprovedRequirementAsync(profile.Id, $"Translated no-run requirement {UniqueSuffix("NT2")}");
+        var talkId = await CreateTalkAsync(nameof(ComplianceChecklist_TranslatedTalk_ConfirmedMapping_NoCompletedRun_IsPending),
+            ToolboxTalkStatus.Published, isActive: true);
+        await CreateValidationRunAsync(talkId, ValidationRunStatus.Running);
+        await CreateMappingAsync(requirement.Id, talkId, null, RequirementMappingStatus.Confirmed);
+
+        var (response, checklist) = await AdminClient.GetWithResponseAsync<ComplianceChecklistDto>(
+            $"/api/toolbox-talks/requirement-mappings/compliance/{sector.Key}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var reqDto = checklist!.PrincipleGroups.SelectMany(g => g.Requirements).Single(r => r.Id == requirement.Id);
+        // A validation run exists (talk has target languages) but hasn't completed yet — coverage
+        // must keep waiting for it, unlike the no-translation case above.
+        reqDto.CoverageStatus.Should().Be("Pending");
+    }
+
+    [Fact]
+    public async Task ComplianceChecklist_TranslatedTalk_ConfirmedMapping_CompletedRun_IsCovered()
+    {
+        var sector = await CreateSectorAsync(nameof(ComplianceChecklist_TranslatedTalk_ConfirmedMapping_CompletedRun_IsCovered));
+        await AssignSectorToTenantAsync(TestTenantConstants.TenantId, sector.Id);
+        var (_, profile) = await CreateRegulationChainAsync(sector, nameof(ComplianceChecklist_TranslatedTalk_ConfirmedMapping_CompletedRun_IsCovered));
+        var requirement = await CreateApprovedRequirementAsync(profile.Id, $"Translated completed-run requirement {UniqueSuffix("NT3")}");
+        var talkId = await CreateTalkAsync(nameof(ComplianceChecklist_TranslatedTalk_ConfirmedMapping_CompletedRun_IsCovered),
+            ToolboxTalkStatus.Published, isActive: true);
+        await CreateValidationRunAsync(talkId, ValidationRunStatus.Completed, ValidationOutcome.Pass);
+        await CreateMappingAsync(requirement.Id, talkId, null, RequirementMappingStatus.Confirmed);
+
+        var (response, checklist) = await AdminClient.GetWithResponseAsync<ComplianceChecklistDto>(
+            $"/api/toolbox-talks/requirement-mappings/compliance/{sector.Key}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var reqDto = checklist!.PrincipleGroups.SelectMany(g => g.Requirements).Single(r => r.Id == requirement.Id);
+        reqDto.CoverageStatus.Should().Be("Covered");
+    }
+
     [Fact]
     public async Task ComplianceChecklist_MappingToActiveCourse_Appears()
     {
@@ -304,7 +399,9 @@ public class RequirementMappingLiveFilterTests : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var reqDto = checklist!.PrincipleGroups.SelectMany(g => g.Requirements).Single(r => r.Id == requirement.Id);
         reqDto.Mappings.Should().ContainSingle(m => m.ContentId == courseId);
-        reqDto.CoverageStatus.Should().Be("Pending"); // Confirmed but no validation run yet
+        // No TranslationValidationRun exists for this course (no target languages configured) —
+        // confirmed mapping alone is enough; there is nothing to wait for.
+        reqDto.CoverageStatus.Should().Be("Covered");
     }
 
     [Fact]

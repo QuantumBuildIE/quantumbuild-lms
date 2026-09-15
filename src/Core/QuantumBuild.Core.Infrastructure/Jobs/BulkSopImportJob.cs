@@ -188,7 +188,7 @@ public class BulkSopImportJob : IBulkSopImportJob
                 return Failed(file, "The file could not be found in the archive.");
             }
 
-            var title = DeriveTitle(file.FileName, file.ItemIndex);
+            var title = DeriveTitle(file.EntryName, file.FileName, file.ItemIndex);
 
             await using var itemScope = _scopeFactory.CreateAsyncScope();
 
@@ -258,6 +258,20 @@ public class BulkSopImportJob : IBulkSopImportJob
                 SourceFileType = "application/pdf"
             }, ct);
 
+            // Re-upload the already-buffered PDF bytes to the permanent talk-ID-keyed pdfs/
+            // location (mirrors ToolboxTalkFilesController.UploadPdf) so the file survives the
+            // end-of-session DeleteSessionFilesAsync cleanup, which wipes the entire
+            // {tenantId}/sessions/{sessionId}/ prefix the scratch upload above just wrote to.
+            seekableStream.Position = 0;
+            var permanentUploadResult = await _storageService.UploadPdfAsync(
+                tenantId, talk.Id, title, seekableStream, file.FileName, ct);
+
+            if (!permanentUploadResult.Success || string.IsNullOrEmpty(permanentUploadResult.PublicUrl))
+            {
+                return Failed(file,
+                    $"Failed to store the PDF permanently: {permanentUploadResult.ErrorMessage ?? "unknown storage error"}");
+            }
+
             var parseResult = await sender.Send(
                 new ParseToolboxTalkContentCommand(talk.Id, tenantId, UserId: null), ct);
 
@@ -283,14 +297,20 @@ public class BulkSopImportJob : IBulkSopImportJob
                     file.ItemIndex, title, sessionId, warning);
             }
 
-            // Flag the new Draft learning as pending bulk-translation. BulkLearningTranslationSweepJob
-            // picks these up off-peak, throttled, and clears the flag once it enqueues
-            // MissingTranslationsJob — this job never translates directly.
+            // Repoint SourceFileUrl/PdfUrl at the permanent pdfs/ copy uploaded above (the
+            // InitialiseToolboxTalkCommand call earlier had no choice but to write the scratch
+            // URL, since the permanent upload needs talk.Id, which only exists after that call
+            // returns), and flag the new Draft learning as pending bulk-translation.
+            // BulkLearningTranslationSweepJob picks these up off-peak, throttled, and clears the
+            // flag once it enqueues MissingTranslationsJob — this job never translates directly.
             var createdTalk = await toolboxTalksDb.ToolboxTalks
                 .IgnoreQueryFilters()
                 .FirstOrDefaultAsync(t => t.Id == talk.Id && t.TenantId == tenantId, ct);
             if (createdTalk is not null)
             {
+                createdTalk.SourceFileUrl = permanentUploadResult.PublicUrl;
+                createdTalk.PdfUrl = permanentUploadResult.PublicUrl;
+                createdTalk.PdfFileName = file.FileName;
                 createdTalk.BulkTranslationPendingSince = DateTimeOffset.UtcNow;
                 await toolboxTalksDb.SaveChangesAsync(ct);
             }
@@ -327,11 +347,26 @@ public class BulkSopImportJob : IBulkSopImportJob
     /// Derives a learning title from a PDF file name: strips the extension, replaces
     /// underscores/dashes with spaces, and collapses whitespace. Falls back to a positional
     /// placeholder if the result is empty (e.g. a file literally named ".pdf").
+    ///
+    /// If the entry lives in a ZIP subfolder, the folder path is prefixed to the title (e.g.
+    /// "SiteA/Manual Handling.pdf" -> "SiteA - Manual Handling") so two PDFs sharing a basename
+    /// in different subfolders (a realistic multi-site SOP export) produce distinct, non-colliding
+    /// titles instead of tripping the title-uniqueness check. Entries at the archive root are
+    /// unaffected.
     /// </summary>
-    private static string DeriveTitle(string fileName, int itemIndex)
+    private static string DeriveTitle(string entryName, string fileName, int itemIndex)
     {
         var baseName = Path.GetFileNameWithoutExtension(fileName);
-        var cleaned = WhitespaceRegex.Replace(baseName.Replace('_', ' ').Replace('-', ' '), " ").Trim();
+        var cleanedBase = WhitespaceRegex.Replace(baseName.Replace('_', ' ').Replace('-', ' '), " ").Trim();
+
+        var lastSlash = entryName.LastIndexOf('/');
+        var cleanedDirectory = lastSlash > 0
+            ? WhitespaceRegex.Replace(entryName[..lastSlash].Replace('/', ' ').Replace('_', ' ').Replace('-', ' '), " ").Trim()
+            : string.Empty;
+
+        var cleaned = string.IsNullOrEmpty(cleanedDirectory)
+            ? cleanedBase
+            : $"{cleanedDirectory} - {cleanedBase}";
 
         if (string.IsNullOrWhiteSpace(cleaned))
             cleaned = $"SOP Import {itemIndex + 1}";
