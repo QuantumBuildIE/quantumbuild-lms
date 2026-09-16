@@ -25,6 +25,8 @@ public class ContentParserService : IContentParserService
     private readonly ILogger<ContentParserService> _logger;
 
     private const int CourseThreshold = 3;
+    private const int MaxResponseLogLength = 4000;
+    private const int MaxInputLogLength = 500;
 
     public ContentParserService(
         HttpClient httpClient,
@@ -48,8 +50,14 @@ public class ContentParserService : IContentParserService
         Guid tenantId,
         Guid? userId = null,
         bool preserveSourceWording = false,
+        Guid? referenceEntityId = null,
+        string? sourceHint = null,
         CancellationToken cancellationToken = default)
     {
+        // Hoisted above the try so the JsonException catch below can still log the raw
+        // response — the local declared inside a try is out of scope in its catch blocks.
+        string? responseBody = null;
+
         try
         {
             if (string.IsNullOrEmpty(_settings.Claude.ApiKey))
@@ -110,7 +118,7 @@ public class ContentParserService : IContentParserService
                 inputModeHint, preserveSourceWording);
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
-            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -146,9 +154,14 @@ public class ContentParserService : IContentParserService
                 // reply) previously fell through as Success:true with an empty section list,
                 // committing an incomplete Draft further down the chain. Fail honestly instead
                 // so callers' existing !Success branches engage.
-                _logger.LogWarning(
-                    "[ContentParserService] Claude response for {InputMode} parse contained no sections",
-                    inputModeHint);
+                _logger.LogError(
+                    "[ContentParserService] Claude response for {InputMode} parse contained no sections. " +
+                    "ReferenceEntityId={ReferenceEntityId}, Source={SourceHint}, RawResponse={RawResponse}, InputSample={InputSample}",
+                    inputModeHint,
+                    referenceEntityId,
+                    sourceHint ?? "(unknown)",
+                    TruncateForLogging(parsed.ContentText, MaxResponseLogLength),
+                    TruncateForLogging(rawText, MaxInputLogLength));
                 return new ContentParseResult(
                     Success: false,
                     Sections: sections,
@@ -180,7 +193,14 @@ public class ContentParserService : IContentParserService
         }
         catch (JsonException ex)
         {
-            _logger.LogError(ex, "[ContentParserService] Failed to parse AI response");
+            _logger.LogError(
+                ex,
+                "[ContentParserService] Failed to parse AI response. " +
+                "ReferenceEntityId={ReferenceEntityId}, Source={SourceHint}, RawResponse={RawResponse}, InputSample={InputSample}",
+                referenceEntityId,
+                sourceHint ?? "(unknown)",
+                TruncateForLogging(responseBody, MaxResponseLogLength),
+                TruncateForLogging(rawText, MaxInputLogLength));
             return new ContentParseResult(
                 Success: false,
                 Sections: new List<ParsedSection>(),
@@ -236,6 +256,12 @@ public class ContentParserService : IContentParserService
             TEXT TO PARSE:
             {{rawText}}
             """;
+    }
+
+    private static string TruncateForLogging(string? text, int maxLength)
+    {
+        if (string.IsNullOrEmpty(text)) return "(empty)";
+        return text.Length <= maxLength ? text : text[..maxLength] + "... [truncated]";
     }
 
     private static List<ParsedSection> ParseSectionsFromContentText(string textContent)

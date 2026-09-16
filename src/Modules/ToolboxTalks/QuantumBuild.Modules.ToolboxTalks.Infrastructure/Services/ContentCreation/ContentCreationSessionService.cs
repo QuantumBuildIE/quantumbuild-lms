@@ -279,7 +279,9 @@ public class ContentCreationSessionService : IContentCreationSessionService
                 rawText, session.InputMode, tenantId,
                 userId: null,
                 preserveSourceWording: session.PreserveSourceWording,
-                cancellationToken);
+                referenceEntityId: sessionId,
+                sourceHint: "legacy-wizard session parse (user-initiated)",
+                cancellationToken: cancellationToken);
 
             if (!parseResult.Success)
             {

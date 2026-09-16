@@ -73,6 +73,8 @@ public class ContentCreationParseJobForTalk(
                 tenantId: tenantId,
                 userId: null,
                 preserveSourceWording: talk.PreserveSourceWording,
+                referenceEntityId: talkId,
+                sourceHint: "new-wizard video-transcript parse (background job)",
                 cancellationToken: cancellationToken);
 
             if (!result.Success)

@@ -68,7 +68,8 @@ public class ParseToolboxTalkContentCommandHandler
 
         var parseResult = await _contentParserService.ParseContentAsync(
             talk.SourceText, InputMode.Text, talk.TenantId, userId,
-            talk.PreserveSourceWording, ct);
+            talk.PreserveSourceWording, referenceEntityId: talk.Id,
+            sourceHint: DescribeSource(userId), cancellationToken: ct);
 
         if (!parseResult.Success)
         {
@@ -110,7 +111,8 @@ public class ParseToolboxTalkContentCommandHandler
 
         var parseResult = await _contentParserService.ParseContentAsync(
             extractResult.Text!, InputMode.Pdf, talk.TenantId, userId,
-            talk.PreserveSourceWording, ct);
+            talk.PreserveSourceWording, referenceEntityId: talk.Id,
+            sourceHint: DescribeSource(userId), cancellationToken: ct);
 
         if (!parseResult.Success)
         {
@@ -150,7 +152,8 @@ public class ParseToolboxTalkContentCommandHandler
 
         var parseResult = await _contentParserService.ParseContentAsync(
             extractResult.Text!, InputMode.Docx, talk.TenantId, userId,
-            talk.PreserveSourceWording, ct);
+            talk.PreserveSourceWording, referenceEntityId: talk.Id,
+            sourceHint: DescribeSource(userId), cancellationToken: ct);
 
         if (!parseResult.Success)
         {
@@ -196,6 +199,13 @@ public class ParseToolboxTalkContentCommandHandler
 
         return Result.Ok(MapToDto(talk, []));
     }
+
+    // This handler serves both the wizard's POST /{id}/parse endpoint (a real user, so
+    // UserId is set from the JWT) and BulkSopImportJob (always passes UserId: null) — there's
+    // no dedicated source flag on the command, so UserId presence is the best available proxy
+    // for diagnostic logging.
+    private static string DescribeSource(Guid? userId) =>
+        userId.HasValue ? "wizard (user-initiated)" : "bulk-import or background job (no user context)";
 
     private async Task<List<ToolboxTalkSection>> MaterialiseSectionsAsync(
         ToolboxTalk talk,
