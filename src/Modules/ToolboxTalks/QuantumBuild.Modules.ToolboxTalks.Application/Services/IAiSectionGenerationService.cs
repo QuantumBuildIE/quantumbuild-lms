@@ -16,7 +16,7 @@ public interface IAiSectionGenerationService
     /// <param name="combinedContent">The combined content from video transcript and/or PDF</param>
     /// <param name="hasVideoContent">Whether the combined content includes video transcript</param>
     /// <param name="hasPdfContent">Whether the combined content includes PDF text</param>
-    /// <param name="minimumSections">Minimum number of sections to generate (default: 7)</param>
+    /// <param name="minimumSections">Minimum number of sections to generate — resolved by the caller from <c>ContentGenerationSettings.MinimumSections</c></param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Result containing generated sections or error information</returns>
     Task<SectionGenerationResult> GenerateSectionsAsync(
@@ -25,8 +25,8 @@ public interface IAiSectionGenerationService
         bool hasVideoContent,
         bool hasPdfContent,
         Guid tenantId,
+        int minimumSections,
         Guid? userId = null,
-        int minimumSections = 7,
         CancellationToken cancellationToken = default);
 }
 

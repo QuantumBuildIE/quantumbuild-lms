@@ -14,7 +14,8 @@ public record SmartGenerateContentCommand : IRequest<SmartGenerateContentResult>
     public bool GenerateQuestions { get; init; }
     public bool GenerateSlideshow { get; init; }
     public string SourceLanguageCode { get; init; } = "en";
-    public int MinimumSections { get; init; } = 7;
+    /// <summary>Resolved by the caller from <c>ContentGenerationSettings.MinimumSections</c> unless overridden by the request.</summary>
+    public int MinimumSections { get; init; }
     public int MinimumQuestions { get; init; } = 5;
     public int PassThreshold { get; init; } = 80;
 

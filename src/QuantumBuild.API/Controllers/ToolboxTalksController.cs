@@ -47,7 +47,9 @@ using QuantumBuild.Modules.ToolboxTalks.Application.Commands.SendForReview;
 using QuantumBuild.Modules.ToolboxTalks.Application.DTOs.Workflows;
 using QuantumBuild.Modules.ToolboxTalks.Application.Queries.PreviewSendForReview;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Enums;
+using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Configuration;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
+using Microsoft.Extensions.Options;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using FileHashType = QuantumBuild.Modules.ToolboxTalks.Application.Services.FileHashType;
@@ -77,6 +79,7 @@ public class ToolboxTalksController : ControllerBase
     private readonly IScormPackageService _scormPackageService;
     private readonly UserManager<User> _userManager;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly ContentGenerationSettings _contentGenerationSettings;
     private readonly ILogger<ToolboxTalksController> _logger;
 
     public ToolboxTalksController(
@@ -94,6 +97,7 @@ public class ToolboxTalksController : ControllerBase
         IScormPackageService scormPackageService,
         UserManager<User> userManager,
         IHttpClientFactory httpClientFactory,
+        IOptions<ContentGenerationSettings> contentGenerationSettings,
         ILogger<ToolboxTalksController> logger)
     {
         _mediator = mediator;
@@ -110,6 +114,7 @@ public class ToolboxTalksController : ControllerBase
         _scormPackageService = scormPackageService;
         _userManager = userManager;
         _httpClientFactory = httpClientFactory;
+        _contentGenerationSettings = contentGenerationSettings.Value;
         _logger = logger;
     }
 
@@ -1316,7 +1321,7 @@ public class ToolboxTalksController : ControllerBase
             var options = new ContentGenerationOptions(
                 IncludeVideo: request.IncludeVideo,
                 IncludePdf: request.IncludePdf,
-                MinimumSections: request.MinimumSections ?? 7,
+                MinimumSections: request.MinimumSections ?? _contentGenerationSettings.MinimumSections,
                 MinimumQuestions: request.MinimumQuestions ?? 5,
                 PassThreshold: request.PassThreshold ?? 80,
                 ReplaceExisting: request.ReplaceExisting ?? true,
@@ -1457,7 +1462,7 @@ public class ToolboxTalksController : ControllerBase
                 GenerateQuestions = request.GenerateQuestions,
                 GenerateSlideshow = request.GenerateSlideshow,
                 SourceLanguageCode = request.SourceLanguageCode ?? "en",
-                MinimumSections = request.MinimumSections ?? 7,
+                MinimumSections = request.MinimumSections ?? _contentGenerationSettings.MinimumSections,
                 MinimumQuestions = request.MinimumQuestions ?? 5,
                 PassThreshold = request.PassThreshold ?? 80,
                 IncludeVideo = includeVideo,
@@ -1486,7 +1491,7 @@ public class ToolboxTalksController : ControllerBase
                 var options = new ContentGenerationOptions(
                     IncludeVideo: includeVideo,
                     IncludePdf: includePdf,
-                    MinimumSections: request.MinimumSections ?? 7,
+                    MinimumSections: request.MinimumSections ?? _contentGenerationSettings.MinimumSections,
                     MinimumQuestions: request.MinimumQuestions ?? 5,
                     PassThreshold: request.PassThreshold ?? 80,
                     ReplaceExisting: false, // Don't delete what we just copied!
@@ -2747,7 +2752,7 @@ public record GenerateContentRequest
     public bool IncludePdf { get; init; }
 
     /// <summary>
-    /// Minimum number of sections to generate (default: 7)
+    /// Minimum number of sections to generate. Falls back to ContentGenerationSettings.MinimumSections when omitted.
     /// </summary>
     public int? MinimumSections { get; init; }
 

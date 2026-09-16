@@ -44,8 +44,8 @@ public class AiSectionGenerationService : IAiSectionGenerationService
         bool hasVideoContent,
         bool hasPdfContent,
         Guid tenantId,
+        int minimumSections,
         Guid? userId = null,
-        int minimumSections = 7,
         CancellationToken cancellationToken = default)
     {
         try

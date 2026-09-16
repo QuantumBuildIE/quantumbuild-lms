@@ -19,6 +19,7 @@ public class ContentParserService : IContentParserService
 {
     private readonly HttpClient _httpClient;
     private readonly SubtitleProcessingSettings _settings;
+    private readonly ContentGenerationSettings _contentGenerationSettings;
     private readonly string _claudeModel;
     private readonly IAiUsageLogger _aiUsageLogger;
     private readonly ILogger<ContentParserService> _logger;
@@ -29,12 +30,14 @@ public class ContentParserService : IContentParserService
         HttpClient httpClient,
         IOptions<SubtitleProcessingSettings> settings,
         IOptions<AIProviderOptions> aiProviders,
+        IOptions<ContentGenerationSettings> contentGenerationSettings,
         IAiUsageLogger aiUsageLogger,
         ILogger<ContentParserService> logger)
     {
         _httpClient = httpClient;
         _settings = settings.Value;
         _claudeModel = aiProviders.Value.Anthropic.Models.Sonnet;
+        _contentGenerationSettings = contentGenerationSettings.Value;
         _aiUsageLogger = aiUsageLogger;
         _logger = logger;
     }
@@ -80,7 +83,7 @@ public class ContentParserService : IContentParserService
             var prompt = SectionGenerationPrompts.BuildSectionPrompt(
                 content: rawText,
                 sourceDescription: sourceDescription,
-                minimumSections: 2,
+                minimumSections: _contentGenerationSettings.MinimumSections,
                 hasVideo: inputModeHint == InputMode.Video,
                 hasPdf: inputModeHint == InputMode.Pdf,
                 preserveSourceWording: preserveSourceWording);
