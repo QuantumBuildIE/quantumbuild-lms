@@ -287,14 +287,13 @@ public class BulkSopImportJob : IBulkSopImportJob
             var quizResult = await sender.Send(
                 new GenerateToolboxTalkQuizCommand(talk.Id, tenantId, UserId: null), ct);
 
-            string? warning = null;
             if (!quizResult.Success)
             {
-                warning = $"Quiz generation failed: {string.Join("; ", quizResult.Errors)}. " +
-                    "The learning was created with sections but no quiz — quiz can be generated manually.";
+                var reason = $"Quiz generation failed: {string.Join("; ", quizResult.Errors)}";
                 _logger.LogWarning(
                     "BulkSopImportJob: item {Index} ('{Title}') quiz generation failed for session {SessionId}: {Reason}",
-                    file.ItemIndex, title, sessionId, warning);
+                    file.ItemIndex, title, sessionId, reason);
+                return Failed(file, reason);
             }
 
             // Repoint SourceFileUrl/PdfUrl at the permanent pdfs/ copy uploaded above (the
@@ -321,8 +320,7 @@ public class BulkSopImportJob : IBulkSopImportJob
                 FileName = file.FileName,
                 Status = BulkSopImportItemStatus.Succeeded,
                 ToolboxTalkId = talk.Id,
-                ToolboxTalkTitle = title,
-                Warning = warning
+                ToolboxTalkTitle = title
             };
         }
         catch (Exception ex)

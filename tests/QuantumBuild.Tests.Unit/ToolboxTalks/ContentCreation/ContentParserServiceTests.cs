@@ -145,4 +145,54 @@ public class ContentParserServiceTests
         capturedBody.Should().Contain("NOT to rewrite");
         capturedBody.Should().Contain("Identify between 7 and a reasonable number");
     }
+
+    // Regression test for the "incomplete lesson reported as success" bug (see
+    // docs/bulk-import-dedup-recon.md §B.1): a Claude response with no '[' at all — a refusal,
+    // safety-filtered reply, or malformed/off-format response — used to fall through
+    // ParseSectionsFromContentText as an empty list while ParseContentAsync still returned
+    // Success: true. Callers must be able to trust Success: false whenever there are zero
+    // sections, so they fail the item honestly instead of committing an empty Draft.
+    [Fact]
+    public async Task ParseContentAsync_ResponseHasNoSections_ReturnsFailure()
+    {
+        _httpMessageHandlerMock
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(new
+                {
+                    content = new[] { new { type = "text", text = "I'm sorry, I can't help with that request." } },
+                    usage = new { input_tokens = 40, output_tokens = 12 },
+                    model = "claude-sonnet-4-5"
+                }))
+            });
+
+        var sut = CreateService();
+
+        var result = await sut.ParseContentAsync(
+            "Some raw content.",
+            InputMode.Pdf,
+            Guid.NewGuid(),
+            userId: null,
+            preserveSourceWording: false);
+
+        result.Success.Should().BeFalse();
+        result.Sections.Should().BeEmpty();
+        result.ErrorMessage.Should().NotBeNullOrWhiteSpace();
+
+        // The Claude call itself succeeded and consumed tokens, so usage must still be logged
+        // (billing) even though the parse result is treated as a failure.
+        _aiUsageLoggerMock.Verify(l => l.LogAsync(
+            It.IsAny<Guid>(),
+            AiOperationCategory.ContentParsing,
+            It.IsAny<string>(),
+            It.IsAny<int>(),
+            It.IsAny<int>(),
+            It.IsAny<bool>(),
+            It.IsAny<Guid?>(),
+            It.IsAny<Guid?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
 }

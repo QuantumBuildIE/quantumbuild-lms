@@ -303,4 +303,111 @@ public class BulkSopImportJobTests : IntegrationTestBase
         titles.Should().OnlyHaveUniqueItems();
         titles.Should().BeEquivalentTo("SiteA - Manual Handling", "SiteB - Manual Handling");
     }
+
+    // Regression test for the "incomplete lesson reported as success" bug: a quiz-generation
+    // failure used to be downgraded to a Warning while the item was still reported Succeeded,
+    // so an admin saw a normal success row for a learning that actually had no quiz (and, per
+    // the companion ContentParserService fix, could also have had zero sections). The item must
+    // now be reported Failed like any other per-item failure — see
+    // docs/bulk-import-dedup-recon.md §B.3.
+    [Fact]
+    public async Task RealZip_QuizGenerationFails_ItemReportedFailedNotSucceeded()
+    {
+        var zipBytes = BuildZip(
+            ("Hot Work Permit.pdf", "%PDF-1.4 fake content — Hot Work Permit"));
+
+        using var form = new MultipartFormDataContent();
+        var fileContent = new ByteArrayContent(zipBytes);
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/zip");
+        form.Add(fileContent, "file", "sops.zip");
+
+        var uploadResponse = await AdminClient.PostAsync("/api/toolbox-talks/bulk-sop-import", form);
+        uploadResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var uploadResult = await uploadResponse.Content
+            .ReadFromJsonAsync<Result<BulkSopImportUploadResponseDto>>();
+        var sessionId = uploadResult!.Data!.SessionId;
+
+        Factory.FakeAiQuizGenerationService.ShouldFail = true;
+        try
+        {
+            using (var jobScope = Factory.Services.CreateScope())
+            {
+                var job = jobScope.ServiceProvider.GetRequiredService<IBulkSopImportJob>();
+                await job.ExecuteAsync(sessionId, CancellationToken.None);
+            }
+        }
+        finally
+        {
+            Factory.FakeAiQuizGenerationService.ShouldFail = false;
+        }
+
+        var statusResponse = await AdminClient.GetAsync($"/api/toolbox-talks/bulk-sop-import/{sessionId}");
+        var statusResult = await statusResponse.Content
+            .ReadFromJsonAsync<Result<BulkSopImportSessionStatusDto>>();
+        statusResult!.Data!.Status.Should().Be(nameof(BulkSopImportStatus.Completed));
+
+        var processing = statusResult.Data.Processing!;
+        processing.TotalAttempted.Should().Be(1);
+        processing.SucceededCount.Should().Be(0,
+            "a quiz-generation failure must not be reported as a success");
+        processing.FailedCount.Should().Be(1);
+
+        var failedItem = processing.Items.Single();
+        failedItem.Status.Should().Be(nameof(BulkSopImportItemStatus.Failed));
+        failedItem.FailureReason.Should().Contain("Quiz generation failed");
+        failedItem.Warning.Should().BeNull("the Warning-and-Succeed downgrade path no longer exists");
+    }
+
+    // Companion regression test: a parse failure (which is what the real
+    // ContentParserService now returns for a zero-section AI response — see the
+    // ContentParserService unit tests) must also be reported as Failed, not Succeeded.
+    // BulkSopImportJob.cs already forwarded parseResult failures to Failed() before this
+    // fix — this locks in that existing wiring stays correct now that a zero-section parse
+    // is one of the ways a real failure can arrive here.
+    [Fact]
+    public async Task RealZip_ParsingFails_ItemReportedFailedNotSucceeded()
+    {
+        var zipBytes = BuildZip(
+            ("Lockout Tagout.pdf", "%PDF-1.4 fake content — Lockout Tagout"));
+
+        using var form = new MultipartFormDataContent();
+        var fileContent = new ByteArrayContent(zipBytes);
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/zip");
+        form.Add(fileContent, "file", "sops.zip");
+
+        var uploadResponse = await AdminClient.PostAsync("/api/toolbox-talks/bulk-sop-import", form);
+        uploadResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var uploadResult = await uploadResponse.Content
+            .ReadFromJsonAsync<Result<BulkSopImportUploadResponseDto>>();
+        var sessionId = uploadResult!.Data!.SessionId;
+
+        Factory.FakeContentParserService.ShouldFail = true;
+        try
+        {
+            using (var jobScope = Factory.Services.CreateScope())
+            {
+                var job = jobScope.ServiceProvider.GetRequiredService<IBulkSopImportJob>();
+                await job.ExecuteAsync(sessionId, CancellationToken.None);
+            }
+        }
+        finally
+        {
+            Factory.FakeContentParserService.ShouldFail = false;
+        }
+
+        var statusResponse = await AdminClient.GetAsync($"/api/toolbox-talks/bulk-sop-import/{sessionId}");
+        var statusResult = await statusResponse.Content
+            .ReadFromJsonAsync<Result<BulkSopImportSessionStatusDto>>();
+        statusResult!.Data!.Status.Should().Be(nameof(BulkSopImportStatus.Completed));
+
+        var processing = statusResult.Data.Processing!;
+        processing.SucceededCount.Should().Be(0, "a parse failure must not be reported as a success");
+        processing.FailedCount.Should().Be(1);
+
+        var failedItem = processing.Items.Single();
+        failedItem.Status.Should().Be(nameof(BulkSopImportItemStatus.Failed));
+        failedItem.FailureReason.Should().NotBeNullOrWhiteSpace();
+    }
 }

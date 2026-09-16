@@ -123,8 +123,9 @@ public class ContentParserService : IContentParserService
             var parsed = AnthropicResponseParser.Parse(responseBody);
             var sections = ParseSectionsFromContentText(parsed.ContentText);
             var tokensUsed = parsed.InputTokens + parsed.OutputTokens;
-            var suggestedType = SuggestOutputType(sections.Count);
 
+            // The Claude call itself succeeded, so usage is logged (and billed) regardless of
+            // whether the response contained a usable section list below.
             await _aiUsageLogger.LogAsync(
                 tenantId,
                 AiOperationCategory.ContentParsing,
@@ -135,6 +136,25 @@ public class ContentParserService : IContentParserService
                 userId: userId,
                 referenceEntityId: null,
                 cancellationToken);
+
+            if (sections.Count == 0)
+            {
+                // A response with no '[' at all (refusal, safety filter, malformed/off-format
+                // reply) previously fell through as Success:true with an empty section list,
+                // committing an incomplete Draft further down the chain. Fail honestly instead
+                // so callers' existing !Success branches engage.
+                _logger.LogWarning(
+                    "[ContentParserService] Claude response for {InputMode} parse contained no sections",
+                    inputModeHint);
+                return new ContentParseResult(
+                    Success: false,
+                    Sections: sections,
+                    SuggestedOutputType: OutputType.Lesson,
+                    ErrorMessage: "AI parsing returned no sections — the response may have been refused, filtered, or malformed. Try again or add content manually.",
+                    TokensUsed: tokensUsed);
+            }
+
+            var suggestedType = SuggestOutputType(sections.Count);
 
             _logger.LogInformation(
                 "[ContentParserService] Parsed {Count} sections ({TokensUsed} tokens), suggested output: {OutputType}",

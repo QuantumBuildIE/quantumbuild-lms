@@ -45,9 +45,9 @@ public sealed record BulkSopImportItemOutcome
     public string? FailureReason { get; init; }
 
     /// <summary>
-    /// Set when Status is Succeeded but quiz generation failed after sections were created
-    /// successfully — the learning was still created as a valid Draft (sections only, no quiz),
-    /// consistent with a wizard user stopping after the Parse step. Null on a clean success.
+    /// Reserved for a future non-fatal, Succeeded-with-caveat outcome. Currently never set — a
+    /// quiz-generation (or parse) failure is reported as Status.Failed via FailureReason instead
+    /// of a Succeeded item with a Warning, so an incomplete lesson is never reported as a success.
     /// </summary>
     public string? Warning { get; init; }
 }
