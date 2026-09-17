@@ -182,6 +182,11 @@ public static class ServiceCollectionExtensions
         // Combines video transcript and PDF text extraction into a single service
         services.AddScoped<IContentExtractionService, ContentExtractionService>();
 
+        // Register content generation configuration (minimum sections floor, shared by
+        // ContentParserService's direct-parse path and the AI-generation path)
+        services.Configure<ContentGenerationSettings>(
+            configuration.GetSection(ContentGenerationSettings.SectionName));
+
         // Register AI section generation service for generating sections from content
         services.AddHttpClient<IAiSectionGenerationService, AiSectionGenerationService>(client =>
         {

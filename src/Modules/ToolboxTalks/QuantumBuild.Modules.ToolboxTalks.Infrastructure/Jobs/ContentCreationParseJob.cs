@@ -67,6 +67,8 @@ public class ContentCreationParseJob(
                 tenantId: tenantId,
                 userId: null,
                 preserveSourceWording: session.PreserveSourceWording,
+                referenceEntityId: sessionId,
+                sourceHint: "legacy-wizard video-transcript parse (background job)",
                 cancellationToken: cancellationToken);
 
             if (!result.Success)

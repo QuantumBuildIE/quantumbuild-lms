@@ -19,22 +19,27 @@ public class ContentParserService : IContentParserService
 {
     private readonly HttpClient _httpClient;
     private readonly SubtitleProcessingSettings _settings;
+    private readonly ContentGenerationSettings _contentGenerationSettings;
     private readonly string _claudeModel;
     private readonly IAiUsageLogger _aiUsageLogger;
     private readonly ILogger<ContentParserService> _logger;
 
     private const int CourseThreshold = 3;
+    private const int MaxResponseLogLength = 4000;
+    private const int MaxInputLogLength = 500;
 
     public ContentParserService(
         HttpClient httpClient,
         IOptions<SubtitleProcessingSettings> settings,
         IOptions<AIProviderOptions> aiProviders,
+        IOptions<ContentGenerationSettings> contentGenerationSettings,
         IAiUsageLogger aiUsageLogger,
         ILogger<ContentParserService> logger)
     {
         _httpClient = httpClient;
         _settings = settings.Value;
         _claudeModel = aiProviders.Value.Anthropic.Models.Sonnet;
+        _contentGenerationSettings = contentGenerationSettings.Value;
         _aiUsageLogger = aiUsageLogger;
         _logger = logger;
     }
@@ -45,8 +50,14 @@ public class ContentParserService : IContentParserService
         Guid tenantId,
         Guid? userId = null,
         bool preserveSourceWording = false,
+        Guid? referenceEntityId = null,
+        string? sourceHint = null,
         CancellationToken cancellationToken = default)
     {
+        // Hoisted above the try so the JsonException catch below can still log the raw
+        // response — the local declared inside a try is out of scope in its catch blocks.
+        string? responseBody = null;
+
         try
         {
             if (string.IsNullOrEmpty(_settings.Claude.ApiKey))
@@ -80,7 +91,7 @@ public class ContentParserService : IContentParserService
             var prompt = SectionGenerationPrompts.BuildSectionPrompt(
                 content: rawText,
                 sourceDescription: sourceDescription,
-                minimumSections: 2,
+                minimumSections: _contentGenerationSettings.MinimumSections,
                 hasVideo: inputModeHint == InputMode.Video,
                 hasPdf: inputModeHint == InputMode.Pdf,
                 preserveSourceWording: preserveSourceWording);
@@ -107,7 +118,7 @@ public class ContentParserService : IContentParserService
                 inputModeHint, preserveSourceWording);
 
             var response = await _httpClient.SendAsync(request, cancellationToken);
-            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -123,8 +134,9 @@ public class ContentParserService : IContentParserService
             var parsed = AnthropicResponseParser.Parse(responseBody);
             var sections = ParseSectionsFromContentText(parsed.ContentText);
             var tokensUsed = parsed.InputTokens + parsed.OutputTokens;
-            var suggestedType = SuggestOutputType(sections.Count);
 
+            // The Claude call itself succeeded, so usage is logged (and billed) regardless of
+            // whether the response contained a usable section list below.
             await _aiUsageLogger.LogAsync(
                 tenantId,
                 AiOperationCategory.ContentParsing,
@@ -135,6 +147,30 @@ public class ContentParserService : IContentParserService
                 userId: userId,
                 referenceEntityId: null,
                 cancellationToken);
+
+            if (sections.Count == 0)
+            {
+                // A response with no '[' at all (refusal, safety filter, malformed/off-format
+                // reply) previously fell through as Success:true with an empty section list,
+                // committing an incomplete Draft further down the chain. Fail honestly instead
+                // so callers' existing !Success branches engage.
+                _logger.LogError(
+                    "[ContentParserService] Claude response for {InputMode} parse contained no sections. " +
+                    "ReferenceEntityId={ReferenceEntityId}, Source={SourceHint}, RawResponse={RawResponse}, InputSample={InputSample}",
+                    inputModeHint,
+                    referenceEntityId,
+                    sourceHint ?? "(unknown)",
+                    TruncateForLogging(parsed.ContentText, MaxResponseLogLength),
+                    TruncateForLogging(rawText, MaxInputLogLength));
+                return new ContentParseResult(
+                    Success: false,
+                    Sections: sections,
+                    SuggestedOutputType: OutputType.Lesson,
+                    ErrorMessage: "AI parsing returned no sections — the response may have been refused, filtered, or malformed. Try again or add content manually.",
+                    TokensUsed: tokensUsed);
+            }
+
+            var suggestedType = SuggestOutputType(sections.Count);
 
             _logger.LogInformation(
                 "[ContentParserService] Parsed {Count} sections ({TokensUsed} tokens), suggested output: {OutputType}",
@@ -157,7 +193,14 @@ public class ContentParserService : IContentParserService
         }
         catch (JsonException ex)
         {
-            _logger.LogError(ex, "[ContentParserService] Failed to parse AI response");
+            _logger.LogError(
+                ex,
+                "[ContentParserService] Failed to parse AI response. " +
+                "ReferenceEntityId={ReferenceEntityId}, Source={SourceHint}, RawResponse={RawResponse}, InputSample={InputSample}",
+                referenceEntityId,
+                sourceHint ?? "(unknown)",
+                TruncateForLogging(responseBody, MaxResponseLogLength),
+                TruncateForLogging(rawText, MaxInputLogLength));
             return new ContentParseResult(
                 Success: false,
                 Sections: new List<ParsedSection>(),
@@ -213,6 +256,12 @@ public class ContentParserService : IContentParserService
             TEXT TO PARSE:
             {{rawText}}
             """;
+    }
+
+    private static string TruncateForLogging(string? text, int maxLength)
+    {
+        if (string.IsNullOrEmpty(text)) return "(empty)";
+        return text.Length <= maxLength ? text : text[..maxLength] + "... [truncated]";
     }
 
     private static List<ParsedSection> ParseSectionsFromContentText(string textContent)

@@ -23,7 +23,8 @@ public class FakeContentParserService : IContentParserService
 
     public Task<ContentParseResult> ParseContentAsync(
         string rawText, InputMode inputModeHint, Guid tenantId, Guid? userId = null,
-        bool preserveSourceWording = false, CancellationToken cancellationToken = default)
+        bool preserveSourceWording = false, Guid? referenceEntityId = null,
+        string? sourceHint = null, CancellationToken cancellationToken = default)
     {
         LastPreserveSourceWordingReceived = preserveSourceWording;
 

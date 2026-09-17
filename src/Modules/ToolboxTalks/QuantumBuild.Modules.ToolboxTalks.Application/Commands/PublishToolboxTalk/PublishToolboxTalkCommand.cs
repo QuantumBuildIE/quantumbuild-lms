@@ -20,9 +20,15 @@ public record PublishToolboxTalkCommand(
 /// Carried through so the controller can decide whether to enqueue slideshow
 /// generation (Shape D) without a second DB read — see ToolboxTalksController.PublishByTalkId.
 /// </param>
+/// <param name="HasPdf">
+/// Whether the talk actually has a PDF attached. The controller must gate PDF-slideshow
+/// enqueueing on both this AND GenerateSlidesFromPdf — the latter alone is not reliable
+/// because it is seeded from a tenant default before talk type is known.
+/// </param>
 public record PublishTalkResult(
     Guid TalkId,
     string Status,
     DateTime PublishedAt,
-    bool GenerateSlidesFromPdf
+    bool GenerateSlidesFromPdf,
+    bool HasPdf
 );

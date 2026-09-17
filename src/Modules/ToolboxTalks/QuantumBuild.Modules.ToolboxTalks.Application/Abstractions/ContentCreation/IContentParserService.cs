@@ -16,6 +16,8 @@ public interface IContentParserService
         Guid tenantId,
         Guid? userId = null,
         bool preserveSourceWording = false,
+        Guid? referenceEntityId = null,
+        string? sourceHint = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

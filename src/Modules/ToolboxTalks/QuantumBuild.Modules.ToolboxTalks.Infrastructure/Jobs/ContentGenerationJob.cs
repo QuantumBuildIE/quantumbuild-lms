@@ -332,7 +332,17 @@ public class ContentGenerationJob
             }
             else
             {
-                _logger.LogError(
+                // "No PDF attached" means the trigger's PDF check was stale (e.g. the PDF was
+                // removed between publish and job execution) — an expected, preventable state,
+                // not a runtime fault. Log it quietly so it doesn't fire a Sentry event; genuine
+                // generation failures still log at Error.
+                var isNoPdfCase = slideResult.Errors.Any(e =>
+                    e.Contains("No PDF attached", StringComparison.OrdinalIgnoreCase));
+
+                var logLevel = isNoPdfCase ? LogLevel.Information : LogLevel.Error;
+
+                _logger.Log(
+                    logLevel,
                     "========== SLIDESHOW-ONLY GENERATION JOB FAILED ==========\n" +
                     "ToolboxTalkId: {TalkId}\n" +
                     "Duration: {Duration}ms\n" +

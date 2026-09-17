@@ -32,7 +32,7 @@ public interface IContentGenerationService
 /// </summary>
 /// <param name="IncludeVideo">Whether to extract and use video transcript content</param>
 /// <param name="IncludePdf">Whether to extract and use PDF document content</param>
-/// <param name="MinimumSections">Minimum number of sections to generate (default: 7)</param>
+/// <param name="MinimumSections">Minimum number of sections to generate — resolved by the caller from <c>ContentGenerationSettings.MinimumSections</c></param>
 /// <param name="MinimumQuestions">Minimum number of quiz questions to generate (default: 5)</param>
 /// <param name="PassThreshold">Quiz pass threshold percentage (default: 80)</param>
 /// <param name="ReplaceExisting">True to replace existing content, false to append (default: true)</param>
@@ -41,7 +41,7 @@ public interface IContentGenerationService
 public record ContentGenerationOptions(
     bool IncludeVideo,
     bool IncludePdf,
-    int MinimumSections = 7,
+    int MinimumSections,
     int MinimumQuestions = 5,
     int PassThreshold = 80,
     bool ReplaceExisting = true,
