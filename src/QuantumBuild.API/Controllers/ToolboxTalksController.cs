@@ -694,7 +694,10 @@ public class ToolboxTalksController : ControllerBase
         // Shape D — fire slideshow generation on Publish, mirroring the legacy wizard's
         // ContentCreationSessionService.PublishAsync. Fire-and-forget: a failure here must
         // never fail the publish, matching legacy's own swallow-and-log behaviour.
-        if (result.Data!.GenerateSlidesFromPdf)
+        // GenerateSlidesFromPdf alone is not a reliable gate — it is seeded from a tenant
+        // default at creation, before talk type is chosen, so video/text talks can carry a
+        // stale true. Only enqueue PDF-slideshow generation when the talk actually has a PDF.
+        if (result.Data!.GenerateSlidesFromPdf && result.Data.HasPdf)
         {
             try
             {

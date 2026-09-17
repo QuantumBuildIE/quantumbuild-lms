@@ -113,6 +113,19 @@ public class PublishToolboxTalkTests : IntegrationTestBase
         await db.SaveChangesAsync();
     }
 
+    /// <summary>Sets PdfUrl on a talk directly via DbContext — used to distinguish a genuine
+    /// PDF-based talk from a video/text talk that merely carries a stale GenerateSlidesFromPdf
+    /// flag (the bug this test file's Shape D tests guard against).</summary>
+    private async Task SetPdfUrlAsync(Guid talkId, string url)
+    {
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var talk = await db.Set<ToolboxTalk>().IgnoreQueryFilters()
+            .FirstOrDefaultAsync(t => t.Id == talkId && !t.IsDeleted);
+        talk!.PdfUrl = url;
+        await db.SaveChangesAsync();
+    }
+
     /// <summary>Checks Hangfire's (in-memory, test-wide) job storage for a
     /// ContentGenerationJob.GenerateSlideshowOnlyAsync call whose first argument is talkId.
     /// The test host registers a real Hangfire server against the in-memory storage, so an
@@ -377,13 +390,14 @@ public class PublishToolboxTalkTests : IntegrationTestBase
 
     // ── Shape D — slideshow generation enqueue on Publish ────────────────────
 
-    // 8a — GenerateSlidesFromPdf = true → slideshow job enqueued
+    // 8a — GenerateSlidesFromPdf = true AND talk has a PDF → slideshow job enqueued
     [Fact]
-    public async Task PublishByTalkId_GenerateSlidesFromPdfTrue_EnqueuesSlideshowJob()
+    public async Task PublishByTalkId_GenerateSlidesFromPdfTrueWithPdf_EnqueuesSlideshowJob()
     {
-        // Arrange
+        // Arrange — a genuine PDF-based talk: flag set AND PdfUrl populated
         var talkId = await CreateTalkWithSectionsAsync();
         await SetGenerateSlidesFromPdfAsync(talkId, true);
+        await SetPdfUrlAsync(talkId, "https://example.com/fake.pdf");
 
         // Act
         var response = await AdminClient.PostAsJsonAsync(
@@ -392,7 +406,7 @@ public class PublishToolboxTalkTests : IntegrationTestBase
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         SlideshowJobEnqueuedForTalk(talkId).Should().BeTrue(
-            "publishing a talk with GenerateSlidesFromPdf=true should enqueue GenerateSlideshowOnlyAsync");
+            "publishing a PDF talk with GenerateSlidesFromPdf=true should still enqueue GenerateSlideshowOnlyAsync");
     }
 
     // 8b — GenerateSlidesFromPdf = false → no slideshow job enqueued
@@ -410,6 +424,28 @@ public class PublishToolboxTalkTests : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         SlideshowJobEnqueuedForTalk(talkId).Should().BeFalse(
             "publishing a talk with GenerateSlidesFromPdf=false must not enqueue a slideshow job");
+    }
+
+    // 8c — GenerateSlidesFromPdf = true but NO PdfUrl (video/text talk with a stale flag) →
+    // no slideshow job enqueued. Regression test: this used to enqueue GenerateSlideshowOnlyAsync
+    // with a hardcoded "pdf" source, which then failed with "No PDF attached" and fired a Sentry
+    // error on every such publish.
+    [Fact]
+    public async Task PublishByTalkId_GenerateSlidesFromPdfTrueWithoutPdf_DoesNotEnqueueSlideshowJob()
+    {
+        // Arrange — simulates a video/text talk carrying a stale GenerateSlidesFromPdf=true
+        // (seeded from the tenant DefaultGenerateSlideshow setting before talk type was chosen)
+        var talkId = await CreateTalkWithSectionsAsync();
+        await SetGenerateSlidesFromPdfAsync(talkId, true);
+
+        // Act
+        var response = await AdminClient.PostAsJsonAsync(
+            $"/api/toolbox-talks/{talkId}/publish", new { });
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        SlideshowJobEnqueuedForTalk(talkId).Should().BeFalse(
+            "publishing a non-PDF talk must not enqueue PDF-slideshow generation, even when GenerateSlidesFromPdf is stale-true");
     }
 
     // ── Strict review gate (added for §23) ───────────────────────────────────

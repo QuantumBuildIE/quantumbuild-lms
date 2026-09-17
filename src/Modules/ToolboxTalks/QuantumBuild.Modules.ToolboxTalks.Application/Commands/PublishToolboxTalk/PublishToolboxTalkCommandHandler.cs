@@ -82,7 +82,8 @@ public class PublishToolboxTalkCommandHandler
 
         await _dbContext.SaveChangesAsync(ct);
 
-        return Result.Ok(new PublishTalkResult(talk.Id, "Published", publishedAt, talk.GenerateSlidesFromPdf));
+        return Result.Ok(new PublishTalkResult(
+            talk.Id, "Published", publishedAt, talk.GenerateSlidesFromPdf, !string.IsNullOrEmpty(talk.PdfUrl)));
     }
 
     private static List<string> ParseTargetLanguageCodes(string? json)
