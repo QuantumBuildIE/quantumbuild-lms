@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/lib/auth/use-auth';
 import {
   getPipelineAuditDashboard,
   getModuleOutcomes,
@@ -36,10 +37,15 @@ import {
   type UpdateChangeStatusRequest,
 } from './pipeline-audit';
 
-export function usePipelineAuditDashboard(tenantId?: string) {
+export function usePipelineAuditDashboard() {
+  const { user, activeTenantId } = useAuth();
+  // A SuperUser with no active tenant would get the all-tenants aggregate; the
+  // admin layout redirects them to /admin/tenants, so don't fire the request.
+  const needsTenant = (user?.isSuperUser ?? false) && !activeTenantId;
   return useQuery({
-    queryKey: ['pipeline-audit', 'dashboard', tenantId],
-    queryFn: () => getPipelineAuditDashboard(tenantId),
+    queryKey: ['pipeline-audit', 'dashboard', activeTenantId],
+    queryFn: () => getPipelineAuditDashboard(),
+    enabled: !needsTenant,
     staleTime: 30_000,
   });
 }

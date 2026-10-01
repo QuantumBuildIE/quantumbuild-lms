@@ -110,7 +110,8 @@ export interface PipelineAuditDashboardDto {
   inProgressDeviations: number;
   closedDeviations: number;
   changeRecords: number;
-  lockedTerms: number;
+  systemGlossaryTermCount: number;
+  tenantOverrideTermCount: number;
   moduleOutcomes: number;
   activePipelineVersion: string;
   activePipelineHash: string;
@@ -130,12 +131,9 @@ export interface PaginatedResult<T> {
 
 // ─── API functions ─────────────────────────────────────────────────────────
 
-export async function getPipelineAuditDashboard(
-  tenantId?: string
-): Promise<PipelineAuditDashboardDto> {
-  const headers: Record<string, string> = {};
-  if (tenantId) headers['X-Tenant-Id'] = tenantId;
-  const res = await apiClient.get(`${BASE}/dashboard`, { headers });
+// Tenant scope comes from the apiClient interceptor (X-Tenant-Id from the active tenant).
+export async function getPipelineAuditDashboard(): Promise<PipelineAuditDashboardDto> {
+  const res = await apiClient.get(`${BASE}/dashboard`);
   return res.data;
 }
 

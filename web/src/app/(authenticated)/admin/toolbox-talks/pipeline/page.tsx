@@ -87,6 +87,11 @@ import {
   useConfirmCorpusRun,
   useUpdateChangeStatus,
 } from '@/lib/api/toolbox-talks/use-pipeline-audit';
+import {
+  AllTenantsScope,
+  DashboardTenantLabel,
+  GlossaryTermsCard,
+} from '@/components/admin/pipeline-dashboard-scope';
 import { useToolboxTalks } from '@/lib/api/toolbox-talks/use-toolbox-talks';
 import { useCorpusRunHub } from '@/features/toolbox-talks/hooks/use-corpus-run-hub';
 import type {
@@ -526,6 +531,7 @@ function Field({
 function DashboardTab() {
   const { data: dashboard, isLoading } = usePipelineAuditDashboard();
 
+  // Query is disabled for a SuperUser with no active tenant (isLoading stays false, no data).
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -542,6 +548,7 @@ function DashboardTab() {
 
   return (
     <div className="space-y-6">
+      <DashboardTenantLabel />
       {/* Stat cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {/* Deviations */}
@@ -568,12 +575,11 @@ function DashboardTab() {
           value={dashboard.changeRecords}
           valueClass="text-blue-600"
           icon={<GitCommitHorizontal className="h-5 w-5 text-blue-400" />}
+          footer={<AllTenantsScope />}
         />
-        <StatCard
-          label="Locked Terms"
-          value={dashboard.lockedTerms}
-          valueClass="text-blue-600"
-          icon={<Lock className="h-5 w-5 text-blue-400" />}
+        <GlossaryTermsCard
+          systemCount={dashboard.systemGlossaryTermCount}
+          overrideCount={dashboard.tenantOverrideTermCount}
         />
         <StatCard
           label="Module Outcomes"
@@ -587,6 +593,7 @@ function DashboardTab() {
             <CardDescription className="flex items-center gap-1.5">
               <ShieldCheck className="h-3.5 w-3.5" />
               Active Pipeline Version
+              <AllTenantsScope />
             </CardDescription>
             <CardTitle className="text-lg font-semibold">
               {dashboard.activePipelineVersion}
@@ -678,11 +685,13 @@ function StatCard({
   value,
   valueClass,
   icon,
+  footer,
 }: {
   label: string;
   value: number;
   valueClass: string;
   icon: React.ReactNode;
+  footer?: React.ReactNode;
 }) {
   return (
     <Card>
@@ -692,6 +701,7 @@ function StatCard({
           {icon}
         </CardDescription>
         <CardTitle className={`text-2xl ${valueClass}`}>{value}</CardTitle>
+        {footer}
       </CardHeader>
     </Card>
   );

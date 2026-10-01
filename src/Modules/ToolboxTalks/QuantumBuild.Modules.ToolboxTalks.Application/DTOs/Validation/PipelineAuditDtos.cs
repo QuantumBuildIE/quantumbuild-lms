@@ -129,7 +129,8 @@ public record PipelineAuditDashboardDto
     public int InProgressDeviations { get; init; }
     public int ClosedDeviations { get; init; }
     public int ChangeRecords { get; init; }
-    public int LockedTerms { get; init; }
+    public int SystemGlossaryTermCount { get; init; }
+    public int TenantOverrideTermCount { get; init; }
     public int ModuleOutcomes { get; init; }
     public string ActivePipelineVersion { get; init; } = string.Empty;
     public string ActivePipelineHash { get; init; } = string.Empty;

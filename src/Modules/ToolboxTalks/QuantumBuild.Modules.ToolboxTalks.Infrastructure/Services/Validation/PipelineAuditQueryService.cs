@@ -139,18 +139,7 @@ public class PipelineAuditQueryService : IPipelineAuditQueryService
             .IgnoreQueryFilters()
             .CountAsync(cr => !cr.IsDeleted, ct);
 
-        // Locked terms count (tenant-scoped or global)
-        var termQuery = _dbContext.SafetyGlossaryTerms.AsQueryable();
-        if (effectiveTenantId.HasValue)
-        {
-            // Count terms in tenant's glossaries (override glossaries)
-            var tenantGlossaryIds = await _dbContext.SafetyGlossaries
-                .Where(g => g.TenantId == effectiveTenantId)
-                .Select(g => g.Id)
-                .ToListAsync(ct);
-            termQuery = termQuery.Where(t => tenantGlossaryIds.Contains(t.GlossaryId));
-        }
-        var lockedTerms = await termQuery.CountAsync(ct);
+        var (systemTermCount, overrideTermCount) = await GetGlossaryTermCountsAsync(effectiveTenantId, ct);
 
         // Module outcomes count (completed runs)
         var runsQuery = _dbContext.TranslationValidationRuns
@@ -188,7 +177,8 @@ public class PipelineAuditQueryService : IPipelineAuditQueryService
             InProgressDeviations = inProgressDev,
             ClosedDeviations = closedDev,
             ChangeRecords = changeRecordCount,
-            LockedTerms = lockedTerms,
+            SystemGlossaryTermCount = systemTermCount,
+            TenantOverrideTermCount = overrideTermCount,
             ModuleOutcomes = moduleOutcomes,
             ActivePipelineVersion = activePipeline?.Version ?? "—",
             ActivePipelineHash = activePipeline?.Hash ?? "—",
@@ -218,6 +208,46 @@ public class PipelineAuditQueryService : IPipelineAuditQueryService
     }
 
     // ─── Private helpers ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Locked glossary terms, split into system defaults and tenant overrides.
+    /// With a tenant: both counts are limited to the tenant's sectors (TenantSectors).
+    /// Note TranslationValidationJob does not filter by tenant sectors; each run uses the
+    /// single SectorKey selected for that run, then prefers overrides over system terms.
+    /// The tenant's sectors are the closest dashboard-level approximation.
+    /// With no tenant (SuperUser, no X-Tenant-Id): the system count covers all sectors and the
+    /// override count covers every tenant's overrides across all sectors.
+    /// </summary>
+    public async Task<(int System, int Override)> GetGlossaryTermCountsAsync(
+        Guid? effectiveTenantId, CancellationToken ct)
+    {
+        // Empty key list + sectorScoped=false means "all sectors" (no tenant).
+        var sectorScoped = effectiveTenantId.HasValue;
+        var tenantSectorKeys = sectorScoped
+            ? await _dbContext.TenantSectors
+                .Where(ts => ts.TenantId == effectiveTenantId!.Value)
+                .Select(ts => ts.Sector.Key)
+                .ToListAsync(ct)
+            : [];
+
+        var systemGlossaryIds = await _dbContext.SafetyGlossaries
+            .Where(g => g.TenantId == null
+                && (!sectorScoped || tenantSectorKeys.Contains(g.SectorKey)))
+            .Select(g => g.Id)
+            .ToListAsync(ct);
+        var overrideGlossaryIds = await _dbContext.SafetyGlossaries
+            .Where(g => (sectorScoped ? g.TenantId == effectiveTenantId : g.TenantId != null)
+                && (!sectorScoped || tenantSectorKeys.Contains(g.SectorKey)))
+            .Select(g => g.Id)
+            .ToListAsync(ct);
+
+        var systemTermCount = await _dbContext.SafetyGlossaryTerms
+            .CountAsync(t => systemGlossaryIds.Contains(t.GlossaryId), ct);
+        var overrideTermCount = await _dbContext.SafetyGlossaryTerms
+            .CountAsync(t => overrideGlossaryIds.Contains(t.GlossaryId), ct);
+
+        return (systemTermCount, overrideTermCount);
+    }
 
     private Guid? ResolveQueryTenantId(Guid? requestedTenantId)
     {
