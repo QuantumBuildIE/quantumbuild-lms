@@ -23,6 +23,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { TenantForm } from "@/components/admin/tenant-form";
+import { TenantLogoCard } from "@/components/admin/tenant-logo-card";
 import { TenantModulesCard } from "@/components/admin/tenant-modules-card";
 import { TenantSectorsCard } from "@/components/admin/tenant-sectors-card";
 import { TypeToConfirmDialog } from "@/components/shared/type-to-confirm-dialog";
@@ -245,6 +246,9 @@ export default function TenantDetailPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Logo */}
+          <TenantLogoCard tenantId={tenantId} tenantName={tenant.name} />
 
           {/* Modules */}
           <TenantModulesCard tenantId={tenantId} />

@@ -29,6 +29,28 @@ public class TenantBrandingController(
     private static readonly byte[] JpegSignature = [0xFF, 0xD8, 0xFF];
 
     /// <summary>
+    /// Read the logo of the tenant in the route, regardless of the caller's active tenant.
+    /// No row or a null key returns a null logo.
+    /// </summary>
+    [HttpGet]
+    [ProducesResponseType(typeof(TenantLogoResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetLogo(Guid tenantId, CancellationToken cancellationToken)
+    {
+        var tenantError = await ValidateTenantAsync(tenantId, cancellationToken);
+        if (tenantError != null)
+            return tenantError;
+
+        var logoKey = await db.TenantBrandings
+            .Where(b => b.TenantId == tenantId)
+            .Select(b => b.LogoKey)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return Ok(new TenantLogoResponse(logoKey == null ? null : storage.GetPublicUrl(logoKey)));
+    }
+
+    /// <summary>
     /// Upload (or replace) the tenant's logo. PNG or JPEG only, detected from the file's leading bytes;
     /// the client-supplied Content-Type and file name are ignored.
     /// </summary>

@@ -70,6 +70,14 @@ public class TenantBrandingTests : IntegrationTestBase
 
     private record LogoDto(string? LogoUrl);
 
+    private record CurrentBrandingDto(string? LogoUrl, string? TenantName);
+
+    private static async Task<CurrentBrandingDto?> CurrentBrandingAsync(HttpResponseMessage response) =>
+        await response.Content.ReadFromJsonAsync<CurrentBrandingDto>();
+
+    private async Task<string> TenantNameAsync(Guid tenantId) =>
+        (await GetDbContext().Tenants.SingleAsync(t => t.Id == tenantId)).Name;
+
     // ── upload ─────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -310,7 +318,129 @@ public class TenantBrandingTests : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
     }
 
+    // ── GET /api/tenants/{tenantId}/branding ───────────────────────────────────
+
+    [Fact]
+    public async Task GetTenantLogo_SuperUserWithActiveTenantX_ReadingY_ReturnsYsLogo()
+    {
+        var x = await CreateTenantAsync();
+        var y = await CreateTenantAsync();
+        using (var setup = Factory.CreateSuperUserClient())
+        {
+            (await UploadAsync(setup, x, PngBytes)).StatusCode.Should().Be(HttpStatusCode.OK);
+            (await UploadAsync(setup, y, PngBytes)).StatusCode.Should().Be(HttpStatusCode.OK);
+        }
+        var yKey = (await BrandingRowsAsync(y)).Single().LogoKey!;
+        var xKey = (await BrandingRowsAsync(x)).Single().LogoKey!;
+
+        using var client = Factory.CreateSuperUserClient(activeTenantId: x);
+        var response = await client.GetAsync($"/api/tenants/{y}/branding");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var url = await LogoUrlAsync(response);
+        url.Should().EndWith(yKey);
+        url.Should().NotContain(xKey);
+    }
+
+    [Fact]
+    public async Task GetTenantLogo_TenantWithNoRow_ReturnsNull()
+    {
+        var tenant = await CreateTenantAsync();
+        using var client = Factory.CreateSuperUserClient();
+
+        var response = await client.GetAsync($"/api/tenants/{tenant}/branding");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await LogoUrlAsync(response)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetTenantLogo_AfterDelete_ReturnsNull()
+    {
+        var tenant = await CreateTenantAsync();
+        using var client = Factory.CreateSuperUserClient();
+        (await UploadAsync(client, tenant, PngBytes)).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await client.DeleteAsync($"/api/tenants/{tenant}/branding/logo")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var response = await client.GetAsync($"/api/tenants/{tenant}/branding");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await LogoUrlAsync(response)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetTenantLogo_TenantAdminOwnTenant_Returns403()
+    {
+        var tenant = await CreateTenantAsync();
+        using (var superUser = Factory.CreateSuperUserClient())
+            (await UploadAsync(superUser, tenant, PngBytes)).StatusCode.Should().Be(HttpStatusCode.OK);
+        using var client = TenantAdminClient(tenant);
+
+        var response = await client.GetAsync($"/api/tenants/{tenant}/branding");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task GetTenantLogo_GuidEmptyTenant_Returns400()
+    {
+        using var client = Factory.CreateSuperUserClient();
+
+        var response = await client.GetAsync($"/api/tenants/{Guid.Empty}/branding");
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task GetTenantLogo_UnknownTenant_Returns404()
+    {
+        using var client = Factory.CreateSuperUserClient();
+
+        var response = await client.GetAsync($"/api/tenants/{Guid.NewGuid()}/branding");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
     // ── GET /api/branding/current ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetCurrent_TenantUser_ReturnsOwnTenantName()
+    {
+        var tenant = await CreateTenantAsync();
+        using var client = TenantAdminClient(tenant);
+
+        var response = await client.GetAsync("/api/branding/current");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await CurrentBrandingAsync(response))!.TenantName.Should().Be(await TenantNameAsync(tenant));
+    }
+
+    [Fact]
+    public async Task GetCurrent_SuperUserWithActiveTenant_ReturnsActiveTenantName()
+    {
+        var x = await CreateTenantAsync();
+        using var client = Factory.CreateSuperUserClient(activeTenantId: x);
+
+        var response = await client.GetAsync("/api/branding/current");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await CurrentBrandingAsync(response))!.TenantName.Should().Be(await TenantNameAsync(x));
+    }
+
+    [Fact]
+    public async Task GetCurrent_SuperUserWithNoActiveTenant_ReturnsNullTenantName()
+    {
+        using var client = Factory.CreateSuperUserClient();
+
+        var response = await client.GetAsync("/api/branding/current");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await CurrentBrandingAsync(response);
+        body!.TenantName.Should().BeNull();
+        body.LogoUrl.Should().BeNull();
+    }
+
+    // ── GET /api/branding/current (logo) ───────────────────────────────────────
 
     [Fact]
     public async Task GetCurrent_TenantUser_ReturnsOwnLogo_EvenWithAnotherTenantsHeader()
