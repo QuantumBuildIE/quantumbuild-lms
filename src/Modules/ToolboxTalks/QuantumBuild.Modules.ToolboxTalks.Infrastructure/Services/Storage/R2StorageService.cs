@@ -633,17 +633,21 @@ public class R2StorageService : IR2StorageService, IDisposable
                     break;
 
                 var keysToDelete = response.S3Objects
+                    .Where(obj => !StorageKeys.IsTenantBrandingKey(tenantId, obj.Key))
                     .Select(obj => new KeyVersion { Key = obj.Key })
                     .ToList();
 
-                var deleteRequest = new DeleteObjectsRequest
+                if (keysToDelete.Count > 0)
                 {
-                    BucketName = _settings.BucketName,
-                    Objects = keysToDelete
-                };
+                    var deleteRequest = new DeleteObjectsRequest
+                    {
+                        BucketName = _settings.BucketName,
+                        Objects = keysToDelete
+                    };
 
-                await _s3Client.DeleteObjectsAsync(deleteRequest, cancellationToken);
-                totalDeleted += keysToDelete.Count;
+                    await _s3Client.DeleteObjectsAsync(deleteRequest, cancellationToken);
+                    totalDeleted += keysToDelete.Count;
+                }
 
                 listRequest.ContinuationToken = response.NextContinuationToken;
             }
@@ -702,6 +706,49 @@ public class R2StorageService : IR2StorageService, IDisposable
         {
             _logger.LogError(ex, "Failed to upload QR code image for token {CodeToken}", codeToken);
             return R2UploadResult.FailureResult($"QR code image upload failed: {ex.Message}");
+        }
+    }
+
+    #endregion
+
+    #region Tenant Branding
+
+    private const string BrandingFolder = StorageKeys.BrandingFolder;
+
+    public async Task<R2UploadResult> UploadTenantLogoAsync(
+        Guid tenantId,
+        string fileName,
+        byte[] imageBytes,
+        string contentType,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var key = BuildKey(tenantId, BrandingFolder, fileName);
+
+            using var stream = new MemoryStream(imageBytes);
+            var request = new PutObjectRequest
+            {
+                BucketName = _settings.BucketName,
+                Key = key,
+                InputStream = stream,
+                ContentType = contentType,
+                DisablePayloadSigning = true,
+                UseChunkEncoding = false
+            };
+
+            await _s3Client.PutObjectAsync(request, cancellationToken);
+
+            var publicUrl = GeneratePublicUrl(tenantId, BrandingFolder, fileName);
+
+            _logger.LogInformation("Uploaded tenant logo to R2: {Key}", key);
+
+            return R2UploadResult.SuccessResult(publicUrl, key, imageBytes.Length, contentType);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to upload tenant logo for tenant {TenantId}", tenantId);
+            return R2UploadResult.FailureResult($"Tenant logo upload failed: {ex.Message}");
         }
     }
 

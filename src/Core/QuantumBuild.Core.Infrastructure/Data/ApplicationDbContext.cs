@@ -55,6 +55,7 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
     public DbSet<SupervisorAssignment> SupervisorAssignments => Set<SupervisorAssignment>();
     public DbSet<TenantModule> TenantModules => Set<TenantModule>();
     public DbSet<DpaAcceptance> DpaAcceptances => Set<DpaAcceptance>();
+    public DbSet<TenantBranding> TenantBrandings => Set<TenantBranding>();
     public DbSet<BulkImportSession> BulkImportSessions => Set<BulkImportSession>();
     public DbSet<BulkSopImportSession> BulkSopImportSessions => Set<BulkSopImportSession>();
 
@@ -253,6 +254,7 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.ApplyConfiguration(new SupervisorAssignmentConfiguration());
         modelBuilder.ApplyConfiguration(new TenantModuleConfiguration());
         modelBuilder.ApplyConfiguration(new DpaAcceptanceConfiguration());
+        modelBuilder.ApplyConfiguration(new TenantBrandingConfiguration());
         modelBuilder.ApplyConfiguration(new BulkImportSessionConfiguration());
         modelBuilder.ApplyConfiguration(new BulkSopImportSessionConfiguration());
 
@@ -351,6 +353,9 @@ public class ApplicationDbContext : IdentityDbContext<User, Role, Guid, Identity
         modelBuilder.Entity<QrCode>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<QrSession>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<DpaAcceptance>().HasQueryFilter(e => !e.IsDeleted);
+        // Soft-delete only, deliberately no tenant predicate: SuperUser writes target the route tenant, not X-Tenant-Id.
+        // Every TenantBranding query must filter on TenantId explicitly.
+        modelBuilder.Entity<TenantBranding>().HasQueryFilter(e => !e.IsDeleted);
         modelBuilder.Entity<BulkImportSession>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
         modelBuilder.Entity<BulkSopImportSession>().HasQueryFilter(e => !e.IsDeleted && (BypassTenantFilter || e.TenantId == TenantId));
 
