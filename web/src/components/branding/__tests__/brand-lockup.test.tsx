@@ -20,6 +20,20 @@ describe('BrandLockup', () => {
     expect(screen.getByTestId('powered-by').className).toContain('sm:flex');
   });
 
+  it('stacks the Powered by label above the small logo inside the badge container', () => {
+    render(<BrandLockup logoUrl="https://cdn.example/logo.png" alt="Acme" />);
+    const badge = screen.getByTestId('powered-by');
+    const label = screen.getByText('Powered by');
+    expect(badge).toContainElement(label);
+    const badgeLogo = badge.querySelector('svg');
+    expect(badgeLogo).toBeInTheDocument();
+    // label precedes the logo in DOM order
+    expect(label.compareDocumentPosition(badgeLogo as Element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // label and logo share a vertical stack
+    expect(label.parentElement?.className).toContain('flex-col');
+    expect(label.parentElement).toContainElement(badgeLogo as SVGElement);
+  });
+
   it('falls back to the CertifiedIQ logo with no badge when the image fails to load', () => {
     const { container } = render(<BrandLockup logoUrl="https://cdn.example/broken.png" alt="Acme" />);
     fireEvent.error(screen.getByRole('img', { name: 'Acme' }));

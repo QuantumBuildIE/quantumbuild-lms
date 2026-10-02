@@ -41,8 +41,8 @@ export function BrandLockup({ logoUrl, alt, isLoading = false }: BrandLockupProp
       />
       <div className="hidden sm:flex items-center gap-3" data-testid="powered-by">
         <span className="h-6 w-px bg-border" aria-hidden />
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+        <div className="flex flex-col items-start gap-0.5">
+          <span className="text-[10px] leading-none uppercase tracking-wide text-muted-foreground">
             Powered by
           </span>
           <CertifiedIqLogo size="sm" />

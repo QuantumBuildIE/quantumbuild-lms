@@ -16,6 +16,7 @@ import {
 import { LogOut, User, KeyRound, ClipboardList, Shield, HelpCircle } from "lucide-react";
 import Link from "next/link";
 import { TenantSwitcher } from "@/components/layout/tenant-switcher";
+import { CONTENT_CONTAINER } from "@/components/layout/content-container";
 import { BrandLockup } from "@/components/branding/brand-lockup";
 import { useCurrentBranding } from "@/lib/api/branding/use-branding";
 
@@ -54,7 +55,7 @@ export function TopNav() {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-14 items-center justify-between px-4">
+      <div className={`${CONTENT_CONTAINER} flex h-14 items-center justify-between`}>
         <Link href={isSuperUser ? "/admin/tenants" : user?.employeeId ? "/toolbox-talks" : "/admin/toolbox-talks"} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
           <BrandLockup logoUrl={logoUrl} alt={tenantName ?? "Tenant logo"} isLoading={brandingLoading} />
         </Link>
