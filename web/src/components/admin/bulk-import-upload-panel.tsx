@@ -13,62 +13,23 @@ import {
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { useIsSuperUser } from "@/lib/auth/use-auth";
-import {
   useUploadBulkImport,
   useDownloadBulkImportTemplate,
   type BulkImportUploadResponse,
 } from "@/lib/api/admin/use-bulk-import";
-import { useTenants } from "@/lib/api/admin/use-tenants";
+import {
+  ImportTargetTenant,
+  useImportTenantMissing,
+} from "@/components/admin/import-target-tenant";
 import { getApiErrorMessage } from "@/lib/utils";
 
 interface UploadPanelProps {
   onSuccess: (response: BulkImportUploadResponse) => void;
 }
 
-// Isolated so useTenants only runs when this component is mounted (SuperUser only).
-function TenantSelect({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  const { data } = useTenants({ pageNumber: 1, pageSize: 200 });
-
-  return (
-    <div className="space-y-2">
-      <Label htmlFor="target-tenant">Target Tenant</Label>
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger id="target-tenant">
-          <SelectValue placeholder="Select a tenant..." />
-        </SelectTrigger>
-        <SelectContent>
-          {data?.items.map((t) => (
-            <SelectItem key={t.id} value={t.id}>
-              {t.name}
-              {t.companyName ? ` — ${t.companyName}` : ""}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <p className="text-xs text-muted-foreground">
-        Select the tenant this import should be applied to.
-      </p>
-    </div>
-  );
-}
-
 export function BulkImportUploadPanel({ onSuccess }: UploadPanelProps) {
-  const isSuperUser = useIsSuperUser();
+  const tenantMissing = useImportTenantMissing();
   const [file, setFile] = React.useState<File | null>(null);
-  const [targetTenantId, setTargetTenantId] = React.useState("");
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const uploadMutation = useUploadBulkImport();
@@ -92,7 +53,6 @@ export function BulkImportUploadPanel({ onSuccess }: UploadPanelProps) {
     try {
       const response = await uploadMutation.mutateAsync({
         file,
-        targetTenantId: isSuperUser && targetTenantId ? targetTenantId : undefined,
       });
       onSuccess(response);
     } catch (error) {
@@ -105,7 +65,7 @@ export function BulkImportUploadPanel({ onSuccess }: UploadPanelProps) {
   const canSubmit =
     file !== null &&
     !uploadMutation.isPending &&
-    (!isSuperUser || targetTenantId !== "");
+    !tenantMissing;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -140,10 +100,8 @@ export function BulkImportUploadPanel({ onSuccess }: UploadPanelProps) {
               </Button>
             </div>
 
-            {/* SuperUser tenant picker — only rendered when user is SuperUser */}
-            {isSuperUser && (
-              <TenantSelect value={targetTenantId} onChange={setTargetTenantId} />
-            )}
+            {/* Target tenant (SuperUser only) — always the active tenant */}
+            <ImportTargetTenant />
 
             {/* File picker */}
             <div className="space-y-2">

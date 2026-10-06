@@ -172,8 +172,19 @@ public interface IR2StorageService
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Deletes all files stored under a tenant's prefix.
-    /// Used for complete tenant data removal.
+    /// Uploads a tenant logo (PNG or JPEG, already validated by the caller) to R2 storage.
+    /// Path: {tenantId}/branding/{fileName}. The content type is set from the caller's sniffed type.
+    /// </summary>
+    Task<R2UploadResult> UploadTenantLogoAsync(
+        Guid tenantId,
+        string fileName,
+        byte[] imageBytes,
+        string contentType,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes all files stored under a tenant's prefix, EXCEPT {tenantId}/branding/
+    /// (tenant branding survives a data reset).
     /// </summary>
     Task DeleteAllTenantFilesAsync(
         Guid tenantId,

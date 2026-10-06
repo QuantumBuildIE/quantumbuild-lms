@@ -74,6 +74,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
     /// Fake IEmailService that captures invitation email sends for assertion in tests.
     /// </summary>
     public FakeEmailService FakeEmailService { get; } = new();
+    public BrandingInsertConflictInterceptor BrandingConflictInterceptor { get; } = new();
 
     /// <summary>
     /// Fake IToolboxTalkEmailService that captures completion/certificate emails for assertion in tests.
@@ -161,6 +162,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
             services.AddDbContext<ApplicationDbContext>(options =>
             {
                 options.UseNpgsql(ConnectionString);
+                options.AddInterceptors(BrandingConflictInterceptor);
                 options.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
             });
 
@@ -398,6 +400,29 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
     }
 
     /// <summary>
+    /// Creates an HTTP client authenticated as a SuperUser (is_super_user claim). When activeTenantId is
+    /// supplied the client sends it as X-Tenant-Id on every request, mirroring the web client's tenant switcher.
+    /// </summary>
+    public HttpClient CreateSuperUserClient(Guid? activeTenantId = null)
+    {
+        var client = CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+
+        var token = GenerateTestToken(
+            Guid.NewGuid(), "superuser@test.quantumbuild.ie", TestTenantConstants.TenantId,
+            new[] { "SuperUser" }, Array.Empty<string>(), isSuperUser: true);
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+        if (activeTenantId.HasValue)
+            client.DefaultRequestHeaders.Add("X-Tenant-Id", activeTenantId.Value.ToString());
+
+        return client;
+    }
+
+    /// <summary>
     /// Generates a valid JWT token for the specified test user type.
     /// </summary>
     private string GenerateTestToken(TestUserType userType)
@@ -450,7 +475,8 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
         IEnumerable<string> permissions,
         string firstName = "Test",
         string lastName = "User",
-        Guid? employeeId = null)
+        Guid? employeeId = null,
+        bool isSuperUser = false)
     {
         var claims = new List<Claim>
         {
@@ -461,6 +487,11 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
             new("tenant_id", tenantId.ToString()),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
+
+        if (isSuperUser)
+        {
+            claims.Add(new Claim("is_super_user", "true"));
+        }
 
         // Add employee_id claim if user has an associated employee
         if (employeeId.HasValue)

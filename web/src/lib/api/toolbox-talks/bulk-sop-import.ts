@@ -62,13 +62,12 @@ export interface BulkSopImportConfirmResponse {
 
 // ── Request params ────────────────────────────────────────────────────────────
 
+/**
+ * The target tenant is never passed per-request: the apiClient interceptor
+ * sends X-Tenant-Id from the active tenant (single source of truth).
+ */
 export interface UploadBulkSopImportParams {
   file: File;
-  /**
-   * When provided, sent as the X-Tenant-Id request header.
-   * Required for SuperUser callers targeting a tenant other than their default.
-   */
-  targetTenantId?: string;
 }
 
 // ── API functions ─────────────────────────────────────────────────────────────
@@ -79,7 +78,6 @@ export interface UploadBulkSopImportParams {
  */
 export async function uploadBulkSopImport({
   file,
-  targetTenantId,
 }: UploadBulkSopImportParams): Promise<BulkSopImportUploadResponse> {
   const formData = new FormData();
   formData.append("file", file);
@@ -89,9 +87,6 @@ export async function uploadBulkSopImport({
   const headers: Record<string, string | undefined> = {
     "Content-Type": undefined,
   };
-  if (targetTenantId) {
-    headers["X-Tenant-Id"] = targetTenantId;
-  }
 
   const response = await apiClient.post<ApiResponse<BulkSopImportUploadResponse>>(
     "/toolbox-talks/bulk-sop-import",

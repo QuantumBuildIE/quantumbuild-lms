@@ -23,6 +23,7 @@ namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 public class RequirementMappingJob
 {
     private const int MaxTokens = 8192;
+    private const int MaxResponseLogLength = 4000;
     private readonly string _sonnetModel;
 
     private static readonly JsonSerializerOptions CamelCaseOptions = new()
@@ -92,9 +93,14 @@ public class RequirementMappingJob
 
             // Step 3 — Claude mapping
             var suggestions = await MapViaClaudeAsync(contentString, requirements, tenantId, toolboxTalkId ?? courseId, cancellationToken);
-            if (suggestions == null || suggestions.Count == 0)
+            if (suggestions == null)
+                return; // Invalid after retry — MapViaClaudeAsync already logged the Error
+
+            if (suggestions.Count == 0)
             {
-                _logger.LogInformation("Claude returned no mapping suggestions");
+                _logger.LogInformation(
+                    "No requirements matched for tenant {TenantId}, TalkId={TalkId}, CourseId={CourseId}",
+                    tenantId, toolboxTalkId, courseId);
                 return;
             }
 
@@ -208,20 +214,35 @@ public class RequirementMappingJob
 
         // First attempt
         var responseText = await CallClaudeAsync(prompt, tenantId, referenceEntityId, cancellationToken);
-        var suggestions = TryParseSuggestions(responseText);
-        if (suggestions != null) return suggestions;
+        var suggestions = TryParseSuggestions(responseText, out var firstReason);
+        if (suggestions != null) return suggestions; // valid, possibly empty
 
-        // Retry with stricter prompt
-        _logger.LogWarning("First mapping attempt returned invalid JSON, retrying with stricter prompt");
+        // Retry with stricter prompt (invalid responses only)
+        var firstResponse = responseText;
+        _logger.LogWarning(
+            "First mapping attempt returned an invalid response, retrying with stricter prompt. TenantId={TenantId}, EntityId={EntityId}, Reason: {Reason}, Response: {Response}",
+            tenantId, referenceEntityId, firstReason, TruncateForLogging(firstResponse, MaxResponseLogLength));
         var stricterPrompt = prompt + "\n\nIMPORTANT: Your previous response was not valid JSON. You MUST respond with ONLY a JSON array. No text before or after. No markdown code fences. Just the raw JSON array starting with [ and ending with ].";
 
         responseText = await CallClaudeAsync(stricterPrompt, tenantId, referenceEntityId, cancellationToken);
-        suggestions = TryParseSuggestions(responseText);
+        suggestions = TryParseSuggestions(responseText, out var retryReason);
 
         if (suggestions == null)
-            _logger.LogError("Failed to parse mapping suggestions from Claude response after retry");
+            _logger.LogError(
+                "Failed to parse mapping suggestions from Claude response after retry. TenantId={TenantId}, TalkOrCourseId={EntityId}, Model={Model}, FirstReason: {FirstReason}, FirstResponse: {FirstResponse}, RetryReason: {RetryReason}, RetryResponse: {RetryResponse}",
+                tenantId, referenceEntityId, _sonnetModel,
+                firstReason,
+                TruncateForLogging(firstResponse, MaxResponseLogLength),
+                retryReason,
+                TruncateForLogging(responseText, MaxResponseLogLength));
 
         return suggestions;
+    }
+
+    private static string TruncateForLogging(string? text, int maxLength)
+    {
+        if (string.IsNullOrEmpty(text)) return "(empty)";
+        return text.Length <= maxLength ? text : text[..maxLength] + "... [truncated]";
     }
 
     private static string BuildMappingPrompt(string contentString, List<RegulatoryRequirement> requirements)
@@ -312,10 +333,19 @@ If no requirements are addressed, respond with an empty array: []";
         return parsed.ContentText;
     }
 
-    private List<MappingSuggestion>? TryParseSuggestions(string responseText)
+    /// <summary>
+    /// Returns a non-empty list (valid suggestions), an empty list (valid "nothing applies" — a
+    /// success), or null (invalid response — blank, malformed, or JSON null) with
+    /// <paramref name="failureReason"/> set. Does not log; the caller logs the reason.
+    /// </summary>
+    private static List<MappingSuggestion>? TryParseSuggestions(string responseText, out string? failureReason)
     {
+        failureReason = null;
         if (string.IsNullOrWhiteSpace(responseText))
+        {
+            failureReason = "blank";
             return null;
+        }
 
         try
         {
@@ -330,12 +360,12 @@ If no requirements are addressed, respond with an empty array: []";
             }
 
             var suggestions = JsonSerializer.Deserialize<List<MappingSuggestion>>(json, CamelCaseOptions);
-            return suggestions?.Count > 0 ? suggestions : null;
+            if (suggestions == null) failureReason = "null";
+            return suggestions;
         }
         catch (JsonException ex)
         {
-            _logger.LogWarning(ex, "Failed to parse Claude mapping response as JSON: {Preview}",
-                responseText.Length > 200 ? responseText[..200] : responseText);
+            failureReason = ex.Message;
             return null;
         }
     }

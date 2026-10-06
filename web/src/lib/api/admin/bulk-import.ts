@@ -72,15 +72,12 @@ export interface BulkImportConfirmResponse {
 
 // ── Request params ────────────────────────────────────────────────────────────
 
+/**
+ * The target tenant is never passed per-request: the apiClient interceptor
+ * sends X-Tenant-Id from the active tenant (single source of truth).
+ */
 export interface UploadBulkImportParams {
   file: File;
-  /**
-   * When provided, sent as the X-Tenant-Id request header.
-   * Required for SuperUser callers targeting a tenant other than their default.
-   * Note: the global apiClient interceptor also injects X-Tenant-Id from
-   * localStorage.activeTenantId — the caller must ensure these are consistent.
-   */
-  targetTenantId?: string;
 }
 
 // ── API functions ─────────────────────────────────────────────────────────────
@@ -91,7 +88,6 @@ export interface UploadBulkImportParams {
  */
 export async function uploadBulkImport({
   file,
-  targetTenantId,
 }: UploadBulkImportParams): Promise<BulkImportUploadResponse> {
   const formData = new FormData();
   formData.append("file", file);
@@ -102,9 +98,6 @@ export async function uploadBulkImport({
   const headers: Record<string, string | undefined> = {
     "Content-Type": undefined,
   };
-  if (targetTenantId) {
-    headers["X-Tenant-Id"] = targetTenantId;
-  }
 
   const response = await apiClient.post<ApiResponse<BulkImportUploadResponse>>(
     "/employees/bulk-import",

@@ -204,10 +204,25 @@ public class FakeR2StorageService : IR2StorageService
         CancellationToken cancellationToken = default)
     {
         var prefix = $"{tenantId}/";
-        var keysToRemove = _files.Keys.Where(k => k.StartsWith(prefix)).ToList();
+        var keysToRemove = _files.Keys
+            .Where(k => k.StartsWith(prefix) && !StorageKeys.IsTenantBrandingKey(tenantId, k))
+            .ToList();
         foreach (var key in keysToRemove)
             _files.Remove(key);
         return Task.CompletedTask;
+    }
+
+    public Task<R2UploadResult> UploadTenantLogoAsync(
+        Guid tenantId,
+        string fileName,
+        byte[] imageBytes,
+        string contentType,
+        CancellationToken cancellationToken = default)
+    {
+        var key = $"{tenantId}/{StorageKeys.BrandingFolder}/{fileName}";
+        _files[key] = imageBytes;
+        return Task.FromResult(R2UploadResult.SuccessResult(
+            $"https://fake-r2.test/{key}", key, imageBytes.Length, contentType));
     }
 
     public Task DeleteSessionFilesAsync(
