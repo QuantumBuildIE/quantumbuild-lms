@@ -44,6 +44,11 @@ public static class HiqaStructureMap
     /// <summary>Matches RegulatoryBody.Code — used by RegulatoryStructureMapSeedData to locate the HIQA RegulatoryDocument row to seed against.</summary>
     public const string RegulatoryBodyCode = "HIQA";
 
+    /// <summary>Exact RegulatoryDocument.Title this map binds to (seeded by RegulatoryProfileSeedData).</summary>
+    public const string DocumentTitle = "Draft National Standards for Home Support Services";
+
+    public static StructureMapSeedSource Source => new(RegulatoryBodyCode, DocumentTitle, Principles);
+
     private const string EqualStatusActFootnote =
         "The Equal Status Act 2000-2015 (the Acts) prohibit discrimination in the provisions of goods and services, accommodation and education. They cover the nine grounds of gender, marital status, family status, age, disability, sexual orientation, race, religion and membership of the Traveller Community.";
 

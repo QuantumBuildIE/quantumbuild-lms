@@ -6,61 +6,105 @@ using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Regulatory.Struc
 namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Persistence.Seed;
 
 /// <summary>
-/// Seeds the DB-backed RegulatoryStructureMap tree for HIQA from the authored content in
-/// HiqaStructureMap.Principles (the seed source — see that class's doc comment). Writes a single
-/// Draft map, idempotently: if a RegulatoryStructureMap row already exists for the HIQA document,
-/// this is a no-op — it never overwrites content a human may since have edited or verified.
+/// Seeds the DB-backed RegulatoryStructureMap tree for each authored seed source (HIQA, RSA) from
+/// its static content (see <see cref="HiqaStructureMap"/> / <see cref="RsaStructureMap"/>). Each
+/// source declares a body code AND an exact document title; the map binds only to the single
+/// non-deleted document of that body with that exact title. Zero matches logs a Warning and skips;
+/// more than one logs an Error and skips — it never picks one arbitrarily. Writes a Draft map,
+/// idempotently: if a map already exists for the bound document this is a no-op, so it never
+/// overwrites content a human may since have edited or verified.
 /// </summary>
 public static class RegulatoryStructureMapSeedData
 {
-    public static async Task SeedAsync(DbContext context, ILogger logger)
+    public static IReadOnlyList<StructureMapSeedSource> Sources { get; } =
+        new[] { HiqaStructureMap.Source, RsaStructureMap.Source };
+
+    public static Task SeedAsync(DbContext context, ILogger logger) =>
+        SeedAsync(context, logger, Sources);
+
+    public static async Task SeedAsync(
+        DbContext context,
+        ILogger logger,
+        IEnumerable<StructureMapSeedSource> sources)
+    {
+        foreach (var source in sources)
+        {
+            await SeedSourceAsync(context, logger, source);
+        }
+    }
+
+    private static async Task SeedSourceAsync(DbContext context, ILogger logger, StructureMapSeedSource source)
     {
         var now = DateTime.UtcNow;
 
-        var hiqaBody = await context.Set<RegulatoryBody>()
+        var bodies = await context.Set<RegulatoryBody>()
             .IgnoreQueryFilters()
-            .Where(b => !b.IsDeleted && b.Code == HiqaStructureMap.RegulatoryBodyCode)
-            .FirstOrDefaultAsync();
+            .Where(b => !b.IsDeleted && b.Code == source.RegulatoryBodyCode)
+            .ToListAsync();
 
-        if (hiqaBody == null)
+        if (bodies.Count == 0)
         {
-            logger.LogWarning("HIQA regulatory body not found — skipping structure map seeding");
+            logger.LogWarning(
+                "{BodyCode} regulatory body not found — skipping structure map seeding",
+                source.RegulatoryBodyCode);
             return;
         }
 
-        var hiqaDoc = await context.Set<RegulatoryDocument>()
-            .IgnoreQueryFilters()
-            .Where(d => !d.IsDeleted && d.RegulatoryBodyId == hiqaBody.Id)
-            .FirstOrDefaultAsync();
-
-        if (hiqaDoc == null)
+        if (bodies.Count > 1)
         {
-            logger.LogWarning("HIQA regulatory document not found — skipping structure map seeding");
+            logger.LogError(
+                "{BodyCode} structure map not bound: {Count} regulatory bodies share this code — skipping",
+                source.RegulatoryBodyCode, bodies.Count);
             return;
         }
+
+        var bodyId = bodies[0].Id;
+
+        var documents = await context.Set<RegulatoryDocument>()
+            .IgnoreQueryFilters()
+            .Where(d => !d.IsDeleted && d.RegulatoryBodyId == bodyId && d.Title == source.DocumentTitle)
+            .ToListAsync();
+
+        if (documents.Count == 0)
+        {
+            logger.LogWarning(
+                "{BodyCode} structure map not bound: no regulatory document titled '{Title}' — skipping",
+                source.RegulatoryBodyCode, source.DocumentTitle);
+            return;
+        }
+
+        if (documents.Count > 1)
+        {
+            logger.LogError(
+                "{BodyCode} structure map not bound: {Count} regulatory documents titled '{Title}' — ambiguous, skipping",
+                source.RegulatoryBodyCode, documents.Count, source.DocumentTitle);
+            return;
+        }
+
+        var document = documents[0];
 
         var existingMap = await context.Set<RegulatoryStructureMap>()
             .IgnoreQueryFilters()
-            .Where(m => !m.IsDeleted && m.RegulatoryDocumentId == hiqaDoc.Id)
+            .Where(m => !m.IsDeleted && m.RegulatoryDocumentId == document.Id)
             .FirstOrDefaultAsync();
 
         if (existingMap != null)
         {
-            logger.LogInformation("HIQA structure map already exists, skipping");
+            logger.LogInformation("{BodyCode} structure map already exists, skipping", source.RegulatoryBodyCode);
             return;
         }
 
         var map = new RegulatoryStructureMap
         {
             Id = Guid.NewGuid(),
-            RegulatoryDocumentId = hiqaDoc.Id,
+            RegulatoryDocumentId = document.Id,
             Status = Domain.Enums.RegulatoryStructureMapStatus.Draft,
             CreatedAt = now,
             CreatedBy = "system"
         };
 
         var principleDisplayOrder = 0;
-        foreach (var sourcePrinciple in HiqaStructureMap.Principles)
+        foreach (var sourcePrinciple in source.Principles)
         {
             var principle = new RegulatoryStructureMapPrinciple
             {
@@ -110,7 +154,8 @@ public static class RegulatoryStructureMapSeedData
         await context.SaveChangesAsync();
 
         logger.LogInformation(
-            "Seeded HIQA structure map (Draft): {PrincipleCount} principles, {StandardCount} standards, {FeatureCount} features",
+            "Seeded {BodyCode} structure map (Draft): {PrincipleCount} principles, {StandardCount} standards, {FeatureCount} features",
+            source.RegulatoryBodyCode,
             map.Principles.Count,
             map.Principles.Sum(p => p.Standards.Count),
             map.Principles.Sum(p => p.Standards.Sum(s => s.Features.Count)));
