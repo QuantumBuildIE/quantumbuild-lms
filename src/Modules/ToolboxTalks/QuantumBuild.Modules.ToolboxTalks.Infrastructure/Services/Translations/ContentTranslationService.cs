@@ -82,35 +82,77 @@ public class ContentTranslationService : IContentTranslationService
                 ? await _applicableFrameworksService.GetTranslationInstructionsAsync(tenantId, sectorKey, cancellationToken)
                 : null;
 
+            // Decide the content type from the text itself, not from the caller's hardcoded flag.
+            isHtml = TranslationOutputGuard.LooksLikeHtml(text);
+
             var prompt = useTiered
                 ? TranslationPrompts.BuildTranslationPrompt(text, source, targetLanguage, isHtml, sectorInstructions, isSafetyCritical, glossaryTerms)
                 : TranslationPrompts.BuildGenericTranslationPrompt(text, source, targetLanguage, isHtml);
-            var parsed = await CallClaudeApiAsync(prompt, cancellationToken);
 
-            await _aiUsageLogger.LogAsync(
-                tenantId,
-                AiOperationCategory.ContentTranslation,
-                parsed.Model,
-                parsed.InputTokens,
-                parsed.OutputTokens,
-                isSystemCall: isSystemCall,
-                userId: userId,
-                referenceEntityId: toolboxTalkId,
-                cancellationToken);
+            string? firstRejected = null;
+            string? firstReason = null;
 
-            if (string.IsNullOrWhiteSpace(parsed.ContentText))
+            for (var attempt = 1; attempt <= 2; attempt++)
             {
-                _logger.LogWarning(
-                    "[DEBUG] Claude API returned empty/whitespace translation for {Language}. Input length was {InputLength}",
-                    targetLanguage, text.Length);
-                return ContentTranslationResult.FailureResult($"Translation to {targetLanguage} returned empty content");
+                var strict = attempt == 2;
+                var parsed = await CallClaudeApiAsync(
+                    prompt,
+                    cancellationToken,
+                    strict ? TranslationPrompts.StrictTranslationSystemPrompt : TranslationPrompts.TranslationSystemPrompt);
+
+                await _aiUsageLogger.LogAsync(
+                    tenantId,
+                    AiOperationCategory.ContentTranslation,
+                    parsed.Model,
+                    parsed.InputTokens,
+                    parsed.OutputTokens,
+                    isSystemCall: isSystemCall,
+                    userId: userId,
+                    referenceEntityId: toolboxTalkId,
+                    cancellationToken);
+
+                if (string.IsNullOrWhiteSpace(parsed.ContentText))
+                {
+                    _logger.LogWarning(
+                        "[DEBUG] Claude API returned empty/whitespace translation for {Language}. Input length was {InputLength}",
+                        targetLanguage, text.Length);
+                    return ContentTranslationResult.FailureResult($"Translation to {targetLanguage} returned empty content");
+                }
+
+                var reason = TranslationOutputGuard.GetRejectionReason(text, parsed.ContentText);
+                if (reason == null)
+                {
+                    _logger.LogInformation(
+                        "[DEBUG] Translation to {Language} completed successfully. " +
+                        "InputLength: {InputLength}, OutputLength: {OutputLength}, Attempt: {Attempt}",
+                        targetLanguage, text.Length, parsed.ContentText.Length, attempt);
+                    return ContentTranslationResult.SuccessResult(parsed.ContentText);
+                }
+
+                if (!strict)
+                {
+                    _logger.LogWarning(
+                        "Translation output rejected by guard ({Reason}). CallSite: {CallSite}, EntityId: {EntityId}, " +
+                        "Language: {Language}. Retrying with stricter prompt. RawOutput: {RawOutput}",
+                        reason, nameof(TranslateTextAsync), toolboxTalkId, targetLanguage,
+                        Truncate(parsed.ContentText));
+                    firstRejected = parsed.ContentText;
+                    firstReason = reason;
+                    continue;
+                }
+
+                _logger.LogError(
+                    "Translation output rejected twice; nothing persisted. CallSite: {CallSite}, EntityId: {EntityId}, " +
+                    "Language: {Language}. FirstReason: {FirstReason}, SecondReason: {SecondReason}. " +
+                    "FirstOutput: {FirstOutput} SecondOutput: {SecondOutput}",
+                    nameof(TranslateTextAsync), toolboxTalkId, targetLanguage,
+                    firstReason, reason, Truncate(firstRejected), Truncate(parsed.ContentText));
+                return ContentTranslationResult.FailureResult(
+                    $"Translation to {targetLanguage} rejected by output guard: {reason}");
             }
 
-            _logger.LogInformation(
-                "[DEBUG] Translation to {Language} completed successfully. " +
-                "InputLength: {InputLength}, OutputLength: {OutputLength}",
-                targetLanguage, text.Length, parsed.ContentText.Length);
-            return ContentTranslationResult.SuccessResult(parsed.ContentText);
+            // Unreachable: the second attempt always returns.
+            return ContentTranslationResult.FailureResult($"Translation to {targetLanguage} failed");
         }
         catch (HttpRequestException ex)
         {
@@ -251,7 +293,8 @@ public class ContentTranslationService : IContentTranslationService
     /// <summary>
     /// Calls the Claude API with the given prompt.
     /// </summary>
-    private async Task<AnthropicParsedResponse> CallClaudeApiAsync(string prompt, CancellationToken cancellationToken)
+    private async Task<AnthropicParsedResponse> CallClaudeApiAsync(
+        string prompt, CancellationToken cancellationToken, string? systemPrompt = null)
     {
         // Validate API key is configured
         if (string.IsNullOrWhiteSpace(_settings.Claude.ApiKey))
@@ -260,15 +303,19 @@ public class ContentTranslationService : IContentTranslationService
             throw new InvalidOperationException("Claude API key is not configured. Please set the SubtitleProcessing__Claude__ApiKey environment variable.");
         }
 
-        var requestBody = new
+        var requestBody = new Dictionary<string, object>
         {
-            model = _claudeModel,
-            max_tokens = _settings.Claude.MaxTokens,
-            messages = new[]
+            ["model"] = _claudeModel,
+            ["max_tokens"] = _settings.Claude.MaxTokens,
+            ["messages"] = new[]
             {
                 new { role = "user", content = prompt }
             }
         };
+        if (!string.IsNullOrEmpty(systemPrompt))
+        {
+            requestBody["system"] = systemPrompt;
+        }
 
         var request = new HttpRequestMessage(HttpMethod.Post, $"{_settings.Claude.BaseUrl}/messages");
         request.Headers.Add("x-api-key", _settings.Claude.ApiKey);
@@ -304,6 +351,9 @@ public class ContentTranslationService : IContentTranslationService
 
         return parsed;
     }
+
+    private static string Truncate(string? value) =>
+        value == null ? string.Empty : value.Length <= 4000 ? value : value[..4000];
 
     /// <summary>
     /// Parses a batch translation response into individual results.

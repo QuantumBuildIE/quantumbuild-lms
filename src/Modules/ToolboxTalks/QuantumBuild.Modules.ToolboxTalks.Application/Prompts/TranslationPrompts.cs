@@ -14,6 +14,19 @@ public record GlossaryTermInstruction(string EnglishTerm, string ApprovedTransla
 /// </summary>
 public static class TranslationPrompts
 {
+    /// <summary>System prompt sent with every text translation call.</summary>
+    public const string TranslationSystemPrompt =
+        "You are a translation engine. Output only the translated text. " +
+        "Do not add any explanation, notes, preamble, or commentary. " +
+        "Do not describe what you are doing. Your entire response is the translation and nothing else.";
+
+    /// <summary>System prompt used for the single retry after a rejected output.</summary>
+    public const string StrictTranslationSystemPrompt =
+        TranslationSystemPrompt +
+        " Your previous response contained commentary instead of a clean translation. " +
+        "The first character of your response must be the first character of the translation. " +
+        "Never write sentences such as 'The user wants', 'Let me', 'Wait', or 'Here is the translation'.";
+
     /// <summary>
     /// Builds a tiered translation prompt for compliance-sensitive content.
     /// Layers: Tier 1 (base) → Tier 2 (sector) → Tier 3 (safety) → Tier 4 (glossary) → Tier 5 (language).
