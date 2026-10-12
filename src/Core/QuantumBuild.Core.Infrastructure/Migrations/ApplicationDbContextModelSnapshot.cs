@@ -3367,8 +3367,36 @@ namespace QuantumBuild.Core.Infrastructure.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
+                    b.Property<string>("PersonBlockDescription")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasDefaultValue("numbered items describing what the person receiving the service experiences");
+
+                    b.Property<string>("PrincipleLabel")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasDefaultValue("Principle");
+
+                    b.Property<string>("ProviderBlockDescription")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasDefaultValue("numbered items describing what the service provider must have in place");
+
                     b.Property<Guid>("RegulatoryDocumentId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("StandardLabel")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasDefaultValue("Standard");
 
                     b.Property<string>("Status")
                         .IsRequired()

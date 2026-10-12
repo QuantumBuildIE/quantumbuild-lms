@@ -10,4 +10,9 @@ namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Regulatory.S
 public sealed record StructureMapSeedSource(
     string RegulatoryBodyCode,
     string DocumentTitle,
-    IReadOnlyList<StructurePrinciple> Principles);
+    IReadOnlyList<StructurePrinciple> Principles,
+    StructureTerminology? Terminology = null)
+{
+    /// <summary>The document's structural vocabulary; HIQA's wording when the source declares none.</summary>
+    public StructureTerminology EffectiveTerminology => Terminology ?? StructureTerminology.Hiqa;
+}

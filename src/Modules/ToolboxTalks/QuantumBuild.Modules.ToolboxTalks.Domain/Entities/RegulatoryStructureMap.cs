@@ -29,6 +29,20 @@ public class RegulatoryStructureMap : BaseEntity
     /// <summary>When this map was verified. Null while Status is Draft.</summary>
     public DateTimeOffset? VerifiedAt { get; set; }
 
+    // Terminology the ingestion prompt uses for this document. Defaults are HIQA's wording; other
+    // documents (e.g. RSA: Chapter / Article) override them. These are labels, not feature content:
+    // changing them never affects verification state. An empty block description means the
+    // document has no such block, and the prompt omits it.
+    public const string DefaultPrincipleLabel = "Principle";
+    public const string DefaultStandardLabel = "Standard";
+    public const string DefaultPersonBlockDescription = "numbered items describing what the person receiving the service experiences";
+    public const string DefaultProviderBlockDescription = "numbered items describing what the service provider must have in place";
+
+    public string PrincipleLabel { get; set; } = DefaultPrincipleLabel;
+    public string StandardLabel { get; set; } = DefaultStandardLabel;
+    public string PersonBlockDescription { get; set; } = DefaultPersonBlockDescription;
+    public string ProviderBlockDescription { get; set; } = DefaultProviderBlockDescription;
+
     // Navigation properties
     public RegulatoryDocument RegulatoryDocument { get; set; } = null!;
     public ICollection<RegulatoryStructureMapPrinciple> Principles { get; set; } = new List<RegulatoryStructureMapPrinciple>();

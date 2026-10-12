@@ -118,6 +118,121 @@ public class RegulatoryStructureMapSeedDataTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task SevenSameTitleDocs_OneAlreadyHasMap_NoError_AndMapUntouched()
+    {
+        var context = GetDbContext();
+        var code = UniqueCode();
+        var body = await AddBodyAsync(context, code);
+        var source = TinySource(code, "Exact Title");
+        var docs = new List<RegulatoryDocument> { await AddDocumentAsync(context, body.Id, "Exact Title") };
+
+        // Dev's history: the map was bound while only one such document existed, duplicates came later.
+        await RegulatoryStructureMapSeedData.SeedAsync(context, new CapturingLogger(), new[] { source });
+        for (var i = 0; i < 6; i++) docs.Add(await AddDocumentAsync(context, body.Id, "Exact Title"));
+
+        var logger = new CapturingLogger();
+        await RegulatoryStructureMapSeedData.SeedAsync(context, logger, new[] { source });
+
+        logger.Entries.Should().NotContain(e => e.Level >= LogLevel.Warning);
+        logger.Entries.Should().Contain(e => e.Level == LogLevel.Information && e.Message.Contains("already exists"));
+        (await MapsForAsync(context, docs[0].Id)).Should().ContainSingle();
+        foreach (var d in docs.Skip(1)) (await MapsForAsync(context, d.Id)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task TwoSameTitleDocs_NoneHasMap_StillLogsAmbiguityError()
+    {
+        var context = GetDbContext();
+        var code = UniqueCode();
+        var body = await AddBodyAsync(context, code);
+        await AddDocumentAsync(context, body.Id, "Exact Title");
+        await AddDocumentAsync(context, body.Id, "Exact Title");
+        var logger = new CapturingLogger();
+
+        await RegulatoryStructureMapSeedData.SeedAsync(context, logger, new[] { TinySource(code, "Exact Title") });
+
+        logger.Entries.Should().ContainSingle(e => e.Level == LogLevel.Error && e.Message.Contains("ambiguous"));
+    }
+
+    // ── Terminology ───────────────────────────────────────────────────────────────────────
+
+    private static readonly StructureTerminology Custom = new("Chapter", "Article", "", "obligations on drivers");
+
+    [Fact]
+    public async Task NewMap_GetsTerminologyFromSource()
+    {
+        var context = GetDbContext();
+        var code = UniqueCode();
+        var body = await AddBodyAsync(context, code);
+        var target = await AddDocumentAsync(context, body.Id, "Exact Title");
+        var source = TinySource(code, "Exact Title") with { Terminology = Custom };
+
+        await RegulatoryStructureMapSeedData.SeedAsync(context, new CapturingLogger(), new[] { source });
+
+        var map = (await MapsForAsync(context, target.Id)).Single();
+        (map.PrincipleLabel, map.StandardLabel, map.PersonBlockDescription, map.ProviderBlockDescription)
+            .Should().Be(("Chapter", "Article", "", "obligations on drivers"));
+    }
+
+    [Fact]
+    public async Task SourceWithoutTerminology_DefaultsToHiqaWording()
+    {
+        var context = GetDbContext();
+        var code = UniqueCode();
+        var body = await AddBodyAsync(context, code);
+        var target = await AddDocumentAsync(context, body.Id, "Exact Title");
+
+        await RegulatoryStructureMapSeedData.SeedAsync(context, new CapturingLogger(), new[] { TinySource(code, "Exact Title") });
+
+        var map = (await MapsForAsync(context, target.Id)).Single();
+        map.PrincipleLabel.Should().Be("Principle");
+        map.StandardLabel.Should().Be("Standard");
+        map.PersonBlockDescription.Should().Be("numbered items describing what the person receiving the service experiences");
+        map.ProviderBlockDescription.Should().Be("numbered items describing what the service provider must have in place");
+    }
+
+    [Fact]
+    public async Task ExistingMapWithDifferentLabels_IsUpdated_WithoutResettingVerification()
+    {
+        var context = GetDbContext();
+        var code = UniqueCode();
+        var body = await AddBodyAsync(context, code);
+        var target = await AddDocumentAsync(context, body.Id, "Exact Title");
+        var plain = TinySource(code, "Exact Title");
+
+        await RegulatoryStructureMapSeedData.SeedAsync(context, new CapturingLogger(), new[] { plain });
+        var seeded = (await MapsForAsync(context, target.Id)).Single();
+        seeded.Status = RegulatoryStructureMapStatus.Verified;
+        seeded.VerifiedBy = "reviewer";
+        seeded.VerifiedAt = DateTimeOffset.UtcNow;
+        await context.SaveChangesAsync();
+
+        await RegulatoryStructureMapSeedData.SeedAsync(context, new CapturingLogger(),
+            new[] { plain with { Terminology = Custom } });
+
+        context.ChangeTracker.Clear();
+        var after = (await MapsForAsync(context, target.Id)).Single();
+        after.Id.Should().Be(seeded.Id);
+        after.PrincipleLabel.Should().Be("Chapter");
+        after.StandardLabel.Should().Be("Article");
+        after.PersonBlockDescription.Should().BeEmpty();
+        after.ProviderBlockDescription.Should().Be("obligations on drivers");
+        after.Status.Should().Be(RegulatoryStructureMapStatus.Verified);
+        after.VerifiedBy.Should().Be("reviewer");
+        after.VerifiedAt.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void RsaSource_DeclaresChapterArticleTerminology_AndHiqaKeepsDefaults()
+    {
+        RsaStructureMap.Source.EffectiveTerminology.Should().Be(RsaStructureMap.Terminology);
+        RsaStructureMap.Terminology.PrincipleLabel.Should().Be("Chapter");
+        RsaStructureMap.Terminology.StandardLabel.Should().Be("Article");
+        RsaStructureMap.Terminology.HasPersonBlock.Should().BeFalse();
+        HiqaStructureMap.Source.EffectiveTerminology.Should().Be(StructureTerminology.Hiqa);
+    }
+
+    [Fact]
     public async Task DifferentTitleInSameBody_IsNotBound_WhileExactMatchIs()
     {
         var context = GetDbContext();

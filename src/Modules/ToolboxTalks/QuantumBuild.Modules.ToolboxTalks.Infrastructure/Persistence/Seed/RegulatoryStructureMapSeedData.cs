@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using QuantumBuild.Modules.ToolboxTalks.Application.Abstractions.Regulatory;
 using QuantumBuild.Modules.ToolboxTalks.Domain.Entities;
 using QuantumBuild.Modules.ToolboxTalks.Infrastructure.Services.Regulatory.StructureMaps;
 
@@ -73,6 +74,34 @@ public static class RegulatoryStructureMapSeedData
             return;
         }
 
+        var terminology = source.EffectiveTerminology;
+
+        // A map on any matching document means this source is already bound (Dev has duplicate
+        // same-title documents, one of which carries the map). Keep the labels current, never touch
+        // content or verification state, and stay quiet.
+        var documentIds = documents.Select(d => d.Id).ToList();
+        var existingMaps = await context.Set<RegulatoryStructureMap>()
+            .IgnoreQueryFilters()
+            .Where(m => !m.IsDeleted && documentIds.Contains(m.RegulatoryDocumentId))
+            .ToListAsync();
+
+        if (existingMaps.Count > 0)
+        {
+            foreach (var existingMap in existingMaps)
+            {
+                if (ApplyTerminology(existingMap, terminology))
+                {
+                    existingMap.UpdatedAt = now;
+                    existingMap.UpdatedBy = "system";
+                    await context.SaveChangesAsync();
+                    logger.LogInformation("{BodyCode} structure map terminology updated", source.RegulatoryBodyCode);
+                }
+            }
+
+            logger.LogInformation("{BodyCode} structure map already exists, skipping", source.RegulatoryBodyCode);
+            return;
+        }
+
         if (documents.Count > 1)
         {
             logger.LogError(
@@ -83,22 +112,15 @@ public static class RegulatoryStructureMapSeedData
 
         var document = documents[0];
 
-        var existingMap = await context.Set<RegulatoryStructureMap>()
-            .IgnoreQueryFilters()
-            .Where(m => !m.IsDeleted && m.RegulatoryDocumentId == document.Id)
-            .FirstOrDefaultAsync();
-
-        if (existingMap != null)
-        {
-            logger.LogInformation("{BodyCode} structure map already exists, skipping", source.RegulatoryBodyCode);
-            return;
-        }
-
         var map = new RegulatoryStructureMap
         {
             Id = Guid.NewGuid(),
             RegulatoryDocumentId = document.Id,
             Status = Domain.Enums.RegulatoryStructureMapStatus.Draft,
+            PrincipleLabel = terminology.PrincipleLabel,
+            StandardLabel = terminology.StandardLabel,
+            PersonBlockDescription = terminology.PersonBlockDescription,
+            ProviderBlockDescription = terminology.ProviderBlockDescription,
             CreatedAt = now,
             CreatedBy = "system"
         };
@@ -159,5 +181,20 @@ public static class RegulatoryStructureMapSeedData
             map.Principles.Count,
             map.Principles.Sum(p => p.Standards.Count),
             map.Principles.Sum(p => p.Standards.Sum(s => s.Features.Count)));
+    }
+
+    /// <summary>Sets the map's labels from the source; true if any value changed. Never touches status or content.</summary>
+    private static bool ApplyTerminology(RegulatoryStructureMap map, StructureTerminology terminology)
+    {
+        var changed = map.PrincipleLabel != terminology.PrincipleLabel
+            || map.StandardLabel != terminology.StandardLabel
+            || map.PersonBlockDescription != terminology.PersonBlockDescription
+            || map.ProviderBlockDescription != terminology.ProviderBlockDescription;
+
+        map.PrincipleLabel = terminology.PrincipleLabel;
+        map.StandardLabel = terminology.StandardLabel;
+        map.PersonBlockDescription = terminology.PersonBlockDescription;
+        map.ProviderBlockDescription = terminology.ProviderBlockDescription;
+        return changed;
     }
 }

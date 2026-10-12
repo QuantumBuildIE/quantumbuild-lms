@@ -56,7 +56,14 @@ public static class RsaStructureMap
     private static StructurePrinciple Principle(int number, params StructureStandard[] standards) =>
         new(number, standards);
 
-    public static StructureMapSeedSource Source => new(RegulatoryBodyCode, DocumentTitle, Principles);
+    /// <summary>RSA has no person block; its provider block holds the Regulation's obligations on drivers and undertakings.</summary>
+    public static readonly StructureTerminology Terminology = new(
+        PrincipleLabel: "Chapter",
+        StandardLabel: "Article",
+        PersonBlockDescription: "",
+        ProviderBlockDescription: "obligations on drivers and transport undertakings set out in the Regulation");
+
+    public static StructureMapSeedSource Source => new(RegulatoryBodyCode, DocumentTitle, Principles, Terminology);
 
     public static readonly IReadOnlyList<StructurePrinciple> Principles = new[]
         {

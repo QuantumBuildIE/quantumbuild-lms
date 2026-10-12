@@ -22,8 +22,12 @@ public sealed record DocumentStructureMap(
     RegulatoryStructureMapStatus Status,
     string? VerifiedBy,
     DateTimeOffset? VerifiedAt,
-    IReadOnlyList<StructurePrinciple> Principles)
+    IReadOnlyList<StructurePrinciple> Principles,
+    StructureTerminology? Terminology = null)
 {
+    /// <summary>The document's own structural vocabulary; HIQA's wording when none was declared.</summary>
+    public StructureTerminology EffectiveTerminology => Terminology ?? StructureTerminology.Hiqa;
+
     public IEnumerable<StructureStandard> AllStandards => Principles.SelectMany(p => p.Standards);
 
     public IEnumerable<StructureFeature> AllFeatures => AllStandards.SelectMany(s => s.Features);

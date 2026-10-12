@@ -26,6 +26,26 @@ public class RegulatoryStructureMapConfiguration : IEntityTypeConfiguration<Regu
 
         builder.Property(e => e.VerifiedAt);
 
+        builder.Property(e => e.PrincipleLabel)
+            .IsRequired()
+            .HasMaxLength(50)
+            .HasDefaultValue(RegulatoryStructureMap.DefaultPrincipleLabel);
+
+        builder.Property(e => e.StandardLabel)
+            .IsRequired()
+            .HasMaxLength(50)
+            .HasDefaultValue(RegulatoryStructureMap.DefaultStandardLabel);
+
+        builder.Property(e => e.PersonBlockDescription)
+            .IsRequired()
+            .HasMaxLength(500)
+            .HasDefaultValue(RegulatoryStructureMap.DefaultPersonBlockDescription);
+
+        builder.Property(e => e.ProviderBlockDescription)
+            .IsRequired()
+            .HasMaxLength(500)
+            .HasDefaultValue(RegulatoryStructureMap.DefaultProviderBlockDescription);
+
         // Audit fields
         builder.Property(e => e.CreatedAt)
             .IsRequired();

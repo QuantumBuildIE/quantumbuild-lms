@@ -106,6 +106,11 @@ public sealed class RegulatoryStructureMapProvider : IRegulatoryStructureMapProv
             mapRow.Status,
             mapRow.VerifiedBy,
             mapRow.VerifiedAt,
-            principles);
+            principles,
+            new StructureTerminology(
+                mapRow.PrincipleLabel,
+                mapRow.StandardLabel,
+                mapRow.PersonBlockDescription,
+                mapRow.ProviderBlockDescription));
     }
 }

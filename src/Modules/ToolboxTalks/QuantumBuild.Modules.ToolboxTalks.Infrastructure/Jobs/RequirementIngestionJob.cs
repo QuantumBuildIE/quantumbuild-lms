@@ -43,6 +43,7 @@ namespace QuantumBuild.Modules.ToolboxTalks.Infrastructure.Jobs;
 public class RequirementIngestionJob
 {
     private const int MaxTokens = 8192;
+    private const int MaxResponseLogLength = 4000;
     private readonly string _sonnetModel;
 
     private static readonly JsonSerializerOptions CamelCaseOptions = new()
@@ -188,7 +189,8 @@ public class RequirementIngestionJob
                 foreach (var standard in principle.Standards)
                 {
                     var outcome = await ExtractStandardSegmentAsync(
-                        extractedText, principle.Number, standard, regulatoryDocumentId, cancellationToken);
+                        extractedText, principle.Number, standard, structureMap.EffectiveTerminology,
+                        regulatoryDocumentId, cancellationToken);
                     segmentOutcomes.Add(outcome);
 
                     if (outcome.Failure != SegmentFailureReason.None)
@@ -569,13 +571,14 @@ public class RequirementIngestionJob
     /// verbatim entry for one or more of the standard's declared features.
     /// </summary>
     private async Task<SegmentExtractionOutcome> ExtractStandardSegmentAsync(
-        string documentText, int principleNumber, StructureStandard standard, Guid documentId, CancellationToken cancellationToken)
+        string documentText, int principleNumber, StructureStandard standard, StructureTerminology terminology,
+        Guid documentId, CancellationToken cancellationToken)
     {
-        var prompt = BuildExtractionPrompt(documentText, principleNumber, standard);
+        var prompt = BuildExtractionPrompt(documentText, principleNumber, standard, terminology);
 
         // First attempt
         var (responseText, stopReason) = await CallClaudeAsync(prompt, documentId, cancellationToken);
-        var features = TryParseFeatures(responseText);
+        var features = TryParseFeatures(responseText, documentId, standard.Id);
         var truncated = stopReason == "max_tokens";
         List<string>? missingFeatures = null;
 
@@ -607,7 +610,7 @@ public class RequirementIngestionJob
         var stricterPrompt = BuildStricterPrompt(prompt, missingFeatures);
 
         var (retryResponseText, retryStopReason) = await CallClaudeAsync(stricterPrompt, documentId, cancellationToken);
-        var retryFeatures = TryParseFeatures(retryResponseText);
+        var retryFeatures = TryParseFeatures(retryResponseText, documentId, standard.Id);
         var retryTruncated = retryStopReason == "max_tokens";
 
         if (retryFeatures != null && !retryTruncated)
@@ -631,8 +634,10 @@ public class RequirementIngestionJob
         }
 
         _logger.LogError(
-            "Failed to parse Standard {StandardId} features from Claude response for document {DocumentId} after retry",
-            standard.Id, documentId);
+            "Failed to parse Standard {StandardId} features from Claude response for document {DocumentId} after retry. First response: {FirstResponse} | Retry response: {RetryResponse}",
+            standard.Id, documentId,
+            TruncateForLogging(responseText, MaxResponseLogLength),
+            TruncateForLogging(retryResponseText, MaxResponseLogLength));
         return SegmentExtractionOutcome.InvalidJson(principleNumber, standard);
     }
 
@@ -822,26 +827,46 @@ public class RequirementIngestionJob
         return (errorCode, message);
     }
 
-    private static string BuildExtractionPrompt(string documentText, int principleNumber, StructureStandard standard)
+    public static string BuildExtractionPrompt(
+        string documentText, int principleNumber, StructureStandard standard, StructureTerminology terminology)
     {
         var personLines = string.Join("\n", standard.PersonFeatures.Select(f => $"- {f.Identifier}"));
         var providerLines = string.Join("\n", standard.ProviderFeatures.Select(f => $"- {f.Identifier}"));
         var totalCount = standard.Features.Count;
 
-        return $@"You are transcribing verbatim text from a regulatory document. A structure map — authored and reviewed separately, NOT by you — has already determined exactly which features this document defines for Standard {standard.Id} (Principle {principleNumber}). Your ONLY task is to locate each declared feature's exact printed text in the document below and copy it. Do not judge whether a feature belongs, do not paraphrase, summarise, reorder, merge, or omit any of them.
+        // The document's own words: a block the document does not have is omitted entirely rather
+        // than listed empty, so the model is never invited to comment on it.
+        var blockSections = new List<string>();
+        var blockNames = new List<string>();
+        var blockChoices = new List<string>();
+        if (terminology.HasPersonBlock)
+        {
+            blockSections.Add($"Person-experience features ({terminology.PersonBlockDescription}):\n{personLines}");
+            blockNames.Add("person-experience");
+            blockChoices.Add("\"Person\"");
+        }
+        if (terminology.HasProviderBlock)
+        {
+            blockSections.Add($"Provider features ({terminology.ProviderBlockDescription}):\n{providerLines}");
+            blockNames.Add("provider");
+            blockChoices.Add("\"Provider\"");
+        }
 
-The structure map declares these features for Standard {standard.Id}:
+        var blocks = string.Join("\n\n", blockSections);
+        var blockHint = string.Join("/", blockNames);
+        var blockChoice = string.Join(" or ", blockChoices);
+        var standardRef = $"{terminology.StandardLabel} {standard.Id}";
 
-Person-experience features (numbered items describing what the person receiving the service experiences):
-{personLines}
+        return $@"You are transcribing verbatim text from a regulatory document. A structure map — authored and reviewed separately, NOT by you — has already determined exactly which features this document defines for {standardRef} ({terminology.PrincipleLabel} {principleNumber}). Your ONLY task is to locate each declared feature's exact printed text in the document below and copy it. Do not judge whether a feature belongs, do not paraphrase, summarise, reorder, merge, or omit any of them.
 
-Provider features (numbered items describing what the service provider must have in place):
-{providerLines}
+The structure map declares these features for {standardRef}:
 
-For EACH of the {totalCount} features listed above, find its exact verbatim text in the document text below (search near ""Standard {standard.Id}"" and its person-experience/provider feature lists) and transcribe it exactly as printed. Exclude footnote marker glyphs and footnote text itself — footnotes are handled separately from this transcription.
+{blocks}
+
+For EACH of the {totalCount} features listed above, find its exact verbatim text in the document text below (search near ""{standardRef}"" and its {blockHint} feature lists) and transcribe it exactly as printed. Exclude footnote marker glyphs and footnote text itself — footnotes are handled separately from this transcription.
 
 Respond ONLY with a valid JSON array of exactly {totalCount} objects, one per feature listed above (any order), each shaped as:
-{{""identifier"": ""<exact identifier exactly as listed above, unchanged>"", ""block"": ""Person"" or ""Provider"", ""verbatimText"": ""<the feature's exact printed text>""}}
+{{""identifier"": ""<exact identifier exactly as listed above, unchanged>"", ""block"": {blockChoice}, ""verbatimText"": ""<the feature's exact printed text>""}}
 
 IMPORTANT RULES:
 - Copy text EXACTLY as printed in the document — no paraphrasing, no summarising, no correcting grammar or punctuation
@@ -913,35 +938,123 @@ DOCUMENT TEXT:
 
     /// <summary>
     /// Returns null only when the response could not be parsed as JSON at all (garbage text,
-    /// markdown-wrapped non-JSON, or truncated mid-object). A syntactically valid but empty
+    /// prose with no array, or truncated mid-object). A syntactically valid but empty
     /// array ("[]") returns an empty list, not null — callers must not conflate "unparseable"
     /// with "parsed cleanly to nothing", since only the former is a retry-worthy failure.
+    /// Every null return logs a Warning carrying the raw (truncated) response.
     /// </summary>
-    private List<ExtractedFeature>? TryParseFeatures(string responseText)
+    private List<ExtractedFeature>? TryParseFeatures(string responseText, Guid documentId, string standardId)
     {
+        var features = ExtractFeatures(responseText, out var strippedSurroundingText);
+
+        if (features == null)
+        {
+            _logger.LogWarning(
+                "Failed to parse Standard {StandardId} response for document {DocumentId} as a JSON array of features. Raw response: {RawResponse}",
+                standardId, documentId, TruncateForLogging(responseText, MaxResponseLogLength));
+            return null;
+        }
+
+        if (strippedSurroundingText)
+        {
+            _logger.LogInformation(
+                "Standard {StandardId} response for document {DocumentId} had text surrounding the JSON array; surrounding text was stripped",
+                standardId, documentId);
+        }
+
+        return features;
+    }
+
+    /// <summary>
+    /// Parses the model's reply into features. Tries the (fence-stripped) reply as-is first; if that
+    /// fails, falls back to the outermost JSON array — first '[' to its matching ']' — so a prose
+    /// preamble or postamble does not fail the segment. Prose with no array stays null, and the
+    /// shape check is unchanged (a JSON array of {identifier, block, verbatimText}).
+    /// </summary>
+    public static List<ExtractedFeature>? ExtractFeatures(string? responseText, out bool strippedSurroundingText)
+    {
+        strippedSurroundingText = false;
+
         if (string.IsNullOrWhiteSpace(responseText))
+            return null;
+
+        // Strip markdown code fences if present
+        var json = responseText.Trim();
+        if (json.StartsWith("```"))
+        {
+            var firstNewline = json.IndexOf('\n');
+            if (firstNewline > 0) json = json[(firstNewline + 1)..];
+            if (json.EndsWith("```")) json = json[..^3];
+            json = json.Trim();
+        }
+
+        try
+        {
+            var direct = JsonSerializer.Deserialize<List<ExtractedFeature>>(json, CamelCaseOptions);
+            if (direct != null)
+                return direct;
+        }
+        catch (JsonException)
+        {
+            // fall through to array extraction
+        }
+
+        var span = FindOutermostArray(json);
+        if (span == null)
             return null;
 
         try
         {
-            // Strip markdown code fences if present
-            var json = responseText.Trim();
-            if (json.StartsWith("```"))
-            {
-                var firstNewline = json.IndexOf('\n');
-                if (firstNewline > 0) json = json[(firstNewline + 1)..];
-                if (json.EndsWith("```")) json = json[..^3];
-                json = json.Trim();
-            }
-
-            return JsonSerializer.Deserialize<List<ExtractedFeature>>(json, CamelCaseOptions);
+            var features = JsonSerializer.Deserialize<List<ExtractedFeature>>(span, CamelCaseOptions);
+            strippedSurroundingText = features != null;
+            return features;
         }
-        catch (JsonException ex)
+        catch (JsonException)
         {
-            _logger.LogWarning(ex, "Failed to parse Claude response as JSON: {Preview}",
-                responseText.Length > 200 ? responseText[..200] : responseText);
             return null;
         }
+    }
+
+    /// <summary>
+    /// The substring from the first '[' to its matching ']', or null if there is none. Brackets
+    /// inside JSON string literals (verbatim text may contain them) are skipped.
+    /// </summary>
+    private static string? FindOutermostArray(string text)
+    {
+        var start = text.IndexOf('[');
+        if (start < 0)
+            return null;
+
+        var depth = 0;
+        var inString = false;
+        for (var i = start; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (inString)
+            {
+                if (c == '\\') i++;
+                else if (c == '"') inString = false;
+                continue;
+            }
+
+            switch (c)
+            {
+                case '"': inString = true; break;
+                case '[': depth++; break;
+                case ']':
+                    depth--;
+                    if (depth == 0) return text[start..(i + 1)];
+                    break;
+            }
+        }
+
+        return null;
+    }
+
+    private static string TruncateForLogging(string? text, int maxLength)
+    {
+        if (string.IsNullOrEmpty(text)) return "(empty)";
+        return text.Length <= maxLength ? text : text[..maxLength] + "... [truncated]";
     }
 
     /// <summary>
@@ -1091,7 +1204,7 @@ DOCUMENT TEXT:
     /// an unrecognised value degrades to "this item can't be matched" rather than a deserialization
     /// exception that would fail the whole segment.
     /// </summary>
-    private class ExtractedFeature
+    public class ExtractedFeature
     {
         public string Identifier { get; set; } = string.Empty;
         public string? Block { get; set; }

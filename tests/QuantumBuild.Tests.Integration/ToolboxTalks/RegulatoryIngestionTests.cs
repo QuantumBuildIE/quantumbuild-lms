@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using QuantumBuild.Core.Application.Configuration;
@@ -294,7 +295,8 @@ public class RegulatoryIngestionTests : IntegrationTestBase
         IPdfExtractionService pdfExtractionService,
         Func<string, (string Text, string? StopReason)>? responder = null,
         string claudeResponseText = "[]",
-        string? claudeStopReason = null)
+        string? claudeStopReason = null,
+        ILogger<RequirementIngestionJob>? logger = null)
     {
         var handler = new FakeAnthropicHttpMessageHandler
         {
@@ -331,7 +333,7 @@ public class RegulatoryIngestionTests : IntegrationTestBase
             httpClient,
             settings,
             aiUsageLogger,
-            NullLogger<RequirementIngestionJob>.Instance,
+            logger ?? NullLogger<RequirementIngestionJob>.Instance,
             aiProviders);
 
         return (job, handler);
@@ -911,6 +913,104 @@ public class RegulatoryIngestionTests : IntegrationTestBase
         reloaded.LastIngestionStatus.Should().Be(RegulatoryIngestionStatus.Failed);
         reloaded.LastIngestionErrorCode.Should().Be("extraction_invalid_json");
         reloaded.LastIngestionErrorMessage.Should().NotBeNullOrWhiteSpace();
+    }
+
+    private sealed class CapturingLogger : ILogger<RequirementIngestionJob>
+    {
+        public List<(LogLevel Level, string Message)> Entries { get; } = new();
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter) => Entries.Add((logLevel, formatter(state, exception)));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_PreambleAndTrailingProseAroundArray_IsParsedAndIngestionSucceeds()
+    {
+        var context = GetDbContext();
+        var document = await CreateDocumentWithProfileAsync(context, "https://example.test/document.pdf");
+        var fakePdf = new FakePdfExtractionService { ShouldFail = false, NextExtractedText = "Some regulation text." };
+        var logger = new CapturingLogger();
+
+        var responder = BuildSegmentedResponder((standardId, _) =>
+        {
+            if (standardId != "1.1") return null;
+            var (_, person, provider) = FakeStandardsById["1.1"];
+            return ("Looking at the document, here is the transcription:\n" + BuildSegmentJson("1.1", person, provider)
+                    + "\n\nNote: the two paragraphs look alike.", "end_turn");
+        });
+
+        var (job, handler) = BuildJobWithHandler(context, fakePdf, responder: responder, logger: logger);
+        await job.ExecuteAsync(document.Id, CancellationToken.None);
+
+        var reloaded = await context.RegulatoryDocuments.FirstAsync(d => d.Id == document.Id);
+        reloaded.LastIngestionStatus.Should().Be(RegulatoryIngestionStatus.Success);
+        handler.RequestBodies.Should().HaveCount(3, "no retry is needed once the surrounding prose is stripped");
+        logger.Entries.Should().Contain(e => e.Level == LogLevel.Information && e.Message.Contains("surrounding text was stripped"));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_FailedParseAttempt_LogsRawResponseWithDocumentAndStandard()
+    {
+        var context = GetDbContext();
+        var document = await CreateDocumentWithProfileAsync(context, "https://example.test/document.pdf");
+        var fakePdf = new FakePdfExtractionService { ShouldFail = false, NextExtractedText = "Some regulation text." };
+        var logger = new CapturingLogger();
+
+        var responder = BuildSegmentedResponder((standardId, isRetry) =>
+            standardId == "1.1" && !isRetry
+                ? ("I need to find Standard 1.1 first - FIRST-RAW-REPLY", "end_turn")
+                : null);
+
+        var (job, _) = BuildJobWithHandler(context, fakePdf, responder: responder, logger: logger);
+        await job.ExecuteAsync(document.Id, CancellationToken.None);
+
+        var warning = logger.Entries.Should().ContainSingle(e =>
+            e.Level == LogLevel.Warning && e.Message.Contains("FIRST-RAW-REPLY")).Subject;
+        warning.Message.Should().Contain(document.Id.ToString()).And.Contain("1.1");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_RawResponseInLogs_IsTruncatedTo4000Chars()
+    {
+        var context = GetDbContext();
+        var document = await CreateDocumentWithProfileAsync(context, "https://example.test/document.pdf");
+        var fakePdf = new FakePdfExtractionService { ShouldFail = false, NextExtractedText = "Some regulation text." };
+        var logger = new CapturingLogger();
+
+        var responder = BuildSegmentedResponder((standardId, isRetry) =>
+            standardId == "1.1" && !isRetry ? (new string('x', 6000), "end_turn") : null);
+
+        var (job, _) = BuildJobWithHandler(context, fakePdf, responder: responder, logger: logger);
+        await job.ExecuteAsync(document.Id, CancellationToken.None);
+
+        var warning = logger.Entries.Single(e => e.Level == LogLevel.Warning && e.Message.Contains("xxxx"));
+        warning.Message.Should().Contain("[truncated]");
+        warning.Message.Count(c => c == 'x').Should().Be(4000);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_BothAttemptsInvalid_FinalErrorCarriesBothRawResponses()
+    {
+        var context = GetDbContext();
+        var document = await CreateDocumentWithProfileAsync(context, "https://example.test/document.pdf");
+        var fakePdf = new FakePdfExtractionService { ShouldFail = false, NextExtractedText = "Some regulation text." };
+        var logger = new CapturingLogger();
+
+        var responder = BuildSegmentedResponder((standardId, isRetry) =>
+            standardId == "1.1"
+                ? (isRetry ? "SECOND-RAW-REPLY, no array here." : "FIRST-RAW-REPLY, no array here.", "end_turn")
+                : null);
+
+        var (job, _) = BuildJobWithHandler(context, fakePdf, responder: responder, logger: logger);
+        await job.ExecuteAsync(document.Id, CancellationToken.None);
+
+        var reloaded = await context.RegulatoryDocuments.FirstAsync(d => d.Id == document.Id);
+        reloaded.LastIngestionErrorCode.Should().Be("extraction_invalid_json");
+
+        var error = logger.Entries.Should().ContainSingle(e =>
+            e.Level == LogLevel.Error && e.Message.Contains("after retry")).Subject;
+        error.Message.Should().Contain("FIRST-RAW-REPLY").And.Contain("SECOND-RAW-REPLY");
     }
 
     [Fact]
